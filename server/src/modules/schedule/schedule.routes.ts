@@ -46,6 +46,11 @@ router.put('/tasks/:taskId', ...canWrite, validateBody(upsertTaskSchema), asyncH
   res.json({ task });
 }));
 
+// Capture the schedule baseline (snapshot planned dates).
+router.post('/baseline', ...canWrite, asyncHandler(async (req, res) => {
+  res.json(await svc.setScheduleBaseline(req.params.projectId, req.user!.id));
+}));
+
 // Progress-only update (WBS % complete / status).
 router.patch('/tasks/:taskId/progress', ...canWrite, validateBody(progressSchema), asyncHandler(async (req, res) => {
   const task = await svc.setTaskProgress(req.params.projectId, req.params.taskId, req.body.progressPct, req.user!.id);

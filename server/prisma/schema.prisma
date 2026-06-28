@@ -156,6 +156,7 @@ model Project {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   deletedAt DateTime?
+  scheduleBaselinedAt DateTime? // when the schedule baseline was last captured
 
   charter          ProjectCharter?
   charterVersions  CharterVersion[]
@@ -373,6 +374,9 @@ model Task {
   acceptanceCriteria String? @db.Text
   planStart    DateTime
   planEnd      DateTime
+  // Schedule baseline snapshot (for variance / tracking Gantt).
+  baselineStart  DateTime?
+  baselineFinish DateTime?
   actualStart  DateTime?
   actualFinish DateTime?
 

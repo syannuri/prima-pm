@@ -56,13 +56,14 @@ export async function listSchedule(projectId: string) {
 
 // Gantt payload: nested tree enriched with duration & linked manpower cost.
 export async function getGantt(projectId: string) {
-  const [tasks, deps, mp] = await Promise.all([
+  const [tasks, deps, mp, project] = await Promise.all([
     prisma.task.findMany({
       where: { projectId },
       include: { pic: { select: { id: true, name: true } } },
     }),
     prisma.taskDependency.findMany({ where: { predecessor: { projectId } } }),
     manpowerByTask(projectId),
+    prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true } }),
   ]);
 
   const enriched = tasks.map((t) => ({
@@ -72,7 +73,7 @@ export async function getGantt(projectId: string) {
     linkedPlanMandays: mp.mandays.get(t.id) ?? 0,
   }));
 
-  return { tree: buildGanttTree(enriched), dependencies: deps };
+  return { tree: buildGanttTree(enriched), dependencies: deps, baselinedAt: project?.scheduleBaselinedAt ?? null };
 }
 
 export async function createTask(projectId: string, input: UpsertTaskInput, actorId: string) {
@@ -171,6 +172,20 @@ export async function setTaskProgress(projectId: string, taskId: string, progres
   const task = await prisma.task.update({ where: { id: taskId }, data });
   await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: taskId, action: 'UPDATE', before: { progressPct: existing.progressPct }, after: { progressPct } });
   return task;
+}
+
+// Capture (or re-capture) the schedule baseline: snapshot every task's planned
+// dates into baselineStart/baselineFinish and stamp the project. Variance is then
+// current planEnd − baselineFinish.
+export async function setScheduleBaseline(projectId: string, actorId: string) {
+  await ensureChartered(projectId);
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.$executeRaw`UPDATE "Task" SET "baselineStart" = "planStart", "baselineFinish" = "planEnd" WHERE "projectId" = ${projectId}`,
+    prisma.project.update({ where: { id: projectId }, data: { scheduleBaselinedAt: now } }),
+  ]);
+  await writeAudit({ projectId, userId: actorId, entity: 'Project', entityId: projectId, action: 'UPDATE', after: { scheduleBaselinedAt: now } });
+  return { baselinedAt: now };
 }
 
 // Delete a task and its whole subtree; unlink manpower and drop dependencies.

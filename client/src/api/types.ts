@@ -196,6 +196,8 @@ export interface Task {
   planEnd: string;
   actualStart: string | null;
   actualFinish: string | null;
+  baselineStart: string | null;
+  baselineFinish: string | null;
   picUserId: string | null;
   progressPct: number;
   isMilestone: boolean;

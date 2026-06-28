@@ -33,10 +33,11 @@ const day = 86_400_000;
 // Summary-task roll-up (MS-Project / WBS 100% rule): a parent's dates span its
 // descendants and its % is the duration-weighted average of theirs. Leaves keep
 // their own stored values. Returns a map of taskId → rolled metrics.
-interface Roll { start: number; end: number; dur: number; pct: number; isParent: boolean }
+interface Roll { start: number; end: number; dur: number; pct: number; isParent: boolean; baseStart: number | null; baseEnd: number | null }
+const ts = (s: string | null) => (s ? +new Date(s) : null);
 function rollup(node: GanttNode, out: Map<string, Roll>): Roll {
   if (!node.children?.length) {
-    const r: Roll = { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, isParent: false };
+    const r: Roll = { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, isParent: false, baseStart: ts(node.baselineStart), baseEnd: ts(node.baselineFinish) };
     out.set(node.id, r);
     return r;
   }
@@ -45,7 +46,9 @@ function rollup(node: GanttNode, out: Map<string, Roll>): Roll {
   const end = Math.max(...kids.map((k) => k.end));
   const totalDur = kids.reduce((s, k) => s + k.dur, 0) || 1;
   const pct = Math.round(kids.reduce((s, k) => s + k.pct * k.dur, 0) / totalDur);
-  const r: Roll = { start, end, dur: Math.round((end - start) / day) + 1, pct, isParent: true };
+  const bs = kids.map((k) => k.baseStart).filter((x): x is number => x != null);
+  const be = kids.map((k) => k.baseEnd).filter((x): x is number => x != null);
+  const r: Roll = { start, end, dur: Math.round((end - start) / day) + 1, pct, isParent: true, baseStart: bs.length ? Math.min(...bs) : null, baseEnd: be.length ? Math.max(...be) : null };
   out.set(node.id, r);
   return r;
 }
@@ -58,8 +61,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
 
   const ganttQ = useQuery({
     queryKey: ['gantt', projectId],
-    queryFn: () => api.get<{ tree: GanttNode[]; dependencies: TaskDependency[] }>(`${base}/gantt`),
+    queryFn: () => api.get<{ tree: GanttNode[]; dependencies: TaskDependency[]; baselinedAt: string | null }>(`${base}/gantt`),
   });
+  const baselinedAt = ganttQ.data?.baselinedAt ?? null;
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['gantt', projectId] });
     qc.invalidateQueries({ queryKey: ['mp-sync', projectId] });
@@ -75,8 +79,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // Timeline axis: span of all (rolled) plan dates → month ticks.
   const axis = useMemo(() => {
     if (!rows.length) return null;
-    const starts = rows.map((r) => rolled.get(r.node.id)?.start ?? +new Date(r.node.planStart));
-    const ends = rows.map((r) => rolled.get(r.node.id)?.end ?? +new Date(r.node.planEnd));
+    const starts = rows.map((r) => { const x = rolled.get(r.node.id); return Math.min(x?.start ?? +new Date(r.node.planStart), x?.baseStart ?? Infinity); });
+    const ends = rows.map((r) => { const x = rolled.get(r.node.id); return Math.max(x?.end ?? +new Date(r.node.planEnd), x?.baseEnd ?? -Infinity); });
     const min = Math.min(...starts);
     const max = Math.max(...ends);
     const span = Math.max(max - min, day);
@@ -96,10 +100,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const [form, setForm] = useState<{ parentId: string | null; edit?: GanttNode } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const colCount = 8 + (canEdit ? 1 : 0);
+  const colCount = 9 + (canEdit ? 1 : 0);
 
   const progress = useMutation({
     mutationFn: ({ id, pct }: { id: string; pct: number }) => api.patch(`${base}/tasks/${id}/progress`, { progressPct: pct }),
+    onSuccess: invalidate,
+  });
+  const baseline = useMutation({
+    mutationFn: () => api.post(`${base}/baseline`),
     onSuccess: invalidate,
   });
   const del = useMutation({
@@ -115,7 +123,17 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete (MS-Project style)">
           Work Breakdown Structure
         </SectionTitle>
-        {canEdit && <Button onClick={() => setForm({ parentId: null })}>+ Add Task</Button>}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 dark:text-slate-500">
+            {baselinedAt ? `Baselined ${formatDate(baselinedAt)}` : 'No baseline set'}
+          </span>
+          {canEdit && rows.length > 0 && (
+            <Button variant="secondary" disabled={baseline.isPending} onClick={() => { if (confirm(baselinedAt ? 'Re-capture the schedule baseline from current plan dates?' : 'Capture the current plan dates as the schedule baseline?')) baseline.mutate(); }}>
+              {baseline.isPending ? 'Saving…' : baselinedAt ? 'Re-baseline' : 'Set Baseline'}
+            </Button>
+          )}
+          {canEdit && <Button onClick={() => setForm({ parentId: null })}>+ Add Task</Button>}
+        </div>
       </div>
 
       {!rows.length ? (
@@ -134,6 +152,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 <th className="text-right">Dur</th>
                 <th className="text-right">% </th>
                 <th>Status</th>
+                <th className="text-right" title="Finish variance vs baseline (days)">Var</th>
                 {/* Timeline header with month ticks */}
                 <th className="w-[320px]">
                   <div className="relative h-4 w-[300px]">
@@ -147,10 +166,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </thead>
             <tbody>
               {rows.map(({ node, depth, wbs }) => {
-                const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, isParent: false };
+                const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, isParent: false, baseStart: null, baseEnd: null };
                 const st = statusOf(r.pct);
                 const leftPct = axis ? ((r.start - axis.min) / axis.span) * 100 : 0;
                 const widthPct = axis ? Math.max(1.5, ((r.end - r.start) / axis.span) * 100) : 0;
+                const varDays = r.baseEnd != null ? Math.round((r.end - r.baseEnd) / day) : null;
+                const baseLeft = axis && r.baseStart != null ? ((r.baseStart - axis.min) / axis.span) * 100 : null;
+                const baseWidth = axis && r.baseStart != null && r.baseEnd != null ? Math.max(1.5, ((r.baseEnd - r.baseStart) / axis.span) * 100) : null;
                 const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.pic);
                 const isOpen = expanded.has(node.id);
                 return (
@@ -184,14 +206,28 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     <td><Badge color={st.color}>{st.label}</Badge></td>
+                    <td className="text-right tabular-nums text-xs">
+                      {varDays == null ? (
+                        <span className="text-slate-300 dark:text-slate-600">—</span>
+                      ) : (
+                        <span title={`Baseline finish ${formatDate(new Date(r.baseEnd!))}`} className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-400 dark:text-slate-500'}>
+                          {varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}
+                        </span>
+                      )}
+                    </td>
                     <td>
-                      <div className="relative h-4 w-[300px] rounded bg-slate-100 dark:bg-slate-800">
+                      <div className="relative h-6 w-[300px]">
+                        {/* baseline (ghost) bar */}
+                        {baseLeft != null && baseWidth != null && (
+                          <div className="absolute top-0 h-2 rounded bg-slate-300 dark:bg-slate-600" style={{ left: `${baseLeft}%`, width: `${baseWidth}%` }} title={`Baseline: ${formatDate(new Date(r.baseStart!))} → ${formatDate(new Date(r.baseEnd!))}`} />
+                        )}
+                        {/* current bar with progress fill */}
                         <div
-                          className={`absolute top-0 h-4 rounded ${st.color === 'green' ? 'bg-green-400' : st.color === 'amber' ? 'bg-amber-400' : 'bg-brand-400'}`}
+                          className={`absolute ${baseLeft != null ? 'top-2.5' : 'top-1.5'} h-3 rounded ${st.color === 'green' ? 'bg-green-400' : st.color === 'amber' ? 'bg-amber-400' : 'bg-brand-400'}`}
                           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                           title={`${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))} · ${r.pct}%`}
                         >
-                          <div className="h-4 rounded bg-black/25" style={{ width: `${r.pct}%` }} />
+                          <div className="h-3 rounded bg-black/25" style={{ width: `${r.pct}%` }} />
                         </div>
                       </div>
                     </td>
