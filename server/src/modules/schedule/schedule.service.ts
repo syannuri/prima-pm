@@ -10,7 +10,6 @@ import {
   buildGanttTree,
   hasDependencyCycle,
   reconcileManpower,
-  wbsProgress,
   type DependencyEdge,
 } from './schedule.helpers.js';
 import type { DependencyInput, UpsertTaskInput } from './schedule.schemas.js';
@@ -312,31 +311,47 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
   const baseFinish = baseFins.length ? Math.max(...baseFins) : null;
   const finishVarianceDays = curFinish != null && baseFinish != null ? Math.round((curFinish - baseFinish) / DAY) : null;
 
+  // Work-package weights for EVM & progress roll-up: use linked cost when the
+  // project is cost-loaded (classic cost-weighted EVM), else fall back to task
+  // DURATION so EV/PV/%complete still reflect the WBS instead of collapsing to 0.
+  const totalLeafCost = leaves.reduce((s, t) => s + (mp.cost.get(t.id) ?? 0), 0);
+  const costLoaded = totalLeafCost > 0;
   const evmTasks: EvmTask[] = leaves.map((t) => ({
-    budgetCost: mp.cost.get(t.id) ?? 0,
+    budgetCost: costLoaded ? (mp.cost.get(t.id) ?? 0) : durationDays(t.planStart, t.planEnd),
     progressPct: t.progressPct,
     planStart: t.planStart,
     planEnd: t.planEnd,
   }));
+  // All-milestone projects have zero duration everywhere → weight each leaf equally.
+  if (!costLoaded && evmTasks.every((t) => t.budgetCost === 0)) {
+    for (const t of evmTasks) t.budgetCost = 1;
+  }
+  const totalWeight = evmTasks.reduce((s, t) => s + t.budgetCost, 0);
 
-  const evm = computeEvm({ tasks: evmTasks, actualCost: resolvedAc, statusDate });
-
-  // Physical % complete from the WBS duration-weighted roll-up (matches the Schedule
-  // tab). Unlike EVM's EV/BAC, this reflects task progress even when no cost is loaded.
-  const wbs = wbsProgress(tasks);
-  const scheduleProgress = Math.round(wbs.progress) / 100; // integer % → 0..1
-
-  // Provide the cost-baseline BAC alongside the schedule-derived BAC for reference.
+  // Authoritative BAC = the cost baseline's Budget at Completion. When absent,
+  // computeEvm derives BAC from Σ weights (so EV/PV still scale sensibly).
   const baseline = await prisma.costBaseline.findUnique({
     where: { projectId },
     select: { budgetAtCompletion: true },
   });
+  const costBaselineBAC = dec(baseline?.budgetAtCompletion);
+
+  const evm = computeEvm({
+    tasks: evmTasks,
+    bac: costBaselineBAC > 0 ? costBaselineBAC : undefined,
+    actualCost: resolvedAc,
+    statusDate,
+  });
+
+  // Physical % complete (0..1) — weight-weighted progress, valid even with no cost.
+  // Aligned with the WBS: duration-weighted when uncosted, budget-weighted when costed.
+  const scheduleProgress = evm.weightedProgress;
 
   return {
     ...evm,
     scheduleProgress,
-    scheduleWeightDays: wbs.weight,
-    costBaselineBAC: dec(baseline?.budgetAtCompletion),
+    scheduleWeight: totalWeight,
+    costBaselineBAC,
     leafTaskCount: leaves.length,
     scheduleBaselinedAt: project?.scheduleBaselinedAt ?? null,
     baselineFinish: baseFinish ? new Date(baseFinish).toISOString() : null,

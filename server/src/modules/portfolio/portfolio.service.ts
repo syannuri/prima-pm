@@ -75,14 +75,14 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
   const schedAccum = { weighted: 0, weight: 0 };
   for (const p of projects) {
     let pv = 0, ev = 0, ac = 0, spi = 0, cpi = 0, percentComplete = 0, leafTaskCount = 0;
-    let scheduleProgress = 0, scheduleWeightDays = 0;
+    let scheduleProgress = 0, scheduleWeight = 0;
     let finishVarianceDays: number | null = null;
     // Only chartered projects can have a schedule; AC resolved from stored time-phased entries.
     if (p.status !== 'DRAFT') {
       const evm = await getEvm(p.id, undefined, statusDate);
       pv = evm.pv; ev = evm.ev; ac = evm.ac; spi = evm.spi; cpi = evm.cpi;
       percentComplete = evm.percentComplete; leafTaskCount = evm.leafTaskCount;
-      scheduleProgress = evm.scheduleProgress; scheduleWeightDays = evm.scheduleWeightDays;
+      scheduleProgress = evm.scheduleProgress; scheduleWeight = evm.scheduleWeight;
       finishVarianceDays = evm.finishVarianceDays;
     }
     rows.push({
@@ -102,8 +102,8 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       changeCount: changeMap.get(p.id) ?? 0,
       scheduleProgress,
     });
-    schedAccum.weighted += scheduleProgress * scheduleWeightDays;
-    schedAccum.weight += scheduleWeightDays;
+    schedAccum.weighted += scheduleProgress * scheduleWeight;
+    schedAccum.weight += scheduleWeight;
   }
 
   // Portfolio totals & distributions.

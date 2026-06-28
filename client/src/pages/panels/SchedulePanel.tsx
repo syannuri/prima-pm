@@ -90,7 +90,8 @@ function EvmPanel({ base }: { base: string }) {
       ),
   });
   const e = evmQ.data;
-  const hColor = e?.health === 'GREEN' ? 'green' : e?.health === 'AMBER' ? 'amber' : 'red';
+  const hColor = e?.health === 'GREEN' ? 'green' : e?.health === 'AMBER' ? 'amber' : e?.health === 'NO_DATA' ? 'slate' : 'red';
+  const hLabel = e?.health === 'NO_DATA' ? 'No data' : e?.health;
 
   return (
     <Card>
@@ -104,16 +105,22 @@ function EvmPanel({ base }: { base: string }) {
       {e && (
         <>
           <div className="mb-3 flex items-center gap-2">
-            <Badge color={hColor}>Health: {e.health}</Badge>
-            <span className="text-sm text-slate-500 dark:text-slate-400" title="Physical % complete — duration-weighted WBS roll-up">{formatNum(e.scheduleProgress * 100, 1)}% complete · {e.leafTaskCount} leaf tasks</span>
+            <Badge color={hColor}>Health: {hLabel}</Badge>
+            <span className="text-sm text-slate-500 dark:text-slate-400" title="Physical % complete — WBS-weighted roll-up (budget-weighted when cost-loaded, else duration-weighted)">{formatNum(e.scheduleProgress * 100, 1)}% complete · {e.leafTaskCount} leaf tasks</span>
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <Metric label="PV" value={formatIdr(e.pv)} />
-            <Metric label="EV" value={formatIdr(e.ev)} />
-            <Metric label="AC" value={formatIdr(e.ac)} />
-            <Metric label="CPI" value={formatNum(e.cpi, 3)} warn={e.cpi < 1} />
-            <Metric label="SPI" value={formatNum(e.spi, 3)} warn={e.spi < 1} />
-            <Metric label="EAC" value={formatIdr(e.eac)} />
+            <Metric label="BAC" value={formatIdr(e.bac)} title="Budget at Completion" />
+            <Metric label="PV" value={formatIdr(e.pv)} title="Planned Value (BCWS)" />
+            <Metric label="EV" value={formatIdr(e.ev)} title="Earned Value (BCWP)" />
+            <Metric label="AC" value={formatIdr(e.ac)} title="Actual Cost (ACWP)" />
+            <Metric label="CV" value={formatIdr(e.cv)} warn={e.cv < 0} title="Cost Variance = EV − AC" />
+            <Metric label="SV" value={formatIdr(e.sv)} warn={e.sv < 0} title="Schedule Variance = EV − PV" />
+            <Metric label="CPI" value={e.ac > 0 ? formatNum(e.cpi, 3) : '—'} warn={e.ac > 0 && e.cpi < 1} title="Cost Performance Index = EV / AC" />
+            <Metric label="SPI" value={e.pv > 0 ? formatNum(e.spi, 3) : '—'} warn={e.pv > 0 && e.spi < 1} title="Schedule Performance Index = EV / PV" />
+            <Metric label="EAC" value={formatIdr(e.eac)} title="Estimate at Completion" />
+            <Metric label="ETC" value={formatIdr(e.etc)} title="Estimate to Complete = EAC − AC" />
+            <Metric label="VAC" value={formatIdr(e.vac)} warn={e.vac < 0} title="Variance at Completion = BAC − EAC" />
+            <Metric label="TCPI" value={e.bac > e.ac ? formatNum(e.tcpi, 3) : '—'} warn={e.bac > e.ac && e.tcpi > 1} title="To-Complete Performance Index = (BAC − EV) / (BAC − AC)" />
           </div>
           {/* Schedule baseline variance (finish vs baseline) */}
           {e.scheduleBaselinedAt ? (
@@ -135,9 +142,9 @@ function EvmPanel({ base }: { base: string }) {
   );
 }
 
-function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+function Metric({ label, value, warn, title }: { label: string; value: string; warn?: boolean; title?: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-2">
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-2" title={title}>
       <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`text-sm font-semibold ${warn ? 'text-red-600' : 'text-slate-800 dark:text-slate-100'}`}>{value}</div>
     </div>

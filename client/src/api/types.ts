@@ -244,11 +244,14 @@ export interface Evm {
   cpi: number;
   spi: number;
   eac: number;
+  etc: number;
   vac: number;
+  tcpi: number;
   percentComplete: number;
-  scheduleProgress: number; // physical % complete from the WBS roll-up (0..1)
-  scheduleWeightDays: number;
-  health: 'GREEN' | 'AMBER' | 'RED';
+  weightedProgress: number; // Σ(weight·%)/Σweight (0..1) — physical, BAC-independent
+  scheduleProgress: number; // physical % complete, WBS-weighted (0..1)
+  scheduleWeight: number;
+  health: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
   costBaselineBAC: number;
   leafTaskCount: number;
   scheduleBaselinedAt: string | null;

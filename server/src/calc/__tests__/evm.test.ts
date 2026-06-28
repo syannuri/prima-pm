@@ -79,3 +79,44 @@ describe('evm — full metric set', () => {
     expect(z.eac).toBe(10_000_000);
   });
 });
+
+describe('evm — BAC distribution & weighting', () => {
+  // Weights 3 & 1 (e.g. duration days), authoritative BAC = 100M. The 75%-weighted
+  // task at 100% + the 25%-weighted task at 0% → 75% earned, EV = 75M of the real BAC.
+  const tasks: EvmTask[] = [
+    { budgetCost: 3, progressPct: 100, planStart: d('2026-01-01'), planEnd: d('2026-01-04') },
+    { budgetCost: 1, progressPct: 0, planStart: d('2026-01-01'), planEnd: d('2026-01-02') },
+  ];
+
+  it('scales weights to the authoritative BAC (100% rule) and keeps EV in real money', () => {
+    const r = computeEvm({ tasks, bac: 100_000_000, actualCost: 0, statusDate: d('2026-02-01') });
+    expect(r.bac).toBe(100_000_000);
+    expect(r.ev).toBe(75_000_000); // 3/4 of BAC earned
+    expect(r.percentComplete).toBe(0.75); // EV / BAC
+    expect(r.weightedProgress).toBe(0.75); // Σ(w·%)/Σw, BAC-independent
+  });
+
+  it('weightedProgress is valid even when BAC is unknown (0)', () => {
+    const r = computeEvm({ tasks, actualCost: 0, statusDate: d('2026-02-01') });
+    expect(r.weightedProgress).toBe(0.75);
+  });
+
+  it('health is NO_DATA when neither index is available (no AC, not started)', () => {
+    const r = computeEvm({
+      tasks: [{ budgetCost: 5, progressPct: 0, planStart: d('2026-06-01'), planEnd: d('2026-06-10') }],
+      actualCost: 0,
+      statusDate: d('2026-01-01'), // before start → PV = 0
+    });
+    expect(r.health).toBe('NO_DATA');
+  });
+
+  it('EAC exposes overrun when cost is incurred with no earned value', () => {
+    const r = computeEvm({
+      tasks: [{ budgetCost: 10_000_000, progressPct: 0, planStart: d('2026-01-01'), planEnd: d('2026-01-11') }],
+      actualCost: 4_000_000, // spent 4M, earned nothing
+      statusDate: d('2026-01-06'),
+    });
+    expect(r.eac).toBe(14_000_000); // AC + (BAC - EV) = 4M + 10M
+    expect(r.vac).toBe(-4_000_000); // BAC - EAC → forecast overrun
+  });
+});
