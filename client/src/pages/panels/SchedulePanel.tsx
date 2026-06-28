@@ -105,7 +105,7 @@ function EvmPanel({ base }: { base: string }) {
         <>
           <div className="mb-3 flex items-center gap-2">
             <Badge color={hColor}>Health: {e.health}</Badge>
-            <span className="text-sm text-slate-500 dark:text-slate-400">{formatNum(e.percentComplete * 100, 1)}% complete · {e.leafTaskCount} leaf tasks</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400" title="Physical % complete — duration-weighted WBS roll-up">{formatNum(e.scheduleProgress * 100, 1)}% complete · {e.leafTaskCount} leaf tasks</span>
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <Metric label="PV" value={formatIdr(e.pv)} />

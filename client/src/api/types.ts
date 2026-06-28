@@ -246,6 +246,8 @@ export interface Evm {
   eac: number;
   vac: number;
   percentComplete: number;
+  scheduleProgress: number; // physical % complete from the WBS roll-up (0..1)
+  scheduleWeightDays: number;
   health: 'GREEN' | 'AMBER' | 'RED';
   costBaselineBAC: number;
   leafTaskCount: number;
