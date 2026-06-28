@@ -110,3 +110,39 @@ export async function getPortfolioAlerts(userId: string, role: string, now: Date
   rows.sort((a, b) => b.high - a.high || b.total - a.total);
   return { projects: rows, total, high };
 }
+
+// Recent edits to WBS / Cost / Risk across the portfolio — surfaced to ADMIN & PMO
+// so they're notified of every change the PMs make. Reads the append-only audit log.
+const CHANGE_ENTITIES = ['Task', 'CostItemDirect', 'CostItemIndirect', 'Risk'];
+const ENTITY_AREA: Record<string, string> = {
+  Task: 'WBS', CostItemDirect: 'Cost', CostItemIndirect: 'Cost', Risk: 'Risk',
+};
+
+export async function getRecentChanges(role: string, limit = 25) {
+  if (!GLOBAL_ROLES.includes(role as Role)) return { changes: [] };
+
+  const rows = await prisma.auditLog.findMany({
+    where: { entity: { in: CHANGE_ENTITIES }, action: { in: ['CREATE', 'UPDATE', 'DELETE'] }, projectId: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(limit, 100),
+    include: { user: { select: { name: true, role: true } } },
+  });
+
+  const ids = [...new Set(rows.map((r) => r.projectId!).filter(Boolean))];
+  const projects = await prisma.project.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true } });
+  const pmap = new Map(projects.map((p) => [p.id, p]));
+
+  return {
+    changes: rows.map((r) => ({
+      id: r.id,
+      area: ENTITY_AREA[r.entity] ?? r.entity,
+      action: r.action,
+      projectId: r.projectId,
+      projectCode: pmap.get(r.projectId!)?.code ?? '—',
+      projectName: pmap.get(r.projectId!)?.name ?? '—',
+      by: r.user?.name ?? '—',
+      byRole: r.user?.role ?? null,
+      at: r.createdAt,
+    })),
+  };
+}

@@ -2,18 +2,36 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { formatDate } from '../lib/format';
 
 interface BellData {
   total: number;
   high: number;
   projects: { projectId: string; code: string; name: string; total: number; high: number }[];
 }
+interface ChangeItem { id: string; area: string; action: string; projectId: string | null; projectCode: string; projectName: string; by: string; byRole: string | null; at: string }
+
+const AREA_COLOR: Record<string, string> = {
+  WBS: 'bg-brand-100 text-brand-700 dark:bg-brand-600/25 dark:text-brand-100',
+  Cost: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  Risk: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+};
+const ACTION_LABEL: Record<string, string> = { CREATE: 'added', UPDATE: 'edited', DELETE: 'removed' };
 
 export default function NotificationBell() {
+  const { user } = useAuth();
+  const isAdminPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const [open, setOpen] = useState(false);
   const { data } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api.get<BellData>('/notifications'),
+    refetchInterval: 60_000,
+  });
+  const { data: changes } = useQuery({
+    queryKey: ['changes'],
+    queryFn: () => api.get<{ changes: ChangeItem[] }>('/notifications/changes'),
+    enabled: isAdminPmo,
     refetchInterval: 60_000,
   });
 
@@ -64,6 +82,32 @@ export default function NotificationBell() {
                   </li>
                 ))}
               </ul>
+            )}
+
+            {isAdminPmo && (
+              <div className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <div className="mb-1 text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">Recent changes (WBS · Cost · Risk)</div>
+                {!changes?.changes.length ? (
+                  <p className="py-2 text-center text-xs text-slate-400 dark:text-slate-500">No recent changes</p>
+                ) : (
+                  <ul className="max-h-64 space-y-0.5 overflow-y-auto">
+                    {changes.changes.map((c) => (
+                      <li key={c.id}>
+                        <Link to={`/projects/${c.projectId}`} onClick={() => setOpen(false)} className="block rounded-lg px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${AREA_COLOR[c.area] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{c.area}</span>
+                            <span className="text-slate-500 dark:text-slate-400">{ACTION_LABEL[c.action] ?? c.action.toLowerCase()}</span>
+                            <span className="ml-auto shrink-0 text-[10px] text-slate-400 dark:text-slate-500">{formatDate(c.at)}</span>
+                          </div>
+                          <div className="truncate text-[11px] text-slate-400 dark:text-slate-500">
+                            <span className="font-mono">{c.projectCode}</span> · by {c.by}
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         </>

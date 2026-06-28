@@ -10,14 +10,13 @@ import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
 import RiskPanel from './panels/RiskPanel';
 import SchedulePanel from './panels/SchedulePanel';
-import WbsPanel from './panels/WbsPanel';
 import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
 
-const TABS = ['Charter', 'WBS', 'Cost', 'Risk', 'Schedule', 'Change Req', 'Audit'] as const;
+const TABS = ['Charter', 'Cost', 'Risk', 'Schedule', 'Change Req', 'Audit'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function ProjectPage() {
@@ -108,7 +107,6 @@ export default function ProjectPage() {
       )}
 
       {tab === 'Charter' && <CharterPanel projectId={projectId} />}
-      {tab === 'WBS' && chartered && <WbsPanel projectId={projectId} />}
       {tab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
       {tab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
       {tab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
