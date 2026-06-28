@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: prima-pm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prima
+      POSTGRES_PASSWORD: prima
+      POSTGRES_DB: prima_pm
+    ports:
+      - "5432:5432"
+    volumes:
+      - prima_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prima -d prima_pm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Optional lightweight DB UI at http://localhost:8080
+  adminer:
+    image: adminer:4
+    container_name: prima-pm-adminer
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+volumes:
+  prima_pgdata:

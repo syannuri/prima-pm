@@ -1,0 +1,81 @@
+import { test, expect } from '@playwright/test';
+import { login } from './helpers';
+
+test.describe('Authentication & RBAC', () => {
+  test('rejects invalid credentials', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.removeItem('prima_token'));
+    await page.reload();
+
+    await page.getByLabel('Email').fill('budi@prima.id');
+    await page.getByLabel('Password').fill('wrong-password');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    // Generous timeout: the login round-trip can be slow on a cold dev server.
+    await expect(page.getByText(/invalid|incorrect|credential/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Logout' })).toHaveCount(0);
+  });
+
+  test('PM can log in and reaches the dashboard', async ({ page }) => {
+    await login(page, 'Project Manager');
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByText('PROJECT_MANAGER', { exact: true })).toBeVisible();
+  });
+
+  test('PM can create projects, Finance cannot', async ({ page }) => {
+    await login(page, 'Project Manager');
+    await expect(page.getByRole('button', { name: '+ New Project' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Logout' }).click();
+    await login(page, 'Finance');
+    await expect(page.getByText('FINANCE', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '+ New Project' })).toHaveCount(0);
+  });
+
+  test('change-password modal validates without mutating the account', async ({ page }) => {
+    await login(page, 'Project Manager');
+    await page.getByRole('button', { name: 'Change password' }).click();
+    await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible();
+
+    // Client-side: mismatched confirmation is caught before any request.
+    await page.getByLabel('Current password').fill('Password123!');
+    await page.getByLabel('New password', { exact: true }).fill('Brand-New-Pass-1');
+    await page.getByLabel('Confirm new password').fill('different-2');
+    await page.getByRole('button', { name: 'Update' }).click();
+    await expect(page.getByText(/do not match/i)).toBeVisible();
+    await page.screenshot({ path: 'test-results/change-password-modal.png' });
+
+    // Server-side: reusing the weak/known password is rejected (denylist) — no mutation,
+    // so the account keeps working (verified by every other test logging in).
+    await page.getByLabel('Confirm new password').fill('Password123!');
+    await page.getByLabel('New password', { exact: true }).fill('Password123!');
+    await page.getByRole('button', { name: 'Update' }).click();
+    await expect(page.getByText(/Invalid request|common|breach|differ/i)).toBeVisible();
+  });
+
+  test('admin sees the Users management page; non-admins do not', async ({ page }) => {
+    test.slow(); // two full logins + navigation — give it extra time on a cold dev server
+    // Admin: header link + populated user table + create form.
+    await login(page, 'Admin');
+    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible();
+    await page.getByRole('link', { name: 'Users' }).click();
+    await expect(page.getByRole('heading', { name: 'User management' })).toBeVisible();
+    await expect(page.getByText('Create user')).toBeVisible();
+    await expect(page.getByText('mamed@prima.id')).toBeVisible();
+    await expect(page.getByText('budi@prima.id')).toBeVisible();
+    await page.screenshot({ path: 'test-results/admin-users.png', fullPage: true });
+
+    // Non-admin (a Project Manager): no link, and direct navigation is blocked by a notice.
+    await page.getByRole('button', { name: 'Logout' }).click();
+    await login(page, 'Project Manager');
+    await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0);
+    await page.goto('/admin/users');
+    await expect(page.getByText(/need the Admin role/i)).toBeVisible();
+  });
+
+  test('logout returns to the login screen', async ({ page }) => {
+    await login(page, 'Admin');
+    await page.getByRole('button', { name: 'Logout' }).click();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  });
+});

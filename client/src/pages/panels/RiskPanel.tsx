@@ -1,0 +1,195 @@
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, ApiError } from '../../api/client';
+import type { Risk, RiskAnalysis } from '../../api/types';
+import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from '../../components/ui';
+import { formatIdr } from '../../lib/format';
+import Attachments from '../../components/Attachments';
+
+const SEV_COLOR: Record<string, string> = { LOW: 'green', MEDIUM: 'amber', HIGH: 'red', CRITICAL: 'red' };
+
+export default function RiskPanel({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const [filesFor, setFilesFor] = useState<{ id: string; code: string } | null>(null);
+  const base = `/projects/${projectId}/risk`;
+  const risksQ = useQuery({ queryKey: ['risks', projectId], queryFn: () => api.get<{ risks: Risk[] }>(base) });
+  const analysisQ = useQuery({ queryKey: ['risk-analysis', projectId], queryFn: () => api.get<RiskAnalysis>(`${base}/analysis`) });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['risks', projectId] });
+    qc.invalidateQueries({ queryKey: ['risk-analysis', projectId] });
+    qc.invalidateQueries({ queryKey: ['cost', projectId] });
+    qc.invalidateQueries({ queryKey: ['project', projectId] });
+  };
+
+  if (risksQ.isLoading) return <Spinner />;
+  const a = analysisQ.data;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <SectionTitle sub="Probability × Impact (5×5)">Risk Heatmap</SectionTitle>
+          {a && <Heatmap cells={a.heatmap} />}
+        </Card>
+        <Card>
+          <SectionTitle sub="Quantitative — EMV drives the contingency reserve">Reserve &amp; Severity</SectionTitle>
+          {a && (
+            <div className="space-y-3">
+              <div className="rounded-lg bg-brand-50 p-3">
+                <div className="text-xs text-brand-600">Contingency Reserve (Σ residual EMV of threats)</div>
+                <div className="text-xl font-bold text-brand-700">{formatIdr(a.reserve.contingencyReserve)}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  threat {formatIdr(a.reserve.threatReserve)} · opportunity offset {formatIdr(a.reserve.opportunityOffset)}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((s) => (
+                  <Badge key={s} color={SEV_COLOR[s]}>{s}: {a.bySeverity[s]}</Badge>
+                ))}
+              </div>
+              <div>
+                <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">Top risks by EMV</div>
+                {a.topByEmv.map((r) => (
+                  <div key={r.id} className="flex justify-between border-b border-slate-100 dark:border-slate-800 py-1 text-sm">
+                    <span>{r.code} · {r.title}</span>
+                    <span className="font-medium">{formatIdr(r.emv)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <Card>
+        <SectionTitle sub="Identified risks with qualitative & quantitative analysis">Risk Register</SectionTitle>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                <th className="py-2">Code</th><th>Title</th><th>Kind</th><th>P×I</th><th>Severity</th>
+                <th className="text-right">EMV</th><th className="text-right">Residual</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {risksQ.data?.risks.map((r) => (
+                <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="py-2 font-mono text-xs">{r.code}</td>
+                  <td>{r.title}</td>
+                  <td><Badge color={r.kind === 'THREAT' ? 'red' : 'green'}>{r.kind}</Badge></td>
+                  <td>{r.probabilityScore}×{r.impactScore}={r.riskScore}</td>
+                  <td><Badge color={SEV_COLOR[r.severity]}>{r.severity}</Badge></td>
+                  <td className="text-right">{formatIdr(r.emv)}</td>
+                  <td className="text-right text-slate-500 dark:text-slate-400">{r.residualEmv ? formatIdr(r.residualEmv) : '—'}</td>
+                  <td className="text-right">
+                    <button
+                      onClick={() => setFilesFor((f) => (f?.id === r.id ? null : { id: r.id, code: r.code }))}
+                      className="mr-2 text-xs text-brand-600 hover:underline"
+                    >
+                      📎 files
+                    </button>
+                    <DeleteRisk base={base} id={r.id} onDone={invalidate} />
+                  </td>
+                </tr>
+              ))}
+              {!risksQ.data?.risks.length && <tr><td colSpan={8} className="py-3 text-center text-slate-400 dark:text-slate-500">No risks yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {filesFor && (
+          <div className="mt-3">
+            <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Attachments for risk {filesFor.code}</p>
+            <Attachments projectId={projectId} ownerType="RISK" ownerId={filesFor.id} />
+          </div>
+        )}
+
+        <AddRisk base={base} onDone={invalidate} />
+      </Card>
+    </div>
+  );
+}
+
+function DeleteRisk({ base, id, onDone }: { base: string; id: string; onDone: () => void }) {
+  const del = useMutation({ mutationFn: () => api.del(`${base}/${id}`), onSuccess: onDone });
+  return <button onClick={() => del.mutate()} className="text-xs text-red-500 hover:underline">delete</button>;
+}
+
+function Heatmap({ cells }: { cells: RiskAnalysis['heatmap'] }) {
+  // probability rows (5 -> 1, top to bottom), impact columns (1 -> 5)
+  const color = (score: number) =>
+    score <= 5 ? 'bg-green-100' : score <= 12 ? 'bg-amber-100' : score <= 19 ? 'bg-orange-200' : 'bg-red-200';
+  const get = (p: number, i: number) => cells.find((c) => c.probability === p && c.impact === i);
+  return (
+    <div className="inline-block">
+      <div className="flex">
+        <div className="w-6" />
+        {[1, 2, 3, 4, 5].map((i) => <div key={i} className="w-12 text-center text-xs text-slate-400 dark:text-slate-500">{i}</div>)}
+      </div>
+      {[5, 4, 3, 2, 1].map((p) => (
+        <div key={p} className="flex items-center">
+          <div className="w-6 text-center text-xs text-slate-400 dark:text-slate-500">{p}</div>
+          {[1, 2, 3, 4, 5].map((i) => {
+            const cell = get(p, i);
+            return (
+              <div key={i} className={`m-0.5 grid h-11 w-11 place-items-center rounded ${color(p * i)} text-sm font-semibold text-slate-700 dark:text-slate-200`}>
+                {cell && cell.count > 0 ? cell.count : ''}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      <div className="mt-1 text-center text-xs text-slate-400 dark:text-slate-500">Impact → / Probability ↑</div>
+    </div>
+  );
+}
+
+function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
+  const [f, setF] = useState({
+    title: '', kind: 'THREAT', probabilityScore: '3', impactScore: '3',
+    probabilityPct: '0.3', impactCostIdr: '', responseStrategy: '', residualProbabilityPct: '', residualImpactCost: '',
+  });
+  const [err, setErr] = useState('');
+  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+
+  const add = useMutation({
+    mutationFn: () => {
+      const body: Record<string, unknown> = {
+        title: f.title, kind: f.kind,
+        probabilityScore: Number(f.probabilityScore), impactScore: Number(f.impactScore),
+        probabilityPct: Number(f.probabilityPct), impactCostIdr: Number(f.impactCostIdr),
+      };
+      if (f.responseStrategy) body.responseStrategy = f.responseStrategy;
+      if (f.residualProbabilityPct && f.residualImpactCost) {
+        body.residualProbabilityPct = Number(f.residualProbabilityPct);
+        body.residualImpactCost = Number(f.residualImpactCost);
+      }
+      return api.post(`${base}`, body);
+    },
+    onSuccess: () => { setF((p) => ({ ...p, title: '', impactCostIdr: '', residualProbabilityPct: '', residualImpactCost: '' })); setErr(''); onDone(); },
+    onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
+  });
+
+  return (
+    <div className="mt-4 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
+      <div className="grid gap-2 md:grid-cols-4">
+        <Field label="Title"><Input value={f.title} onChange={(e) => set('title', e.target.value)} /></Field>
+        <Field label="Kind">
+          <Select value={f.kind} onChange={(e) => set('kind', e.target.value)}>
+            <option value="THREAT">Threat</option><option value="OPPORTUNITY">Opportunity</option>
+          </Select>
+        </Field>
+        <Field label="Probability (1-5)"><Input type="number" min={1} max={5} value={f.probabilityScore} onChange={(e) => set('probabilityScore', e.target.value)} /></Field>
+        <Field label="Impact (1-5)"><Input type="number" min={1} max={5} value={f.impactScore} onChange={(e) => set('impactScore', e.target.value)} /></Field>
+        <Field label="Probability % (0-1)"><Input type="number" step={0.05} value={f.probabilityPct} onChange={(e) => set('probabilityPct', e.target.value)} /></Field>
+        <Field label="Impact Cost (IDR)"><Input type="number" value={f.impactCostIdr} onChange={(e) => set('impactCostIdr', e.target.value)} /></Field>
+        <Field label="Residual P% (opt)"><Input type="number" step={0.05} value={f.residualProbabilityPct} onChange={(e) => set('residualProbabilityPct', e.target.value)} /></Field>
+        <Field label="Residual Impact (opt)"><Input type="number" value={f.residualImpactCost} onChange={(e) => set('residualImpactCost', e.target.value)} /></Field>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <Button onClick={() => add.mutate()} disabled={!f.title || !f.impactCostIdr || add.isPending}>Add Risk</Button>
+        {err && <span className="text-sm text-red-600">{err}</span>}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,27 @@
+# systemd unit for PRIMA-PM (single process: API + static client).
+# Install:
+#   sudo cp scripts/prima-pm.service /etc/systemd/system/prima-pm.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now prima-pm
+# Logs:   journalctl -u prima-pm -f
+#
+# Runs as root because the checkout (incl. server/uploads for attachments) is
+# root-owned. If you chown the repo to a non-root user, set User=/Group= to match.
+
+[Unit]
+Description=PRIMA-PM project management app
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/mamed/prima-pm/server
+Environment=NODE_ENV=production
+EnvironmentFile=/home/mamed/prima-pm/server/.env
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

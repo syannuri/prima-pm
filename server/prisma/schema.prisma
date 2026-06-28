@@ -1,0 +1,467 @@
+// =====================================================================
+// PRIMA-PM — Prisma Schema
+// Integrated Project Management Web Application
+// DB: PostgreSQL 16 | Money: Decimal(18,2) | Generated: 2026-06-27
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================================
+// ENUMS
+// =====================================================================
+
+enum Role {
+  ADMIN
+  PMO
+  PROJECT_MANAGER
+  FINANCE
+  RISK_OFFICER
+  TEAM_MEMBER
+  VIEWER
+}
+
+enum ProjectStatus {
+  DRAFT
+  CHARTERED
+  IN_PROGRESS
+  ON_HOLD
+  CLOSED
+}
+
+enum ProjectCategory {
+  NETWORK_INFRA
+  SERVER_INFRA
+  CLOUD_INFRA
+  CYBERSECURITY_INFRA
+  APP_DEV
+}
+
+enum DirectCostType {
+  TECHNOLOGY_ONPREM
+  TECHNOLOGY_CLOUD
+  HARDWARE_LICENSE
+  SOFTWARE_LICENSE
+  MANPOWER
+}
+
+enum PersonnelRole {
+  PM
+  PROJECT_PERSONNEL
+}
+
+enum IndirectCostType {
+  TRANSPORTATION
+  ACCOMMODATION
+  ENTERTAINMENT
+}
+
+enum RiskKind {
+  THREAT
+  OPPORTUNITY
+}
+
+enum RiskSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskStatus {
+  IDENTIFIED
+  ANALYZING
+  PLANNED
+  OPEN
+  CLOSED
+  OCCURRED
+}
+
+enum ResponseStrategy {
+  AVOID
+  MITIGATE
+  TRANSFER
+  ACCEPT
+  EXPLOIT
+  ENHANCE
+  SHARE
+}
+
+enum DependencyType {
+  FS // Finish-to-Start
+  SS // Start-to-Start
+  FF // Finish-to-Finish
+  SF // Start-to-Finish
+}
+
+enum ChangeRequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum AttachmentOwner {
+  CHARTER
+  RISK
+  PROJECT
+  TASK
+}
+
+// =====================================================================
+// CORE / IDENTITY
+// =====================================================================
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(VIEWER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // relations
+  managedProjects   Project[]       @relation("ProjectManager")
+  charters          ProjectCharter[] @relation("CharterPM")
+  ownedRisks        Risk[]          @relation("RiskOwner")
+  assignedTasks     Task[]          @relation("TaskPIC")
+  manpowerItems     CostItemDirect[] @relation("ManpowerResource")
+  auditLogs         AuditLog[]
+  changeRequests    ChangeRequest[] @relation("CRRequester")
+  decidedCRs        ChangeRequest[] @relation("CRDecider")
+
+  @@index([role])
+}
+
+// =====================================================================
+// PROJECT + CHARTER (Module 1)
+// =====================================================================
+
+model Project {
+  id        String        @id @default(uuid())
+  code      String        @unique
+  name      String
+  sponsor   String?
+  status    ProjectStatus @default(DRAFT)
+  pmUserId  String?
+  pm        User?         @relation("ProjectManager", fields: [pmUserId], references: [id])
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
+
+  charter          ProjectCharter?
+  charterVersions  CharterVersion[]
+  directCosts      CostItemDirect[]
+  indirectCosts    CostItemIndirect[]
+  risks            Risk[]
+  tasks            Task[]
+  costBaseline     CostBaseline?
+  changeRequests   ChangeRequest[]
+  attachments      Attachment[]
+  actualCosts      ActualCostEntry[]
+
+  @@index([status])
+  @@index([pmUserId])
+}
+
+model ProjectCharter {
+  id              String          @id @default(uuid())
+  projectId       String          @unique
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  description     String
+  goals           String
+  category        ProjectCategory
+  hiScope         String
+  hiCostIdr       Decimal         @db.Decimal(18, 2)
+  hiScheduleStart DateTime
+  hiScheduleEnd   DateTime
+  hiDeliverables  String
+
+  pmUserId        String
+  pm              User            @relation("CharterPM", fields: [pmUserId], references: [id])
+
+  version         Int             @default(1)
+  locked          Boolean         @default(false)
+  committedAt     DateTime?
+  committedBy     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([category])
+}
+
+// Immutable snapshot taken on each Commit (versioning + audit)
+model CharterVersion {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version     Int
+  snapshot    Json
+  committedBy String
+  committedAt DateTime @default(now())
+
+  @@unique([projectId, version])
+  @@index([projectId])
+}
+
+// =====================================================================
+// COST MANAGEMENT (Module 2)
+// =====================================================================
+
+// Unified Direct Cost line (Material rows + Manpower rows), discriminated by `type`
+model CostItemDirect {
+  id        String         @id @default(uuid())
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      DirectCostType
+  label     String
+
+  // --- Material fields (TECHNOLOGY_*, HARDWARE_LICENSE, SOFTWARE_LICENSE) ---
+  qty       Decimal?       @db.Decimal(18, 2)
+  unitCost  Decimal?       @db.Decimal(18, 2)
+  amount    Decimal?       @db.Decimal(18, 2) // = qty * unitCost
+
+  // --- Manpower fields (type = MANPOWER) ---
+  personnelRole     PersonnelRole?
+  resourceUserId    String?
+  resource          User?          @relation("ManpowerResource", fields: [resourceUserId], references: [id])
+  rateCardId        String?
+  rateCard          RateCard?      @relation(fields: [rateCardId], references: [id])
+  unitCostPerManday Decimal?       @db.Decimal(18, 2)
+  planMandays       Decimal?       @db.Decimal(10, 2)
+  manpowerCost      Decimal?       @db.Decimal(18, 2) // = unitCostPerManday * planMandays
+
+  // Link to schedule task (manpower <-> schedule sync)
+  task   Task?   @relation("TaskManpower", fields: [taskId], references: [id])
+  taskId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, type])
+}
+
+model CostItemIndirect {
+  id          String           @id @default(uuid())
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        IndirectCostType
+  description String
+  amount      Decimal          @db.Decimal(18, 2)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([projectId, type])
+}
+
+model RateCard {
+  id                String           @id @default(uuid())
+  roleName          String
+  level             String?
+  unitCostPerManday Decimal          @db.Decimal(18, 2)
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  directCosts CostItemDirect[]
+
+  @@unique([roleName, level])
+}
+
+// Computed roll-up cache (1:1 with Project)
+model CostBaseline {
+  id                 String   @id @default(uuid())
+  projectId          String   @unique
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  directTotal        Decimal  @default(0) @db.Decimal(18, 2)
+  indirectTotal      Decimal  @default(0) @db.Decimal(18, 2)
+  contingencyReserve Decimal  @default(0) @db.Decimal(18, 2)
+  managementReserve  Decimal  @default(0) @db.Decimal(18, 2)
+  costBaseline       Decimal  @default(0) @db.Decimal(18, 2) // direct + indirect + contingency
+  budgetAtCompletion Decimal  @default(0) @db.Decimal(18, 2) // costBaseline + managementReserve
+
+  updatedAt          DateTime @updatedAt
+}
+
+// Time-phased Actual Cost (AC) entries — cumulative AC up to a status date
+// drives the Cost Performance Index (CPI) in EVM.
+model ActualCostEntry {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date        DateTime
+  amount      Decimal  @db.Decimal(18, 2)
+  description String?
+  recordedBy  String?
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, date])
+}
+
+// =====================================================================
+// RISK MANAGEMENT (Module 3)
+// =====================================================================
+
+model Risk {
+  id          String     @id @default(uuid())
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code        String
+  title       String
+  description String?
+  category    String?
+  status      RiskStatus @default(IDENTIFIED)
+  kind        RiskKind   @default(THREAT)
+
+  ownerUserId String?
+  owner       User?      @relation("RiskOwner", fields: [ownerUserId], references: [id])
+
+  // --- Qualitative ---
+  probabilityScore Int          // 1..5
+  impactScore      Int          // 1..5
+  riskScore        Int          // = probabilityScore * impactScore
+  severity         RiskSeverity
+
+  // --- Quantitative (EMV) ---
+  probabilityPct Decimal  @db.Decimal(5, 4) // 0..1
+  impactCostIdr  Decimal  @db.Decimal(18, 2)
+  emv            Decimal  @db.Decimal(18, 2) // = probabilityPct * impactCostIdr
+
+  // --- Response ---
+  responseStrategy ResponseStrategy?
+  responseCost     Decimal?          @db.Decimal(18, 2)
+  residualEmv      Decimal?          @db.Decimal(18, 2)
+  includeInReserve Boolean           @default(true)
+
+  attachments Attachment[] @relation("RiskAttachments")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, code])
+  @@index([projectId, severity])
+}
+
+// =====================================================================
+// SCHEDULE MANAGEMENT (Module 4)
+// =====================================================================
+
+model Task {
+  id           String    @id @default(uuid())
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  parentTaskId String?
+  parent       Task?     @relation("TaskTree", fields: [parentTaskId], references: [id])
+  subtasks     Task[]    @relation("TaskTree")
+
+  wbsCode      String
+  name         String
+  planStart    DateTime
+  planEnd      DateTime
+  actualStart  DateTime?
+  actualFinish DateTime?
+
+  picUserId    String?
+  pic          User?     @relation("TaskPIC", fields: [picUserId], references: [id])
+
+  progressPct  Int       @default(0) // 0..100
+  isMilestone  Boolean   @default(false)
+  sortOrder    Int       @default(0)
+
+  // schedule <-> cost (manpower) link
+  manpowerItems CostItemDirect[] @relation("TaskManpower")
+
+  // dependencies
+  predecessorOf TaskDependency[] @relation("DepPredecessor")
+  successorOf   TaskDependency[] @relation("DepSuccessor")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, parentTaskId])
+}
+
+model TaskDependency {
+  id            String         @id @default(uuid())
+  predecessorId String
+  predecessor   Task           @relation("DepPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successorId   String
+  successor     Task           @relation("DepSuccessor", fields: [successorId], references: [id], onDelete: Cascade)
+  type          DependencyType @default(FS)
+  lagDays       Int            @default(0)
+
+  @@unique([predecessorId, successorId])
+}
+
+// =====================================================================
+// GOVERNANCE: CHANGE CONTROL, AUDIT, ATTACHMENTS
+// =====================================================================
+
+model ChangeRequest {
+  id          String              @id @default(uuid())
+  projectId   String
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        String // e.g. CHARTER, COST_BASELINE, SCHEDULE, SCOPE
+  title       String
+  description String
+
+  status      ChangeRequestStatus @default(SUBMITTED)
+  requestedBy String
+  requester   User                @relation("CRRequester", fields: [requestedBy], references: [id])
+  decidedBy   String?
+  decider     User?               @relation("CRDecider", fields: [decidedBy], references: [id])
+  decidedAt   DateTime?
+
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([projectId, status])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  projectId String? // set for project-scoped events (enables per-project audit view)
+  entity    String
+  entityId  String
+  action    String // CREATE | UPDATE | DELETE | COMMIT | APPROVE | REJECT
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([projectId, createdAt])
+  @@index([createdAt])
+}
+
+model Attachment {
+  id         String          @id @default(uuid())
+  ownerType  AttachmentOwner
+  ownerId    String
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  uploadedBy String
+  createdAt  DateTime        @default(now())
+
+  // optional typed back-relations (kept loose/polymorphic by ownerType)
+  project    Project? @relation(fields: [projectRelId], references: [id])
+  projectRelId String?
+  risk       Risk?    @relation("RiskAttachments", fields: [riskRelId], references: [id])
+  riskRelId  String?
+
+  @@index([ownerType, ownerId])
+}

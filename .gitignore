@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment / secrets — never commit real .env (keep the *.example templates)
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Runtime data
+server/uploads/
+backups/
+
+# Test artifacts
+e2e/test-results/
+e2e/playwright-report/
+playwright/.cache/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
