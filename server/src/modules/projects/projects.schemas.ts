@@ -4,6 +4,7 @@ export const PROJECT_CATEGORIES = ['NETWORK_INFRA', 'SERVER_INFRA', 'CLOUD_INFRA
 
 export const createProjectSchema = z.object({
   name: z.string().min(2).max(160),
+  code: z.string().trim().min(2).max(40).optional(), // override the auto-generated code
   clientName: z.string().max(160).optional(),
   sponsor: z.string().max(160).optional(),
   pmUserId: z.string().uuid().optional(),
@@ -14,6 +15,7 @@ export const createProjectSchema = z.object({
 
 export const updateProjectSchema = z.object({
   name: z.string().min(2).max(160).optional(),
+  code: z.string().trim().min(2).max(40).optional(),
   clientName: z.string().max(160).nullable().optional(),
   sponsor: z.string().max(160).nullable().optional(),
   category: z.enum(PROJECT_CATEGORIES).nullable().optional(),

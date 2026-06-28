@@ -1,7 +1,7 @@
 import type { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
-import { NotFound, BadRequest } from '../../lib/errors.js';
+import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { generateProjectCode } from '../charter/charter.helpers.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
 
@@ -42,10 +42,16 @@ export async function createProject(input: CreateProjectInput, actorId: string) 
   const year = new Date().getFullYear();
 
   const project = await prisma.$transaction(async (tx) => {
-    const countThisYear = await tx.project.count({
-      where: { code: { startsWith: `PRJ-${year}-` } },
-    });
-    const code = generateProjectCode(year, countThisYear + 1);
+    let code = input.code?.trim();
+    if (code) {
+      const clash = await tx.project.findUnique({ where: { code }, select: { id: true } });
+      if (clash) throw Conflict(`Project code "${code}" is already in use`);
+    } else {
+      const countThisYear = await tx.project.count({
+        where: { code: { startsWith: `PRJ-${year}-` } },
+      });
+      code = generateProjectCode(year, countThisYear + 1);
+    }
 
     return tx.project.create({
       data: {
@@ -70,10 +76,18 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   const before = await prisma.project.findFirst({ where: { id, deletedAt: null } });
   if (!before) throw NotFound('Project not found');
 
+  // Project code is unique — block a clash with another project.
+  const newCode = input.code?.trim();
+  if (newCode && newCode !== before.code) {
+    const clash = await prisma.project.findUnique({ where: { code: newCode }, select: { id: true } });
+    if (clash) throw Conflict(`Project code "${newCode}" is already in use`);
+  }
+
   const project = await prisma.project.update({
     where: { id },
     data: {
       name: input.name ?? undefined,
+      code: newCode ?? undefined,
       clientName: input.clientName === undefined ? undefined : input.clientName,
       sponsor: input.sponsor === undefined ? undefined : input.sponsor,
       category: input.category === undefined ? undefined : input.category,

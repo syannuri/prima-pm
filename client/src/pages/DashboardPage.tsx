@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState<'portfolio' | 'resources' | 'cards'>('portfolio');
   const [name, setName] = useState('');
+  const [code, setCode] = useState('');
   const [clientName, setClientName] = useState('');
   const [sponsor, setSponsor] = useState('');
   const [category, setCategory] = useState<ProjectCategory | ''>('');
@@ -35,10 +36,11 @@ export default function DashboardPage() {
     queryFn: () => api.get<{ projects: Project[] }>('/projects'),
   });
 
-  const resetForm = () => { setName(''); setClientName(''); setSponsor(''); setCategory(''); setCostBaseline(''); setRevenue(''); };
+  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setCostBaseline(''); setRevenue(''); };
   const create = useMutation({
     mutationFn: () => api.post<{ project: Project }>('/projects', {
       name,
+      code: code.trim() || undefined,
       clientName: clientName || undefined,
       sponsor: sponsor || undefined,
       category: category || undefined,
@@ -92,9 +94,14 @@ export default function DashboardPage() {
             <h2 className="mb-1 text-lg font-semibold text-slate-800 dark:text-slate-100">New Project</h2>
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Create a project shell, then build its Charter, WBS, Cost & Risk.</p>
             <div className="space-y-3">
-              <Field label="Project name">
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SOC Modernization" />
-              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Project name">
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SOC Modernization" />
+                </Field>
+                <Field label="Project code">
+                  <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="auto-generated if blank" />
+                </Field>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Client">
                   <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="e.g. Bank XYZ" />

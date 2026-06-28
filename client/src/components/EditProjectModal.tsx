@@ -14,6 +14,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(project.name);
+  const [code, setCode] = useState(project.code);
   const [clientName, setClientName] = useState(project.clientName ?? '');
   const [sponsor, setSponsor] = useState(project.sponsor ?? '');
   const [category, setCategory] = useState<ProjectCategory | ''>(project.category ?? '');
@@ -25,6 +26,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
 
   const start = () => {
     setName(project.name);
+    setCode(project.code);
     setClientName(project.clientName ?? '');
     setSponsor(project.sponsor ?? '');
     setCategory(project.category ?? '');
@@ -37,6 +39,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
   const save = useMutation({
     mutationFn: () => api.patch(`/projects/${project.id}`, {
       name,
+      code: code.trim() || undefined,
       clientName: clientName || null,
       sponsor: sponsor || null,
       category: category || null,
@@ -63,9 +66,14 @@ export default function EditProjectModal({ project }: { project: Project }) {
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">Edit Project Details</h2>
             <div className="space-y-3">
-              <Field label="Project name">
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Project name">
+                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                </Field>
+                <Field label="Project code">
+                  <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. PRJ-2026-0001" />
+                </Field>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Client">
                   <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="e.g. Bank XYZ" />
