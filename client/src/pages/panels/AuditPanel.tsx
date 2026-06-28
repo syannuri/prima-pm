@@ -31,7 +31,7 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['audit', projectId, entity, action],
     queryFn: () =>
-      api.get<{ entries: AuditEntry[]; entities: string[] }>(
+      api.get<{ entries: AuditEntry[]; entities: string[]; total: number }>(
         `${base}?limit=200${entity ? `&entity=${entity}` : ''}${action ? `&action=${action}` : ''}`,
       ),
   });
@@ -41,7 +41,9 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
   return (
     <Card>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <SectionTitle sub="Immutable trail of who changed what, when (append-only)">Audit Log</SectionTitle>
+        <SectionTitle sub="Immutable trail of who changed what, when (append-only)">
+          Audit Log {data?.total ? <span className="ml-1 text-sm font-normal text-slate-400 dark:text-slate-500">· {data.total} changes</span> : null}
+        </SectionTitle>
         <div className="flex items-end gap-2">
           <div className="w-44">
             <span className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Entity</span>
@@ -83,7 +85,9 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">Showing latest {data.entries.length} entries.</p>
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+            Showing latest {data.entries.length}{entity || action ? ' matching' : ` of ${data.total}`} entries.
+          </p>
         </div>
       )}
     </Card>

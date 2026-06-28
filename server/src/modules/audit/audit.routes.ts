@@ -43,7 +43,10 @@ router.get(
       distinct: ['entity'],
     });
 
-    res.json({ entries, entities: distinct.map((d) => d.entity).sort() });
+    // Total number of recorded changes for this project (unaffected by filters).
+    const total = await prisma.auditLog.count({ where: { projectId: req.params.projectId } });
+
+    res.json({ entries, entities: distinct.map((d) => d.entity).sort(), total });
   }),
 );
 
