@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Button, Card, Field, Input } from '../components/ui';
+import Logo from '../components/Logo';
 import { ApiError } from '../api/client';
 
 export default function LoginPage() {
@@ -27,10 +28,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-xl bg-brand-600 text-xl font-bold text-white">
-            P
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">PRIMA-PM</h1>
+          <Logo className="mx-auto mb-3 h-16 w-16" />
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">PRIMA</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">Project Risk, Investment, Management &amp; Assurance</p>
         </div>
         <Card>

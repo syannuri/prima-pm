@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { useAuth } from '../context/AuthContext';
+import Logo from './Logo';
 
 function Icon({ path }: { path: string }) {
   return (
@@ -41,8 +42,8 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
   return (
     <div className={`flex h-full flex-col bg-slate-900 text-slate-300 transition-[width] duration-200 ${collapsed ? 'w-16' : 'w-60'}`}>
       <div className={`flex h-14 items-center gap-2 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-600 font-bold text-white">P</span>
-        {!collapsed && <span className="text-base font-semibold text-white">PRIMA-PM</span>}
+        <Logo className="h-8 w-8 shrink-0" />
+        {!collapsed && <span className="text-base font-semibold text-white">PRIMA</span>}
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">

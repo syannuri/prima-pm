@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
-import { upsertTaskSchema, dependencySchema, evmQuerySchema } from './schedule.schemas.js';
+import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 
 const router = Router({ mergeParams: true });
@@ -43,6 +43,12 @@ router.post('/tasks', ...canWrite, validateBody(upsertTaskSchema), asyncHandler(
 
 router.put('/tasks/:taskId', ...canWrite, validateBody(upsertTaskSchema), asyncHandler(async (req, res) => {
   const task = await svc.updateTask(req.params.projectId, req.params.taskId, req.body, req.user!.id);
+  res.json({ task });
+}));
+
+// Progress-only update (WBS % complete / status).
+router.patch('/tasks/:taskId/progress', ...canWrite, validateBody(progressSchema), asyncHandler(async (req, res) => {
+  const task = await svc.setTaskProgress(req.params.projectId, req.params.taskId, req.body.progressPct, req.user!.id);
   res.json({ task });
 }));
 

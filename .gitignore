@@ -16,8 +16,8 @@ server/uploads/
 backups/
 
 # Test artifacts
-e2e/test-results/
-e2e/playwright-report/
+test-results/
+playwright-report/
 playwright/.cache/
 
 # Logs

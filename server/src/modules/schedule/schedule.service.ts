@@ -149,6 +149,24 @@ export async function updateTask(
   return task;
 }
 
+// Update only a task's progress (% complete). Also keeps actual dates sensible:
+// first progress stamps actualStart; reaching 100% stamps actualFinish; dropping
+// below 100% clears it.
+export async function setTaskProgress(projectId: string, taskId: string, progressPct: number, actorId: string) {
+  const existing = await prisma.task.findFirst({ where: { id: taskId, projectId } });
+  if (!existing) throw NotFound('Task not found');
+
+  const now = new Date();
+  const data: { progressPct: number; actualStart?: Date; actualFinish?: Date | null } = { progressPct };
+  if (progressPct > 0 && !existing.actualStart) data.actualStart = now;
+  if (progressPct >= 100) data.actualFinish = existing.actualFinish ?? now;
+  else if (existing.actualFinish) data.actualFinish = null;
+
+  const task = await prisma.task.update({ where: { id: taskId }, data });
+  await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: taskId, action: 'UPDATE', before: { progressPct: existing.progressPct }, after: { progressPct } });
+  return task;
+}
+
 // Delete a task and its whole subtree; unlink manpower and drop dependencies.
 export async function deleteTask(projectId: string, taskId: string, actorId: string) {
   const all = await prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true } });

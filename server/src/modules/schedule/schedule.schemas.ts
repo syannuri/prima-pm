@@ -37,5 +37,12 @@ export const evmQuerySchema = z.object({
   statusDate: z.coerce.date().optional(),
 });
 
+// Lightweight progress update (drives the WBS "% complete" / status) without a full
+// task replace, so parent/sortOrder/dependencies are never clobbered.
+export const progressSchema = z.object({
+  progressPct: z.coerce.number().int().min(0).max(100),
+});
+
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
+export type ProgressInput = z.infer<typeof progressSchema>;

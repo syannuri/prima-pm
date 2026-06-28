@@ -19,7 +19,7 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   await page.evaluate(() => localStorage.removeItem('prima_token'));
   await page.reload();
 
-  await expect(page.getByRole('heading', { name: 'PRIMA-PM' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'PRIMA' })).toBeVisible();
   await page.getByLabel('Email').fill(acct.email);
   await page.getByLabel('Password').fill(acct.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
