@@ -32,11 +32,19 @@ const linkActive = 'bg-brand-600/15 text-white shadow-[inset_2px_0_0_#f4675f]';
 
 export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const { user } = useAuth();
+  const isAdminPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const { data } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.get<{ projects: Project[] }>('/projects'),
   });
+  const { data: changes } = useQuery({
+    queryKey: ['changes'],
+    queryFn: () => api.get<{ unread: number }>('/notifications/changes'),
+    enabled: isAdminPmo,
+    refetchInterval: 60_000,
+  });
   const projects = data?.projects ?? [];
+  const unread = isAdminPmo ? changes?.unread ?? 0 : 0;
   const cx = (active: boolean) => `${linkBase} ${collapsed ? 'justify-center px-0' : ''} ${active ? linkActive : linkIdle}`;
 
   return (
@@ -47,8 +55,13 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        <NavLink to="/" end onClick={onNavigate} title="Dashboard" className={({ isActive }) => cx(isActive)}>
+        <NavLink to="/" end onClick={onNavigate} title={unread > 0 ? `Dashboard — ${unread} unread changes` : 'Dashboard'} className={({ isActive }) => `relative ${cx(isActive)}`}>
           <Icon path={ICONS.home} /> {!collapsed && 'Dashboard'}
+          {unread > 0 && (collapsed ? (
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-900" />
+          ) : (
+            <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{unread}</span>
+          ))}
         </NavLink>
         {user?.role === 'ADMIN' && (
           <NavLink to="/admin/users" onClick={onNavigate} title="Users" className={({ isActive }) => cx(isActive)}>
