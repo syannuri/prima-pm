@@ -138,6 +138,7 @@ model User {
   passwordHash String
   role         Role     @default(VIEWER)
   isActive     Boolean  @default(true)
+  changesSeenAt DateTime? // last time this user viewed the change-notification feed
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

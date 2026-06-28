@@ -118,8 +118,16 @@ const ENTITY_AREA: Record<string, string> = {
   Task: 'WBS', CostItemDirect: 'Cost', CostItemIndirect: 'Cost', Risk: 'Risk',
 };
 
-export async function getRecentChanges(role: string, limit = 25) {
-  if (!GLOBAL_ROLES.includes(role as Role)) return { changes: [] };
+export async function markChangesSeen(userId: string) {
+  await prisma.user.update({ where: { id: userId }, data: { changesSeenAt: new Date() } });
+  return { ok: true };
+}
+
+export async function getRecentChanges(userId: string, role: string, limit = 25) {
+  if (!GLOBAL_ROLES.includes(role as Role)) return { changes: [], unread: 0 };
+
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { changesSeenAt: true } });
+  const seenAt = me?.changesSeenAt?.getTime() ?? 0;
 
   const rows = await prisma.auditLog.findMany({
     where: { entity: { in: CHANGE_ENTITIES }, action: { in: ['CREATE', 'UPDATE', 'DELETE'] }, projectId: { not: null } },
@@ -132,8 +140,12 @@ export async function getRecentChanges(role: string, limit = 25) {
   const projects = await prisma.project.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true } });
   const pmap = new Map(projects.map((p) => [p.id, p]));
 
-  return {
-    changes: rows.map((r) => ({
+  let unread = 0;
+  const changes = rows.map((r) => {
+    // A change is "new" if it's after the user last viewed the feed and not their own.
+    const isNew = r.createdAt.getTime() > seenAt && r.userId !== userId;
+    if (isNew) unread += 1;
+    return {
       id: r.id,
       area: ENTITY_AREA[r.entity] ?? r.entity,
       action: r.action,
@@ -143,6 +155,8 @@ export async function getRecentChanges(role: string, limit = 25) {
       by: r.user?.name ?? '—',
       byRole: r.user?.role ?? null,
       at: r.createdAt,
-    })),
-  };
+      isNew,
+    };
+  });
+  return { changes, unread };
 }
