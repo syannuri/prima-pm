@@ -12,7 +12,7 @@ export async function listProjects(userId: string, role: Role) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
   if (!GLOBAL_ROLES.includes(role)) where.pmUserId = userId;
 
-  return prisma.project.findMany({
+  const projects = await prisma.project.findMany({
     where,
     orderBy: { createdAt: 'desc' },
     include: {
@@ -21,6 +21,16 @@ export async function listProjects(userId: string, role: Role) {
       costBaseline: { select: { budgetAtCompletion: true } },
     },
   });
+
+  // Total recorded changes per project (one grouped query, avoids N+1).
+  const changeGroups = await prisma.auditLog.groupBy({
+    by: ['projectId'],
+    where: { projectId: { in: projects.map((p) => p.id) } },
+    _count: { _all: true },
+  });
+  const changeMap = new Map(changeGroups.map((g) => [g.projectId, g._count._all]));
+
+  return projects.map((p) => ({ ...p, changeCount: changeMap.get(p.id) ?? 0 }));
 }
 
 export async function getProject(id: string) {

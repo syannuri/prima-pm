@@ -41,6 +41,7 @@ export interface Project {
   pm?: { id: string; name: string; email: string } | null;
   charter?: { id: string; locked: boolean; version: number; category: ProjectCategory } | null;
   costBaseline?: { budgetAtCompletion: string } | null;
+  changeCount?: number;
 }
 
 export interface Charter {

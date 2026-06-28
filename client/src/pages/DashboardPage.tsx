@@ -178,6 +178,12 @@ export default function DashboardPage() {
                     {p.costBaseline ? formatIdr(p.costBaseline.budgetAtCompletion) : '—'}
                   </span>
                 </div>
+                {!!p.changeCount && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+                    <span>🕓</span>
+                    <span><span className="font-medium text-slate-600 dark:text-slate-300">{p.changeCount}</span> changes</span>
+                  </div>
+                )}
               </Card>
             </Link>
           ))}
