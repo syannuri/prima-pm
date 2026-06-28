@@ -367,6 +367,10 @@ model Task {
 
   wbsCode      String
   name         String
+  // WBS dictionary — descriptive detail for each work package.
+  description        String? @db.Text
+  deliverable        String? @db.Text
+  acceptanceCriteria String? @db.Text
   planStart    DateTime
   planEnd      DateTime
   actualStart  DateTime?

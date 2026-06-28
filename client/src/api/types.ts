@@ -189,6 +189,9 @@ export interface Task {
   parentTaskId: string | null;
   wbsCode: string;
   name: string;
+  description: string | null;
+  deliverable: string | null;
+  acceptanceCriteria: string | null;
   planStart: string;
   planEnd: string;
   actualStart: string | null;

@@ -6,6 +6,10 @@ export const upsertTaskSchema = z
   .object({
     name: z.string().min(2).max(200),
     wbsCode: z.string().max(40).optional(), // auto-generated if omitted
+    // WBS dictionary
+    description: z.string().max(2000).nullable().optional(),
+    deliverable: z.string().max(1000).nullable().optional(),
+    acceptanceCriteria: z.string().max(2000).nullable().optional(),
     parentTaskId: z.string().uuid().nullable().optional(),
     planStart: z.coerce.date(),
     planEnd: z.coerce.date(),

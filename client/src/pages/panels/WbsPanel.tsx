@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { GanttNode, TaskDependency } from '../../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Spinner } from '../../components/ui';
+import type { GanttNode, TaskDependency, User } from '../../api/types';
+import { Badge, Button, Card, Field, Input, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
 import { formatDate, formatDateInput } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
 
@@ -94,6 +94,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   }, [rows, rolled]);
 
   const [form, setForm] = useState<{ parentId: string | null; edit?: GanttNode } | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const colCount = 8 + (canEdit ? 1 : 0);
 
   const progress = useMutation({
     mutationFn: ({ id, pct }: { id: string; pct: number }) => api.patch(`${base}/tasks/${id}/progress`, { progressPct: pct }),
@@ -148,11 +151,17 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 const st = statusOf(r.pct);
                 const leftPct = axis ? ((r.start - axis.min) / axis.span) * 100 : 0;
                 const widthPct = axis ? Math.max(1.5, ((r.end - r.start) / axis.span) * 100) : 0;
+                const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.pic);
+                const isOpen = expanded.has(node.id);
                 return (
-                  <tr key={node.id} className="[&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <Fragment key={node.id}>
+                  <tr className="[&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="font-mono text-xs text-slate-400 dark:text-slate-500">{wbs}</td>
                     <td>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
+                        <button onClick={() => toggle(node.id)} title="WBS dictionary" className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
+                          {isOpen ? '▾' : 'ⓘ'}
+                        </button>
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
                         <span className={depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'}>{node.name}</span>
                       </span>
@@ -194,6 +203,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </td>
                     )}
                   </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={colCount} className="border-b border-slate-100 bg-slate-50/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-800/30">
+                        <DictionaryView node={node} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -217,6 +234,24 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   );
 }
 
+// Read-only WBS dictionary detail shown when a row is expanded.
+function DictionaryView({ node }: { node: GanttNode }) {
+  const Item = ({ label, value }: { label: string; value: string | null | undefined }) => (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</div>
+      <div className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{value || <span className="text-slate-400 dark:text-slate-500">—</span>}</div>
+    </div>
+  );
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Item label="Owner (PIC)" value={node.pic?.name} />
+      <Item label="Deliverable" value={node.deliverable} />
+      <div className="sm:col-span-2"><Item label="Description / Scope" value={node.description} /></div>
+      <div className="sm:col-span-2"><Item label="Acceptance criteria" value={node.acceptanceCriteria} /></div>
+    </div>
+  );
+}
+
 function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
   base: string; parentId: string | null; edit?: GanttNode; siblingCount: number; onClose: () => void; onSaved: () => void;
 }) {
@@ -225,7 +260,12 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
   const [planEnd, setEnd] = useState(formatDateInput(edit?.planEnd ?? new Date()));
   const [progressPct, setProgress] = useState(edit?.progressPct ?? 0);
   const [isMilestone, setMilestone] = useState(edit?.isMilestone ?? false);
+  const [description, setDescription] = useState(edit?.description ?? '');
+  const [deliverable, setDeliverable] = useState(edit?.deliverable ?? '');
+  const [acceptanceCriteria, setAcceptance] = useState(edit?.acceptanceCriteria ?? '');
+  const [picUserId, setPic] = useState(edit?.picUserId ?? '');
   const [err, setErr] = useState('');
+  const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory') });
 
   const save = useMutation({
     mutationFn: () => {
@@ -238,7 +278,10 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
         isMilestone,
         parentTaskId: edit ? edit.parentTaskId : parentId,
         sortOrder: edit ? edit.sortOrder : siblingCount,
-        picUserId: edit?.picUserId ?? undefined,
+        picUserId: picUserId || undefined,
+        description: description || null,
+        deliverable: deliverable || null,
+        acceptanceCriteria: acceptanceCriteria || null,
         actualStart: edit?.actualStart ?? undefined,
         actualFinish: edit?.actualFinish ?? undefined,
       };
@@ -254,7 +297,7 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
         <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
         <div className="space-y-3">
           <Field label="Task name">
@@ -279,6 +322,23 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
             <input type="checkbox" checked={isMilestone} onChange={(e) => setMilestone(e.target.checked)} className="accent-brand-600" />
             Milestone
           </label>
+
+          {/* WBS dictionary */}
+          <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">WBS dictionary (optional)</div>
+            <div className="space-y-3">
+              <Field label="Owner (PIC)">
+                <Select value={picUserId} onChange={(e) => setPic(e.target.value)}>
+                  <option value="">— unassigned —</option>
+                  {usersQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                </Select>
+              </Field>
+              <Field label="Deliverable"><Input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} placeholder="e.g. Signed-off design document" /></Field>
+              <Field label="Description / scope"><Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What this work package covers" /></Field>
+              <Field label="Acceptance criteria"><Textarea value={acceptanceCriteria} onChange={(e) => setAcceptance(e.target.value)} placeholder="Definition of done" /></Field>
+            </div>
+          </div>
+
           {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}
           <div className="flex gap-2 pt-1">
             <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
