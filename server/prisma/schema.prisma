@@ -151,6 +151,7 @@ model User {
   auditLogs         AuditLog[]
   changeRequests    ChangeRequest[] @relation("CRRequester")
   decidedCRs        ChangeRequest[] @relation("CRDecider")
+  resourceProfiles  Resource[]      @relation("ResourceUser")
 
   @@index([role])
 }
@@ -292,8 +293,47 @@ model RateCard {
   updatedAt         DateTime         @updatedAt
 
   directCosts CostItemDirect[]
+  resources   Resource[]
 
   @@unique([roleName, level])
+}
+
+// ---------------------------------------------------------------------------
+// Resource master (manpower pool). A Resource is a person or a generic role
+// available to projects; it is NOT a login account (optionally linked to one
+// via userId). Picked when loading manpower into the WBS / Cost module.
+// ---------------------------------------------------------------------------
+enum ResourceType {
+  NAMED // a specific person
+  GENERIC // a role / placeholder (e.g. "Senior QA Engineer")
+}
+
+model Resource {
+  id            String        @id @default(uuid())
+  name          String
+  resourceType  ResourceType  @default(NAMED)
+  roleTitle     String? // free-text job title, e.g. "Backend Engineer"
+  personnelRole PersonnelRole @default(PROJECT_PERSONNEL)
+
+  // Costing: an effective day-rate, optionally sourced from a rate card.
+  rateCardId        String?
+  rateCard          RateCard? @relation(fields: [rateCardId], references: [id])
+  unitCostPerManday Decimal   @default(0) @db.Decimal(18, 2)
+
+  // Capacity: mandays available per working day (0.5 = half-time, 3 = a crew of 3).
+  capacityPerDay Decimal @default(1) @db.Decimal(6, 2)
+
+  department String?
+
+  // Optional link to a system account (for resources who also log in).
+  userId String?
+  user   User?   @relation("ResourceUser", fields: [userId], references: [id])
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
 }
 
 // Computed roll-up cache (1:1 with Project)

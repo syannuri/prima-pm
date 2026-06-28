@@ -5,10 +5,25 @@ import {
   periodKey,
   periodsInRange,
   buildCapacityReport,
+  effectiveDayRate,
   type AllocationInput,
 } from '../resource.helpers.js';
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
+
+describe('resource — effective day rate', () => {
+  it('uses the explicit override when positive', () => {
+    expect(effectiveDayRate(1_500_000, 1_000_000)).toBe(1_500_000);
+  });
+  it('inherits the rate card when no override', () => {
+    expect(effectiveDayRate(0, 1_000_000)).toBe(1_000_000);
+    expect(effectiveDayRate(null, 1_000_000)).toBe(1_000_000);
+    expect(effectiveDayRate(undefined, 1_000_000)).toBe(1_000_000);
+  });
+  it('falls back to 0 when neither is available', () => {
+    expect(effectiveDayRate(null, null)).toBe(0);
+  });
+});
 
 const item = (over: Partial<AllocationInput> = {}): AllocationInput => ({
   resourceKey: 'U:1',

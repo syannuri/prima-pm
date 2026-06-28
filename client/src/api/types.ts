@@ -19,6 +19,33 @@ export interface AdminUser extends User {
   createdAt: string;
 }
 
+export type PersonnelRole = 'PM' | 'PROJECT_PERSONNEL';
+export type ResourceType = 'NAMED' | 'GENERIC';
+
+export interface RateCard {
+  id: string;
+  roleName: string;
+  level: string | null;
+  unitCostPerManday: string; // Decimal serialized as string
+  isActive: boolean;
+}
+
+export interface ResourceItem {
+  id: string;
+  name: string;
+  resourceType: ResourceType;
+  roleTitle: string | null;
+  personnelRole: PersonnelRole;
+  rateCardId: string | null;
+  rateCard?: { id: string; roleName: string; level: string | null } | null;
+  unitCostPerManday: string;
+  capacityPerDay: string;
+  department: string | null;
+  userId: string | null;
+  user?: { id: string; name: string; email: string } | null;
+  isActive: boolean;
+}
+
 export type ProjectStatus = 'DRAFT' | 'CHARTERED' | 'IN_PROGRESS' | 'ON_HOLD' | 'CLOSED';
 export type ProjectCategory =
   | 'NETWORK_INFRA'

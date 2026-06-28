@@ -15,6 +15,7 @@ function Icon({ path }: { path: string }) {
 const ICONS = {
   home: 'M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5',
   users: 'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.9M16 3.1A4 4 0 0 1 16 11',
+  resources: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13-1-2 2-1-1m1-4v6',
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -66,6 +67,11 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
         {user?.role === 'ADMIN' && (
           <NavLink to="/admin/users" onClick={onNavigate} title="Users" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.users} /> {!collapsed && 'Users'}
+          </NavLink>
+        )}
+        {!!user && ['ADMIN', 'PMO', 'FINANCE'].includes(user.role) && (
+          <NavLink to="/admin/resources" onClick={onNavigate} title="Resources" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.resources} /> {!collapsed && 'Resources'}
           </NavLink>
         )}
 

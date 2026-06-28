@@ -243,3 +243,13 @@ export function buildCapacityReport(
 function periodKeyDate(d: Date): string {
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
+
+// --- Resource master: effective day-rate resolution ---
+// An explicit override (> 0) wins; otherwise inherit the linked rate card's rate.
+export function effectiveDayRate(
+  override: number | null | undefined,
+  rateCardRate: number | null | undefined,
+): number {
+  if (override != null && override > 0) return override;
+  return rateCardRate ?? 0;
+}

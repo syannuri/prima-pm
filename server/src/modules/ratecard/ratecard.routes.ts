@@ -18,11 +18,13 @@ const rateCardSchema = z.object({
 });
 
 // Anyone authenticated can read the rate card (needed for manpower pickers).
+// `?all=1` includes inactive cards (for admin management).
 router.get(
   '/',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const all = req.query.all === '1' || req.query.all === 'true';
     const rateCards = await prisma.rateCard.findMany({
-      where: { isActive: true },
+      where: all ? {} : { isActive: true },
       orderBy: [{ roleName: 'asc' }, { level: 'asc' }],
     });
     res.json({ rateCards });
@@ -64,6 +66,20 @@ router.put(
         isActive: req.body.isActive ?? existing.isActive,
       },
     });
+    await writeAudit({ userId: req.user!.id, entity: 'RateCard', entityId: rateCard.id, action: 'UPDATE', before: existing, after: rateCard });
+    res.json({ rateCard });
+  }),
+);
+
+// Activate / deactivate without resending the whole card.
+router.patch(
+  '/:id/active',
+  requireRole('ADMIN', 'FINANCE'),
+  validateBody(z.object({ isActive: z.boolean() })),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.rateCard.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw NotFound('Rate card not found');
+    const rateCard = await prisma.rateCard.update({ where: { id: req.params.id }, data: { isActive: req.body.isActive } });
     await writeAudit({ userId: req.user!.id, entity: 'RateCard', entityId: rateCard.id, action: 'UPDATE', before: existing, after: rateCard });
     res.json({ rateCard });
   }),
