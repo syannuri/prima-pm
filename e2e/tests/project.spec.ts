@@ -28,7 +28,7 @@ test.describe('Project workspace', () => {
     // per-row selects) appears with the seeded users.
     const addResourceSelect = page.locator('select').filter({ hasText: 'Resource… (optional)' });
     await expect(addResourceSelect).toBeVisible();
-    await expect(addResourceSelect.getByRole('option', { name: 'Sari Dewi' })).toBeAttached();
+    await expect(addResourceSelect.getByRole('option', { name: 'Budi Santoso' })).toBeAttached();
     await page.screenshot({ path: 'test-results/manpower-resource-picker.png', fullPage: true });
   });
 
@@ -39,7 +39,7 @@ test.describe('Project workspace', () => {
     await expect(rowSelect).toBeVisible();
 
     // Assign → the PUT round-trips and the refetched row reflects the new value.
-    await rowSelect.selectOption({ label: '👤 Sari Dewi' });
+    await rowSelect.selectOption({ label: '👤 Budi Santoso' });
     await expect(page.locator('select').filter({ hasText: '👤 Unassigned' }).first())
       .toHaveValue(/.+/, { timeout: 10_000 });
     await page.screenshot({ path: 'test-results/manpower-inline-reassign.png', fullPage: true });
