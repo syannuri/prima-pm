@@ -109,7 +109,7 @@ function EvmPanel({ base }: { base: string }) {
             <span className="text-sm text-slate-500 dark:text-slate-400" title="Physical % complete — WBS-weighted roll-up (budget-weighted when cost-loaded, else duration-weighted)">{formatNum(e.scheduleProgress * 100, 1)}% complete · {e.leafTaskCount} leaf tasks</span>
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <Metric label="BAC" value={formatIdr(e.bac)} title="Budget at Completion" />
+            <Metric label="BAC" value={formatIdr(e.bac)} title="Budget at Completion = Performance Measurement Baseline (direct + indirect + contingency; excludes management reserve)" />
             <Metric label="PV" value={formatIdr(e.pv)} title="Planned Value (BCWS)" />
             <Metric label="EV" value={formatIdr(e.ev)} title="Earned Value (BCWP)" />
             <Metric label="AC" value={formatIdr(e.ac)} title="Actual Cost (ACWP)" />

@@ -58,7 +58,7 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
     include: {
       pm: { select: { name: true } },
       charter: { select: { category: true } },
-      costBaseline: { select: { budgetAtCompletion: true, contingencyReserve: true } },
+      costBaseline: { select: { costBaseline: true, contingencyReserve: true } },
     },
   });
 
@@ -93,7 +93,7 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       status: p.status,
       pm: p.pm?.name ?? '—',
       category: p.charter?.category ?? null,
-      bac: dec(p.costBaseline?.budgetAtCompletion),
+      bac: dec(p.costBaseline?.costBaseline), // PMB (excludes management reserve)
       contingencyReserve: dec(p.costBaseline?.contingencyReserve),
       pv, ev, ac, spi, cpi, percentComplete,
       health: scheduleHealth(spi, leafTaskCount, pv),

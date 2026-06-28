@@ -29,6 +29,7 @@ async function ensureChartered(projectId: string): Promise<void> {
 }
 
 // Σ manpowerCost / Σ planMandays per task, from linked Direct (MANPOWER) cost lines.
+// Used by the manpower<->schedule reconciliation (mandays are manpower-specific).
 async function manpowerByTask(projectId: string) {
   const items = await prisma.costItemDirect.findMany({
     where: { projectId, type: 'MANPOWER', taskId: { not: null } },
@@ -42,6 +43,23 @@ async function manpowerByTask(projectId: string) {
     mandays.set(id, (mandays.get(id) ?? 0) + dec(it.planMandays));
   }
   return { cost, mandays };
+}
+
+// Σ direct cost per task across ALL direct types (manpower + material/license),
+// using each line's value = amount ?? manpowerCost. This is the work-package
+// budget weight that distributes BAC across leaves for EVM.
+async function directCostByTask(projectId: string) {
+  const items = await prisma.costItemDirect.findMany({
+    where: { projectId, taskId: { not: null } },
+    select: { taskId: true, amount: true, manpowerCost: true },
+  });
+  const cost = new Map<string, number>();
+  for (const it of items) {
+    const id = it.taskId!;
+    const value = it.amount != null ? dec(it.amount) : dec(it.manpowerCost);
+    cost.set(id, (cost.get(id) ?? 0) + value);
+  }
+  return cost;
 }
 
 export async function listSchedule(projectId: string) {
@@ -293,9 +311,9 @@ export async function getManpowerSync(projectId: string) {
  * budget per task = Σ linked manpower cost, AC supplied (manual, MVP).
  */
 export async function getEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
-  const [tasks, mp, resolvedAc, project] = await Promise.all([
+  const [tasks, costByTask, resolvedAc, project] = await Promise.all([
     prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, baselineFinish: true } }),
-    manpowerByTask(projectId),
+    directCostByTask(projectId),
     // Use the explicit override if provided, else the stored time-phased AC.
     actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
     prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true } }),
@@ -311,13 +329,14 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
   const baseFinish = baseFins.length ? Math.max(...baseFins) : null;
   const finishVarianceDays = curFinish != null && baseFinish != null ? Math.round((curFinish - baseFinish) / DAY) : null;
 
-  // Work-package weights for EVM & progress roll-up: use linked cost when the
-  // project is cost-loaded (classic cost-weighted EVM), else fall back to task
+  // Work-package weights for EVM & progress roll-up: use ALL linked direct cost
+  // when the project is cost-loaded (classic cost-weighted EVM — the full BAC is
+  // then distributed pro-rata across these leaves), else fall back to task
   // DURATION so EV/PV/%complete still reflect the WBS instead of collapsing to 0.
-  const totalLeafCost = leaves.reduce((s, t) => s + (mp.cost.get(t.id) ?? 0), 0);
+  const totalLeafCost = leaves.reduce((s, t) => s + (costByTask.get(t.id) ?? 0), 0);
   const costLoaded = totalLeafCost > 0;
   const evmTasks: EvmTask[] = leaves.map((t) => ({
-    budgetCost: costLoaded ? (mp.cost.get(t.id) ?? 0) : durationDays(t.planStart, t.planEnd),
+    budgetCost: costLoaded ? (costByTask.get(t.id) ?? 0) : durationDays(t.planStart, t.planEnd),
     progressPct: t.progressPct,
     planStart: t.planStart,
     planEnd: t.planEnd,
@@ -328,13 +347,15 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
   }
   const totalWeight = evmTasks.reduce((s, t) => s + t.budgetCost, 0);
 
-  // Authoritative BAC = the cost baseline's Budget at Completion. When absent,
-  // computeEvm derives BAC from Σ weights (so EV/PV still scale sensibly).
+  // Authoritative BAC = the Performance Measurement Baseline (PMB): direct +
+  // indirect + contingency reserve. Management reserve is NOT part of the PMB, so
+  // it is excluded from BAC (PMI). When absent, computeEvm derives BAC from Σ
+  // weights so EV/PV still scale sensibly.
   const baseline = await prisma.costBaseline.findUnique({
     where: { projectId },
-    select: { budgetAtCompletion: true },
+    select: { costBaseline: true },
   });
-  const costBaselineBAC = dec(baseline?.budgetAtCompletion);
+  const costBaselineBAC = dec(baseline?.costBaseline);
 
   const evm = computeEvm({
     tasks: evmTasks,
