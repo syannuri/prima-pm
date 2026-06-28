@@ -157,6 +157,7 @@ export interface PortfolioRow {
   health: PortfolioHealth;
   costHealth: PortfolioHealth;
   finishVarianceDays: number | null;
+  changeCount: number;
 }
 
 export interface PortfolioSummary {

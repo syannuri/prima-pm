@@ -121,7 +121,7 @@ export default function PortfolioSummary() {
                 <th className="py-2">Project</th><th>Status</th>
                 <th className="text-right">BAC</th><th className="text-right">EV</th><th className="text-right">AC</th>
                 <th className="text-right">CPI</th><th className="text-right">SPI</th>
-                <th className="text-right">% Done</th><th className="text-right" title="Finish variance vs schedule baseline">Var</th><th className="text-right">Cost</th><th className="text-right">Sched.</th>
+                <th className="text-right">% Done</th><th className="text-right" title="Finish variance vs schedule baseline">Var</th><th className="text-right" title="Total recorded changes (WBS · Cost · Risk · etc.)">Changes</th><th className="text-right">Cost</th><th className="text-right">Sched.</th>
               </tr>
             </thead>
             <tbody>
@@ -148,6 +148,15 @@ export default function PortfolioSummary() {
                       <span className={p.finishVarianceDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : p.finishVarianceDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-400 dark:text-slate-500'}>
                         {p.finishVarianceDays > 0 ? `+${p.finishVarianceDays}d` : p.finishVarianceDays < 0 ? `${p.finishVarianceDays}d` : '0'}
                       </span>
+                    )}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {p.changeCount > 0 ? (
+                      <Link to={`/projects/${p.id}`} className="inline-grid h-5 min-w-[24px] place-items-center rounded-full bg-slate-100 px-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" title="View audit trail">
+                        {p.changeCount}
+                      </Link>
+                    ) : (
+                      <span className="text-slate-300 dark:text-slate-600">0</span>
                     )}
                   </td>
                   <td className="text-right">

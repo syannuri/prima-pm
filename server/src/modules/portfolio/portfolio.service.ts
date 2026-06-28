@@ -44,6 +44,7 @@ export interface PortfolioRow {
   health: Health; // schedule health (SPI)
   costHealth: Health; // cost health (CPI)
   finishVarianceDays: number | null; // vs schedule baseline (null = no baseline)
+  changeCount: number; // total recorded changes (audit-log entries) for this project
 }
 
 export async function getPortfolioSummary(userId: string, role: string, statusDate: Date) {
@@ -59,6 +60,14 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       costBaseline: { select: { budgetAtCompletion: true, contingencyReserve: true } },
     },
   });
+
+  // One grouped query for change counts across all visible projects (avoids N+1).
+  const changeGroups = await prisma.auditLog.groupBy({
+    by: ['projectId'],
+    where: { projectId: { in: projects.map((p) => p.id) } },
+    _count: { _all: true },
+  });
+  const changeMap = new Map(changeGroups.map((g) => [g.projectId, g._count._all]));
 
   const rows: PortfolioRow[] = [];
   for (const p of projects) {
@@ -85,6 +94,7 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       health: scheduleHealth(spi, leafTaskCount, pv),
       costHealth: costHealthFrom(cpi, ac),
       finishVarianceDays,
+      changeCount: changeMap.get(p.id) ?? 0,
     });
   }
 
