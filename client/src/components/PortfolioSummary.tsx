@@ -60,6 +60,11 @@ export default function PortfolioSummary() {
     { label: 'Delay', value: delayed, color: PIE.red },
   ];
 
+  // Changes breakdown (PMO dashboard) — most-changed projects first.
+  const changeRows = [...data.projects].sort((a, b) => b.changeCount - a.changeCount);
+  const totalChanges = data.projects.reduce((s, p) => s + p.changeCount, 0);
+  const maxChanges = Math.max(1, ...data.projects.map((p) => p.changeCount));
+
   return (
     <div className="space-y-3">
       <div className="flex items-end justify-end">
@@ -110,6 +115,34 @@ export default function PortfolioSummary() {
           <PieChart title="Project Financial Status (by CPI)" data={financialSlices} />
           <PieChart title="Project Status" data={statusSlices} />
         </div>
+      )}
+
+      {/* PMO dashboard — change activity per project */}
+      {showPies && (
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Changes by project</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">{totalChanges} total changes (WBS · Cost · Risk · …)</span>
+          </div>
+          {totalChanges === 0 ? (
+            <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">No changes recorded yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {changeRows.map((p) => (
+                <li key={p.id} className="flex items-center gap-3">
+                  <Link to={`/projects/${p.id}`} className="w-44 shrink-0 truncate text-sm hover:underline" title={p.name}>
+                    <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>{' '}
+                    <span className="text-brand-600">{p.name}</span>
+                  </Link>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div className="h-full rounded-full bg-brand-500" style={{ width: `${(p.changeCount / maxChanges) * 100}%` }} />
+                  </div>
+                  <span className="w-10 shrink-0 text-right text-sm font-medium tabular-nums text-slate-700 dark:text-slate-200">{p.changeCount}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       )}
 
       {/* Per-project EVM table */}
