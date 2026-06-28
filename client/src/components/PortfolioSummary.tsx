@@ -65,6 +65,14 @@ export default function PortfolioSummary() {
   const totalChanges = data.projects.reduce((s, p) => s + p.changeCount, 0);
   const maxChanges = Math.max(1, ...data.projects.map((p) => p.changeCount));
 
+  // Resource summary per project (PMO dashboard) — most manpower-heavy first.
+  const resourceRows = [...data.projects].sort((a, b) => b.manpowerCost - a.manpowerCost);
+  const resTotals = data.projects.reduce(
+    (a, p) => ({ resources: a.resources + p.resourceCount, mandays: a.mandays + p.planMandays, cost: a.cost + p.manpowerCost }),
+    { resources: 0, mandays: 0, cost: 0 },
+  );
+  const hasResources = resTotals.resources > 0 || resTotals.cost > 0;
+
   return (
     <div className="space-y-3">
       <div className="flex items-end justify-end">
@@ -141,6 +149,58 @@ export default function PortfolioSummary() {
                 </li>
               ))}
             </ul>
+          )}
+        </Card>
+      )}
+
+      {/* PMO dashboard — resource / manpower summary per project */}
+      {showPies && (
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resources by project</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">{resTotals.resources} resources · {formatNum(resTotals.mandays, 0)} mandays · {formatIdr(resTotals.cost)}</span>
+          </div>
+          {!hasResources ? (
+            <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">No manpower loaded yet. Add manpower lines (from the resource pool) in each project's Cost tab.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                    <th className="py-2">Project</th>
+                    <th className="text-right">Resources</th>
+                    <th className="text-right">Mandays</th>
+                    <th className="text-right">Manpower cost</th>
+                    <th className="text-right" title="Manpower cost ÷ project BAC (PMB)">% of BAC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resourceRows.map((p) => (
+                    <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <td className="py-2">
+                        <Link to={`/projects/${p.id}`} className="block">
+                          <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>{' '}
+                          <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
+                        </Link>
+                      </td>
+                      <td className="text-right tabular-nums">{p.resourceCount || <span className="text-slate-300 dark:text-slate-600">0</span>}</td>
+                      <td className="text-right tabular-nums">{formatNum(p.planMandays, 0)}</td>
+                      <td className="text-right tabular-nums">{formatIdr(p.manpowerCost)}</td>
+                      <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{p.bac > 0 ? `${formatNum((p.manpowerCost / p.bac) * 100, 0)}%` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    <td className="py-2">Total</td>
+                    <td className="text-right tabular-nums">{resTotals.resources}</td>
+                    <td className="text-right tabular-nums">{formatNum(resTotals.mandays, 0)}</td>
+                    <td className="text-right tabular-nums">{formatIdr(resTotals.cost)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           )}
         </Card>
       )}

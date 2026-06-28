@@ -46,6 +46,9 @@ export interface PortfolioRow {
   finishVarianceDays: number | null; // vs schedule baseline (null = no baseline)
   changeCount: number; // total recorded changes (audit-log entries) for this project
   scheduleProgress: number; // physical % complete from the WBS roll-up (0..1)
+  resourceCount: number; // distinct manpower resources loaded on the project
+  planMandays: number; // Σ planned man-days across manpower lines
+  manpowerCost: number; // Σ manpower cost
 }
 
 export async function getPortfolioSummary(userId: string, role: string, statusDate: Date) {
@@ -69,6 +72,21 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
     _count: { _all: true },
   });
   const changeMap = new Map(changeGroups.map((g) => [g.projectId, g._count._all]));
+
+  // Per-project manpower/resource summary (distinct resources, mandays, cost).
+  const manpower = await prisma.costItemDirect.findMany({
+    where: { type: 'MANPOWER', projectId: { in: projects.map((p) => p.id) } },
+    select: { projectId: true, resourceId: true, resourceUserId: true, label: true, planMandays: true, manpowerCost: true },
+  });
+  const mpMap = new Map<string, { keys: Set<string>; mandays: number; cost: number }>();
+  for (const m of manpower) {
+    const e = mpMap.get(m.projectId) ?? { keys: new Set<string>(), mandays: 0, cost: 0 };
+    // Identify a distinct resource by pool id, else linked user, else its label.
+    e.keys.add(m.resourceId ? `R:${m.resourceId}` : m.resourceUserId ? `U:${m.resourceUserId}` : `L:${m.label}`);
+    e.mandays += dec(m.planMandays);
+    e.cost += dec(m.manpowerCost);
+    mpMap.set(m.projectId, e);
+  }
 
   const rows: PortfolioRow[] = [];
   // Portfolio physical progress = duration-weighted roll-up across projects.
@@ -101,6 +119,9 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       finishVarianceDays,
       changeCount: changeMap.get(p.id) ?? 0,
       scheduleProgress,
+      resourceCount: mpMap.get(p.id)?.keys.size ?? 0,
+      planMandays: round2(mpMap.get(p.id)?.mandays ?? 0),
+      manpowerCost: round2(mpMap.get(p.id)?.cost ?? 0),
     });
     schedAccum.weighted += scheduleProgress * scheduleWeight;
     schedAccum.weight += scheduleWeight;

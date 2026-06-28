@@ -189,6 +189,9 @@ export interface PortfolioRow {
   finishVarianceDays: number | null;
   changeCount: number;
   scheduleProgress: number; // physical % complete from the WBS roll-up (0..1)
+  resourceCount: number;
+  planMandays: number;
+  manpowerCost: number;
 }
 
 export interface PortfolioSummary {
