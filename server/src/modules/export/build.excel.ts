@@ -79,8 +79,8 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
     ['Indirect Total', num(b?.indirectTotal)],
     ['Contingency Reserve', num(b?.contingencyReserve)],
     ['Management Reserve', num(b?.managementReserve)],
-    ['Cost Baseline', num(b?.costBaseline)],
-    ['Budget at Completion (BAC)', num(b?.budgetAtCompletion)],
+    ['Budget at Completion / PMB (BAC)', num(b?.costBaseline)],
+    ['Total Budget (BAC + Mgmt Reserve)', num(b?.budgetAtCompletion)],
   ];
   styleHeader(co.addRow(['Baseline Summary', '', '', '']));
   baselineRows.forEach(([label, val]) => {

@@ -56,8 +56,8 @@ export async function getProjectAlerts(projectId: string, now: Date): Promise<{ 
     }
   }
 
-  // 3) Budget signals.
-  const bac = dec(cost.baseline?.budgetAtCompletion);
+  // 3) Budget signals. BAC = PMB (cost baseline, excl. management reserve).
+  const bac = dec(cost.baseline?.costBaseline);
   const charterCost = cost.highLevelCharterCost ?? 0;
   const actual = cost.actualCostTotal ?? 0;
   if (charterCost > 0 && bac > charterCost) {

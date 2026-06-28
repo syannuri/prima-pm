@@ -41,11 +41,11 @@ export default function CostPanel({ projectId }: { projectId: string }) {
         <Stat label="Indirect" value={formatIdr(b?.indirectTotal)} />
         <Stat label="Contingency" value={formatIdr(b?.contingencyReserve)} hint="from Risk EMV" />
         <Stat label="Mgmt Reserve" value={formatIdr(b?.managementReserve)} />
-        <Stat label="Cost Baseline" value={formatIdr(b?.costBaseline)} />
-        <Stat label="BAC" value={formatIdr(b?.budgetAtCompletion)} strong />
+        <Stat label="BAC (PMB)" value={formatIdr(b?.costBaseline)} hint="Budget at Completion = direct + indirect + contingency (excl. mgmt reserve)" strong />
+        <Stat label="Total Budget" value={formatIdr(b?.budgetAtCompletion)} hint="BAC + management reserve" />
       </div>
       {data?.highLevelCharterCost != null && b && (
-        <CharterVariance charter={data.highLevelCharterCost} bac={Number(b.budgetAtCompletion)} />
+        <CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} />
       )}
 
       <DirectCosts data={data!} base={base} onChange={invalidate} />

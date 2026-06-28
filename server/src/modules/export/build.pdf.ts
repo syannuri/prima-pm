@@ -104,8 +104,8 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
       ['Indirect Total', formatIdr(num(b?.indirectTotal))],
       ['Contingency Reserve (from Risk)', formatIdr(num(b?.contingencyReserve))],
       ['Management Reserve', formatIdr(num(b?.managementReserve))],
-      ['Cost Baseline', formatIdr(num(b?.costBaseline))],
-      ['Budget at Completion (BAC)', formatIdr(num(b?.budgetAtCompletion))],
+      ['Budget at Completion / PMB (BAC)', formatIdr(num(b?.costBaseline))],
+      ['Total Budget (BAC + Mgmt Reserve)', formatIdr(num(b?.budgetAtCompletion))],
     ],
   );
 
