@@ -16,6 +16,9 @@ export const updateProjectSchema = z.object({
   name: z.string().min(2).max(160).optional(),
   clientName: z.string().max(160).nullable().optional(),
   sponsor: z.string().max(160).nullable().optional(),
+  category: z.enum(PROJECT_CATEGORIES).nullable().optional(),
+  costBaselineIdr: z.coerce.number().nonnegative().nullable().optional(),
+  totalRevenueIdr: z.coerce.number().nonnegative().nullable().optional(),
   pmUserId: z.string().uuid().nullable().optional(),
   status: z.enum(['DRAFT', 'CHARTERED', 'IN_PROGRESS', 'ON_HOLD', 'CLOSED']).optional(),
 });

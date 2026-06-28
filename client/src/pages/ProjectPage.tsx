@@ -15,6 +15,7 @@ import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import ReassignPm from '../components/ReassignPm';
+import EditProjectModal from '../components/EditProjectModal';
 
 const TABS = ['Charter', 'WBS', 'Cost', 'Risk', 'Schedule', 'Change Req', 'Audit'] as const;
 type Tab = (typeof TABS)[number];
@@ -50,16 +51,19 @@ export default function ProjectPage() {
           <span className="font-mono text-sm text-slate-400 dark:text-slate-500">{project.code}</span>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{project.name}</h1>
           <Badge color={chartered ? 'indigo' : 'slate'}>{project.status}</Badge>
-          {chartered && (
-            <div className="ml-auto flex gap-2">
-              <Button variant="secondary" onClick={() => api.download(`/projects/${projectId}/export/excel`, 'report.xlsx')}>
-                ⬇ Excel
-              </Button>
-              <Button variant="secondary" onClick={() => api.download(`/projects/${projectId}/export/pdf`, 'report.pdf')}>
-                ⬇ PDF
-              </Button>
-            </div>
-          )}
+          <div className="ml-auto flex flex-wrap gap-2">
+            <EditProjectModal project={project} />
+            {chartered && (
+              <>
+                <Button variant="secondary" onClick={() => api.download(`/projects/${projectId}/export/excel`, 'report.xlsx')}>
+                  ⬇ Excel
+                </Button>
+                <Button variant="secondary" onClick={() => api.download(`/projects/${projectId}/export/pdf`, 'report.pdf')}>
+                  ⬇ PDF
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
           <span>Client: {project.clientName ?? '—'} · PM: {project.pm?.name ?? '—'} · Sponsor: {project.sponsor ?? '—'}</span>
