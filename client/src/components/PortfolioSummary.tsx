@@ -82,7 +82,7 @@ export default function PortfolioSummary() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
-                <th className="py-2">Code</th><th>Project</th><th>Status</th>
+                <th className="py-2">Project</th><th>Status</th>
                 <th className="text-right">BAC</th><th className="text-right">EV</th><th className="text-right">AC</th>
                 <th className="text-right">CPI</th><th className="text-right">SPI</th>
                 <th className="text-right">% Done</th><th className="text-right" title="Finish variance vs schedule baseline">Var</th><th className="text-right">Cost</th><th className="text-right">Sched.</th>
@@ -91,11 +91,11 @@ export default function PortfolioSummary() {
             <tbody>
               {data.projects.map((p) => (
                 <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <td className="py-2 font-mono text-xs">
-                    <Link to={`/projects/${p.id}`} className="text-brand-600 hover:underline">{p.code}</Link>
-                  </td>
-                  <td>
-                    <div>{p.name}</div>
+                  <td className="py-2">
+                    <Link to={`/projects/${p.id}`} className="block">
+                      <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>
+                      <div className="font-medium text-brand-600 hover:underline">{p.name}</div>
+                    </Link>
                     {p.clientName && <div className="text-xs text-slate-400 dark:text-slate-500">Client: {p.clientName}</div>}
                   </td>
                   <td><Badge color="slate">{p.status}</Badge></td>
