@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { Project } from '../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Spinner } from '../components/ui';
+import type { Project, ProjectCategory } from '../api/types';
+import { Badge, Button, Card, Field, Input, Select, SectionTitle, Spinner } from '../components/ui';
 import { formatIdr } from '../lib/format';
+import { PROJECT_CATEGORIES } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import ResourceCapacity from '../components/ResourceCapacity';
@@ -24,19 +25,28 @@ export default function DashboardPage() {
   const [view, setView] = useState<'portfolio' | 'resources' | 'cards'>('portfolio');
   const [name, setName] = useState('');
   const [sponsor, setSponsor] = useState('');
+  const [category, setCategory] = useState<ProjectCategory | ''>('');
+  const [costBaseline, setCostBaseline] = useState('');
+  const [revenue, setRevenue] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.get<{ projects: Project[] }>('/projects'),
   });
 
+  const resetForm = () => { setName(''); setSponsor(''); setCategory(''); setCostBaseline(''); setRevenue(''); };
   const create = useMutation({
-    mutationFn: () => api.post<{ project: Project }>('/projects', { name, sponsor: sponsor || undefined }),
+    mutationFn: () => api.post<{ project: Project }>('/projects', {
+      name,
+      sponsor: sponsor || undefined,
+      category: category || undefined,
+      costBaselineIdr: costBaseline ? Number(costBaseline) : undefined,
+      totalRevenueIdr: revenue ? Number(revenue) : undefined,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] });
       setShowForm(false);
-      setName('');
-      setSponsor('');
+      resetForm();
     },
   });
 
@@ -75,22 +85,47 @@ export default function DashboardPage() {
       {view === 'resources' && <ResourceCapacity />}
 
       {showForm && (
-        <Card>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Project name">
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SOC Modernization" />
-            </Field>
-            <Field label="Sponsor">
-              <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office" />
-            </Field>
-            <div className="flex items-end">
-              <Button onClick={() => create.mutate()} disabled={!name || create.isPending}>
-                {create.isPending ? 'Creating…' : 'Create'}
-              </Button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowForm(false)}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-1 text-lg font-semibold text-slate-800 dark:text-slate-100">New Project</h2>
+            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Create a project shell, then build its Charter, WBS, Cost & Risk.</p>
+            <div className="space-y-3">
+              <Field label="Project name">
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SOC Modernization" />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Sponsor">
+                  <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office" />
+                </Field>
+                <Field label="Project category">
+                  <Select value={category} onChange={(e) => setCategory(e.target.value as ProjectCategory | '')}>
+                    <option value="">— select —</option>
+                    {PROJECT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Cost Baseline (IDR)">
+                  <Input type="number" min={0} value={costBaseline} onChange={(e) => setCostBaseline(e.target.value)} placeholder="e.g. 1000000000" />
+                </Field>
+                <Field label="Total Revenue (IDR)">
+                  <Input type="number" min={0} value={revenue} onChange={(e) => setRevenue(e.target.value)} placeholder="e.g. 1500000000" />
+                </Field>
+              </div>
+              {costBaseline && revenue && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Projected margin: {formatIdr(Number(revenue) - Number(costBaseline))}
+                  {Number(costBaseline) > 0 && ` (${(((Number(revenue) - Number(costBaseline)) / Number(costBaseline)) * 100).toFixed(1)}%)`}
+                </p>
+              )}
+              {create.isError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{(create.error as Error).message}</p>}
+              <div className="flex gap-2 pt-1">
+                <Button variant="secondary" className="flex-1" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</Button>
+                <Button className="flex-1" onClick={() => create.mutate()} disabled={!name || create.isPending}>
+                  {create.isPending ? 'Creating…' : 'Create Project'}
+                </Button>
+              </div>
             </div>
           </div>
-          {create.isError && <p className="mt-2 text-sm text-red-600">{(create.error as Error).message}</p>}
-        </Card>
+        </div>
       )}
 
       {view === 'cards' && (isLoading ? (

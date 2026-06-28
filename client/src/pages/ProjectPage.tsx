@@ -4,16 +4,19 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { Badge, Button, Card, Spinner } from '../components/ui';
+import { formatIdr } from '../lib/format';
+import { categoryLabel } from '../lib/labels';
 import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
 import RiskPanel from './panels/RiskPanel';
 import SchedulePanel from './panels/SchedulePanel';
 import WbsPanel from './panels/WbsPanel';
+import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import ReassignPm from '../components/ReassignPm';
 
-const TABS = ['Charter', 'WBS', 'Cost', 'Risk', 'Schedule', 'Audit'] as const;
+const TABS = ['Charter', 'WBS', 'Cost', 'Risk', 'Schedule', 'Change Req', 'Audit'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function ProjectPage() {
@@ -62,6 +65,16 @@ export default function ProjectPage() {
           <span>PM: {project.pm?.name ?? '—'} · Sponsor: {project.sponsor ?? '—'}</span>
           <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
         </p>
+        {(project.category || project.costBaselineIdr || project.totalRevenueIdr) && (
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            {project.category && <Badge color="slate">{categoryLabel(project.category)}</Badge>}
+            {project.costBaselineIdr && <span>Cost Baseline: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.costBaselineIdr)}</span></span>}
+            {project.totalRevenueIdr && <span>· Revenue: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.totalRevenueIdr)}</span></span>}
+            {project.costBaselineIdr && project.totalRevenueIdr && (
+              <span>· Margin: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span></span>
+            )}
+          </div>
+        )}
       </div>
 
       <ProjectAlerts projectId={projectId} onJump={(t) => setTab(t as Tab)} />
@@ -95,6 +108,7 @@ export default function ProjectPage() {
       {tab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
       {tab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
       {tab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
+      {tab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} />}
       {tab === 'Audit' && <AuditPanel projectId={projectId} />}
     </div>
   );

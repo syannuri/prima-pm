@@ -35,11 +35,13 @@ export async function login(page: Page, role: Role = 'Project Manager') {
  */
 export async function openFirstProject(page: Page) {
   await page.getByRole('button', { name: 'Project Cards' }).click();
-  // Scope to <main> so we hit a project *card* (which shows a status badge), not the
-  // sidebar's project nav links (which have no status text and would match DRAFT ones).
+  // Open the canonical fully-populated seed project (charter + manpower + risk +
+  // schedule). Scoped to <main> to hit the card, not the sidebar nav link. Targeting
+  // it by name avoids depending on card order (other chartered projects may lack
+  // manpower rows that some tests need).
   const charteredCard = page
     .locator('main a[href^="/projects/"]')
-    .filter({ hasNotText: 'DRAFT' })
+    .filter({ hasText: 'SOC Modernization' })
     .first();
   await expect(charteredCard).toBeVisible();
   await charteredCard.click();

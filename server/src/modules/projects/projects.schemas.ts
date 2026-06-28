@@ -1,9 +1,14 @@
 import { z } from 'zod';
 
+export const PROJECT_CATEGORIES = ['NETWORK_INFRA', 'SERVER_INFRA', 'CLOUD_INFRA', 'CYBERSECURITY_INFRA', 'APP_DEV'] as const;
+
 export const createProjectSchema = z.object({
   name: z.string().min(2).max(160),
   sponsor: z.string().max(160).optional(),
   pmUserId: z.string().uuid().optional(),
+  category: z.enum(PROJECT_CATEGORIES).optional(),
+  costBaselineIdr: z.coerce.number().nonnegative().optional(),
+  totalRevenueIdr: z.coerce.number().nonnegative().optional(),
 });
 
 export const updateProjectSchema = z.object({

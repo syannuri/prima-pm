@@ -53,6 +53,9 @@ export async function createProject(input: CreateProjectInput, actorId: string) 
         name: input.name,
         sponsor: input.sponsor ?? null,
         pmUserId: input.pmUserId ?? null,
+        category: input.category ?? null,
+        costBaselineIdr: input.costBaselineIdr ?? null,
+        totalRevenueIdr: input.totalRevenueIdr ?? null,
         status: 'DRAFT',
       },
     });

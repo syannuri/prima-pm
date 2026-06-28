@@ -32,6 +32,9 @@ export interface Project {
   code: string;
   name: string;
   sponsor: string | null;
+  category: ProjectCategory | null;
+  costBaselineIdr: string | null;
+  totalRevenueIdr: string | null;
   status: ProjectStatus;
   pmUserId: string | null;
   pm?: { id: string; name: string; email: string } | null;
@@ -106,11 +109,16 @@ export interface CostSummary {
 
 export type CRStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
 
+export type ChangeImpact = 'COST' | 'SCHEDULE' | 'RESOURCE' | 'QUALITY' | 'RISK';
+
 export interface ChangeRequest {
   id: string;
   type: string;
   title: string;
   description: string;
+  chargeable: boolean;
+  magnitude: 'MINOR' | 'MAJOR';
+  impactAreas: ChangeImpact[];
   status: CRStatus;
   requestedBy: string;
   requester?: { name: string } | null;

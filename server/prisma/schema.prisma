@@ -43,6 +43,19 @@ enum ProjectCategory {
   APP_DEV
 }
 
+enum ChangeMagnitude {
+  MINOR
+  MAJOR
+}
+
+enum ChangeImpact {
+  COST
+  SCHEDULE
+  RESOURCE
+  QUALITY
+  RISK
+}
+
 enum DirectCostType {
   TECHNOLOGY_ONPREM
   TECHNOLOGY_CLOUD
@@ -150,6 +163,9 @@ model Project {
   code      String        @unique
   name      String
   sponsor   String?
+  category        ProjectCategory?
+  costBaselineIdr Decimal? @db.Decimal(18, 2) // high-level planning cost baseline
+  totalRevenueIdr Decimal? @db.Decimal(18, 2) // expected total revenue
   status    ProjectStatus @default(DRAFT)
   pmUserId  String?
   pm        User?         @relation("ProjectManager", fields: [pmUserId], references: [id])
@@ -423,6 +439,10 @@ model ChangeRequest {
   type        String // e.g. CHARTER, COST_BASELINE, SCHEDULE, SCOPE
   title       String
   description String
+
+  chargeable  Boolean             @default(false) // paid (billable) vs no-cost change
+  magnitude   ChangeMagnitude     @default(MINOR)
+  impactAreas ChangeImpact[]      // areas affected: cost/schedule/resource/quality/risk
 
   status      ChangeRequestStatus @default(SUBMITTED)
   requestedBy String
