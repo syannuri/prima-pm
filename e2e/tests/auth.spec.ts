@@ -22,10 +22,19 @@ test.describe('Authentication & RBAC', () => {
     await expect(page.getByText('PROJECT_MANAGER', { exact: true })).toBeVisible();
   });
 
-  test('PM can create projects, Finance cannot', async ({ page }) => {
-    await login(page, 'Project Manager');
+  test('only PMO/Admin can create projects; PM and Finance cannot', async ({ page }) => {
+    test.slow(); // three logins
+    // Admin can create.
+    await login(page, 'Admin');
     await expect(page.getByRole('button', { name: '+ New Project' })).toBeVisible();
 
+    // Project Manager cannot create (PMO assigns projects to PMs, not the reverse).
+    await page.getByRole('button', { name: 'Logout' }).click();
+    await login(page, 'Project Manager');
+    await expect(page.getByText('PROJECT_MANAGER', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '+ New Project' })).toHaveCount(0);
+
+    // Finance cannot either.
     await page.getByRole('button', { name: 'Logout' }).click();
     await login(page, 'Finance');
     await expect(page.getByText('FINANCE', { exact: true })).toBeVisible();

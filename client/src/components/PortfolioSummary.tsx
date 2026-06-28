@@ -5,6 +5,10 @@ import { api } from '../api/client';
 import type { PortfolioSummary as Summary } from '../api/types';
 import { Badge, Card, Field, Input, Spinner } from './ui';
 import { formatDateInput, formatIdr, formatNum } from '../lib/format';
+import { useAuth } from '../context/AuthContext';
+import PieChart, { type Slice } from './PieChart';
+
+const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#f4675f' };
 
 const HEALTH_COLOR: Record<string, string> = { GREEN: 'green', AMBER: 'amber', RED: 'red', NO_DATA: 'slate' };
 // Human-friendly labels instead of the raw enum (GREEN/NO_DATA/…).
@@ -15,6 +19,8 @@ const NODATA_HINT = {
 };
 
 export default function PortfolioSummary() {
+  const { user } = useAuth();
+  const showPies = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const [statusDate, setStatusDate] = useState(formatDateInput(new Date()));
   const { data, isLoading } = useQuery({
     queryKey: ['portfolio', statusDate],
@@ -31,6 +37,28 @@ export default function PortfolioSummary() {
   if (!data || data.totals.count === 0) return null;
   const t = data.totals;
   const spiBehind = t.spi > 0 && t.spi < 1;
+
+  // Pie 1 — Project Financial Status (by cost health / CPI).
+  const finCount = { GREEN: 0, AMBER: 0, RED: 0, NO_DATA: 0 } as Record<string, number>;
+  // Pie 2 — Project Status (completed / on progress / delayed).
+  let completed = 0, delayed = 0, onProgress = 0;
+  for (const p of data.projects) {
+    finCount[p.costHealth] = (finCount[p.costHealth] ?? 0) + 1;
+    if (p.percentComplete >= 1 || p.status === 'CLOSED') completed += 1;
+    else if (p.health === 'RED' || (p.finishVarianceDays ?? 0) > 0) delayed += 1;
+    else onProgress += 1;
+  }
+  const financialSlices: Slice[] = [
+    { label: 'On budget', value: finCount.GREEN, color: PIE.green },
+    { label: 'At risk', value: finCount.AMBER, color: PIE.amber },
+    { label: 'Over budget', value: finCount.RED, color: PIE.red },
+    { label: 'Not tracked', value: finCount.NO_DATA, color: PIE.slate },
+  ];
+  const statusSlices: Slice[] = [
+    { label: 'Completed', value: completed, color: PIE.green },
+    { label: 'On Progress', value: onProgress, color: PIE.amber },
+    { label: 'Delay', value: delayed, color: PIE.red },
+  ];
 
   return (
     <div className="space-y-3">
@@ -75,6 +103,14 @@ export default function PortfolioSummary() {
           </p>
         )}
       </Card>
+
+      {/* PMO dashboard — portfolio pie charts */}
+      {showPies && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <PieChart title="Project Financial Status (by CPI)" data={financialSlices} />
+          <PieChart title="Project Status" data={statusSlices} />
+        </div>
+      )}
 
       {/* Per-project EVM table */}
       <Card>

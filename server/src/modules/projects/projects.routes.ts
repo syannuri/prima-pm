@@ -25,10 +25,10 @@ router.get(
   }),
 );
 
-// Only PM/PMO/ADMIN may create projects.
+// Only PMO (and ADMIN) may create projects and assign them to a PM.
 router.post(
   '/',
-  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER'),
+  requireRole('ADMIN', 'PMO'),
   validateBody(createProjectSchema),
   asyncHandler(async (req, res) => {
     const project = await svc.createProject(req.body, req.user!.id);

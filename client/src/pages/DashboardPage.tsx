@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { Project, ProjectCategory } from '../api/types';
+import type { Project, ProjectCategory, User } from '../api/types';
 import { Badge, Button, Card, Field, Input, Select, SectionTitle, Spinner } from '../components/ui';
 import { formatIdr } from '../lib/format';
 import { PROJECT_CATEGORIES } from '../lib/labels';
@@ -30,13 +30,16 @@ export default function DashboardPage() {
   const [category, setCategory] = useState<ProjectCategory | ''>('');
   const [costBaseline, setCostBaseline] = useState('');
   const [revenue, setRevenue] = useState('');
+  const [pmUserId, setPmUserId] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.get<{ projects: Project[] }>('/projects'),
   });
+  // PMO assigns the project to a PM at creation.
+  const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory'), enabled: showForm });
 
-  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setCostBaseline(''); setRevenue(''); };
+  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setCostBaseline(''); setRevenue(''); setPmUserId(''); };
   const create = useMutation({
     mutationFn: () => api.post<{ project: Project }>('/projects', {
       name,
@@ -46,6 +49,7 @@ export default function DashboardPage() {
       category: category || undefined,
       costBaselineIdr: costBaseline ? Number(costBaseline) : undefined,
       totalRevenueIdr: revenue ? Number(revenue) : undefined,
+      pmUserId: pmUserId || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] });
@@ -54,7 +58,8 @@ export default function DashboardPage() {
     },
   });
 
-  const canCreate = user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  // Only PMO (and ADMIN) may create projects and assign them to a PM.
+  const canCreate = user && ['ADMIN', 'PMO'].includes(user.role);
 
   return (
     <div className="space-y-5">
@@ -113,6 +118,12 @@ export default function DashboardPage() {
                   <Select value={category} onChange={(e) => setCategory(e.target.value as ProjectCategory | '')}>
                     <option value="">— select —</option>
                     {PROJECT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Assign Project Manager">
+                  <Select value={pmUserId} onChange={(e) => setPmUserId(e.target.value)}>
+                    <option value="">— unassigned —</option>
+                    {usersQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
                   </Select>
                 </Field>
                 <Field label="Cost Baseline (IDR)">
