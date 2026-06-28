@@ -4,6 +4,7 @@ export const PROJECT_CATEGORIES = ['NETWORK_INFRA', 'SERVER_INFRA', 'CLOUD_INFRA
 
 export const createProjectSchema = z.object({
   name: z.string().min(2).max(160),
+  clientName: z.string().max(160).optional(),
   sponsor: z.string().max(160).optional(),
   pmUserId: z.string().uuid().optional(),
   category: z.enum(PROJECT_CATEGORIES).optional(),
@@ -13,6 +14,7 @@ export const createProjectSchema = z.object({
 
 export const updateProjectSchema = z.object({
   name: z.string().min(2).max(160).optional(),
+  clientName: z.string().max(160).nullable().optional(),
   sponsor: z.string().max(160).nullable().optional(),
   pmUserId: z.string().uuid().nullable().optional(),
   status: z.enum(['DRAFT', 'CHARTERED', 'IN_PROGRESS', 'ON_HOLD', 'CLOSED']).optional(),

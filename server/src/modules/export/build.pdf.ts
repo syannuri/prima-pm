@@ -59,7 +59,7 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
   doc.moveDown(0.5);
   doc.fillColor('#0f172a').fontSize(15).font('Helvetica-Bold').text(`${data.project.code} — ${data.project.name}`);
   doc.fontSize(9).font('Helvetica').fillColor(GRAY)
-    .text(`Status: ${data.project.status}   |   PM: ${data.project.pm?.name ?? '—'}   |   Generated: ${iso(data.generatedAt)}`);
+    .text(`Client: ${data.project.clientName ?? '—'}   |   Status: ${data.project.status}   |   PM: ${data.project.pm?.name ?? '—'}   |   Generated: ${iso(data.generatedAt)}`);
 
   // ---------- Charter ----------
   heading('1. Project Charter');

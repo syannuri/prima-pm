@@ -22,6 +22,7 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
   ov.columns = [{ width: 26 }, { width: 60 }];
   ov.addRow(['Project Code', data.project.code]);
   ov.addRow(['Project Name', data.project.name]);
+  ov.addRow(['Client', data.project.clientName ?? '—']);
   ov.addRow(['Status', data.project.status]);
   ov.addRow(['Project Manager', data.project.pm?.name ?? '—']);
   ov.addRow(['Sponsor', data.project.sponsor ?? '—']);

@@ -162,6 +162,7 @@ model Project {
   id        String        @id @default(uuid())
   code      String        @unique
   name      String
+  clientName String?      // the client/customer the project is delivered for
   sponsor   String?
   category        ProjectCategory?
   costBaselineIdr Decimal? @db.Decimal(18, 2) // high-level planning cost baseline

@@ -29,6 +29,7 @@ export interface PortfolioRow {
   id: string;
   code: string;
   name: string;
+  clientName: string | null;
   status: string;
   pm: string;
   category: string | null;
@@ -74,6 +75,7 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       id: p.id,
       code: p.code,
       name: p.name,
+      clientName: p.clientName,
       status: p.status,
       pm: p.pm?.name ?? '—',
       category: p.charter?.category ?? null,

@@ -94,7 +94,10 @@ export default function PortfolioSummary() {
                   <td className="py-2 font-mono text-xs">
                     <Link to={`/projects/${p.id}`} className="text-brand-600 hover:underline">{p.code}</Link>
                   </td>
-                  <td>{p.name}</td>
+                  <td>
+                    <div>{p.name}</div>
+                    {p.clientName && <div className="text-xs text-slate-400 dark:text-slate-500">Client: {p.clientName}</div>}
+                  </td>
                   <td><Badge color="slate">{p.status}</Badge></td>
                   <td className="text-right">{formatIdr(p.bac)}</td>
                   <td className="text-right">{formatIdr(p.ev)}</td>

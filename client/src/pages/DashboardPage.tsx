@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState<'portfolio' | 'resources' | 'cards'>('portfolio');
   const [name, setName] = useState('');
+  const [clientName, setClientName] = useState('');
   const [sponsor, setSponsor] = useState('');
   const [category, setCategory] = useState<ProjectCategory | ''>('');
   const [costBaseline, setCostBaseline] = useState('');
@@ -34,10 +35,11 @@ export default function DashboardPage() {
     queryFn: () => api.get<{ projects: Project[] }>('/projects'),
   });
 
-  const resetForm = () => { setName(''); setSponsor(''); setCategory(''); setCostBaseline(''); setRevenue(''); };
+  const resetForm = () => { setName(''); setClientName(''); setSponsor(''); setCategory(''); setCostBaseline(''); setRevenue(''); };
   const create = useMutation({
     mutationFn: () => api.post<{ project: Project }>('/projects', {
       name,
+      clientName: clientName || undefined,
       sponsor: sponsor || undefined,
       category: category || undefined,
       costBaselineIdr: costBaseline ? Number(costBaseline) : undefined,
@@ -94,6 +96,9 @@ export default function DashboardPage() {
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SOC Modernization" />
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Client">
+                  <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="e.g. Bank XYZ" />
+                </Field>
                 <Field label="Sponsor">
                   <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office" />
                 </Field>
@@ -146,7 +151,9 @@ export default function DashboardPage() {
                   <Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge>
                 </div>
                 <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">{p.name}</h3>
-                <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{p.sponsor ?? 'No sponsor'}</p>
+                <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                  {p.clientName ? `Client: ${p.clientName}` : (p.sponsor ?? 'No client')}
+                </p>
                 <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 text-sm">
                   <span className="text-slate-500 dark:text-slate-400">PM: {p.pm?.name ?? '—'}</span>
                   <span className="font-medium text-slate-700 dark:text-slate-200">

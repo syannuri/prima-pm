@@ -62,7 +62,7 @@ export default function ProjectPage() {
           )}
         </div>
         <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          <span>PM: {project.pm?.name ?? '—'} · Sponsor: {project.sponsor ?? '—'}</span>
+          <span>Client: {project.clientName ?? '—'} · PM: {project.pm?.name ?? '—'} · Sponsor: {project.sponsor ?? '—'}</span>
           <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
         </p>
         {(project.category || project.costBaselineIdr || project.totalRevenueIdr) && (

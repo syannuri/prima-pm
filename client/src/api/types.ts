@@ -31,6 +31,7 @@ export interface Project {
   id: string;
   code: string;
   name: string;
+  clientName: string | null;
   sponsor: string | null;
   category: ProjectCategory | null;
   costBaselineIdr: string | null;
@@ -141,6 +142,7 @@ export interface PortfolioRow {
   id: string;
   code: string;
   name: string;
+  clientName: string | null;
   status: string;
   pm: string;
   category: string | null;

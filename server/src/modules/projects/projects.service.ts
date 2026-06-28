@@ -51,6 +51,7 @@ export async function createProject(input: CreateProjectInput, actorId: string) 
       data: {
         code,
         name: input.name,
+        clientName: input.clientName ?? null,
         sponsor: input.sponsor ?? null,
         pmUserId: input.pmUserId ?? null,
         category: input.category ?? null,
@@ -73,6 +74,7 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
     where: { id },
     data: {
       name: input.name ?? undefined,
+      clientName: input.clientName === undefined ? undefined : input.clientName,
       sponsor: input.sponsor === undefined ? undefined : input.sponsor,
       pmUserId: input.pmUserId === undefined ? undefined : input.pmUserId,
       status: input.status ?? undefined,
