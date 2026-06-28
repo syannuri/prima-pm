@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { CostSummary, DirectCost, User } from '../../api/types';
+import type { CostSummary, DirectCost, ResourceItem } from '../../api/types';
 import { Button, Card, Input, SectionTitle, Select, Spinner } from '../../components/ui';
 import { formatIdr } from '../../lib/format';
 
@@ -128,40 +128,41 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
   const [label, setLabel] = useState('');
   const [qty, setQty] = useState('1');
   const [unitCost, setUnitCost] = useState('');
-  const [personnelRole, setPersonnelRole] = useState('PROJECT_PERSONNEL');
-  const [unitCostPerManday, setRate] = useState('');
   const [planMandays, setMandays] = useState('');
-  const [resourceUserId, setResourceUserId] = useState('');
+  const [resourceId, setResourceId] = useState('');
+  const [rateOverride, setRateOverride] = useState('');
   const [err, setErr] = useState('');
   const isManpower = type === 'MANPOWER';
 
-  // Named-resource picker for manpower lines (drives cross-project capacity/over-allocation).
-  const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory') });
+  // Manpower is loaded from the resource master pool (rate & role come from it).
+  const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources') });
+  const picked = resourcesQ.data?.resources.find((r) => r.id === resourceId);
 
   const add = useMutation({
     mutationFn: () =>
       api.post(`${base}/direct`, isManpower
-        ? { type, label, personnelRole, unitCostPerManday: Number(unitCostPerManday), planMandays: Number(planMandays), resourceUserId: resourceUserId || undefined }
+        ? { type, label: label || picked?.name || '', resourceId, planMandays: Number(planMandays), unitCostPerManday: rateOverride === '' ? undefined : Number(rateOverride) }
         : { type, label, qty: Number(qty), unitCost: Number(unitCost) }),
-    onSuccess: () => { setLabel(''); setUnitCost(''); setRate(''); setMandays(''); setResourceUserId(''); setErr(''); onChange(); },
+    onSuccess: () => { setLabel(''); setUnitCost(''); setMandays(''); setResourceId(''); setRateOverride(''); setErr(''); onChange(); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
   const del = useMutation({
     mutationFn: (id: string) => api.del(`${base}/direct/${id}`),
     onSuccess: onChange,
   });
-  // Inline reassignment: resend the full manpower payload (PUT replaces the line),
-  // preserving taskId so the manpower↔schedule link survives the edit.
+  // Inline reassignment: resend the manpower line pointing at a new resource. Rate &
+  // role are re-derived server-side from that resource; taskId preserved so the
+  // manpower↔schedule link survives the edit.
   const reassign = useMutation({
-    mutationFn: ({ d, resourceUserId }: { d: DirectCost; resourceUserId: string }) =>
+    mutationFn: ({ d, resourceId }: { d: DirectCost; resourceId: string }) =>
       api.put(`${base}/direct/${d.id}`, {
         type: 'MANPOWER',
         label: d.label,
-        personnelRole: d.personnelRole,
-        unitCostPerManday: Number(d.unitCostPerManday),
         planMandays: Number(d.planMandays),
         taskId: d.taskId ?? undefined,
-        resourceUserId: resourceUserId || undefined,
+        resourceId: resourceId || undefined,
+        // No resource → keep the existing rate/role so the line stays valid.
+        ...(resourceId ? {} : { personnelRole: d.personnelRole, unitCostPerManday: Number(d.unitCostPerManday) }),
       }),
     onSuccess: () => { setErr(''); onChange(); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
@@ -185,17 +186,17 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                   <div>{d.label}</div>
                   {d.type === 'MANPOWER' && (
                     <select
-                      value={d.resourceUserId ?? ''}
+                      value={d.resourceId ?? ''}
                       disabled={reassign.isPending}
-                      onChange={(e) => reassign.mutate({ d, resourceUserId: e.target.value })}
+                      onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })}
                       title="Assign / change resource"
                       className={`mt-0.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
-                        d.resourceUserId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
+                        d.resourceId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
                       }`}
                     >
                       <option value="">👤 Unassigned</option>
-                      {usersQ.data?.users.map((u) => (
-                        <option key={u.id} value={u.id}>👤 {u.name}</option>
+                      {resourcesQ.data?.resources.map((r) => (
+                        <option key={r.id} value={r.id}>👤 {r.name}</option>
                       ))}
                     </select>
                   )}
@@ -223,16 +224,23 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
         <Input placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
         {isManpower ? (
           <>
-            <Select value={personnelRole} onChange={(e) => setPersonnelRole(e.target.value)}>
-              <option value="PM">PM</option>
-              <option value="PROJECT_PERSONNEL">Project Personnel</option>
+            <Select value={resourceId} onChange={(e) => setResourceId(e.target.value)} title="Pick from the resource pool">
+              <option value="">Resource…</option>
+              {resourcesQ.data?.resources.map((r) => (
+                <option key={r.id} value={r.id}>{r.name} · {formatIdr(Number(r.unitCostPerManday))}/md</option>
+              ))}
             </Select>
-            <Input type="number" placeholder="Unit cost/manday" value={unitCostPerManday} onChange={(e) => setRate(e.target.value)} />
+            <Input
+              type="number"
+              placeholder={picked ? `${formatIdr(Number(picked.unitCostPerManday))} (rate)` : 'Rate override'}
+              value={rateOverride}
+              onChange={(e) => setRateOverride(e.target.value)}
+              title="Leave blank to use the resource's rate"
+            />
             <Input type="number" placeholder="Plan mandays" value={planMandays} onChange={(e) => setMandays(e.target.value)} />
-            <Select value={resourceUserId} onChange={(e) => setResourceUserId(e.target.value)} title="Assign a named resource">
-              <option value="">Resource… (optional)</option>
-              {usersQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </Select>
+            <div className="flex items-center px-1 text-xs text-slate-500 dark:text-slate-400">
+              {picked && planMandays ? `= ${formatIdr((rateOverride === '' ? Number(picked.unitCostPerManday) : Number(rateOverride)) * Number(planMandays))}` : 'rate × mandays'}
+            </div>
           </>
         ) : (
           <>
@@ -242,7 +250,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
             <div />
           </>
         )}
-        <Button onClick={() => add.mutate()} disabled={!label || add.isPending}>Add</Button>
+        <Button onClick={() => add.mutate()} disabled={add.isPending || (isManpower ? !resourceId || !planMandays : !label)}>Add</Button>
       </div>
       {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
     </Card>

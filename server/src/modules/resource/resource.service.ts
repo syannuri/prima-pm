@@ -30,8 +30,10 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
       label: true,
       personnelRole: true,
       planMandays: true,
+      resourceId: true,
       resourceUserId: true,
       resource: { select: { name: true } },
+      resourceRef: { select: { name: true } },
       projectId: true,
       project: { select: { code: true, name: true } },
       task: { select: { planStart: true, planEnd: true } },
@@ -39,9 +41,14 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
   });
 
   const inputs: AllocationInput[] = items.map((i) => ({
-    // A named resource is tracked across projects; an unnamed line is scoped to its project+label.
-    resourceKey: i.resourceUserId ? `U:${i.resourceUserId}` : `L:${i.projectId}:${i.label}`,
-    resourceName: i.resource?.name ?? i.label,
+    // Prefer the master resource as the cross-project key; else a linked user;
+    // else scope an unnamed line to its project+label.
+    resourceKey: i.resourceId
+      ? `R:${i.resourceId}`
+      : i.resourceUserId
+        ? `U:${i.resourceUserId}`
+        : `L:${i.projectId}:${i.label}`,
+    resourceName: i.resourceRef?.name ?? i.resource?.name ?? i.label,
     personnelRole: i.personnelRole ?? null,
     projectId: i.projectId,
     projectCode: i.project.code,

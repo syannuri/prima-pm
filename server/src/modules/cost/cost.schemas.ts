@@ -15,7 +15,8 @@ export const PERSONNEL_ROLES = ['PM', 'PROJECT_PERSONNEL'] as const;
 export const directLineSchema = z
   .object({
     type: z.enum(DIRECT_TYPES),
-    label: z.string().min(1).max(200),
+    // Optional: a manpower line may inherit its label from the chosen resource.
+    label: z.string().max(200).optional(),
 
     // Material fields
     qty: z.coerce.number().positive().optional(),
@@ -23,7 +24,8 @@ export const directLineSchema = z
 
     // Manpower fields
     personnelRole: z.enum(PERSONNEL_ROLES).optional(),
-    resourceUserId: z.string().uuid().optional(),
+    resourceId: z.string().uuid().optional(), // master resource pool (preferred)
+    resourceUserId: z.string().uuid().optional(), // legacy: link to a user account
     rateCardId: z.string().uuid().optional(),
     unitCostPerManday: z.coerce.number().nonnegative().optional(),
     planMandays: z.coerce.number().nonnegative().optional(),
@@ -31,13 +33,20 @@ export const directLineSchema = z
   })
   .superRefine((d, ctx) => {
     if (d.type === 'MANPOWER') {
-      if (!d.personnelRole)
-        ctx.addIssue({ code: 'custom', path: ['personnelRole'], message: 'Required for manpower' });
-      if (d.unitCostPerManday === undefined)
-        ctx.addIssue({ code: 'custom', path: ['unitCostPerManday'], message: 'Required for manpower' });
       if (d.planMandays === undefined)
         ctx.addIssue({ code: 'custom', path: ['planMandays'], message: 'Required for manpower' });
+      // With a pooled resource the server fills role, rate & label; else they're required.
+      if (!d.resourceId) {
+        if (!d.label)
+          ctx.addIssue({ code: 'custom', path: ['label'], message: 'Required' });
+        if (!d.personnelRole)
+          ctx.addIssue({ code: 'custom', path: ['personnelRole'], message: 'Required for manpower' });
+        if (d.unitCostPerManday === undefined)
+          ctx.addIssue({ code: 'custom', path: ['unitCostPerManday'], message: 'Required for manpower' });
+      }
     } else {
+      if (!d.label)
+        ctx.addIssue({ code: 'custom', path: ['label'], message: 'Required' });
       // Material line
       if (d.qty === undefined)
         ctx.addIssue({ code: 'custom', path: ['qty'], message: 'Required for material' });

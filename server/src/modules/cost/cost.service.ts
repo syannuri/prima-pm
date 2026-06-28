@@ -80,22 +80,47 @@ export async function recomputeBaseline(projectId: string) {
 
 // --- DIRECT COST ---
 
+// Resolve manpower role & rate, inheriting from the resource pool when a
+// resourceId is given (an explicit value on the input still wins). Also back-fills
+// the legacy resourceUserId and a default label from the resource.
+async function resolveManpower(input: DirectLineInput) {
+  let personnelRole = input.personnelRole ?? null;
+  let unitCostPerManday = input.unitCostPerManday ?? null;
+  let resourceUserId = input.resourceUserId ?? null;
+  let label = input.label;
+  if (input.resourceId) {
+    const r = await prisma.resource.findUnique({
+      where: { id: input.resourceId },
+      select: { name: true, personnelRole: true, unitCostPerManday: true, userId: true },
+    });
+    if (!r) throw NotFound('Resource not found');
+    personnelRole = personnelRole ?? r.personnelRole;
+    if (unitCostPerManday == null) unitCostPerManday = Number(r.unitCostPerManday);
+    resourceUserId = resourceUserId ?? r.userId ?? null;
+    if (!label) label = r.name;
+  }
+  return { personnelRole, unitCostPerManday: unitCostPerManday ?? 0, resourceUserId, label: label ?? '' };
+}
+
 export async function addDirectLine(projectId: string, input: DirectLineInput, actorId: string) {
   await ensureChartered(projectId);
 
   const data: Prisma.CostItemDirectUncheckedCreateInput = {
     projectId,
     type: input.type,
-    label: input.label,
+    label: input.label ?? '',
   };
 
   if (input.type === 'MANPOWER') {
-    data.personnelRole = input.personnelRole;
-    data.resourceUserId = input.resourceUserId ?? null;
+    const m = await resolveManpower(input);
+    data.label = m.label;
+    data.personnelRole = m.personnelRole;
+    data.resourceId = input.resourceId ?? null;
+    data.resourceUserId = m.resourceUserId;
     data.rateCardId = input.rateCardId ?? null;
-    data.unitCostPerManday = input.unitCostPerManday;
+    data.unitCostPerManday = m.unitCostPerManday;
     data.planMandays = input.planMandays;
-    data.manpowerCost = manpowerCost(input.unitCostPerManday!, input.planMandays!);
+    data.manpowerCost = manpowerCost(m.unitCostPerManday, input.planMandays!);
     data.taskId = input.taskId ?? null;
   } else {
     data.qty = input.qty;
@@ -118,14 +143,17 @@ export async function updateDirectLine(
   const existing = await prisma.costItemDirect.findFirst({ where: { id: itemId, projectId } });
   if (!existing) throw NotFound('Direct cost line not found');
 
-  const data: Prisma.CostItemDirectUncheckedUpdateInput = { type: input.type, label: input.label };
+  const data: Prisma.CostItemDirectUncheckedUpdateInput = { type: input.type, label: input.label ?? '' };
   if (input.type === 'MANPOWER') {
-    data.personnelRole = input.personnelRole;
-    data.resourceUserId = input.resourceUserId ?? null;
+    const m = await resolveManpower(input);
+    data.label = m.label;
+    data.personnelRole = m.personnelRole;
+    data.resourceId = input.resourceId ?? null;
+    data.resourceUserId = m.resourceUserId;
     data.rateCardId = input.rateCardId ?? null;
-    data.unitCostPerManday = input.unitCostPerManday;
+    data.unitCostPerManday = m.unitCostPerManday;
     data.planMandays = input.planMandays;
-    data.manpowerCost = manpowerCost(input.unitCostPerManday!, input.planMandays!);
+    data.manpowerCost = manpowerCost(m.unitCostPerManday, input.planMandays!);
     data.taskId = input.taskId ?? null;
     // clear material fields
     data.qty = null;
@@ -137,6 +165,7 @@ export async function updateDirectLine(
     data.amount = materialAmount(input.qty!, input.unitCost!);
     // clear manpower fields
     data.personnelRole = null;
+    data.resourceId = null;
     data.resourceUserId = null;
     data.rateCardId = null;
     data.unitCostPerManday = null;
@@ -252,7 +281,10 @@ export async function getCostSummary(projectId: string) {
     prisma.costItemDirect.findMany({
       where: { projectId },
       orderBy: { createdAt: 'asc' },
-      include: { resource: { select: { id: true, name: true } } },
+      include: {
+        resource: { select: { id: true, name: true } },
+        resourceRef: { select: { id: true, name: true, resourceType: true } },
+      },
     }),
     prisma.costItemIndirect.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' } }),
     prisma.costBaseline.findUnique({ where: { projectId } }),

@@ -111,6 +111,8 @@ export interface DirectCost {
   taskId: string | null;
   resourceUserId: string | null;
   resource: { id: string; name: string } | null;
+  resourceId: string | null;
+  resourceRef: { id: string; name: string; resourceType: ResourceType } | null;
 }
 
 export interface IndirectCost {
