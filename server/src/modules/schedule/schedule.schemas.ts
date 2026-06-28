@@ -16,6 +16,7 @@ export const upsertTaskSchema = z
     actualStart: z.coerce.date().nullable().optional(),
     actualFinish: z.coerce.date().nullable().optional(),
     picUserId: z.string().uuid().nullable().optional(),
+    picResourceId: z.string().uuid().nullable().optional(),
     progressPct: z.coerce.number().int().min(0).max(100).default(0),
     isMilestone: z.boolean().default(false),
     sortOrder: z.coerce.number().int().default(0),

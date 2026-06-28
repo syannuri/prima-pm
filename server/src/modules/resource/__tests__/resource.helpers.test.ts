@@ -102,6 +102,17 @@ describe('resource — capacity report', () => {
     expect(cell.utilization).toBe(3);
   });
 
+  it('scales capacity by capacityPerDay — a crew absorbs more before over-allocation', () => {
+    const r = buildCapacityReport(
+      [item({ planMandays: 15, taskStart: d('2026-03-02'), taskEnd: d('2026-03-06'), capacityPerDay: 3 })],
+      'week',
+    );
+    const cell = r.resources[0].cells.find((c) => c.period === '2026-03-02')!;
+    expect(cell.capacity).toBe(15); // 5 business days × 3 mandays/day
+    expect(cell.utilization).toBe(1);
+    expect(r.resources[0].overAllocated).toBe(false);
+  });
+
   it('aggregates one resource across multiple projects', () => {
     const r = buildCapacityReport(
       [

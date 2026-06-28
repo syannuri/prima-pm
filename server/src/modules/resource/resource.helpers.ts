@@ -11,6 +11,7 @@ export interface AllocationInput {
   resourceKey: string; // stable identity (named user, else project+label)
   resourceName: string; // display label
   personnelRole: string | null;
+  capacityPerDay?: number; // mandays this resource can deliver per business day (default 1)
   projectId: string;
   projectCode: string;
   projectName: string;
@@ -145,18 +146,20 @@ export function buildCapacityReport(
   const periods = from && to && from <= to ? periodsInRange(from, to, granularity) : [];
   const periodSet = new Set(periods);
 
-  // Capacity is shared across resources: business days per period inside the window.
-  const capacity = new Map<string, number>();
+  // Business days per period inside the window. A resource's capacity in a period
+  // is businessDays × its capacityPerDay (1 = full-time, 2 = a crew of two, …).
+  const bizDays = new Map<string, number>();
   if (from && to) {
     for (const d of eachBusinessDay(from, to)) {
       const k = periodKey(d, granularity);
-      capacity.set(k, (capacity.get(k) ?? 0) + 1);
+      bizDays.set(k, (bizDays.get(k) ?? 0) + 1);
     }
   }
 
   interface Acc {
     name: string;
     personnelRole: string | null;
+    capacityPerDay: number;
     total: number;
     scheduled: number;
     unscheduled: number;
@@ -167,7 +170,7 @@ export function buildCapacityReport(
   const ensure = (i: AllocationInput): Acc => {
     let a = byResource.get(i.resourceKey);
     if (!a) {
-      a = { name: i.resourceName, personnelRole: i.personnelRole, total: 0, scheduled: 0, unscheduled: 0, projects: new Map(), alloc: new Map() };
+      a = { name: i.resourceName, personnelRole: i.personnelRole, capacityPerDay: i.capacityPerDay && i.capacityPerDay > 0 ? i.capacityPerDay : 1, total: 0, scheduled: 0, unscheduled: 0, projects: new Map(), alloc: new Map() };
       byResource.set(i.resourceKey, a);
     }
     return a;
@@ -205,7 +208,7 @@ export function buildCapacityReport(
   for (const [key, a] of byResource) {
     const cells: PeriodCell[] = periods.map((p) => {
       const allocated = round2(a.alloc.get(p) ?? 0);
-      const cap = capacity.get(p) ?? 0;
+      const cap = round2((bizDays.get(p) ?? 0) * a.capacityPerDay);
       const utilization = cap > 0 ? round2(allocated / cap) : 0;
       return { period: p, allocated, capacity: cap, utilization, over: allocated > cap + EPSILON };
     });

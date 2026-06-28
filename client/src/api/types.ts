@@ -242,6 +242,7 @@ export interface Task {
   baselineStart: string | null;
   baselineFinish: string | null;
   picUserId: string | null;
+  picResourceId: string | null;
   progressPct: number;
   isMilestone: boolean;
   sortOrder: number;
@@ -260,6 +261,7 @@ export interface GanttNode extends Task {
   budgetCost: number;
   linkedPlanMandays: number;
   pic?: { id: string; name: string } | null;
+  picResource?: { id: string; name: string } | null;
   children: GanttNode[];
 }
 

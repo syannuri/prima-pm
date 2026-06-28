@@ -335,6 +335,7 @@ model Resource {
   user   User?   @relation("ResourceUser", fields: [userId], references: [id])
 
   costLines CostItemDirect[] @relation("LineResource")
+  picTasks  Task[]           @relation("TaskPicResource")
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -447,6 +448,10 @@ model Task {
 
   picUserId    String?
   pic          User?     @relation("TaskPIC", fields: [picUserId], references: [id])
+
+  // Owner / person-in-charge picked from the resource master (preferred over picUserId).
+  picResourceId String?
+  picResource   Resource? @relation("TaskPicResource", fields: [picResourceId], references: [id])
 
   progressPct  Int       @default(0) // 0..100
   isMilestone  Boolean   @default(false)

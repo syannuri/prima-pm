@@ -77,7 +77,10 @@ export async function getGantt(projectId: string) {
   const [tasks, deps, mp, project] = await Promise.all([
     prisma.task.findMany({
       where: { projectId },
-      include: { pic: { select: { id: true, name: true } } },
+      include: {
+        pic: { select: { id: true, name: true } },
+        picResource: { select: { id: true, name: true } },
+      },
     }),
     prisma.taskDependency.findMany({ where: { predecessor: { projectId } } }),
     manpowerByTask(projectId),
@@ -122,6 +125,7 @@ export async function createTask(projectId: string, input: UpsertTaskInput, acto
         actualStart: input.actualStart ?? null,
         actualFinish: input.actualFinish ?? null,
         picUserId: input.picUserId ?? null,
+        picResourceId: input.picResourceId ?? null,
         progressPct: input.progressPct,
         isMilestone: input.isMilestone,
         sortOrder: input.sortOrder,
@@ -165,6 +169,7 @@ export async function updateTask(
       actualStart: input.actualStart ?? null,
       actualFinish: input.actualFinish ?? null,
       picUserId: input.picUserId ?? null,
+      picResourceId: input.picResourceId ?? null,
       progressPct: input.progressPct,
       isMilestone: input.isMilestone,
       sortOrder: input.sortOrder,

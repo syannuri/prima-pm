@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { GanttNode, TaskDependency, User } from '../../api/types';
+import type { GanttNode, ResourceItem, TaskDependency } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
 import { formatDate, formatDateInput } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
@@ -173,7 +173,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 const varDays = r.baseEnd != null ? Math.round((r.end - r.baseEnd) / day) : null;
                 const baseLeft = axis && r.baseStart != null ? ((r.baseStart - axis.min) / axis.span) * 100 : null;
                 const baseWidth = axis && r.baseStart != null && r.baseEnd != null ? Math.max(1.5, ((r.baseEnd - r.baseStart) / axis.span) * 100) : null;
-                const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.pic);
+                const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.picResource || node.pic);
                 const isOpen = expanded.has(node.id);
                 return (
                   <Fragment key={node.id}>
@@ -280,7 +280,7 @@ function DictionaryView({ node }: { node: GanttNode }) {
   );
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <Item label="Owner (PIC)" value={node.pic?.name} />
+      <Item label="Owner (PIC)" value={node.picResource?.name ?? node.pic?.name} />
       <Item label="Deliverable" value={node.deliverable} />
       <div className="sm:col-span-2"><Item label="Description / Scope" value={node.description} /></div>
       <div className="sm:col-span-2"><Item label="Acceptance criteria" value={node.acceptanceCriteria} /></div>
@@ -299,9 +299,9 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
   const [description, setDescription] = useState(edit?.description ?? '');
   const [deliverable, setDeliverable] = useState(edit?.deliverable ?? '');
   const [acceptanceCriteria, setAcceptance] = useState(edit?.acceptanceCriteria ?? '');
-  const [picUserId, setPic] = useState(edit?.picUserId ?? '');
+  const [picResourceId, setPic] = useState(edit?.picResourceId ?? '');
   const [err, setErr] = useState('');
-  const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory') });
+  const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources') });
 
   const save = useMutation({
     mutationFn: () => {
@@ -314,7 +314,8 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
         isMilestone,
         parentTaskId: edit ? edit.parentTaskId : parentId,
         sortOrder: edit ? edit.sortOrder : siblingCount,
-        picUserId: picUserId || undefined,
+        picUserId: edit?.picUserId ?? undefined, // preserve any legacy user-PIC
+        picResourceId: picResourceId || undefined,
         description: description || null,
         deliverable: deliverable || null,
         acceptanceCriteria: acceptanceCriteria || null,
@@ -364,9 +365,9 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">WBS dictionary (optional)</div>
             <div className="space-y-3">
               <Field label="Owner (PIC)">
-                <Select value={picUserId} onChange={(e) => setPic(e.target.value)}>
+                <Select value={picResourceId} onChange={(e) => setPic(e.target.value)}>
                   <option value="">— unassigned —</option>
-                  {usersQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                  {resourcesQ.data?.resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
                 </Select>
               </Field>
               <Field label="Deliverable"><Input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} placeholder="e.g. Signed-off design document" /></Field>

@@ -33,7 +33,7 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
       resourceId: true,
       resourceUserId: true,
       resource: { select: { name: true } },
-      resourceRef: { select: { name: true } },
+      resourceRef: { select: { name: true, capacityPerDay: true } },
       projectId: true,
       project: { select: { code: true, name: true } },
       task: { select: { planStart: true, planEnd: true } },
@@ -49,6 +49,7 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
         ? `U:${i.resourceUserId}`
         : `L:${i.projectId}:${i.label}`,
     resourceName: i.resourceRef?.name ?? i.resource?.name ?? i.label,
+    capacityPerDay: i.resourceRef ? Number(i.resourceRef.capacityPerDay) : 1,
     personnelRole: i.personnelRole ?? null,
     projectId: i.projectId,
     projectCode: i.project.code,
