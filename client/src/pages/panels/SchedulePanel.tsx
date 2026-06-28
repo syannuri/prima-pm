@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Evm, GanttNode, Task, TaskDependency, User } from '../../api/types';
 import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from '../../components/ui';
-import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
+import { formatDate, formatDateInput, formatIdr, formatNum } from '../../lib/format';
 import GanttChart, { type FlatRow as Flat } from './GanttChart';
 
 function flatten(nodes: GanttNode[], depth = 0, acc: Flat[] = []): Flat[] {
@@ -114,6 +114,20 @@ function EvmPanel({ base }: { base: string }) {
             <Metric label="SPI" value={formatNum(e.spi, 3)} warn={e.spi < 1} />
             <Metric label="EAC" value={formatIdr(e.eac)} />
           </div>
+          {/* Schedule baseline variance (finish vs baseline) */}
+          {e.scheduleBaselinedAt ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-slate-500 dark:text-slate-400">Schedule variance:</span>
+              <span className="text-slate-700 dark:text-slate-200">finish {formatDate(e.currentFinish)} vs baseline {formatDate(e.baselineFinish)}</span>
+              {e.finishVarianceDays != null && (
+                <Badge color={e.finishVarianceDays > 0 ? 'red' : e.finishVarianceDays < 0 ? 'green' : 'slate'}>
+                  {e.finishVarianceDays > 0 ? `+${e.finishVarianceDays}d late` : e.finishVarianceDays < 0 ? `${e.finishVarianceDays}d early` : 'On schedule'}
+                </Badge>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">No schedule baseline set — capture one in the WBS tab to track finish variance.</p>
+          )}
         </>
       )}
     </Card>

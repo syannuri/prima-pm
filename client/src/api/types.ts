@@ -146,11 +146,12 @@ export interface PortfolioRow {
   percentComplete: number;
   health: PortfolioHealth;
   costHealth: PortfolioHealth;
+  finishVarianceDays: number | null;
 }
 
 export interface PortfolioSummary {
   projects: PortfolioRow[];
-  totals: { bac: number; contingencyReserve: number; pv: number; ev: number; ac: number; spi: number; cpi: number; percentComplete: number; count: number };
+  totals: { bac: number; contingencyReserve: number; pv: number; ev: number; ac: number; spi: number; cpi: number; percentComplete: number; count: number; baselinedCount: number; slippedCount: number; worstSlipDays: number };
   byStatus: Record<string, number>;
   byHealth: Record<string, number>;
   statusDate: string;
@@ -235,4 +236,8 @@ export interface Evm {
   health: 'GREEN' | 'AMBER' | 'RED';
   costBaselineBAC: number;
   leafTaskCount: number;
+  scheduleBaselinedAt: string | null;
+  baselineFinish: string | null;
+  currentFinish: string | null;
+  finishVarianceDays: number | null;
 }

@@ -293,15 +293,23 @@ export async function getManpowerSync(projectId: string) {
  * budget per task = Σ linked manpower cost, AC supplied (manual, MVP).
  */
 export async function getEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
-  const [tasks, mp, resolvedAc] = await Promise.all([
-    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true } }),
+  const [tasks, mp, resolvedAc, project] = await Promise.all([
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, baselineFinish: true } }),
     manpowerByTask(projectId),
     // Use the explicit override if provided, else the stored time-phased AC.
     actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
+    prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true } }),
   ]);
 
   const parentIds = new Set(tasks.filter((t) => t.parentTaskId).map((t) => t.parentTaskId!));
   const leaves = tasks.filter((t) => !parentIds.has(t.id));
+
+  // Schedule finish variance vs baseline: latest current finish − latest baseline finish.
+  const DAY = 86_400_000;
+  const curFinish = leaves.length ? Math.max(...leaves.map((t) => +t.planEnd)) : null;
+  const baseFins = leaves.map((t) => (t.baselineFinish ? +t.baselineFinish : null)).filter((x): x is number => x != null);
+  const baseFinish = baseFins.length ? Math.max(...baseFins) : null;
+  const finishVarianceDays = curFinish != null && baseFinish != null ? Math.round((curFinish - baseFinish) / DAY) : null;
 
   const evmTasks: EvmTask[] = leaves.map((t) => ({
     budgetCost: mp.cost.get(t.id) ?? 0,
@@ -318,5 +326,13 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
     select: { budgetAtCompletion: true },
   });
 
-  return { ...evm, costBaselineBAC: dec(baseline?.budgetAtCompletion), leafTaskCount: leaves.length };
+  return {
+    ...evm,
+    costBaselineBAC: dec(baseline?.budgetAtCompletion),
+    leafTaskCount: leaves.length,
+    scheduleBaselinedAt: project?.scheduleBaselinedAt ?? null,
+    baselineFinish: baseFinish ? new Date(baseFinish).toISOString() : null,
+    currentFinish: curFinish ? new Date(curFinish).toISOString() : null,
+    finishVarianceDays,
+  };
 }

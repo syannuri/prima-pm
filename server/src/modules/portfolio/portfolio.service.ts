@@ -42,6 +42,7 @@ export interface PortfolioRow {
   percentComplete: number;
   health: Health; // schedule health (SPI)
   costHealth: Health; // cost health (CPI)
+  finishVarianceDays: number | null; // vs schedule baseline (null = no baseline)
 }
 
 export async function getPortfolioSummary(userId: string, role: string, statusDate: Date) {
@@ -61,11 +62,13 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
   const rows: PortfolioRow[] = [];
   for (const p of projects) {
     let pv = 0, ev = 0, ac = 0, spi = 0, cpi = 0, percentComplete = 0, leafTaskCount = 0;
+    let finishVarianceDays: number | null = null;
     // Only chartered projects can have a schedule; AC resolved from stored time-phased entries.
     if (p.status !== 'DRAFT') {
       const evm = await getEvm(p.id, undefined, statusDate);
       pv = evm.pv; ev = evm.ev; ac = evm.ac; spi = evm.spi; cpi = evm.cpi;
       percentComplete = evm.percentComplete; leafTaskCount = evm.leafTaskCount;
+      finishVarianceDays = evm.finishVarianceDays;
     }
     rows.push({
       id: p.id,
@@ -79,6 +82,7 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       pv, ev, ac, spi, cpi, percentComplete,
       health: scheduleHealth(spi, leafTaskCount, pv),
       costHealth: costHealthFrom(cpi, ac),
+      finishVarianceDays,
     });
   }
 
@@ -105,9 +109,23 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
     byHealth[r.health] += 1;
   }
 
+  // Schedule-variance roll-up (baselined projects only).
+  const baselined = rows.filter((r) => r.finishVarianceDays != null);
+  const slippedCount = baselined.filter((r) => (r.finishVarianceDays ?? 0) > 0).length;
+  const worstSlipDays = baselined.reduce((m, r) => Math.max(m, r.finishVarianceDays ?? 0), 0);
+
   return {
     projects: rows,
-    totals: { ...totals, spi: portfolioSpi, cpi: portfolioCpi, percentComplete: portfolioPercent, count: rows.length },
+    totals: {
+      ...totals,
+      spi: portfolioSpi,
+      cpi: portfolioCpi,
+      percentComplete: portfolioPercent,
+      count: rows.length,
+      baselinedCount: baselined.length,
+      slippedCount,
+      worstSlipDays,
+    },
     byStatus,
     byHealth,
     statusDate,

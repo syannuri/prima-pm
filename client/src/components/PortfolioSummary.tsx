@@ -51,6 +51,11 @@ export default function PortfolioSummary() {
         <Kpi label="Portfolio CPI" value={t.cpi ? formatNum(t.cpi, 2) : '—'} warn={t.cpi > 0 && t.cpi < 1} />
         <Kpi label="Portfolio SPI" value={t.spi ? formatNum(t.spi, 2) : '—'} warn={spiBehind} />
         <Kpi label="% Complete" value={`${formatNum(t.percentComplete * 100, 1)}%`} />
+        <Kpi
+          label="Schedule slip"
+          value={t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule'}
+          warn={t.slippedCount > 0}
+        />
       </div>
 
       {/* Health distribution */}
@@ -80,7 +85,7 @@ export default function PortfolioSummary() {
                 <th className="py-2">Code</th><th>Project</th><th>Status</th>
                 <th className="text-right">BAC</th><th className="text-right">EV</th><th className="text-right">AC</th>
                 <th className="text-right">CPI</th><th className="text-right">SPI</th>
-                <th className="text-right">% Done</th><th className="text-right">Cost</th><th className="text-right">Sched.</th>
+                <th className="text-right">% Done</th><th className="text-right" title="Finish variance vs schedule baseline">Var</th><th className="text-right">Cost</th><th className="text-right">Sched.</th>
               </tr>
             </thead>
             <tbody>
@@ -97,6 +102,15 @@ export default function PortfolioSummary() {
                   <td className={`text-right ${p.cpi > 0 && p.cpi < 1 ? 'text-red-600' : ''}`}>{p.cpi ? formatNum(p.cpi, 2) : '—'}</td>
                   <td className={`text-right ${p.spi > 0 && p.spi < 1 ? 'text-red-600' : ''}`}>{p.spi ? formatNum(p.spi, 2) : '—'}</td>
                   <td className="text-right">{formatNum(p.percentComplete * 100, 0)}%</td>
+                  <td className="text-right tabular-nums">
+                    {p.finishVarianceDays == null ? (
+                      <span className="text-slate-300 dark:text-slate-600" title="No baseline">—</span>
+                    ) : (
+                      <span className={p.finishVarianceDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : p.finishVarianceDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-400 dark:text-slate-500'}>
+                        {p.finishVarianceDays > 0 ? `+${p.finishVarianceDays}d` : p.finishVarianceDays < 0 ? `${p.finishVarianceDays}d` : '0'}
+                      </span>
+                    )}
+                  </td>
                   <td className="text-right">
                     {p.costHealth === 'NO_DATA'
                       ? <span className="text-slate-400 dark:text-slate-500" title={NODATA_HINT.cost}>—</span>
