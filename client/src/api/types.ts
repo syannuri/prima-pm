@@ -159,11 +159,12 @@ export interface PortfolioRow {
   costHealth: PortfolioHealth;
   finishVarianceDays: number | null;
   changeCount: number;
+  scheduleProgress: number; // physical % complete from the WBS roll-up (0..1)
 }
 
 export interface PortfolioSummary {
   projects: PortfolioRow[];
-  totals: { bac: number; contingencyReserve: number; pv: number; ev: number; ac: number; spi: number; cpi: number; percentComplete: number; count: number; baselinedCount: number; slippedCount: number; worstSlipDays: number };
+  totals: { bac: number; contingencyReserve: number; pv: number; ev: number; ac: number; spi: number; cpi: number; percentComplete: number; scheduleProgress: number; count: number; baselinedCount: number; slippedCount: number; worstSlipDays: number };
   byStatus: Record<string, number>;
   byHealth: Record<string, number>;
   statusDate: string;

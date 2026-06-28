@@ -44,7 +44,7 @@ export default function PortfolioSummary() {
   let completed = 0, delayed = 0, onProgress = 0;
   for (const p of data.projects) {
     finCount[p.costHealth] = (finCount[p.costHealth] ?? 0) + 1;
-    if (p.percentComplete >= 1 || p.status === 'CLOSED') completed += 1;
+    if (p.scheduleProgress >= 1 || p.status === 'CLOSED') completed += 1;
     else if (p.health === 'RED' || (p.finishVarianceDays ?? 0) > 0) delayed += 1;
     else onProgress += 1;
   }
@@ -83,7 +83,7 @@ export default function PortfolioSummary() {
         <Kpi label="Actual Cost" value={formatIdr(t.ac)} />
         <Kpi label="Portfolio CPI" value={t.cpi ? formatNum(t.cpi, 2) : '—'} warn={t.cpi > 0 && t.cpi < 1} />
         <Kpi label="Portfolio SPI" value={t.spi ? formatNum(t.spi, 2) : '—'} warn={spiBehind} />
-        <Kpi label="% Complete" value={`${formatNum(t.percentComplete * 100, 1)}%`} />
+        <Kpi label="% Complete" value={`${formatNum(t.scheduleProgress * 100, 1)}%`} />
         <Kpi
           label="Schedule slip"
           value={t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule'}
@@ -173,7 +173,7 @@ export default function PortfolioSummary() {
                   <td className="text-right">{formatIdr(p.ac)}</td>
                   <td className={`text-right ${p.cpi > 0 && p.cpi < 1 ? 'text-red-600' : ''}`}>{p.cpi ? formatNum(p.cpi, 2) : '—'}</td>
                   <td className={`text-right ${p.spi > 0 && p.spi < 1 ? 'text-red-600' : ''}`}>{p.spi ? formatNum(p.spi, 2) : '—'}</td>
-                  <td className="text-right">{formatNum(p.percentComplete * 100, 0)}%</td>
+                  <td className="text-right" title="Physical % complete — duration-weighted WBS roll-up (Schedule tab)">{formatNum(p.scheduleProgress * 100, 0)}%</td>
                   <td className="text-right tabular-nums">
                     {p.finishVarianceDays == null ? (
                       <span className="text-slate-300 dark:text-slate-600" title="No baseline">—</span>

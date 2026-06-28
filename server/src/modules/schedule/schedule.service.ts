@@ -10,6 +10,7 @@ import {
   buildGanttTree,
   hasDependencyCycle,
   reconcileManpower,
+  wbsProgress,
   type DependencyEdge,
 } from './schedule.helpers.js';
 import type { DependencyInput, UpsertTaskInput } from './schedule.schemas.js';
@@ -320,6 +321,11 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
 
   const evm = computeEvm({ tasks: evmTasks, actualCost: resolvedAc, statusDate });
 
+  // Physical % complete from the WBS duration-weighted roll-up (matches the Schedule
+  // tab). Unlike EVM's EV/BAC, this reflects task progress even when no cost is loaded.
+  const wbs = wbsProgress(tasks);
+  const scheduleProgress = Math.round(wbs.progress) / 100; // integer % → 0..1
+
   // Provide the cost-baseline BAC alongside the schedule-derived BAC for reference.
   const baseline = await prisma.costBaseline.findUnique({
     where: { projectId },
@@ -328,6 +334,8 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
 
   return {
     ...evm,
+    scheduleProgress,
+    scheduleWeightDays: wbs.weight,
     costBaselineBAC: dec(baseline?.budgetAtCompletion),
     leafTaskCount: leaves.length,
     scheduleBaselinedAt: project?.scheduleBaselinedAt ?? null,

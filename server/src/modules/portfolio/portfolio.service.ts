@@ -45,6 +45,7 @@ export interface PortfolioRow {
   costHealth: Health; // cost health (CPI)
   finishVarianceDays: number | null; // vs schedule baseline (null = no baseline)
   changeCount: number; // total recorded changes (audit-log entries) for this project
+  scheduleProgress: number; // physical % complete from the WBS roll-up (0..1)
 }
 
 export async function getPortfolioSummary(userId: string, role: string, statusDate: Date) {
@@ -70,14 +71,18 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
   const changeMap = new Map(changeGroups.map((g) => [g.projectId, g._count._all]));
 
   const rows: PortfolioRow[] = [];
+  // Portfolio physical progress = duration-weighted roll-up across projects.
+  const schedAccum = { weighted: 0, weight: 0 };
   for (const p of projects) {
     let pv = 0, ev = 0, ac = 0, spi = 0, cpi = 0, percentComplete = 0, leafTaskCount = 0;
+    let scheduleProgress = 0, scheduleWeightDays = 0;
     let finishVarianceDays: number | null = null;
     // Only chartered projects can have a schedule; AC resolved from stored time-phased entries.
     if (p.status !== 'DRAFT') {
       const evm = await getEvm(p.id, undefined, statusDate);
       pv = evm.pv; ev = evm.ev; ac = evm.ac; spi = evm.spi; cpi = evm.cpi;
       percentComplete = evm.percentComplete; leafTaskCount = evm.leafTaskCount;
+      scheduleProgress = evm.scheduleProgress; scheduleWeightDays = evm.scheduleWeightDays;
       finishVarianceDays = evm.finishVarianceDays;
     }
     rows.push({
@@ -95,7 +100,10 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       costHealth: costHealthFrom(cpi, ac),
       finishVarianceDays,
       changeCount: changeMap.get(p.id) ?? 0,
+      scheduleProgress,
     });
+    schedAccum.weighted += scheduleProgress * scheduleWeightDays;
+    schedAccum.weight += scheduleWeightDays;
   }
 
   // Portfolio totals & distributions.
@@ -113,6 +121,8 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
   const portfolioSpi = totals.pv > 0 ? round2(totals.ev / totals.pv) : 0;
   const portfolioCpi = totals.ac > 0 ? round2(totals.ev / totals.ac) : 0;
   const portfolioPercent = totals.bac > 0 ? round2(totals.ev / totals.bac) : 0;
+  // Physical % complete (WBS) rolled up across projects, weighted by schedule span.
+  const portfolioSchedule = schedAccum.weight > 0 ? round2(schedAccum.weighted / schedAccum.weight) : 0;
 
   const byStatus: Record<string, number> = {};
   const byHealth: Record<string, number> = { GREEN: 0, AMBER: 0, RED: 0, NO_DATA: 0 };
@@ -133,6 +143,7 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       spi: portfolioSpi,
       cpi: portfolioCpi,
       percentComplete: portfolioPercent,
+      scheduleProgress: portfolioSchedule,
       count: rows.length,
       baselinedCount: baselined.length,
       slippedCount,

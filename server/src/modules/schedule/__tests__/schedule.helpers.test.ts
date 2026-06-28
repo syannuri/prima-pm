@@ -6,6 +6,7 @@ import {
   hasDependencyCycle,
   reconcileManpower,
   weightedProgress,
+  wbsProgress,
 } from '../schedule.helpers.js';
 
 const d = (s: string) => new Date(s);
@@ -86,5 +87,38 @@ describe('schedule — weighted progress', () => {
   });
   it('returns 0 for empty', () => {
     expect(weightedProgress([])).toBe(0);
+  });
+});
+
+describe('schedule — WBS duration-weighted progress', () => {
+  const t = (id: string, parentTaskId: string | null, start: string, end: string, progressPct: number) =>
+    ({ id, parentTaskId, planStart: d(start), planEnd: d(end), progressPct });
+
+  it('weights leaves by duration, ignoring stored parent %', () => {
+    // Phase has two leaves: 10d @ 100% and 30d @ 0% → 25%. Parent's own % is ignored.
+    const r = wbsProgress([
+      t('p', null, '2026-01-01', '2026-02-10', 99),
+      t('a', 'p', '2026-01-01', '2026-01-11', 100), // 10 days
+      t('b', 'p', '2026-01-11', '2026-02-10', 0), // 30 days
+    ]);
+    expect(r.progress).toBe(25);
+  });
+
+  it('matches a simple average when all leaves share equal duration', () => {
+    const r = wbsProgress([
+      t('a', null, '2026-01-01', '2026-01-11', 40),
+      t('b', null, '2026-01-01', '2026-01-11', 60),
+    ]);
+    expect(r.progress).toBe(50);
+  });
+
+  it('reflects progress even with no cost loaded (the dashboard fix)', () => {
+    // A fully-complete single task → 100%, regardless of any cost/budget.
+    const r = wbsProgress([t('a', null, '2026-01-01', '2026-01-11', 100)]);
+    expect(r.progress).toBe(100);
+  });
+
+  it('returns 0 for empty', () => {
+    expect(wbsProgress([])).toEqual({ progress: 0, weight: 0 });
   });
 });
