@@ -1,0 +1,21 @@
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Precise">
+  <defs>
+    <linearGradient id="preciseGrad" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f4675f" />
+      <stop offset="1" stop-color="#be3b39" />
+    </linearGradient>
+  </defs>
+  <!-- badge (fills the canvas for crisp small sizes) -->
+  <rect x="0" y="0" width="48" height="48" rx="11" fill="url(#preciseGrad)" />
+  <!-- target ring -->
+  <circle cx="24" cy="24" r="10.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-opacity="0.95" />
+  <!-- four reticle ticks pointing inward -->
+  <g stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-opacity="0.95">
+    <path d="M24 5 V12" />
+    <path d="M24 36 V43" />
+    <path d="M5 24 H12" />
+    <path d="M36 24 H43" />
+  </g>
+  <!-- centre lock dot -->
+  <circle cx="24" cy="24" r="3.2" fill="#fff" />
+</svg>
