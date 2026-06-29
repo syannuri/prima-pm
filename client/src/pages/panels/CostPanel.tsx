@@ -323,7 +323,13 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
             <div />
           </>
         )}
-        <Button onClick={() => add.mutate()} disabled={add.isPending || (isManpower ? !resourceId || !planMandays : !label)}>Add</Button>
+        <Button
+          onClick={() => add.mutate()}
+          disabled={add.isPending || (isManpower ? !resourceId || !planMandays : !label)}
+          title={isManpower ? (!resourceId ? 'Pick a Resource from the pool first' : !planMandays ? 'Enter Plan mandays' : 'Add manpower line') : !label ? 'Enter a label first' : 'Add cost line'}
+        >
+          Add
+        </Button>
       </div>
       {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
     </Card>
