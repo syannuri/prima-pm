@@ -49,6 +49,8 @@ export interface PortfolioRow {
   resourceCount: number; // distinct manpower resources loaded on the project
   planMandays: number; // Σ planned man-days across manpower lines
   manpowerCost: number; // Σ manpower cost
+  plannedCost: number; // project-level cost baseline (costBaselineIdr)
+  revenue: number; // project-level total revenue (totalRevenueIdr)
 }
 
 export async function getPortfolioSummary(userId: string, role: string, statusDate: Date) {
@@ -122,6 +124,8 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
       resourceCount: mpMap.get(p.id)?.keys.size ?? 0,
       planMandays: round2(mpMap.get(p.id)?.mandays ?? 0),
       manpowerCost: round2(mpMap.get(p.id)?.cost ?? 0),
+      plannedCost: dec(p.costBaselineIdr),
+      revenue: dec(p.totalRevenueIdr),
     });
     schedAccum.weighted += scheduleProgress * scheduleWeight;
     schedAccum.weight += scheduleWeight;

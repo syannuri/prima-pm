@@ -192,6 +192,8 @@ export interface PortfolioRow {
   resourceCount: number;
   planMandays: number;
   manpowerCost: number;
+  plannedCost: number;
+  revenue: number;
 }
 
 export interface PortfolioSummary {

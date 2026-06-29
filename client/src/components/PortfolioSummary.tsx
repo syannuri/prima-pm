@@ -73,6 +73,15 @@ export default function PortfolioSummary() {
   );
   const hasResources = resTotals.resources > 0 || resTotals.cost > 0;
 
+  // Cost & revenue per project (PMO dashboard) — highest revenue first.
+  const finRows = [...data.projects].sort((a, b) => b.revenue - a.revenue);
+  const finTotals = data.projects.reduce(
+    (a, p) => ({ cost: a.cost + p.plannedCost, revenue: a.revenue + p.revenue }),
+    { cost: 0, revenue: 0 },
+  );
+  const finMargin = finTotals.revenue - finTotals.cost;
+  const hasFinancials = finTotals.cost > 0 || finTotals.revenue > 0;
+
   return (
     <div className="space-y-3">
       <div className="flex items-end justify-end">
@@ -197,6 +206,66 @@ export default function PortfolioSummary() {
                     <td className="text-right tabular-nums">{formatNum(resTotals.mandays, 0)}</td>
                     <td className="text-right tabular-nums">{formatIdr(resTotals.cost)}</td>
                     <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* PMO dashboard — cost & revenue per project */}
+      {showPies && (
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cost &amp; revenue by project</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              Cost {formatIdr(finTotals.cost)} · Revenue {formatIdr(finTotals.revenue)} · Margin{' '}
+              <span className={finMargin < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>{formatIdr(finMargin)}</span>
+            </span>
+          </div>
+          {!hasFinancials ? (
+            <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">No cost/revenue captured yet. Set them per project under “Edit details”.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                    <th className="py-2">Project</th>
+                    <th className="text-right">Cost</th>
+                    <th className="text-right">Revenue</th>
+                    <th className="text-right">Margin</th>
+                    <th className="text-right" title="Margin ÷ revenue">Margin %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {finRows.map((p) => {
+                    const margin = p.revenue - p.plannedCost;
+                    return (
+                      <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <td className="py-2">
+                          <Link to={`/projects/${p.id}`} className="block">
+                            <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>{' '}
+                            <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
+                          </Link>
+                        </td>
+                        <td className="text-right tabular-nums">{p.plannedCost ? formatIdr(p.plannedCost) : '—'}</td>
+                        <td className="text-right tabular-nums">{p.revenue ? formatIdr(p.revenue) : '—'}</td>
+                        <td className={`text-right tabular-nums ${p.revenue || p.plannedCost ? (margin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : ''}`}>
+                          {p.revenue || p.plannedCost ? formatIdr(margin) : '—'}
+                        </td>
+                        <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((margin / p.revenue) * 100, 1)}%` : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    <td className="py-2">Total</td>
+                    <td className="text-right tabular-nums">{formatIdr(finTotals.cost)}</td>
+                    <td className="text-right tabular-nums">{formatIdr(finTotals.revenue)}</td>
+                    <td className={`text-right tabular-nums ${finMargin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatIdr(finMargin)}</td>
+                    <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finTotals.revenue > 0 ? `${formatNum((finMargin / finTotals.revenue) * 100, 1)}%` : '—'}</td>
                   </tr>
                 </tfoot>
               </table>
