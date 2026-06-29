@@ -165,7 +165,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   return (
     <Card>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete (MS-Project style)">
+        <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete">
           Work Breakdown Structure
         </SectionTitle>
         <div className="flex flex-wrap items-center gap-2">
