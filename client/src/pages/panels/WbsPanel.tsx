@@ -29,6 +29,8 @@ function statusOf(pct: number): { label: string; color: string } {
 }
 
 const day = 86_400_000;
+type Scale = 'day' | 'week' | 'month';
+const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
 
 // Summary-task roll-up (MS-Project / WBS 100% rule): a parent's dates span its
 // descendants and its % is the duration-weighted average of theirs. Leaves keep
@@ -53,6 +55,36 @@ function rollup(node: GanttNode, out: Map<string, Roll>): Roll {
   return r;
 }
 
+// A round "done" toggle — the PM's one-click way to mark a task/subtask 100%.
+function CircleCheck({ pct, readOnly, busy, onSet }: { pct: number; readOnly?: boolean; busy?: boolean; onSet?: (v: number) => void }) {
+  const complete = pct >= 100;
+  const inProgress = pct > 0 && pct < 100;
+  const ring = complete
+    ? 'border-green-500 bg-green-500 text-white shadow-sm shadow-green-500/30'
+    : inProgress
+    ? 'border-amber-400 text-amber-500'
+    : 'border-slate-300 text-transparent dark:border-slate-600';
+  const cls = `grid h-5 w-5 place-items-center rounded-full border-2 transition ${ring} ${busy ? 'animate-pulse' : ''}`;
+  const dot = complete ? <CheckIcon /> : inProgress ? <span className="h-[7px] w-[7px] rounded-full bg-amber-400" /> : null;
+  const title = readOnly
+    ? `${pct}% — rolls up from subtasks`
+    : complete
+    ? 'Completed — click to reopen'
+    : `Mark complete (currently ${pct}%)`;
+  if (readOnly) return <span className={`${cls} opacity-70`} title={title}>{dot}</span>;
+  return (
+    <button type="button" onClick={() => !busy && onSet?.(complete ? 0 : 100)} aria-pressed={complete} aria-label={title} title={title}
+      className={`${cls} ${complete ? '' : 'hover:border-brand-500 hover:text-brand-500/40'}`}>
+      {dot}
+    </button>
+  );
+}
+const CheckIcon = () => (
+  <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 10.5l3.2 3.5L15 6.5" />
+  </svg>
+);
+
 export default function WbsPanel({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -76,7 +108,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     return m;
   }, [ganttQ.data]);
 
-  // Timeline axis: span of all (rolled) plan dates → month ticks.
+  const [scale, setScale] = useState<Scale>('month');
+
+  // Timeline axis: span of all (rolled) plan dates → a pixel width + ticks for the
+  // chosen scale, plus a "today" marker. Bars are positioned by % of the span, so
+  // changing the scale only restyles the axis and grows/shrinks the timeline width.
   const axis = useMemo(() => {
     if (!rows.length) return null;
     const starts = rows.map((r) => { const x = rolled.get(r.node.id); return Math.min(x?.start ?? +new Date(r.node.planStart), x?.baseStart ?? Infinity); });
@@ -84,23 +120,32 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     const min = Math.min(...starts);
     const max = Math.max(...ends);
     const span = Math.max(max - min, day);
-    const months: { label: string; leftPct: number }[] = [];
-    const d = new Date(min);
-    d.setUTCDate(1);
-    while (+d <= max) {
-      months.push({
-        label: d.toLocaleString('en', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
-        leftPct: Math.max(0, ((+d - min) / span) * 100),
-      });
-      d.setUTCMonth(d.getUTCMonth() + 1);
+    const spanDays = span / day;
+    const width = Math.round(Math.min(11000, Math.max(300, spanDays * PX_PER_DAY[scale])));
+    const pct = (t: number) => Math.max(0, ((t - min) / span) * 100);
+
+    const ticks: { key: string; label: string; leftPct: number; major: boolean }[] = [];
+    if (scale === 'month') {
+      const d = new Date(min); d.setUTCDate(1); d.setUTCHours(0, 0, 0, 0);
+      while (+d <= max) { ticks.push({ key: `${+d}`, label: d.toLocaleString('en', { month: 'short', year: '2-digit', timeZone: 'UTC' }), leftPct: pct(+d), major: true }); d.setUTCMonth(d.getUTCMonth() + 1); }
+    } else if (scale === 'week') {
+      const d = new Date(min); d.setUTCHours(0, 0, 0, 0);
+      d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); // back to Monday
+      while (+d <= max) { ticks.push({ key: `${+d}`, label: d.toLocaleString('en', { day: 'numeric', month: 'short', timeZone: 'UTC' }), leftPct: pct(+d), major: d.getUTCDate() <= 7 }); d.setUTCDate(d.getUTCDate() + 7); }
+    } else {
+      const d = new Date(min); d.setUTCHours(0, 0, 0, 0);
+      while (+d <= max) { const first = d.getUTCDate() === 1; ticks.push({ key: `${+d}`, label: first ? d.toLocaleString('en', { month: 'short', timeZone: 'UTC' }) : String(d.getUTCDate()), leftPct: pct(+d), major: first }); d.setUTCDate(d.getUTCDate() + 1); }
     }
-    return { min, span, months };
-  }, [rows, rolled]);
+    const now = Date.now();
+    const todayPct = now >= min && now <= max ? pct(now) : null;
+    const minBarPct = (6 / width) * 100; // keep tiny tasks/milestones visible at any scale
+    return { min, span, width, ticks, todayPct, minBarPct };
+  }, [rows, rolled, scale]);
 
   const [form, setForm] = useState<{ parentId: string | null; edit?: GanttNode } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const colCount = 9 + (canEdit ? 1 : 0);
+  const colCount = 10 + (canEdit ? 1 : 0);
 
   const progress = useMutation({
     mutationFn: ({ id, pct }: { id: string; pct: number }) => api.patch(`${base}/tasks/${id}/progress`, { progressPct: pct }),
@@ -123,7 +168,20 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete (MS-Project style)">
           Work Breakdown Structure
         </SectionTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {rows.length > 0 && (
+            <div className="inline-flex items-center gap-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Timeline</span>
+              <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+                {(['day', 'week', 'month'] as Scale[]).map((s) => (
+                  <button key={s} onClick={() => setScale(s)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <span className="text-xs text-slate-400 dark:text-slate-500">
             {baselinedAt ? `Baselined ${formatDate(baselinedAt)}` : 'No baseline set'}
           </span>
@@ -145,23 +203,27 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="text-left text-xs uppercase text-slate-400 dark:text-slate-500 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-2 [&>th]:pr-3">
+                <th className="w-8 text-center" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
                 <th className="w-12">WBS</th>
-                <th className="min-w-[16rem]">Task</th>
+                <th className="min-w-[15rem]">Task</th>
                 <th className="text-right">Start</th>
                 <th className="text-right">Finish</th>
                 <th className="text-right">Dur</th>
                 <th className="text-right">% </th>
                 <th>Status</th>
                 <th className="text-right" title="Finish variance vs baseline (days)">Var</th>
-                {/* Timeline header with month ticks */}
-                <th className="w-[320px]">
-                  <div className="relative h-4 w-[300px]">
-                    {axis?.months.map((m) => (
-                      <span key={m.label} className="absolute -top-0.5 text-[10px] font-normal normal-case text-slate-400 dark:text-slate-500" style={{ left: `${m.leftPct}%` }}>{m.label}</span>
+                {canEdit && <th className="text-right">Actions</th>}
+                {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
+                <th>
+                  <div className="relative h-4" style={{ width: axis?.width }}>
+                    {axis?.ticks.map((t) => (
+                      <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
                     ))}
+                    {axis?.todayPct != null && (
+                      <span className="absolute -top-0.5 z-10 -translate-x-1/2 rounded bg-brand-600 px-1 text-[9px] font-semibold normal-case text-white" style={{ left: `${axis.todayPct}%` }}>Today</span>
+                    )}
                   </div>
                 </th>
-                {canEdit && <th className="text-right">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -169,15 +231,21 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, isParent: false, baseStart: null, baseEnd: null };
                 const st = statusOf(r.pct);
                 const leftPct = axis ? ((r.start - axis.min) / axis.span) * 100 : 0;
-                const widthPct = axis ? Math.max(1.5, ((r.end - r.start) / axis.span) * 100) : 0;
+                const widthPct = axis ? Math.max(axis.minBarPct, ((r.end - r.start) / axis.span) * 100) : 0;
                 const varDays = r.baseEnd != null ? Math.round((r.end - r.baseEnd) / day) : null;
                 const baseLeft = axis && r.baseStart != null ? ((r.baseStart - axis.min) / axis.span) * 100 : null;
-                const baseWidth = axis && r.baseStart != null && r.baseEnd != null ? Math.max(1.5, ((r.baseEnd - r.baseStart) / axis.span) * 100) : null;
+                const baseWidth = axis && r.baseStart != null && r.baseEnd != null ? Math.max(axis.minBarPct, ((r.baseEnd - r.baseStart) / axis.span) * 100) : null;
                 const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.picResource || node.pic);
                 const isOpen = expanded.has(node.id);
+                const togglingId = progress.isPending && progress.variables?.id === node.id;
                 return (
                   <Fragment key={node.id}>
                   <tr className="[&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="text-center">
+                      <div className="flex justify-center">
+                        <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
+                      </div>
+                    </td>
                     <td className="font-mono text-xs text-slate-400 dark:text-slate-500">{wbs}</td>
                     <td>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
@@ -185,7 +253,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                           {isOpen ? '▾' : 'ⓘ'}
                         </button>
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
-                        <span className={depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'}>{node.name}</span>
+                        <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
                       </span>
                     </td>
                     <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.start))}</td>
@@ -194,7 +262,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     <td className="text-right">
                       {canEdit && !r.isParent ? (
                         <input
-                          type="number" min={0} max={100} defaultValue={node.progressPct}
+                          type="number" min={0} max={100} defaultValue={node.progressPct} key={node.progressPct}
                           onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                           className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -215,8 +283,22 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         </span>
                       )}
                     </td>
+                    {canEdit && (
+                      <td className="whitespace-nowrap text-right text-xs">
+                        <button onClick={() => setForm({ parentId: node.id })} className="text-brand-600 hover:underline" title="Add subtask">+ Sub</button>
+                        <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400">Edit</button>
+                        <button onClick={() => { if (confirm(`Delete “${node.name}” and its subtasks?`)) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
+                      </td>
+                    )}
                     <td>
-                      <div className="relative h-6 w-[300px]">
+                      <div className="relative h-6" style={{ width: axis?.width }}>
+                        {/* month/period gridlines + today marker for orientation */}
+                        {axis?.ticks.filter((t) => t.major).map((t) => (
+                          <div key={t.key} className="absolute inset-y-0 w-px bg-slate-100 dark:bg-slate-800/80" style={{ left: `${t.leftPct}%` }} />
+                        ))}
+                        {axis?.todayPct != null && (
+                          <div className="absolute inset-y-0 z-10 w-px bg-brand-500/50" style={{ left: `${axis.todayPct}%` }} />
+                        )}
                         {/* baseline (ghost) bar */}
                         {baseLeft != null && baseWidth != null && (
                           <div className="absolute top-0 h-2 rounded bg-slate-300 dark:bg-slate-600" style={{ left: `${baseLeft}%`, width: `${baseWidth}%` }} title={`Baseline: ${formatDate(new Date(r.baseStart!))} → ${formatDate(new Date(r.baseEnd!))}`} />
@@ -231,13 +313,6 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         </div>
                       </div>
                     </td>
-                    {canEdit && (
-                      <td className="whitespace-nowrap text-right text-xs">
-                        <button onClick={() => setForm({ parentId: node.id })} className="text-brand-600 hover:underline" title="Add subtask">+ Sub</button>
-                        <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400">Edit</button>
-                        <button onClick={() => { if (confirm(`Delete “${node.name}” and its subtasks?`)) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
-                      </td>
-                    )}
                   </tr>
                   {isOpen && (
                     <tr>
