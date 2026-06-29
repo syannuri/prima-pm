@@ -58,20 +58,21 @@ export default function DashboardPage() {
     },
   });
 
-  // Only PMO (and ADMIN) may create projects and assign them to a PM.
-  const canCreate = user && ['ADMIN', 'PMO'].includes(user.role);
+  // PMO/Admin get the portfolio-wide framing; PMs see a "my projects" view.
+  const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  const canCreate = isPmo;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionTitle sub="Cross-project EVM portfolio & project directory">Dashboard</SectionTitle>
+        <SectionTitle sub={isPmo ? 'Cross-project EVM portfolio & project directory' : 'Your projects — health, cost & schedule'}>Dashboard</SectionTitle>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5 text-sm">
             <button
               onClick={() => setView('portfolio')}
               className={`rounded-md px-3 py-1 ${view === 'portfolio' ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
             >
-              Portfolio EVM
+              {isPmo ? 'Portfolio EVM' : 'My Projects'}
             </button>
             <button
               onClick={() => setView('resources')}

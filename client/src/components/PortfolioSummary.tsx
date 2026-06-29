@@ -98,8 +98,8 @@ export default function PortfolioSummary() {
         <Kpi label="Total BAC" value={formatIdr(t.bac)} strong />
         <Kpi label="Earned Value" value={formatIdr(t.ev)} />
         <Kpi label="Actual Cost" value={formatIdr(t.ac)} />
-        <Kpi label="Portfolio CPI" value={t.cpi ? formatNum(t.cpi, 2) : '—'} warn={t.cpi > 0 && t.cpi < 1} />
-        <Kpi label="Portfolio SPI" value={t.spi ? formatNum(t.spi, 2) : '—'} warn={spiBehind} />
+        <Kpi label={showPies ? 'Portfolio CPI' : 'CPI'} value={t.cpi ? formatNum(t.cpi, 2) : '—'} warn={t.cpi > 0 && t.cpi < 1} />
+        <Kpi label={showPies ? 'Portfolio SPI' : 'SPI'} value={t.spi ? formatNum(t.spi, 2) : '—'} warn={spiBehind} />
         <Kpi label="% Complete" value={`${formatNum(t.scheduleProgress * 100, 1)}%`} />
         <Kpi
           label="Schedule slip"
