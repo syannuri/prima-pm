@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { PersonnelRole, RateCard, ResourceItem, ResourceType, User } from '../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { formatIdr } from '../lib/format';
 
@@ -245,9 +245,7 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
   const pickedRate = rateCardsQ.data?.rateCards.find((rc) => rc.id === rateCardId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">{editing ? 'Edit resource' : 'New resource'}</h2>
+    <Modal onClose={onClose} title={editing ? 'Edit resource' : 'New resource'} size="lg">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Person or role" /></Field>
           <Field label="Type">
@@ -285,7 +283,6 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
           <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
           <Button className="flex-1" disabled={!name || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create resource'}</Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

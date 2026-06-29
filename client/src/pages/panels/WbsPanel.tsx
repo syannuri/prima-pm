@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { GanttNode, ResourceItem, TaskDependency } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
 import { formatDate, formatDateInput } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
 
@@ -304,6 +304,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       {canEdit && !r.isParent ? (
                         <input
                           type="number" min={0} max={100} defaultValue={node.progressPct} key={node.progressPct}
+                          aria-label={`Percent complete for ${node.name}`}
                           onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                           className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -450,9 +451,7 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
   const isParent = !!edit?.children?.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
+    <Modal onClose={onClose} title={title} size="lg">
         <div className="space-y-3">
           <Field label="Task name">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Requirements gathering" />
@@ -501,7 +500,6 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

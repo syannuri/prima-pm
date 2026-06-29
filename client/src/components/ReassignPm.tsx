@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { User } from '../api/types';
-import { Button, Field, Select } from './ui';
+import { Button, Field, Modal, Select } from './ui';
 import { useAuth } from '../context/AuthContext';
 
 // Inline "Change PM" control for a project header. Visible to ADMIN/PMO only.
@@ -42,9 +42,7 @@ export default function ReassignPm({ projectId, currentPmId }: { projectId: stri
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">Reassign Project Manager</h2>
+        <Modal onClose={() => setOpen(false)} title="Reassign Project Manager" size="sm">
             <Field label="Project Manager">
               <Select value={pmUserId} onChange={(e) => setPmUserId(e.target.value)} disabled={usersQ.isLoading}>
                 <option value="">— select —</option>
@@ -60,8 +58,7 @@ export default function ReassignPm({ projectId, currentPmId }: { projectId: stri
                 {save.isPending ? 'Saving…' : 'Reassign'}
               </Button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

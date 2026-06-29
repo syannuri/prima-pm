@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project, ProjectCategory, User } from '../api/types';
-import { Badge, Button, Card, Field, Input, Select, SectionTitle, Spinner } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Select, SectionTitle, Spinner } from '../components/ui';
 import { formatIdr } from '../lib/format';
 import { PROJECT_CATEGORIES } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
@@ -97,9 +97,7 @@ export default function DashboardPage() {
       {view === 'resources' && <ResourceCapacity />}
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowForm(false)}>
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-1 text-lg font-semibold text-slate-800 dark:text-slate-100">New Project</h2>
+        <Modal onClose={() => setShowForm(false)} title="New Project" size="lg">
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Create a project shell, then build its Charter, WBS, Cost & Risk.</p>
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -150,8 +148,7 @@ export default function DashboardPage() {
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {view === 'cards' && (isLoading ? (

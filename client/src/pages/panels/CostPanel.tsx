@@ -113,9 +113,9 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
         </tbody>
       </table>
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
-        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <Input type="number" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Input type="number" aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <Input aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
         <Button onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
       </div>
     </Card>
@@ -239,6 +239,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                         disabled={reassign.isPending}
                         onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })}
                         title="Assign / change resource"
+                        aria-label={`Assign resource to ${d.label}`}
                         className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
                           d.resourceId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
                         }`}
@@ -253,6 +254,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                         disabled={reassignTask.isPending}
                         onChange={(e) => reassignTask.mutate({ d, taskId: e.target.value })}
                         title="Link / change task (work package)"
+                        aria-label={`Link ${d.label} to a task`}
                         className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
                           d.taskId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
                         }`}
@@ -282,13 +284,13 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
       </div>
 
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-7">
-        <Select value={type} onChange={(e) => setType(e.target.value)}>
+        <Select aria-label="Direct cost type" value={type} onChange={(e) => setType(e.target.value)}>
           {DIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </Select>
-        <Input placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <Input aria-label="Cost line label" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
         {isManpower ? (
           <>
-            <Select value={resourceId} onChange={(e) => setResourceId(e.target.value)} title="Pick from the resource pool">
+            <Select aria-label="Pick resource from pool" value={resourceId} onChange={(e) => setResourceId(e.target.value)} title="Pick from the resource pool">
               <option value="">Resource…</option>
               {resourcesQ.data?.resources.map((r) => (
                 <option key={r.id} value={r.id}>{r.name} · {formatIdr(Number(r.unitCostPerManday))}/md</option>
@@ -296,6 +298,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
             </Select>
             <Input
               type="number"
+              aria-label="Rate override (IDR per manday)"
               placeholder={picked ? `${formatIdr(Number(picked.unitCostPerManday))} (rate)` : 'Rate override'}
               value={rateOverride}
               onChange={(e) => setRateOverride(e.target.value)}
@@ -303,12 +306,13 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
             />
             <Input
               type="number"
+              aria-label="Planned mandays"
               placeholder="Plan mandays"
               value={planMandays}
               onChange={(e) => setMandays(e.target.value)}
               title={picked && planMandays ? `= ${formatIdr((rateOverride === '' ? Number(picked.unitCostPerManday) : Number(rateOverride)) * Number(planMandays))}` : 'rate × mandays'}
             />
-            <Select value={taskId} onChange={(e) => setTaskId(e.target.value)} title="Link to a task (work package)">
+            <Select aria-label="Link to a task" value={taskId} onChange={(e) => setTaskId(e.target.value)} title="Link to a task (work package)">
               <option value="">Task… (optional)</option>
               {leafTasks.map((t) => (
                 <option key={t.id} value={t.id}>{t.wbsCode} {t.name}</option>
@@ -317,8 +321,8 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
           </>
         ) : (
           <>
-            <Input type="number" placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
-            <Input type="number" placeholder="Unit cost" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+            <Input type="number" aria-label="Quantity" placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
+            <Input type="number" aria-label="Unit cost (IDR)" placeholder="Unit cost" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
             <div />
             <div />
           </>
@@ -366,11 +370,11 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
         </tbody>
       </table>
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
-        <Select value={type} onChange={(e) => setType(e.target.value)}>
+        <Select aria-label="Indirect cost type" value={type} onChange={(e) => setType(e.target.value)}>
           {INDIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </Select>
-        <Input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <Input type="number" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <Input aria-label="Indirect cost description" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <Input type="number" aria-label="Indirect cost amount (IDR)" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
         <Button onClick={() => add.mutate()} disabled={!description || !amount || add.isPending}>Add</Button>
       </div>
     </Card>

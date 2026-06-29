@@ -1,4 +1,6 @@
+import { useEffect, useId, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import { createPortal } from 'react-dom';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
@@ -74,4 +76,101 @@ export function Badge({ children, color = 'slate' }: { children: ReactNode; colo
 
 export function Spinner() {
   return <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600 dark:border-slate-700 dark:border-t-brand-500" />;
+}
+
+// Accessible modal dialog: portalled, role="dialog" + aria-modal, labelled by its
+// title, focus-trapped (Tab cycles inside), Esc to close, restores focus to the
+// trigger on close, and locks body scroll. Mount it conditionally — it renders
+// whenever present. Keep the action buttons inside `children`.
+const MODAL_SIZE = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg' } as const;
+export function Modal({
+  onClose,
+  title,
+  children,
+  size = 'md',
+  panelClassName = '',
+  closeOnBackdrop = true,
+}: {
+  onClose: () => void;
+  title: ReactNode;
+  children: ReactNode;
+  size?: keyof typeof MODAL_SIZE;
+  panelClassName?: string;
+  closeOnBackdrop?: boolean;
+}) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Keep the latest onClose without re-running the mount effect (which would
+  // steal focus back to the first field on every parent render).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const prevFocused = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    const focusable = () =>
+      panel
+        ? Array.from(
+            panel.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((el) => el.offsetParent !== null)
+        : [];
+    (focusable()[0] ?? panel)?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const f = focusable();
+        if (f.length === 0) {
+          e.preventDefault();
+          panel?.focus();
+          return;
+        }
+        const idx = f.indexOf(document.activeElement as HTMLElement);
+        if (e.shiftKey && idx <= 0) {
+          e.preventDefault();
+          f[f.length - 1].focus();
+        } else if (!e.shiftKey && idx === f.length - 1) {
+          e.preventDefault();
+          f[0].focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      document.body.style.overflow = prevOverflow;
+      prevFocused?.focus?.();
+    };
+  }, []);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onMouseDown={closeOnBackdrop ? () => onCloseRef.current() : undefined}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={`max-h-[90vh] w-full ${MODAL_SIZE[size]} overflow-y-auto rounded-xl bg-white p-6 shadow-xl outline-none dark:bg-slate-900 ${panelClassName}`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h2 id={titleId} className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">
+          {title}
+        </h2>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
 }

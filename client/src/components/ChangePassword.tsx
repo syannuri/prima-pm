@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import { Button, Field, Input } from './ui';
+import { Button, Field, Input, Modal } from './ui';
 
 // A small "Change password" button that opens a modal. Self-contained so it can
 // drop straight into the header.
@@ -41,9 +41,7 @@ export default function ChangePassword() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={close}>
-          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-1 text-lg font-semibold text-slate-800 dark:text-slate-100">Change password</h2>
+        <Modal onClose={close} title="Change password" size="sm">
             {done ? (
               <div className="space-y-4">
                 <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
@@ -74,8 +72,7 @@ export default function ChangePassword() {
                 </div>
               </form>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

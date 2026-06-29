@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { AdminUser, Role } from '../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/format';
 
@@ -170,9 +170,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: (
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-1 text-lg font-semibold text-slate-800 dark:text-slate-100">Edit user</h2>
+    <Modal onClose={onClose} title="Edit user" size="sm">
         <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Update name and email. Role, status and password are managed separately.</p>
         <div className="space-y-3">
           <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>
@@ -185,8 +183,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: (
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -201,9 +198,7 @@ function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () =>
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-1 text-lg font-semibold text-slate-800 dark:text-slate-100">Reset password</h2>
+    <Modal onClose={onClose} title="Reset password" size="sm">
         <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">For <span className="font-medium">{user.name}</span> ({user.email}).</p>
         {done ? (
           <div className="space-y-4">
@@ -224,7 +219,6 @@ function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () =>
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

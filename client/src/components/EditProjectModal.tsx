@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { Project, ProjectCategory } from '../api/types';
-import { Button, Field, Input, Select } from './ui';
+import { Button, Field, Input, Modal, Select } from './ui';
 import { PROJECT_CATEGORIES } from '../lib/labels';
 import { formatIdr } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
@@ -62,9 +62,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
       <Button variant="secondary" onClick={start}>Edit details</Button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">Edit Project Details</h2>
+        <Modal onClose={() => setOpen(false)} title="Edit Project Details" size="lg">
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Project name">
@@ -109,8 +107,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );
