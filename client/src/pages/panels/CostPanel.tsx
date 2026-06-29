@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { CostSummary, DirectCost, GanttNode, ResourceItem } from '../../api/types';
+import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
 import { Button, Card, Input, SectionTitle, Select, Spinner } from '../../components/ui';
-import { formatIdr } from '../../lib/format';
+import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
 
 const DIRECT_TYPES = [
   { value: 'TECHNOLOGY_ONPREM', label: 'Technology — On-Premise' },
@@ -65,6 +65,11 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
 
+  // Pull EV/AC/CPI so the user can see how Actual Cost relates to Earned Value.
+  const scheduleBase = base.replace(/\/cost$/, '/schedule');
+  const evmQ = useQuery({ queryKey: ['evm', scheduleBase, '', formatDateInput(new Date())], queryFn: () => api.get<Evm>(`${scheduleBase}/evm?statusDate=${formatDateInput(new Date())}`) });
+  const e = evmQ.data;
+
   const add = useMutation({
     mutationFn: () => api.post(`${base}/actuals`, { date, amount: Number(amount), description: description || undefined }),
     onSuccess: () => { setAmount(''); setDescription(''); onChange(); },
@@ -73,9 +78,25 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
 
   return (
     <Card>
-      <SectionTitle sub="Time-phased spend. Cumulative AC ≤ status date drives the EVM CPI.">
+      <SectionTitle sub="Real money spent — recorded here manually. It is NOT taken from % progress (that drives Earned Value). CPI = EV ÷ AC.">
         Actual Cost (AC) — {formatIdr(data.actualCostTotal)} total
       </SectionTitle>
+
+      {/* How AC relates to progress / Earned Value, so AC = 0 isn't mistaken for a bug. */}
+      {e && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 dark:bg-slate-800/60 p-2.5 text-xs text-slate-600 dark:text-slate-300">
+          <span title="Earned Value = % progress × budget (automatic)">Earned (EV): <span className="font-semibold text-slate-800 dark:text-slate-100">{formatIdr(e.ev)}</span></span>
+          <span className="text-slate-300 dark:text-slate-600">·</span>
+          <span title="Actual Cost = money actually spent (recorded below)">Spent (AC): <span className="font-semibold text-slate-800 dark:text-slate-100">{formatIdr(e.ac)}</span></span>
+          <span className="text-slate-300 dark:text-slate-600">·</span>
+          <span title="Cost Variance = EV − AC">CV: <span className={`font-semibold ${e.ac > 0 && e.cv < 0 ? 'text-red-600 dark:text-red-400' : e.ac > 0 ? 'text-green-600 dark:text-green-400' : ''}`}>{e.ac > 0 ? formatIdr(e.cv) : '—'}</span></span>
+          <span className="text-slate-300 dark:text-slate-600">·</span>
+          <span title="Cost Performance Index = EV ÷ AC">CPI: <span className="font-semibold text-slate-800 dark:text-slate-100">{e.ac > 0 ? formatNum(e.cpi, 2) : '—'}</span></span>
+          {e.ac === 0 && e.ev > 0 && (
+            <span className="text-amber-600 dark:text-amber-400">↳ You’ve earned {formatIdr(e.ev)} of work but recorded Rp 0 spent — add actual spend below to get CPI.</span>
+          )}
+        </div>
+      )}
       <table className="w-full text-sm">
         <tbody>
           {data.actualCosts.map((a) => (
