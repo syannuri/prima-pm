@@ -19,6 +19,7 @@ backups/
 test-results/
 playwright-report/
 playwright/.cache/
+coverage/
 
 # Logs
 *.log

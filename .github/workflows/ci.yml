@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  server:
+    name: Server (build, unit, integration)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: prima
+          POSTGRES_PASSWORD: prima
+          POSTGRES_DB: prima_pm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U prima"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Type-check + build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+      - name: Migrate test database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public
+      - name: Integration tests (HTTP + DB)
+        run: npm run test:integration
+
+  client:
+    name: Client (type-check, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build

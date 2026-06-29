@@ -12,7 +12,10 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration:setup": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' prisma migrate deploy",
+    "test:integration": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' JWT_ACCESS_SECRET=test-access JWT_REFRESH_SECRET=test-refresh NODE_ENV=test vitest run --config vitest.integration.config.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -38,7 +41,10 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^22.7.0",
     "@types/pdfkit": "^0.17.6",
+    "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "prisma": "^6.5.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
