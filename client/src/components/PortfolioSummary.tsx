@@ -220,8 +220,10 @@ export default function PortfolioSummary() {
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cost &amp; revenue by project</span>
             <span className="text-xs text-slate-400 dark:text-slate-500">
-              Cost {formatIdr(finTotals.cost)} · Revenue {formatIdr(finTotals.revenue)} · Margin{' '}
-              <span className={finMargin < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>{formatIdr(finMargin)}</span>
+              Cost {formatIdr(finTotals.cost)} · Revenue {formatIdr(finTotals.revenue)} · Profit{' '}
+              <span className={finMargin < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
+                {formatIdr(finMargin)}{finTotals.revenue > 0 ? ` (${formatNum((finMargin / finTotals.revenue) * 100, 1)}%)` : ''}
+              </span>
             </span>
           </div>
           {!hasFinancials ? (
@@ -234,8 +236,8 @@ export default function PortfolioSummary() {
                     <th className="py-2">Project</th>
                     <th className="text-right">Cost</th>
                     <th className="text-right">Revenue</th>
-                    <th className="text-right">Margin</th>
-                    <th className="text-right" title="Margin ÷ revenue">Margin %</th>
+                    <th className="text-right" title="Profit = Revenue − Cost">Profit</th>
+                    <th className="text-right" title="Profit margin = Profit ÷ Revenue">Margin %</th>
                   </tr>
                 </thead>
                 <tbody>
