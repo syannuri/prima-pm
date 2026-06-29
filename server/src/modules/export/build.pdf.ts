@@ -32,19 +32,24 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
     doc.moveDown(0.2);
   };
 
-  // Simple fixed-column table.
+  // Simple column table. Column widths are auto-scaled down to fit the page
+  // content width, so a table can never run off the right margin.
   const table = (cols: { title: string; w: number; align?: 'left' | 'right' }[], rows: (string | number)[][]) => {
+    const totalW = cols.reduce((s, c) => s + c.w, 0);
+    const scale = totalW > width ? width / totalW : 1;
+    const cw = cols.map((c) => c.w * scale);
+    const tableW = cw.reduce((s, w) => s + w, 0);
     const colX: number[] = [];
     let x = left;
-    for (const c of cols) { colX.push(x); x += c.w; }
+    for (const w of cw) { colX.push(x); x += w; }
     const drawRow = (cells: (string | number)[], bold: boolean, fill?: string) => {
       const rowH = 16;
       if (doc.y > doc.page.height - 60) doc.addPage();
       const y = doc.y;
-      if (fill) doc.rect(left, y - 2, width, rowH).fill(fill);
+      if (fill) doc.rect(left, y - 2, tableW, rowH).fill(fill);
       doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8).fillColor(bold && fill ? '#ffffff' : '#0f172a');
       cols.forEach((c, i) => {
-        doc.text(String(cells[i] ?? ''), colX[i] + 2, y, { width: c.w - 4, align: c.align ?? 'left', lineBreak: false });
+        doc.text(String(cells[i] ?? ''), colX[i] + 2, y, { width: cw[i] - 4, align: c.align ?? 'left', lineBreak: false, ellipsis: true });
       });
       doc.y = y + rowH;
     };
@@ -128,8 +133,8 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
   heading('4. Schedule Management');
   table(
     [
-      { title: 'WBS', w: 50 }, { title: 'Task', w: 180 }, { title: 'Plan Start', w: 70 },
-      { title: 'Plan End', w: 70 }, { title: 'PIC', w: 80 }, { title: '%', w: 35, align: 'right' }, { title: 'Budget', w: 90, align: 'right' },
+      { title: 'WBS', w: 45 }, { title: 'Task', w: 155 }, { title: 'Plan Start', w: 65 },
+      { title: 'Plan End', w: 65 }, { title: 'PIC', w: 65 }, { title: '%', w: 30, align: 'right' }, { title: 'Budget', w: 90, align: 'right' },
     ],
     flattenGantt(data.gantt.tree).map((t) => [
       t.wbsCode, `${'  '.repeat(t.depth)}${t.name}`, iso(t.planStart), iso(t.planEnd), t.pic, `${t.progressPct}%`, formatIdr(t.budgetCost),
