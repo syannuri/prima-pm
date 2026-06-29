@@ -30,7 +30,11 @@ async function ensureChartered(projectId: string): Promise<void> {
 // Map persisted risks into the shape the contingency calculator expects.
 async function loadRisksForReserve(projectId: string): Promise<RiskForReserve[]> {
   const risks = await prisma.risk.findMany({
-    where: { projectId },
+    // Only active risks fund the contingency reserve. A CLOSED threat is no
+    // longer a threat, and an OCCURRED one has already materialized (its cost
+    // belongs in Actual Cost, not the reserve) — neither should keep inflating
+    // the cost baseline / BAC.
+    where: { projectId, status: { notIn: ['CLOSED', 'OCCURRED'] } },
     select: { kind: true, emv: true, residualEmv: true, includeInReserve: true },
   });
   return risks.map((r) => ({

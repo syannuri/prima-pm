@@ -33,9 +33,12 @@ export function requireProjectAccess(opts: { write?: boolean; allowRoles?: Role[
 
       const project = await prisma.project.findUnique({
         where: { id: projectId },
-        select: { id: true, pmUserId: true, status: true },
+        select: { id: true, pmUserId: true, status: true, deletedAt: true },
       });
-      if (!project || (project as { deletedAt?: Date | null }).deletedAt) {
+      // A soft-deleted project must be treated as gone for every nested route,
+      // not just the top-level project endpoints (otherwise its cost/risk/
+      // schedule/attachment data stays readable + writable after "deletion").
+      if (!project || project.deletedAt) {
         throw NotFound('Project not found');
       }
 

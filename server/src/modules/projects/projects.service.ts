@@ -7,6 +7,19 @@ import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.
 
 const GLOBAL_ROLES: Role[] = ['ADMIN', 'PMO'];
 
+// Allowed project-status transitions (lifecycle: DRAFT -> CHARTERED ->
+// IN_PROGRESS <-> ON_HOLD -> CLOSED). Charter commit moves DRAFT -> CHARTERED
+// via its own flow; this guards manual status edits so a project can't jump
+// to an illegal state (e.g. CLOSED -> DRAFT, or skipping CHARTERED). Staying on
+// the same status is always allowed (no-op).
+const STATUS_TRANSITIONS: Record<string, string[]> = {
+  DRAFT: ['CHARTERED'],
+  CHARTERED: ['IN_PROGRESS', 'ON_HOLD', 'CLOSED'],
+  IN_PROGRESS: ['ON_HOLD', 'CLOSED'],
+  ON_HOLD: ['IN_PROGRESS', 'CLOSED'],
+  CLOSED: [],
+};
+
 // List projects visible to the caller (global roles see all; others see owned).
 export async function listProjects(userId: string, role: Role) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
@@ -91,6 +104,14 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   if (newCode && newCode !== before.code) {
     const clash = await prisma.project.findUnique({ where: { code: newCode }, select: { id: true } });
     if (clash) throw Conflict(`Project code "${newCode}" is already in use`);
+  }
+
+  // Enforce the lifecycle: reject illegal status jumps (same status is a no-op).
+  if (input.status && input.status !== before.status) {
+    const allowed = STATUS_TRANSITIONS[before.status] ?? [];
+    if (!allowed.includes(input.status)) {
+      throw BadRequest(`Cannot change status from ${before.status} to ${input.status}`);
+    }
   }
 
   const project = await prisma.project.update({

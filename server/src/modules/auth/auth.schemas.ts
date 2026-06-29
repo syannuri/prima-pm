@@ -1,21 +1,5 @@
 import { z } from 'zod';
 
-// Self-registration defaults to VIEWER; elevated roles are assigned by ADMIN.
-export const registerSchema = z.object({
-  name: z.string().min(2).max(120),
-  email: z.string().email().toLowerCase(),
-  password: z.string().min(8).max(128),
-});
-
-export const loginSchema = z.object({
-  email: z.string().email().toLowerCase(),
-  password: z.string().min(1),
-});
-
-export const refreshSchema = z.object({
-  refreshToken: z.string().min(10),
-});
-
 // Small denylist of obviously-weak / known-breached passwords (incl. the seed demo
 // password). Compared case-insensitively. Not a substitute for HIBP, just a guardrail.
 const WEAK_PASSWORDS = new Set([
@@ -40,6 +24,24 @@ export const strongPassword = z
   .max(128)
   .refine((v) => /[a-zA-Z]/.test(v) && /[0-9]/.test(v), 'Use at least one letter and one number')
   .refine((v) => !WEAK_PASSWORDS.has(v.toLowerCase()), 'That password is too common / known from breaches — pick a stronger one');
+
+// Self-registration defaults to VIEWER; elevated roles are assigned by ADMIN.
+// Uses the same strong-password policy as admin-create and self-change so a
+// self-registered account can't set a weaker password than everyone else.
+export const registerSchema = z.object({
+  name: z.string().min(2).max(120),
+  email: z.string().email().toLowerCase(),
+  password: strongPassword,
+});
+
+export const loginSchema = z.object({
+  email: z.string().email().toLowerCase(),
+  password: z.string().min(1),
+});
+
+export const refreshSchema = z.object({
+  refreshToken: z.string().min(10),
+});
 
 export const changePasswordSchema = z
   .object({

@@ -21,3 +21,5 @@ export const NotFound = (msg = 'Not found') =>
   new AppError(404, msg, 'NOT_FOUND');
 export const Conflict = (msg = 'Conflict') =>
   new AppError(409, msg, 'CONFLICT');
+export const TooManyRequests = (msg = 'Too many requests') =>
+  new AppError(429, msg, 'TOO_MANY_REQUESTS');
