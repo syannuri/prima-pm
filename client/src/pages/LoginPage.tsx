@@ -34,9 +34,19 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_#f4675f59,_transparent_55%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_#be3b394d,_transparent_50%)]" />
 
-        {/* soft glows for depth */}
-        <div className="absolute -left-24 top-1/3 h-96 w-96 rounded-full bg-brand-500/25 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-[30rem] w-[30rem] translate-x-1/4 translate-y-1/4 rounded-full bg-brand-600/20 blur-3xl" />
+        {/* scoped animations */}
+        <style>{`
+          @keyframes prima-sweep { to { transform: rotate(360deg) } }
+          @keyframes prima-floatA { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-26px)} }
+          @keyframes prima-floatB { 0%,100%{transform:translateY(0)} 50%{transform:translateY(24px)} }
+          @keyframes prima-scan { 0%{transform:translateY(-8rem);opacity:0} 12%,88%{opacity:.5} 100%{transform:translateY(58rem);opacity:0} }
+          @media (prefers-reduced-motion: reduce){ .prima-anim{animation:none!important} }
+        `}</style>
+
+        {/* drifting glow orbs */}
+        <div className="prima-anim absolute -left-24 top-1/3 h-96 w-96 rounded-full bg-brand-500/25 blur-3xl" style={{ animation: 'prima-floatA 11s ease-in-out infinite' }} />
+        <div className="prima-anim absolute bottom-0 right-0 h-[30rem] w-[30rem] translate-x-1/4 translate-y-1/4 rounded-full bg-brand-600/20 blur-3xl" style={{ animation: 'prima-floatB 13s ease-in-out infinite' }} />
+        <div className="prima-anim absolute left-1/3 top-10 h-44 w-44 rounded-full bg-brand-400/15 blur-2xl" style={{ animation: 'prima-floatB 9s ease-in-out infinite' }} />
 
         {/* technical grid mesh */}
         <svg className="absolute inset-0 h-full w-full text-white opacity-[0.06]" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -48,13 +58,27 @@ export default function LoginPage() {
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
 
-        {/* concentric target rings — echoes the PRIMA mark (precision) */}
-        <svg className="absolute -right-16 -top-16 h-[34rem] w-[34rem] text-brand-300/20" viewBox="0 0 400 400" fill="none" aria-hidden="true">
-          {[60, 110, 160, 200].map((r) => (
-            <circle key={r} cx="200" cy="200" r={r} stroke="currentColor" strokeWidth="1.5" />
-          ))}
-          <circle cx="200" cy="200" r="14" fill="currentColor" />
-        </svg>
+        {/* radar over concentric target rings — echoes the PRIMA mark (precision) */}
+        <div className="absolute -right-16 -top-16 h-[34rem] w-[34rem]">
+          <div className="absolute inset-0 overflow-hidden rounded-full opacity-80">
+            <div
+              className="prima-anim absolute inset-0"
+              style={{ background: 'conic-gradient(from 0deg, transparent 0deg, rgba(244,103,95,0.22) 40deg, transparent 72deg)', animation: 'prima-sweep 7s linear infinite' }}
+            />
+          </div>
+          <svg className="absolute inset-0 h-full w-full text-brand-300/25" viewBox="0 0 400 400" fill="none" aria-hidden="true">
+            {[60, 110, 160, 200].map((r) => (
+              <circle key={r} cx="200" cy="200" r={r} stroke="currentColor" strokeWidth="1.5" />
+            ))}
+          </svg>
+          {/* pulsing centre node */}
+          <span className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-400 shadow-[0_0_18px_4px_rgba(244,103,95,0.55)]">
+            <span className="prima-anim absolute -inset-3 rounded-full bg-brand-500/40" style={{ animation: 'ping 2.4s cubic-bezier(0,0,0.2,1) infinite' }} />
+          </span>
+        </div>
+
+        {/* slow horizontal scan line */}
+        <div className="prima-anim absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-400/60 to-transparent" style={{ animation: 'prima-scan 8s linear infinite' }} />
 
         {/* content */}
         <div className="relative z-10 flex w-full flex-col justify-between p-12 text-white xl:p-16">
