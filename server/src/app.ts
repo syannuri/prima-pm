@@ -39,7 +39,11 @@ export function createApp() {
               useDefaults: false,
               directives: {
                 defaultSrc: ["'self'"],
-                scriptSrc: ["'self'"],
+                // The hash whitelists the inline pre-paint theme script in
+                // client/index.html (anti-FOUC) WITHOUT opening up 'unsafe-inline'.
+                // If that <script> body changes, regenerate the hash (the browser
+                // console reports the expected sha256 when it blocks it).
+                scriptSrc: ["'self'", "'sha256-gMdNfBP1eXqQ3m6NFYrMP973br0Py2/yVbUh1/QvQeY='"],
                 styleSrc: ["'self'", "'unsafe-inline'"],
                 imgSrc: ["'self'", 'data:'],
                 connectSrc: ["'self'"],
