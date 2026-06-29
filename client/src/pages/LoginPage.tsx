@@ -31,30 +31,33 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-brand-50 via-white to-brand-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-brand-50 via-white to-brand-100 dark:from-black dark:via-slate-950 dark:to-black">
       {/* gentle drifting glow orbs — soft, elegant, brand-tinted */}
       <style>{`
         @keyframes prima-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(22px,-26px)} }
         @keyframes prima-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-26px,20px)} }
         @media (prefers-reduced-motion: reduce){ .prima-orb{animation:none!important} }
       `}</style>
-      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[30rem] w-[30rem] rounded-full bg-brand-200/50 blur-3xl dark:bg-brand-700/20" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
-      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/3 h-[34rem] w-[34rem] rounded-full bg-brand-300/40 blur-3xl dark:bg-brand-800/25" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
-      <div className="prima-orb pointer-events-none absolute right-1/4 top-1/4 h-72 w-72 rounded-full bg-brand-100/70 blur-3xl dark:bg-brand-900/20" style={{ animation: 'prima-drift1 22s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[30rem] w-[30rem] rounded-full bg-brand-200/50 blur-3xl dark:bg-brand-700/30" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/3 h-[34rem] w-[34rem] rounded-full bg-brand-300/40 blur-3xl dark:bg-brand-800/35" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute right-1/4 top-1/4 h-72 w-72 rounded-full bg-brand-100/70 blur-3xl dark:bg-brand-700/25" style={{ animation: 'prima-drift1 22s ease-in-out infinite' }} />
 
       {/* soft light wash from the top */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(255,255,255,0.75),transparent)] dark:bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(244,103,95,0.10),transparent)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(255,255,255,0.75),transparent)] dark:bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(244,103,95,0.18),transparent)]" />
+
+      {/* dark-mode drama: glossy top sheen + vignette for depth */}
+      <div className="pointer-events-none absolute inset-0 hidden dark:block bg-[radial-gradient(120%_80%_at_50%_-10%,rgba(255,255,255,0.07),transparent_50%),radial-gradient(110%_90%_at_50%_120%,rgba(0,0,0,0.6),transparent_55%)]" />
 
       <div className="relative z-10 flex min-h-screen">
         {/* ---------- LEFT · tagline space (large screens) ---------- */}
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
-          <div className="flex items-center gap-3">
-            <Logo className="h-11 w-11 drop-shadow-[0_8px_22px_rgba(244,103,95,0.35)]" />
-            <span className="font-brand text-xl font-bold tracking-wide text-slate-800 dark:text-slate-100">PRECISE</span>
+          <div className="flex items-center gap-4">
+            <Logo className="h-16 w-16 drop-shadow-[0_10px_28px_rgba(244,103,95,0.4)]" />
+            <span className="font-brand text-2xl font-bold tracking-wide text-slate-800 dark:text-slate-100">PRECISE</span>
           </div>
 
-          <div className="max-w-xl">
-            <p className="mb-4 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-600 dark:text-brand-400 xl:text-[11px] xl:tracking-[0.16em]">
+          <div className="max-w-2xl">
+            <p className="mb-4 whitespace-nowrap text-xs font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400 xl:text-[13px] xl:tracking-[0.22em]">
               Projects · Risk · Earned Value · Cost · Investment · Schedule · Execution
             </p>
             <h2 className="text-4xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-5xl">
@@ -81,7 +84,7 @@ export default function LoginPage() {
         </div>
 
         {/* ---------- RIGHT · sign-in card (right-aligned, with a splitter) ---------- */}
-        <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[46%] lg:justify-end lg:border-l lg:border-slate-200/70 lg:pr-12 xl:pr-20 dark:lg:border-white/10">
+        <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[40%] lg:justify-end lg:border-l lg:border-slate-200/70 lg:pr-12 xl:pr-16 dark:lg:border-white/10">
           <div className="w-full max-w-sm">
             <div className="rounded-3xl border border-white/70 bg-white/75 p-7 shadow-[0_24px_70px_-20px_rgba(244,103,95,0.35)] backdrop-blur-xl sm:p-8 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.65)]">
               {/* logo on small screens (left pane hidden) */}
