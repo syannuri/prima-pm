@@ -1,45 +1,19 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import type { Evm, GanttNode, TaskDependency } from '../../api/types';
-import { Badge, Card, Field, Input, SectionTitle, Spinner } from '../../components/ui';
+import type { Evm } from '../../api/types';
+import { Badge, Card, Field, Input, SectionTitle } from '../../components/ui';
 import { formatDate, formatDateInput, formatIdr, formatNum } from '../../lib/format';
-import GanttChart, { type FlatRow as Flat } from './GanttChart';
 import WbsPanel from './WbsPanel';
 
-function flatten(nodes: GanttNode[], depth = 0, acc: Flat[] = []): Flat[] {
-  for (const n of nodes) {
-    acc.push({ node: n, depth });
-    if (n.children?.length) flatten(n.children, depth + 1, acc);
-  }
-  return acc;
-}
-
 export default function SchedulePanel({ projectId }: { projectId: string }) {
-  const qc = useQueryClient();
   const base = `/projects/${projectId}/schedule`;
-  const ganttQ = useQuery({
-    queryKey: ['gantt', projectId],
-    queryFn: () => api.get<{ tree: GanttNode[]; dependencies: TaskDependency[] }>(`${base}/gantt`),
-  });
   const syncQ = useQuery({ queryKey: ['mp-sync', projectId], queryFn: () => api.get<{ rows: ManpowerSyncRow[] }>(`${base}/manpower-sync`) });
-
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['gantt', projectId] });
-    qc.invalidateQueries({ queryKey: ['mp-sync', projectId] });
-  };
-
-  if (ganttQ.isLoading) return <Spinner />;
-  const flat = ganttQ.data ? flatten(ganttQ.data.tree) : [];
 
   return (
     <div className="space-y-5">
       <EvmPanel base={base} />
       <WbsPanel projectId={projectId} />
-      <Card>
-        <SectionTitle sub="Drag bars to reschedule · drag the ● handle to link dependencies">Interactive Gantt — drag &amp; dependencies</SectionTitle>
-        <GanttChart flat={flat} dependencies={ganttQ.data?.dependencies ?? []} base={base} onChange={invalidate} />
-      </Card>
       <ManpowerSync rows={syncQ.data?.rows ?? []} />
     </div>
   );
