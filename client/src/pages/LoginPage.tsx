@@ -31,16 +31,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-brand-50 via-white to-brand-100 dark:from-black dark:via-slate-950 dark:to-black">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-brand-50 dark:from-black dark:via-slate-950 dark:to-black">
       {/* gentle drifting glow orbs — soft, elegant, brand-tinted */}
       <style>{`
         @keyframes prima-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(22px,-26px)} }
         @keyframes prima-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-26px,20px)} }
         @media (prefers-reduced-motion: reduce){ .prima-orb{animation:none!important} }
       `}</style>
-      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[30rem] w-[30rem] rounded-full bg-brand-200/50 blur-3xl dark:bg-brand-700/30" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
-      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/3 h-[34rem] w-[34rem] rounded-full bg-brand-300/40 blur-3xl dark:bg-brand-800/35" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
-      <div className="prima-orb pointer-events-none absolute right-1/4 top-1/4 h-72 w-72 rounded-full bg-brand-100/70 blur-3xl dark:bg-brand-700/25" style={{ animation: 'prima-drift1 22s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[30rem] w-[30rem] rounded-full bg-brand-200/25 blur-3xl dark:bg-brand-700/30" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/3 h-[34rem] w-[34rem] rounded-full bg-slate-200/50 blur-3xl dark:bg-brand-800/35" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute right-1/4 top-1/4 h-72 w-72 rounded-full bg-slate-100/60 blur-3xl dark:bg-brand-700/25" style={{ animation: 'prima-drift1 22s ease-in-out infinite' }} />
 
       {/* soft light wash from the top */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(255,255,255,0.75),transparent)] dark:bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(244,103,95,0.18),transparent)]" />
@@ -83,8 +83,8 @@ export default function LoginPage() {
           <p className="text-xs text-slate-400 dark:text-slate-500">© 2026 Precise · Xapiens</p>
         </div>
 
-        {/* ---------- RIGHT · sign-in card (right-aligned, with a splitter) ---------- */}
-        <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[40%] lg:justify-end lg:border-l lg:border-slate-200/70 lg:pr-12 xl:pr-16 dark:lg:border-white/10">
+        {/* ---------- RIGHT · sign-in card (right-aligned) ---------- */}
+        <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[40%] lg:justify-end lg:pr-12 xl:pr-16">
           <div className="w-full max-w-sm">
             <div className="rounded-3xl border border-white/70 bg-white/75 p-7 shadow-[0_24px_70px_-20px_rgba(244,103,95,0.35)] backdrop-blur-xl sm:p-8 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.65)]">
               {/* logo on small screens (left pane hidden) */}

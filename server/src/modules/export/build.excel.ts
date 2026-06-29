@@ -14,7 +14,7 @@ function styleHeader(row: ExcelJS.Row) {
 
 export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'PRIMA-PM';
+  wb.creator = 'Precise';
   wb.created = data.generatedAt;
 
   // --- Overview ---

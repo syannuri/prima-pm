@@ -4,7 +4,7 @@ import { categoryLabel, flattenGantt, type ProjectExport } from './export.data.j
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const iso = (d: Date | string | null) => (d ? new Date(d).toISOString().slice(0, 10) : '—');
-const INDIGO = '#4F46E5';
+const ACCENT = '#e34f4a'; // brand coral (matches the app)
 const GRAY = '#64748b';
 
 export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
@@ -20,8 +20,8 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
   const heading = (text: string) => {
     if (doc.y > doc.page.height - 120) doc.addPage();
     doc.moveDown(0.6);
-    doc.fillColor(INDIGO).fontSize(13).font('Helvetica-Bold').text(text);
-    doc.moveTo(left, doc.y + 2).lineTo(right, doc.y + 2).strokeColor(INDIGO).lineWidth(1).stroke();
+    doc.fillColor(ACCENT).fontSize(13).font('Helvetica-Bold').text(text);
+    doc.moveTo(left, doc.y + 2).lineTo(right, doc.y + 2).strokeColor(ACCENT).lineWidth(1).stroke();
     doc.moveDown(0.5).fillColor('#0f172a').font('Helvetica').fontSize(9);
   };
 
@@ -48,13 +48,13 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
       });
       doc.y = y + rowH;
     };
-    drawRow(cols.map((c) => c.title), true, INDIGO);
+    drawRow(cols.map((c) => c.title), true, ACCENT);
     rows.forEach((r) => drawRow(r, false));
     doc.moveDown(0.4);
   };
 
   // ---------- Header ----------
-  doc.fillColor(INDIGO).fontSize(20).font('Helvetica-Bold').text('PRIMA-PM');
+  doc.fillColor(ACCENT).fontSize(20).font('Helvetica-Bold').text('Precise');
   doc.fillColor(GRAY).fontSize(9).font('Helvetica').text('Project Management Report');
   doc.moveDown(0.5);
   doc.fillColor('#0f172a').fontSize(15).font('Helvetica-Bold').text(`${data.project.code} — ${data.project.name}`);
