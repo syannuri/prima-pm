@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { GanttNode, ResourceItem, TaskDependency } from '../../api/types';
@@ -84,6 +84,29 @@ const CheckIcon = () => (
     <path d="M5 10.5l3.2 3.5L15 6.5" />
   </svg>
 );
+const ExpandIcon = () => (
+  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M7 3H3v4M13 3h4v4M7 17H3v-4M13 17h4v-4" />
+  </svg>
+);
+const CollapseIcon = () => (
+  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 7h4V3M17 7h-4V3M3 13h4v4M17 13h-4v4" />
+  </svg>
+);
+const initialsOf = (name: string) =>
+  name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+
+// The Owner (PIC) responsible for a task/subtask — an initials avatar + name.
+function OwnerCell({ name }: { name: string | null | undefined }) {
+  if (!name) return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5" title={`Owner (PIC): ${name}`}>
+      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">{initialsOf(name)}</span>
+      <span className="whitespace-nowrap text-xs text-slate-600 dark:text-slate-300">{name}</span>
+    </span>
+  );
+}
 
 export default function WbsPanel({ projectId }: { projectId: string }) {
   const { user } = useAuth();
@@ -145,7 +168,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const [form, setForm] = useState<{ parentId: string | null; edit?: GanttNode } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const colCount = 10 + (canEdit ? 1 : 0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const colCount = 11 + (canEdit ? 1 : 0);
+
+  // Esc exits full screen.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
 
   const progress = useMutation({
     mutationFn: ({ id, pct }: { id: string; pct: number }) => api.patch(`${base}/tasks/${id}/progress`, { progressPct: pct }),
@@ -163,12 +195,19 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
   return (
-    <Card>
+    <div className={fullscreen ? 'fixed inset-0 z-50 overflow-auto bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
+    <Card className={fullscreen ? 'min-h-full' : ''}>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete">
           Work Breakdown Structure
         </SectionTitle>
         <div className="flex flex-wrap items-center gap-2">
+          {rows.length > 0 && (
+            <button onClick={() => setFullscreen((f) => !f)} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+              {fullscreen ? <><CollapseIcon /> Exit full screen</> : <><ExpandIcon /> Full screen</>}
+            </button>
+          )}
           {rows.length > 0 && (
             <div className="inline-flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Timeline</span>
@@ -205,7 +244,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               <tr className="text-left text-xs uppercase text-slate-400 dark:text-slate-500 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-2 [&>th]:pr-3">
                 <th className="w-8 text-center" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
                 <th className="w-12">WBS</th>
-                <th className="min-w-[15rem]">Task</th>
+                <th className="min-w-[14rem]">Task</th>
+                <th title="Owner (PIC) responsible for the task">Owner</th>
                 <th className="text-right">Start</th>
                 <th className="text-right">Finish</th>
                 <th className="text-right">Dur</th>
@@ -256,6 +296,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
                       </span>
                     </td>
+                    <td><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></td>
                     <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.start))}</td>
                     <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.end))}</td>
                     <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
@@ -342,6 +383,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         />
       )}
     </Card>
+    </div>
   );
 }
 
