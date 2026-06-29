@@ -9,6 +9,7 @@ import {
   createResource,
   updateResource,
   setResourceActive,
+  refreshResourceRate,
 } from './resourceMaster.service.js';
 
 const router = Router();
@@ -77,6 +78,15 @@ router.patch(
   validateBody(z.object({ isActive: z.boolean() })),
   asyncHandler(async (req, res) => {
     res.json({ resource: await setResourceActive(req.params.id, req.body.isActive, req.user!.id) });
+  }),
+);
+
+// Adopt the linked rate card's current day-rate.
+router.post(
+  '/:id/refresh-rate',
+  requireRole('ADMIN', 'PMO'),
+  asyncHandler(async (req, res) => {
+    res.json({ resource: await refreshResourceRate(req.params.id, req.user!.id) });
   }),
 );
 

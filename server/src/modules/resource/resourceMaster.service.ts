@@ -1,7 +1,7 @@
 import type { PersonnelRole, ResourceType } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
-import { NotFound } from '../../lib/errors.js';
+import { NotFound, BadRequest } from '../../lib/errors.js';
 import { effectiveDayRate } from './resource.helpers.js';
 
 export interface ResourceInput {
@@ -32,7 +32,7 @@ export async function listResources(includeInactive = false) {
     where: includeInactive ? {} : { isActive: true },
     orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
     include: {
-      rateCard: { select: { id: true, roleName: true, level: true } },
+      rateCard: { select: { id: true, roleName: true, level: true, unitCostPerManday: true, isActive: true } },
       user: { select: { id: true, name: true, email: true } },
     },
   });
@@ -77,6 +77,22 @@ export async function updateResource(id: string, input: ResourceInput, actorId: 
       userId: input.userId ?? null,
       isActive: input.isActive ?? existing.isActive,
     },
+  });
+  await writeAudit({ userId: actorId, entity: 'Resource', entityId: id, action: 'UPDATE', before: existing, after: resource });
+  return resource;
+}
+
+// Re-pull the day-rate from the linked rate card (adopt its current rate).
+export async function refreshResourceRate(id: string, actorId: string) {
+  const existing = await prisma.resource.findUnique({
+    where: { id },
+    include: { rateCard: { select: { unitCostPerManday: true } } },
+  });
+  if (!existing) throw NotFound('Resource not found');
+  if (!existing.rateCardId || !existing.rateCard) throw BadRequest('Resource has no linked rate card');
+  const resource = await prisma.resource.update({
+    where: { id },
+    data: { unitCostPerManday: existing.rateCard.unitCostPerManday },
   });
   await writeAudit({ userId: actorId, entity: 'Resource', entityId: id, action: 'UPDATE', before: existing, after: resource });
   return resource;

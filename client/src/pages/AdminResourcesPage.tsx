@@ -167,15 +167,29 @@ function ResourcesSection({ canEdit }: { canEdit: boolean }) {
 
 function ResourceRow({ r, canEdit, onEdit, onChange }: { r: ResourceItem; canEdit: boolean; onEdit: () => void; onChange: () => void }) {
   const toggle = useMutation({ mutationFn: () => api.patch(`/resources/${r.id}/active`, { isActive: !r.isActive }), onSuccess: onChange });
+  const refresh = useMutation({ mutationFn: () => api.post(`/resources/${r.id}/refresh-rate`, {}), onSuccess: onChange });
   const rcLabel = r.rateCard ? `${r.rateCard.roleName}${r.rateCard.level ? ` · ${r.rateCard.level}` : ''}` : null;
+  // Flag when the stored rate has drifted from the linked rate card's current rate.
+  const cardRate = r.rateCard ? Number(r.rateCard.unitCostPerManday) : null;
+  const differs = cardRate != null && Math.round(cardRate) !== Math.round(Number(r.unitCostPerManday));
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 align-middle">
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{r.name}</td>
       <td><Badge color={r.resourceType === 'NAMED' ? 'indigo' : 'slate'}>{r.resourceType === 'NAMED' ? 'Named' : 'Generic'}</Badge></td>
       <td className="text-slate-500 dark:text-slate-400">{r.roleTitle || (r.personnelRole === 'PM' ? 'Project Manager' : 'Project Personnel')}</td>
       <td className="text-right tabular-nums">
-        {formatIdr(Number(r.unitCostPerManday))}
+        <span className={differs ? 'text-amber-600 dark:text-amber-400' : ''}>{formatIdr(Number(r.unitCostPerManday))}</span>
         {rcLabel && <div className="text-[10px] text-slate-400 dark:text-slate-500">{rcLabel}</div>}
+        {differs && (
+          <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[10px] text-amber-600 dark:text-amber-400" title={`Linked rate card is now ${formatIdr(cardRate!)}`}>
+            <span>≠ card {formatIdr(cardRate!)}</span>
+            {canEdit && (
+              <button onClick={() => refresh.mutate()} disabled={refresh.isPending} className="rounded bg-amber-100 px-1 font-medium text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200">
+                {refresh.isPending ? '…' : '↻ refresh'}
+              </button>
+            )}
+          </div>
+        )}
       </td>
       <td className="text-right tabular-nums">{Number(r.capacityPerDay)}</td>
       <td className="text-slate-500 dark:text-slate-400">{r.department || '—'}</td>

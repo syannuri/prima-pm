@@ -37,7 +37,7 @@ export interface ResourceItem {
   roleTitle: string | null;
   personnelRole: PersonnelRole;
   rateCardId: string | null;
-  rateCard?: { id: string; roleName: string; level: string | null } | null;
+  rateCard?: { id: string; roleName: string; level: string | null; unitCostPerManday: string; isActive: boolean } | null;
   unitCostPerManday: string;
   capacityPerDay: string;
   department: string | null;
