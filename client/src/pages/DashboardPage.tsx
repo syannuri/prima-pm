@@ -77,7 +77,7 @@ export default function DashboardPage() {
               onClick={() => setView('resources')}
               className={`rounded-md px-3 py-1 ${view === 'resources' ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
             >
-              Resources
+              Utilization
             </button>
             <button
               onClick={() => setView('cards')}

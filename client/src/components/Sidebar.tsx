@@ -70,8 +70,8 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
           </NavLink>
         )}
         {!!user && ['ADMIN', 'PMO', 'FINANCE'].includes(user.role) && (
-          <NavLink to="/admin/resources" onClick={onNavigate} title="Resources" className={({ isActive }) => cx(isActive)}>
-            <Icon path={ICONS.resources} /> {!collapsed && 'Resources'}
+          <NavLink to="/admin/resources" onClick={onNavigate} title="Resource Pool" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.resources} /> {!collapsed && 'Resource Pool'}
           </NavLink>
         )}
 

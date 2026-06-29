@@ -27,7 +27,7 @@ export default function AdminResourcesPage() {
   }
   return (
     <div className="space-y-5">
-      <SectionTitle sub="Master manpower pool & day-rate catalogue used to load the WBS / Cost module">Resources &amp; rate cards</SectionTitle>
+      <SectionTitle sub="Master manpower pool & day-rate catalogue used to load the WBS / Cost module">Resource Pool &amp; rate cards</SectionTitle>
       <RateCardsSection canEditRates={['ADMIN', 'FINANCE'].includes(user!.role)} />
       <ResourcesSection canEdit={['ADMIN', 'PMO'].includes(user!.role)} />
     </div>

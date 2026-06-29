@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Card, Spinner, Badge } from './ui';
+import { Card, Spinner, Badge, SectionTitle } from './ui';
 import { formatNum } from '../lib/format';
 
 type Granularity = 'month' | 'week';
@@ -79,6 +79,7 @@ export default function ResourceCapacity() {
 
   return (
     <div className="space-y-4">
+      <SectionTitle sub="Cross-project resource allocation & over-allocation over time (from manpower linked to tasks)">Resource Utilization</SectionTitle>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="grid flex-1 grid-cols-3 gap-3">
           <Kpi label="Resources" value={String(summary.resourceCount)} />
