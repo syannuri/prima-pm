@@ -50,7 +50,7 @@ export default function LoginPage() {
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
           <div className="flex items-center gap-3">
             <Logo className="h-11 w-11 drop-shadow-[0_8px_22px_rgba(244,103,95,0.35)]" />
-            <span className="text-xl font-semibold tracking-tight text-slate-800 dark:text-slate-100">Precise</span>
+            <span className="font-brand text-xl font-bold tracking-wide text-slate-800 dark:text-slate-100">PRECISE</span>
           </div>
 
           <div className="max-w-xl">
@@ -87,7 +87,7 @@ export default function LoginPage() {
               {/* logo on small screens (left pane hidden) */}
               <div className="mb-6 flex items-center justify-center gap-3 lg:hidden">
                 <Logo className="h-10 w-10" />
-                <span className="text-lg font-semibold text-slate-800 dark:text-slate-100">Precise</span>
+                <span className="font-brand text-lg font-bold tracking-wide text-slate-800 dark:text-slate-100">PRECISE</span>
               </div>
 
               <div className="mb-7 text-center">

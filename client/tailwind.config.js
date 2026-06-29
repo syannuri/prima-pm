@@ -4,6 +4,10 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        // Geometric sans-serif used for the "PRECISE" brand wordmark.
+        brand: ['Poppins', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
       colors: {
         // Asana-style coral accent (full 50–900 ramp).
         brand: {

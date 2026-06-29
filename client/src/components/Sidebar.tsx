@@ -52,7 +52,7 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
     <div className={`flex h-full flex-col bg-slate-900 text-slate-300 transition-[width] duration-200 ${collapsed ? 'w-16' : 'w-60'}`}>
       <div className={`flex h-14 items-center gap-2 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
         <Logo className="h-8 w-8 shrink-0" />
-        {!collapsed && <span className="text-base font-semibold text-white">Precise</span>}
+        {!collapsed && <span className="font-brand text-base font-bold tracking-wide text-white">PRECISE</span>}
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">

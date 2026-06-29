@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import App from './App';
+import '@fontsource/poppins/latin-700.css'; // geometric sans-serif for the brand wordmark
 import './index.css';
 
 const queryClient = new QueryClient({
