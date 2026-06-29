@@ -52,8 +52,8 @@ export default function LoginPage() {
         {/* ---------- LEFT · tagline space (large screens) ---------- */}
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
           <div className="flex items-center gap-4">
-            <Logo className="h-16 w-16 drop-shadow-[0_10px_28px_rgba(244,103,95,0.4)]" />
-            <span className="font-brand text-4xl font-bold tracking-wide text-slate-800 dark:text-slate-100">PRECISE</span>
+            <Logo className="h-14 w-14 drop-shadow-[0_10px_28px_rgba(244,103,95,0.4)]" />
+            <span className="font-brand text-3xl font-bold tracking-wide text-slate-800 dark:text-slate-100">PRECISE</span>
           </div>
 
           <div className="max-w-2xl">
