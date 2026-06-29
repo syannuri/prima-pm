@@ -1,25 +1,30 @@
-// PRIMA brandmark — a precise arrow striking the centre of a target.
-//   target + bullseye  → Ketepatan (precision)
-//   the rising arrow   → Ketangkasan (agility) & Komitmen (commitment to the goal)
-//   the whole, solid badge + ring → Kepercayaan (trust)
+// Precise brandmark — a precision reticle locking onto its centre.
+//   ring + centre dot    → Ketepatan / akurasi (precision)
+//   the four ticks        → fokus & penyelarasan (locking onto the target)
+//   the solid coral badge → Kepercayaan (trust)
 // Self-contained SVG (carries the coral theme colour); white marks read on light & dark.
 export default function Logo({ className = 'h-8 w-8' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 48 48" className={className} role="img" aria-label="PRIMA" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 48 48" className={className} role="img" aria-label="Precise" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="primaGrad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+        <linearGradient id="preciseGrad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
           <stop stopColor="#f4675f" />
           <stop offset="1" stopColor="#be3b39" />
         </linearGradient>
       </defs>
       {/* badge */}
-      <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#primaGrad)" />
-      {/* target ring + bullseye (precision / trust) */}
-      <circle cx="24" cy="16" r="6.6" fill="none" stroke="#fff" strokeWidth="2.4" strokeOpacity="0.95" />
-      <circle cx="24" cy="16" r="2.2" fill="#fff" />
-      {/* rising arrow striking the centre (agility / commitment) */}
-      <path d="M24 39 V20" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" />
-      <path d="M19 25 L24 18.5 L29 25" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#preciseGrad)" />
+      {/* target ring */}
+      <circle cx="24" cy="24" r="10.5" fill="none" stroke="#fff" strokeWidth="2.4" strokeOpacity="0.95" />
+      {/* four reticle ticks pointing inward */}
+      <g stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeOpacity="0.95">
+        <path d="M24 6 V12.5" />
+        <path d="M24 35.5 V42" />
+        <path d="M6 24 H12.5" />
+        <path d="M35.5 24 H42" />
+      </g>
+      {/* centre lock dot */}
+      <circle cx="24" cy="24" r="3" fill="#fff" />
     </svg>
   );
 }

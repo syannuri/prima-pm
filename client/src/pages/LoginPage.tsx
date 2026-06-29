@@ -50,7 +50,7 @@ export default function LoginPage() {
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
           <div className="flex items-center gap-3">
             <Logo className="h-11 w-11 drop-shadow-[0_8px_22px_rgba(244,103,95,0.35)]" />
-            <span className="text-xl font-semibold tracking-tight text-slate-800 dark:text-slate-100">PRIMA</span>
+            <span className="text-xl font-semibold tracking-tight text-slate-800 dark:text-slate-100">Precise</span>
           </div>
 
           <div className="max-w-xl">
@@ -77,7 +77,7 @@ export default function LoginPage() {
             </ul>
           </div>
 
-          <p className="text-xs text-slate-400 dark:text-slate-500">© 2026 PRIMA · Xapiens</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">© 2026 Precise · Xapiens</p>
         </div>
 
         {/* ---------- RIGHT · sign-in card (right-aligned, with a splitter) ---------- */}
@@ -87,12 +87,12 @@ export default function LoginPage() {
               {/* logo on small screens (left pane hidden) */}
               <div className="mb-6 flex items-center justify-center gap-3 lg:hidden">
                 <Logo className="h-10 w-10" />
-                <span className="text-lg font-semibold text-slate-800 dark:text-slate-100">PRIMA</span>
+                <span className="text-lg font-semibold text-slate-800 dark:text-slate-100">Precise</span>
               </div>
 
               <div className="mb-7 text-center">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Welcome back</h1>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Sign in to your PRIMA workspace</p>
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Sign in to your Precise workspace</p>
               </div>
 
               <form onSubmit={submit} className="space-y-4">
