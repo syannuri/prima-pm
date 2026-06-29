@@ -6,7 +6,15 @@
 #   Env overrides:
 #     PRIMA_BACKUP_DIR        (default: <repo>/backups)
 #     PRIMA_BACKUP_RETENTION  (default: 14 — number of dumps to keep)
+#     PRIMA_OFFBOX_DEST       (rsync target "user@host:/path"; empty = skip off-box copy)
+#     PRIMA_OFFBOX_KEY        (ssh identity for the off-box copy)
 set -euo pipefail
+
+# Where to mirror a second copy of the backups (OFF this box). Best-effort:
+# if the destination is unreachable the local backup still counts as a success.
+# Set PRIMA_OFFBOX_DEST="" to disable.
+OFFBOX_DEST="${PRIMA_OFFBOX_DEST-mamed@192.168.1.11:/home/mamed/prima-backups}"
+OFFBOX_KEY="${PRIMA_OFFBOX_KEY:-/root/.ssh/prima_backup}"
 
 # cron has a minimal PATH; make sure pg_dump is found.
 export PATH=/usr/local/bin:/usr/bin:/bin:${PATH:-}
@@ -45,3 +53,25 @@ while IFS= read -r f; do
 done < <(ls -1t "$BACKUP_DIR"/prima_pm_*.dump 2>/dev/null | tail -n +"$((RETENTION + 1))")
 
 log "done; $(ls -1 "$BACKUP_DIR"/prima_pm_*.dump 2>/dev/null | wc -l) backup(s) retained in $BACKUP_DIR"
+
+# --- Off-box copy (best-effort) -------------------------------------------
+# Mirror the backups dir to another machine over SSH so a disk/host failure
+# here doesn't lose every copy. Failures here MUST NOT fail the backup, so the
+# whole block is guarded and never propagates a non-zero exit.
+if [ -n "$OFFBOX_DEST" ]; then
+  if [ ! -r "$OFFBOX_KEY" ]; then
+    log "WARN off-box: ssh key $OFFBOX_KEY not readable; skipping off-box copy"
+  else
+    log "off-box: mirroring -> $OFFBOX_DEST"
+    SSH_CMD="ssh -i $OFFBOX_KEY -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
+    # --delete keeps the remote in lockstep with local retention (same 14 dumps).
+    if rsync -az --delete --timeout=60 -e "$SSH_CMD" \
+         --include='prima_pm_*.dump' --include='backup.log' --exclude='*' \
+         "$BACKUP_DIR"/ "$OFFBOX_DEST"/ >>"$LOG" 2>&1; then
+      log "off-box: OK -> $OFFBOX_DEST"
+    else
+      rc=$?
+      log "WARN off-box: rsync failed (exit $rc) — local backup is fine, off-box copy skipped this run"
+    fi
+  fi
+fi
