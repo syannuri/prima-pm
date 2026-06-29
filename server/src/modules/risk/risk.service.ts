@@ -65,16 +65,18 @@ export async function listRisks(projectId: string) {
 export async function createRisk(projectId: string, input: UpsertRiskInput, actorId: string) {
   await ensureChartered(projectId);
 
+  // Risks change the Contingency Reserve -> refresh the cost baseline in the
+  // same transaction so the risk and the baseline can never diverge on failure.
   const risk = await prisma.$transaction(async (tx) => {
     const count = await tx.risk.count({ where: { projectId } });
     const code = generateRiskCode(count + 1);
-    return tx.risk.create({
+    const created = await tx.risk.create({
       data: { ...buildRiskData(input), projectId, code },
     });
+    await recomputeBaseline(projectId, tx);
+    return created;
   });
 
-  // Risks change the Contingency Reserve -> refresh the cost baseline.
-  await recomputeBaseline(projectId);
   await writeAudit({ projectId, userId: actorId, entity: 'Risk', entityId: risk.id, action: 'CREATE', after: risk });
   return risk;
 }
@@ -88,11 +90,11 @@ export async function updateRisk(
   const existing = await prisma.risk.findFirst({ where: { id: riskId, projectId } });
   if (!existing) throw NotFound('Risk not found');
 
-  const risk = await prisma.risk.update({
-    where: { id: riskId },
-    data: buildRiskData(input),
+  const risk = await prisma.$transaction(async (tx) => {
+    const updated = await tx.risk.update({ where: { id: riskId }, data: buildRiskData(input) });
+    await recomputeBaseline(projectId, tx);
+    return updated;
   });
-  await recomputeBaseline(projectId);
   await writeAudit({ projectId, userId: actorId, entity: 'Risk', entityId: riskId, action: 'UPDATE', before: existing, after: risk });
   return risk;
 }
@@ -100,8 +102,10 @@ export async function updateRisk(
 export async function deleteRisk(projectId: string, riskId: string, actorId: string) {
   const existing = await prisma.risk.findFirst({ where: { id: riskId, projectId } });
   if (!existing) throw NotFound('Risk not found');
-  await prisma.risk.delete({ where: { id: riskId } });
-  await recomputeBaseline(projectId);
+  await prisma.$transaction(async (tx) => {
+    await tx.risk.delete({ where: { id: riskId } });
+    await recomputeBaseline(projectId, tx);
+  });
   await writeAudit({ projectId, userId: actorId, entity: 'Risk', entityId: riskId, action: 'DELETE', before: existing });
 }
 

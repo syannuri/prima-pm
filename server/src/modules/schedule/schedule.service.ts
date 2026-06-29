@@ -153,6 +153,16 @@ export async function updateTask(
       select: { id: true },
     });
     if (!parent) throw BadRequest('parentTaskId does not belong to this project');
+
+    // Reject reparenting a task under one of its own descendants — that would
+    // create a hierarchy cycle, after which buildGanttTree drops the whole cycle
+    // (no node is a root) so the subtree vanishes from the Gantt and roll-ups.
+    const all = await prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true } });
+    const parentOf = new Map(all.map((t) => [t.id, t.parentTaskId]));
+    for (let cursor: string | null = input.parentTaskId, hops = 0; cursor && hops <= all.length; hops++) {
+      if (cursor === taskId) throw BadRequest('Cannot move a task under one of its own subtasks');
+      cursor = parentOf.get(cursor) ?? null;
+    }
   }
 
   const task = await prisma.task.update({
@@ -317,7 +327,7 @@ export async function getManpowerSync(projectId: string) {
  */
 export async function getEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
   const [tasks, costByTask, resolvedAc, project] = await Promise.all([
-    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, baselineFinish: true } }),
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, baselineStart: true, baselineFinish: true } }),
     directCostByTask(projectId),
     // Use the explicit override if provided, else the stored time-phased AC.
     actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
@@ -345,6 +355,9 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
     progressPct: t.progressPct,
     planStart: t.planStart,
     planEnd: t.planEnd,
+    // PV is measured against the baseline window when one exists (see plannedProgress).
+    baselineStart: t.baselineStart,
+    baselineEnd: t.baselineFinish,
   }));
   // All-milestone projects have zero duration everywhere → weight each leaf equally.
   if (!costLoaded && evmTasks.every((t) => t.budgetCost === 0)) {

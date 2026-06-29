@@ -16,12 +16,23 @@ export interface EvmTask {
   progressPct: number;
   planStart: Date;
   planEnd: Date;
+  /**
+   * Baseline (PMB) schedule window. When a baseline has been captured, Planned
+   * Value is measured against it, NOT the (re-planned) current dates — otherwise
+   * pushing planStart/planEnd out would silently re-base PV and reset SV/SPI,
+   * hiding the slip. Falls back to plan dates when not yet baselined.
+   */
+  baselineStart?: Date | null;
+  baselineEnd?: Date | null;
 }
 
-/** Planned % complete for a task at `statusDate`, linear over its planned window. */
+/**
+ * Planned % complete for a task at `statusDate`, linear over its BASELINE window
+ * (falling back to the planned window when the task has no baseline).
+ */
 export function plannedProgress(task: EvmTask, statusDate: Date): number {
-  const start = task.planStart.getTime();
-  const end = task.planEnd.getTime();
+  const start = (task.baselineStart ?? task.planStart).getTime();
+  const end = (task.baselineEnd ?? task.planEnd).getTime();
   const now = statusDate.getTime();
   if (now <= start) return 0;
   if (now >= end || end <= start) return now >= end ? 1 : 0;

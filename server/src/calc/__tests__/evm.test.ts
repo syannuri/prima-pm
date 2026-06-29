@@ -19,6 +19,24 @@ describe('evm — planned progress', () => {
   it('linear midpoint ~50%', () => {
     expect(plannedProgress(task, d('2026-01-06'))).toBeCloseTo(0.5, 5);
   });
+
+  it('measures PV against the BASELINE window, not the re-planned dates', () => {
+    // Baseline says Jan 1–11; the plan was later pushed out to Feb. At Jan 6 the
+    // baseline says 50% should be done — re-planning must NOT reset that to 0.
+    const rebased: EvmTask = {
+      budgetCost: 10_000_000,
+      progressPct: 0,
+      planStart: d('2026-02-01'),
+      planEnd: d('2026-02-11'),
+      baselineStart: d('2026-01-01'),
+      baselineEnd: d('2026-01-11'),
+    };
+    expect(plannedProgress(rebased, d('2026-01-06'))).toBeCloseTo(0.5, 5);
+  });
+
+  it('falls back to plan dates when not yet baselined', () => {
+    expect(plannedProgress(task, d('2026-01-06'))).toBeCloseTo(0.5, 5);
+  });
 });
 
 describe('evm — full metric set', () => {

@@ -36,12 +36,16 @@ export async function upsertCharter(
     pmUserId: input.pmUserId,
   };
 
-  const charter = existing
-    ? await prisma.projectCharter.update({ where: { projectId }, data })
-    : await prisma.projectCharter.create({ data: { ...data, projectId, version: 1, locked: false } });
-
-  // Keep the project's PM in sync with the charter assignment.
-  await prisma.project.update({ where: { id: projectId }, data: { pmUserId: input.pmUserId } });
+  // Write the charter and sync the project's PM together — Project.pmUserId
+  // drives RBAC ownership, so it must never diverge from the charter on a
+  // partial failure.
+  const charter = await prisma.$transaction(async (tx) => {
+    const saved = existing
+      ? await tx.projectCharter.update({ where: { projectId }, data })
+      : await tx.projectCharter.create({ data: { ...data, projectId, version: 1, locked: false } });
+    await tx.project.update({ where: { id: projectId }, data: { pmUserId: input.pmUserId } });
+    return saved;
+  });
 
   await writeAudit({ projectId,
     userId: actorId,

@@ -28,8 +28,12 @@ async function ensureChartered(projectId: string): Promise<void> {
 }
 
 // Map persisted risks into the shape the contingency calculator expects.
-async function loadRisksForReserve(projectId: string): Promise<RiskForReserve[]> {
-  const risks = await prisma.risk.findMany({
+// `db` is the prisma client or a transaction client, so the baseline recompute
+// can run atomically inside the same transaction as the mutation that triggered it.
+type Db = Prisma.TransactionClient;
+
+async function loadRisksForReserve(projectId: string, db: Db = prisma): Promise<RiskForReserve[]> {
+  const risks = await db.risk.findMany({
     // Only active risks fund the contingency reserve. A CLOSED threat is no
     // longer a threat, and an OCCURRED one has already materialized (its cost
     // belongs in Actual Cost, not the reserve) — neither should keep inflating
@@ -46,12 +50,14 @@ async function loadRisksForReserve(projectId: string): Promise<RiskForReserve[]>
 }
 
 // Recompute and persist the CostBaseline. Called after every cost/risk mutation.
-export async function recomputeBaseline(projectId: string) {
+// Pass a transaction client so the recompute commits/rolls back atomically with
+// the triggering write (a failure here must not leave a stale baseline behind).
+export async function recomputeBaseline(projectId: string, db: Db = prisma) {
   const [directs, indirects, risks, existing] = await Promise.all([
-    prisma.costItemDirect.findMany({ where: { projectId }, select: { amount: true, manpowerCost: true } }),
-    prisma.costItemIndirect.findMany({ where: { projectId }, select: { amount: true } }),
-    loadRisksForReserve(projectId),
-    prisma.costBaseline.findUnique({ where: { projectId }, select: { managementReserve: true } }),
+    db.costItemDirect.findMany({ where: { projectId }, select: { amount: true, manpowerCost: true } }),
+    db.costItemIndirect.findMany({ where: { projectId }, select: { amount: true } }),
+    loadRisksForReserve(projectId, db),
+    db.costBaseline.findUnique({ where: { projectId }, select: { managementReserve: true } }),
   ]);
 
   const result = computeBaseline({
@@ -61,7 +67,7 @@ export async function recomputeBaseline(projectId: string) {
     managementReserve: dec(existing?.managementReserve),
   });
 
-  return prisma.costBaseline.upsert({
+  return db.costBaseline.upsert({
     where: { projectId },
     create: {
       projectId,
@@ -132,8 +138,11 @@ export async function addDirectLine(projectId: string, input: DirectLineInput, a
     data.amount = materialAmount(input.qty!, input.unitCost!);
   }
 
-  const line = await prisma.costItemDirect.create({ data });
-  await recomputeBaseline(projectId);
+  const line = await prisma.$transaction(async (tx) => {
+    const created = await tx.costItemDirect.create({ data });
+    await recomputeBaseline(projectId, tx);
+    return created;
+  });
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemDirect', entityId: line.id, action: 'CREATE', after: line });
   return line;
 }
@@ -158,7 +167,10 @@ export async function updateDirectLine(
     data.unitCostPerManday = m.unitCostPerManday;
     data.planMandays = input.planMandays;
     data.manpowerCost = manpowerCost(m.unitCostPerManday, input.planMandays!);
-    data.taskId = input.taskId ?? null;
+    // Only touch taskId when the payload actually carries it. Writing `?? null`
+    // here silently severed the manpower↔task link (the EVM budget weight + the
+    // resource time-phasing key) whenever an edit form omitted taskId.
+    if (input.taskId !== undefined) data.taskId = input.taskId;
     // clear material fields
     data.qty = null;
     data.unitCost = null;
@@ -178,8 +190,11 @@ export async function updateDirectLine(
     data.taskId = null;
   }
 
-  const line = await prisma.costItemDirect.update({ where: { id: itemId }, data });
-  await recomputeBaseline(projectId);
+  const line = await prisma.$transaction(async (tx) => {
+    const updated = await tx.costItemDirect.update({ where: { id: itemId }, data });
+    await recomputeBaseline(projectId, tx);
+    return updated;
+  });
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemDirect', entityId: itemId, action: 'UPDATE', before: existing, after: line });
   return line;
 }
@@ -187,8 +202,10 @@ export async function updateDirectLine(
 export async function deleteDirectLine(projectId: string, itemId: string, actorId: string) {
   const existing = await prisma.costItemDirect.findFirst({ where: { id: itemId, projectId } });
   if (!existing) throw NotFound('Direct cost line not found');
-  await prisma.costItemDirect.delete({ where: { id: itemId } });
-  await recomputeBaseline(projectId);
+  await prisma.$transaction(async (tx) => {
+    await tx.costItemDirect.delete({ where: { id: itemId } });
+    await recomputeBaseline(projectId, tx);
+  });
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemDirect', entityId: itemId, action: 'DELETE', before: existing });
 }
 
@@ -196,10 +213,13 @@ export async function deleteDirectLine(projectId: string, itemId: string, actorI
 
 export async function addIndirectLine(projectId: string, input: IndirectLineInput, actorId: string) {
   await ensureChartered(projectId);
-  const line = await prisma.costItemIndirect.create({
-    data: { projectId, type: input.type, description: input.description, amount: input.amount },
+  const line = await prisma.$transaction(async (tx) => {
+    const created = await tx.costItemIndirect.create({
+      data: { projectId, type: input.type, description: input.description, amount: input.amount },
+    });
+    await recomputeBaseline(projectId, tx);
+    return created;
   });
-  await recomputeBaseline(projectId);
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemIndirect', entityId: line.id, action: 'CREATE', after: line });
   return line;
 }
@@ -212,11 +232,14 @@ export async function updateIndirectLine(
 ) {
   const existing = await prisma.costItemIndirect.findFirst({ where: { id: itemId, projectId } });
   if (!existing) throw NotFound('Indirect cost line not found');
-  const line = await prisma.costItemIndirect.update({
-    where: { id: itemId },
-    data: { type: input.type, description: input.description, amount: input.amount },
+  const line = await prisma.$transaction(async (tx) => {
+    const updated = await tx.costItemIndirect.update({
+      where: { id: itemId },
+      data: { type: input.type, description: input.description, amount: input.amount },
+    });
+    await recomputeBaseline(projectId, tx);
+    return updated;
   });
-  await recomputeBaseline(projectId);
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemIndirect', entityId: itemId, action: 'UPDATE', before: existing, after: line });
   return line;
 }
@@ -224,8 +247,10 @@ export async function updateIndirectLine(
 export async function deleteIndirectLine(projectId: string, itemId: string, actorId: string) {
   const existing = await prisma.costItemIndirect.findFirst({ where: { id: itemId, projectId } });
   if (!existing) throw NotFound('Indirect cost line not found');
-  await prisma.costItemIndirect.delete({ where: { id: itemId } });
-  await recomputeBaseline(projectId);
+  await prisma.$transaction(async (tx) => {
+    await tx.costItemIndirect.delete({ where: { id: itemId } });
+    await recomputeBaseline(projectId, tx);
+  });
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemIndirect', entityId: itemId, action: 'DELETE', before: existing });
 }
 
@@ -233,12 +258,14 @@ export async function deleteIndirectLine(projectId: string, itemId: string, acto
 
 export async function setManagementReserve(projectId: string, amount: number, actorId: string) {
   await ensureChartered(projectId);
-  await prisma.costBaseline.upsert({
-    where: { projectId },
-    create: { projectId, managementReserve: amount },
-    update: { managementReserve: amount },
+  const baseline = await prisma.$transaction(async (tx) => {
+    await tx.costBaseline.upsert({
+      where: { projectId },
+      create: { projectId, managementReserve: amount },
+      update: { managementReserve: amount },
+    });
+    return recomputeBaseline(projectId, tx);
   });
-  const baseline = await recomputeBaseline(projectId);
   await writeAudit({ projectId, userId: actorId, entity: 'CostBaseline', entityId: projectId, action: 'UPDATE', after: { managementReserve: amount } });
   return baseline;
 }

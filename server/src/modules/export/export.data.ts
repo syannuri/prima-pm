@@ -23,7 +23,10 @@ export async function gatherProjectExport(projectId: string, opts: ExportOptions
     getCostSummary(projectId),
     getRiskAnalysis(projectId),
     getGantt(projectId),
-    getEvm(projectId, opts.actualCost ?? 0, opts.statusDate ?? new Date()),
+    // Pass actualCost through as-is: undefined makes getEvm resolve the stored
+    // time-phased AC (same as the live /evm endpoint). Forcing 0 here made every
+    // exported PDF/Excel show CPI=0 / EAC=BAC even when actuals existed.
+    getEvm(projectId, opts.actualCost, opts.statusDate ?? new Date()),
   ]);
 
   return { project, charter, risks, cost, riskAnalysis, gantt, evm, generatedAt: new Date() };
