@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { CostSummary, DirectCost, ResourceItem } from '../../api/types';
+import type { CostSummary, DirectCost, GanttNode, ResourceItem } from '../../api/types';
 import { Button, Card, Input, SectionTitle, Select, Spinner } from '../../components/ui';
 import { formatIdr } from '../../lib/format';
 
@@ -17,6 +17,11 @@ const INDIRECT_TYPES = [
   { value: 'ACCOMMODATION', label: 'Accommodation' },
   { value: 'ENTERTAINMENT', label: 'Entertainment' },
 ];
+
+// Flatten a gantt tree to its leaf tasks (work packages manpower is assigned to).
+function flattenLeaves(nodes: GanttNode[]): GanttNode[] {
+  return nodes.flatMap((n) => (n.children?.length ? flattenLeaves(n.children) : [n]));
+}
 
 export default function CostPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
@@ -131,6 +136,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
   const [planMandays, setMandays] = useState('');
   const [resourceId, setResourceId] = useState('');
   const [rateOverride, setRateOverride] = useState('');
+  const [taskId, setTaskId] = useState('');
   const [err, setErr] = useState('');
   const isManpower = type === 'MANPOWER';
 
@@ -138,12 +144,17 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
   const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources') });
   const picked = resourcesQ.data?.resources.find((r) => r.id === resourceId);
 
+  // Leaf tasks for the manpower↔schedule link (assign work to a work package).
+  const scheduleBase = base.replace(/\/cost$/, '/schedule');
+  const ganttQ = useQuery({ queryKey: ['gantt', scheduleBase], queryFn: () => api.get<{ tree: GanttNode[] }>(`${scheduleBase}/gantt`) });
+  const leafTasks = flattenLeaves(ganttQ.data?.tree ?? []);
+
   const add = useMutation({
     mutationFn: () =>
       api.post(`${base}/direct`, isManpower
-        ? { type, label: label || picked?.name || '', resourceId, planMandays: Number(planMandays), unitCostPerManday: rateOverride === '' ? undefined : Number(rateOverride) }
+        ? { type, label: label || picked?.name || '', resourceId, planMandays: Number(planMandays), unitCostPerManday: rateOverride === '' ? undefined : Number(rateOverride), taskId: taskId || undefined }
         : { type, label, qty: Number(qty), unitCost: Number(unitCost) }),
-    onSuccess: () => { setLabel(''); setUnitCost(''); setMandays(''); setResourceId(''); setRateOverride(''); setErr(''); onChange(); },
+    onSuccess: () => { setLabel(''); setUnitCost(''); setMandays(''); setResourceId(''); setRateOverride(''); setTaskId(''); setErr(''); onChange(); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
   const del = useMutation({
@@ -167,6 +178,22 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
     onSuccess: () => { setErr(''); onChange(); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
+  // Inline task (re)assignment: change only the linked work package; rate, role &
+  // resource are sent back explicitly so nothing else on the line changes.
+  const reassignTask = useMutation({
+    mutationFn: ({ d, taskId }: { d: DirectCost; taskId: string }) =>
+      api.put(`${base}/direct/${d.id}`, {
+        type: 'MANPOWER',
+        label: d.label,
+        planMandays: Number(d.planMandays),
+        taskId: taskId || undefined,
+        resourceId: d.resourceId ?? undefined,
+        personnelRole: d.personnelRole,
+        unitCostPerManday: Number(d.unitCostPerManday),
+      }),
+    onSuccess: () => { setErr(''); onChange(); },
+    onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
+  });
 
   return (
     <Card>
@@ -185,20 +212,36 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                 <td>
                   <div>{d.label}</div>
                   {d.type === 'MANPOWER' && (
-                    <select
-                      value={d.resourceId ?? ''}
-                      disabled={reassign.isPending}
-                      onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })}
-                      title="Assign / change resource"
-                      className={`mt-0.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
-                        d.resourceId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
-                      }`}
-                    >
-                      <option value="">👤 Unassigned</option>
-                      {resourcesQ.data?.resources.map((r) => (
-                        <option key={r.id} value={r.id}>👤 {r.name}</option>
-                      ))}
-                    </select>
+                    <div className="mt-0.5 flex flex-wrap gap-1">
+                      <select
+                        value={d.resourceId ?? ''}
+                        disabled={reassign.isPending}
+                        onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })}
+                        title="Assign / change resource"
+                        className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
+                          d.resourceId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
+                        }`}
+                      >
+                        <option value="">👤 Unassigned</option>
+                        {resourcesQ.data?.resources.map((r) => (
+                          <option key={r.id} value={r.id}>👤 {r.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={d.taskId ?? ''}
+                        disabled={reassignTask.isPending}
+                        onChange={(e) => reassignTask.mutate({ d, taskId: e.target.value })}
+                        title="Link / change task (work package)"
+                        className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
+                          d.taskId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
+                        }`}
+                      >
+                        <option value="">📋 No task</option>
+                        {leafTasks.map((t) => (
+                          <option key={t.id} value={t.id}>📋 {t.wbsCode} {t.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </td>
                 <td className="text-xs text-slate-500 dark:text-slate-400">
@@ -237,10 +280,19 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
               onChange={(e) => setRateOverride(e.target.value)}
               title="Leave blank to use the resource's rate"
             />
-            <Input type="number" placeholder="Plan mandays" value={planMandays} onChange={(e) => setMandays(e.target.value)} />
-            <div className="flex items-center px-1 text-xs text-slate-500 dark:text-slate-400">
-              {picked && planMandays ? `= ${formatIdr((rateOverride === '' ? Number(picked.unitCostPerManday) : Number(rateOverride)) * Number(planMandays))}` : 'rate × mandays'}
-            </div>
+            <Input
+              type="number"
+              placeholder="Plan mandays"
+              value={planMandays}
+              onChange={(e) => setMandays(e.target.value)}
+              title={picked && planMandays ? `= ${formatIdr((rateOverride === '' ? Number(picked.unitCostPerManday) : Number(rateOverride)) * Number(planMandays))}` : 'rate × mandays'}
+            />
+            <Select value={taskId} onChange={(e) => setTaskId(e.target.value)} title="Link to a task (work package)">
+              <option value="">Task… (optional)</option>
+              {leafTasks.map((t) => (
+                <option key={t.id} value={t.id}>{t.wbsCode} {t.name}</option>
+              ))}
+            </Select>
           </>
         ) : (
           <>
