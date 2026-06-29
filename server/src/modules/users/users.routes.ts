@@ -30,6 +30,14 @@ const createUserSchema = z.object({
   password: strongPassword,
 });
 const resetPasswordSchema = z.object({ newPassword: strongPassword });
+const editProfileSchema = z
+  .object({
+    name: z.string().min(2).max(120).optional(),
+    email: z.string().email().toLowerCase().optional(),
+  })
+  .refine((d) => d.name !== undefined || d.email !== undefined, {
+    message: 'Provide a name or email to update',
+  });
 
 const PUBLIC_USER = { id: true, name: true, email: true, role: true, isActive: true, createdAt: true } as const;
 
@@ -92,6 +100,35 @@ router.patch(
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash: await hashPassword(req.body.newPassword) } });
     await writeAudit({ userId: req.user!.id, entity: 'User', entityId: req.params.id, action: 'PASSWORD_CHANGE', after: { reset: true } });
     res.json({ ok: true });
+  }),
+);
+
+// Edit a user's name and/or email.
+router.patch(
+  '/:id/profile',
+  validateBody(editProfileSchema),
+  asyncHandler(async (req, res) => {
+    const before = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!before) throw NotFound('User not found');
+    // Email is unique — block clashes with a different account.
+    if (req.body.email && req.body.email !== before.email) {
+      const clash = await prisma.user.findUnique({ where: { email: req.body.email } });
+      if (clash) throw Conflict('A user with that email already exists');
+    }
+    const data: { name?: string; email?: string } = {};
+    if (req.body.name !== undefined) data.name = req.body.name;
+    if (req.body.email !== undefined) data.email = req.body.email;
+
+    const user = await prisma.user.update({ where: { id: req.params.id }, data, select: PUBLIC_USER });
+    await writeAudit({
+      userId: req.user!.id,
+      entity: 'User',
+      entityId: user.id,
+      action: 'UPDATE',
+      before: { name: before.name, email: before.email },
+      after: { name: user.name, email: user.email },
+    });
+    res.json({ user });
   }),
 );
 

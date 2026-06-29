@@ -20,6 +20,7 @@ export default function AdminUsersPage() {
   });
 
   const [resetFor, setResetFor] = useState<AdminUser | null>(null);
+  const [editFor, setEditFor] = useState<AdminUser | null>(null);
 
   if (user?.role !== 'ADMIN') {
     return (
@@ -48,7 +49,7 @@ export default function AdminUsersPage() {
               </thead>
               <tbody>
                 {data?.users.map((u) => (
-                  <UserRow key={u.id} u={u} isSelf={u.id === user.id} onChange={invalidate} onReset={() => setResetFor(u)} />
+                  <UserRow key={u.id} u={u} isSelf={u.id === user.id} onChange={invalidate} onReset={() => setResetFor(u)} onEdit={() => setEditFor(u)} />
                 ))}
               </tbody>
             </table>
@@ -57,11 +58,12 @@ export default function AdminUsersPage() {
       </Card>
 
       {resetFor && <ResetPasswordModal user={resetFor} onClose={() => setResetFor(null)} />}
+      {editFor && <EditUserModal user={editFor} onClose={() => setEditFor(null)} onSaved={invalidate} />}
     </div>
   );
 }
 
-function UserRow({ u, isSelf, onChange, onReset }: { u: AdminUser; isSelf: boolean; onChange: () => void; onReset: () => void }) {
+function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSelf: boolean; onChange: () => void; onReset: () => void; onEdit: () => void }) {
   const [err, setErr] = useState('');
   const setRole = useMutation({
     mutationFn: (role: Role) => api.patch(`/users/${u.id}/role`, { role }),
@@ -95,7 +97,8 @@ function UserRow({ u, isSelf, onChange, onReset }: { u: AdminUser; isSelf: boole
       </td>
       <td className="text-xs text-slate-400 dark:text-slate-500">{formatDate(u.createdAt)}</td>
       <td className="whitespace-nowrap text-right">
-        <button onClick={onReset} className="text-xs text-brand-600 hover:underline">Reset password</button>
+        <button onClick={onEdit} className="text-xs text-brand-600 hover:underline">Edit</button>
+        <button onClick={onReset} className="ml-3 text-xs text-brand-600 hover:underline">Reset password</button>
         {!isSelf && (
           <button
             onClick={() => setActive.mutate(!u.isActive)}
@@ -147,6 +150,43 @@ function CreateUser({ onChange }: { onChange: () => void }) {
       {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
       {ok && <p className="mt-2 text-sm text-green-600">{ok} — share the password; they can change it under “Change password”.</p>}
     </Card>
+  );
+}
+
+function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [err, setErr] = useState('');
+
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  const changed = trimmedName !== user.name || trimmedEmail !== user.email;
+  const valid = trimmedName.length >= 2 && /.+@.+\..+/.test(trimmedEmail);
+
+  const save = useMutation({
+    mutationFn: () => api.patch(`/users/${user.id}/profile`, { name: trimmedName, email: trimmedEmail }),
+    onSuccess: () => { onSaved(); onClose(); },
+    onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="mb-1 text-lg font-semibold text-slate-800 dark:text-slate-100">Edit user</h2>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Update name and email. Role, status and password are managed separately.</p>
+        <div className="space-y-3">
+          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>
+          <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prima.id" /></Field>
+          {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
+          <div className="flex gap-2 pt-1">
+            <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1" disabled={!changed || !valid || save.isPending} onClick={() => save.mutate()}>
+              {save.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
