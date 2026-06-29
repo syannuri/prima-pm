@@ -5,9 +5,9 @@ import Logo from '../components/Logo';
 import { ApiError } from '../api/client';
 
 const HIGHLIGHTS = [
-  'Earned Value & portfolio health at a glance',
-  'WBS, schedule & cross-project resources',
-  'Cost baselines, risk & change control',
+  'See every project’s true health at a glance',
+  'Catch slips, overruns and risks before they grow',
+  'Keep schedules, budgets and people in sync',
 ];
 
 export default function LoginPage() {
@@ -54,8 +54,8 @@ export default function LoginPage() {
           </div>
 
           <div className="max-w-xl">
-            <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-brand-600 dark:text-brand-400">
-              Project Risk · Investment · Management · Assurance
+            <p className="mb-4 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-600 dark:text-brand-400 xl:text-[11px] xl:tracking-[0.16em]">
+              Projects · Risk · Earned Value · Cost · Investment · Schedule · Execution
             </p>
             <h2 className="text-4xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-5xl">
               Precision in every{' '}
@@ -82,8 +82,8 @@ export default function LoginPage() {
 
         {/* ---------- RIGHT · sign-in card (right-aligned, with a splitter) ---------- */}
         <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[46%] lg:justify-end lg:border-l lg:border-slate-200/70 lg:pr-12 xl:pr-20 dark:lg:border-white/10">
-          <div className="w-full max-w-md">
-            <div className="rounded-3xl border border-white/70 bg-white/75 p-8 shadow-[0_24px_70px_-20px_rgba(244,103,95,0.35)] backdrop-blur-xl sm:p-10 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.65)]">
+          <div className="w-full max-w-sm">
+            <div className="rounded-3xl border border-white/70 bg-white/75 p-7 shadow-[0_24px_70px_-20px_rgba(244,103,95,0.35)] backdrop-blur-xl sm:p-8 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.65)]">
               {/* logo on small screens (left pane hidden) */}
               <div className="mb-6 flex items-center justify-center gap-3 lg:hidden">
                 <Logo className="h-10 w-10" />
@@ -113,7 +113,7 @@ export default function LoginPage() {
               </form>
 
               <div className="mt-7 border-t border-slate-200/70 pt-4 dark:border-slate-700/60">
-                <p className="text-center text-xs text-slate-400 dark:text-slate-500">Project Risk, Investment, Management &amp; Assurance</p>
+                <p className="text-center text-xs text-slate-400 dark:text-slate-500">Plan with clarity. Deliver with confidence.</p>
               </div>
             </div>
           </div>
