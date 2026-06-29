@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { getPortfolioAlerts, getRecentChanges, markChangesSeen } from './notification.service.js';
+import { getAttentionItems, getPortfolioAlerts, getRecentChanges, markChangesSeen } from './notification.service.js';
 
 // Portfolio-wide alerts for the header bell. Mounted at /api/v1/notifications.
 const router = Router();
@@ -32,6 +32,14 @@ router.post(
   '/changes/seen',
   asyncHandler(async (req, res) => {
     res.json(await markChangesSeen(req.user!.id));
+  }),
+);
+
+// Actionable items across the caller's visible projects (PM action panel).
+router.get(
+  '/attention',
+  asyncHandler(async (req, res) => {
+    res.json(await getAttentionItems(req.user!.id, req.user!.role, new Date()));
   }),
 );
 

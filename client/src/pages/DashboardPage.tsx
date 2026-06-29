@@ -9,6 +9,7 @@ import { PROJECT_CATEGORIES } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import ResourceCapacity from '../components/ResourceCapacity';
+import NeedsAttention from '../components/NeedsAttention';
 
 const STATUS_COLOR: Record<string, string> = {
   DRAFT: 'slate',
@@ -91,6 +92,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {view === 'portfolio' && <NeedsAttention />}
       {view === 'portfolio' && <PortfolioSummary />}
       {view === 'resources' && <ResourceCapacity />}
 

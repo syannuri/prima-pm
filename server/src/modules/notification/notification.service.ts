@@ -160,3 +160,46 @@ export async function getRecentChanges(userId: string, role: string, limit = 25)
   });
   return { changes, unread };
 }
+
+// =====================================================================
+// "Needs attention" — actionable items across the caller's visible
+// projects (PM = own projects). Reuses live project alerts (overdue
+// tasks, high risks, budget signals) and adds change requests awaiting
+// a decision. Drives the PM dashboard action panel.
+// =====================================================================
+export interface AttentionItem {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  type: AlertType | 'CHANGE_REQUEST';
+  severity: AlertSeverity;
+  tab: string;
+  message: string;
+}
+
+export async function getAttentionItems(userId: string, role: string, now: Date) {
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { not: 'DRAFT' } };
+  if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+  const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
+
+  const items: AttentionItem[] = [];
+  for (const p of projects) {
+    const { alerts } = await getProjectAlerts(p.id, now);
+    for (const a of alerts) {
+      items.push({ projectId: p.id, projectCode: p.code, projectName: p.name, type: a.type, severity: a.severity, tab: a.tab, message: a.message });
+    }
+  }
+
+  // Change requests still awaiting a decision.
+  const crs = await prisma.changeRequest.findMany({
+    where: { projectId: { in: projects.map((p) => p.id) }, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } },
+    select: { title: true, projectId: true, project: { select: { code: true, name: true } } },
+  });
+  for (const cr of crs) {
+    items.push({ projectId: cr.projectId, projectCode: cr.project.code, projectName: cr.project.name, type: 'CHANGE_REQUEST', severity: 'MEDIUM', tab: 'Change Req', message: `Change request “${cr.title}” awaiting a decision` });
+  }
+
+  const rank: Record<AlertSeverity, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  items.sort((a, b) => rank[a.severity] - rank[b.severity]);
+  return { items, total: items.length, high: items.filter((i) => i.severity === 'HIGH').length };
+}
