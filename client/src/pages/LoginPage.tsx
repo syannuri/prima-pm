@@ -62,8 +62,8 @@ export default function LoginPage() {
               <span className="bg-gradient-to-r from-brand-500 to-brand-600 bg-clip-text text-transparent">project</span>.
             </h2>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-slate-600 dark:text-slate-300">
-              One elegant workspace where Earned Value, schedule, cost, risk and resources come together —
-              so every decision is grounded in real numbers, not guesswork.
+              Know exactly where your projects stand. From budget to schedule to risk, Precise
+              turns scattered updates into one clear view your team can actually act on.
             </p>
             <ul className="mt-9 space-y-3.5 text-sm text-slate-600 dark:text-slate-300">
               {HIGHLIGHTS.map((t) => (
