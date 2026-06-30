@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project, ProjectCategory, PortfolioSummary as Summary, User } from '../api/types';
-import { Badge, Button, Card, Field, Input, Modal, Select, SectionTitle, Spinner } from '../components/ui';
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Skeleton } from '../components/ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
 
@@ -71,27 +71,41 @@ export default function DashboardPage() {
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const canCreate = isPmo;
 
+  // Warm header: time-based greeting + today's date + a one-line portfolio pulse.
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const firstName = user?.name?.split(' ')[0] ?? 'there';
+  const today = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const projectCount = data?.projects.length ?? 0;
+  const pulse = projectCount === 0
+    ? 'No projects yet'
+    : `${projectCount} ${projectCount === 1 ? 'project' : 'projects'} ${isPmo ? 'in the portfolio' : 'assigned to you'}`;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionTitle sub={isPmo ? 'Cross-project EVM portfolio & project directory' : 'Your projects — health, cost & schedule'}>Dashboard</SectionTitle>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{greeting}, {firstName} 👋</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5 text-sm">
             <button
               onClick={() => setView('portfolio')}
-              className={`rounded-md px-3 py-1 ${view === 'portfolio' ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
+              className={`rounded-md px-3 py-1 transition ${view ==='portfolio' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
             >
               {isPmo ? 'Portfolio EVM' : 'My Projects'}
             </button>
             <button
               onClick={() => setView('resources')}
-              className={`rounded-md px-3 py-1 ${view === 'resources' ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
+              className={`rounded-md px-3 py-1 transition ${view ==='resources' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
             >
               Utilization
             </button>
             <button
               onClick={() => setView('cards')}
-              className={`rounded-md px-3 py-1 ${view === 'cards' ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
+              className={`rounded-md px-3 py-1 transition ${view ==='cards' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
             >
               Project Cards
             </button>
@@ -160,12 +174,31 @@ export default function DashboardPage() {
       )}
 
       {view === 'cards' && (isLoading ? (
-        <div className="flex justify-center py-10">
-          <Spinner />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="h-1.5 w-full rounded-full" />
+              <div className="flex items-center justify-between pt-2">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </Card>
+          ))}
         </div>
       ) : !data?.projects.length ? (
         <Card>
-          <p className="text-center text-slate-500 dark:text-slate-400">No projects yet. Create your first project to begin.</p>
+          <EmptyState
+            icon="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"
+            title="No projects yet"
+            hint={canCreate ? 'Create your first project to start tracking cost, schedule and risk.' : 'Projects assigned to you will appear here.'}
+            action={canCreate ? <Button onClick={() => setShowForm(true)}>+ New Project</Button> : undefined}
+          />
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

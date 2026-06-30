@@ -81,6 +81,29 @@ export function Spinner() {
   return <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600 dark:border-slate-700 dark:border-t-brand-500" />;
 }
 
+// Animated placeholder block for loading (skeleton) states.
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md bg-slate-200/70 dark:bg-slate-700/40 ${className}`} />;
+}
+
+// Friendly empty state: an icon bubble, a title, an optional hint and an optional action.
+export function EmptyState({ icon, title, hint, action }: { icon?: string; title: string; hint?: string; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+      {icon && (
+        <div className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d={icon} />
+          </svg>
+        </div>
+      )}
+      <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</p>
+      {hint && <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">{hint}</p>}
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
+}
+
 // Accessible on/off switch (role="switch"). Controlled via checked/onChange.
 export function Toggle({
   checked,

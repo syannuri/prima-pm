@@ -46,7 +46,7 @@ export default function NeedsAttention() {
         <ul className="space-y-0.5">
           {data.items.map((it, i) => (
             <li key={i}>
-              <Link to={`/projects/${it.projectId}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800">
+              <Link to={`/projects/${it.projectId}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800">
                 <span className={`h-2 w-2 shrink-0 rounded-full ${SEV_DOT[it.severity] ?? 'bg-slate-400'}`} title={it.severity} />
                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${AREA_COLOR[it.tab] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{it.tab}</span>
                 <span className="truncate text-sm text-slate-700 dark:text-slate-200">{it.message}</span>

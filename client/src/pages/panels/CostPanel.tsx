@@ -109,7 +109,7 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
           )}
         </div>
       )}
-      <table className="w-full text-sm">
+      <table className="prima-rows w-full text-sm">
         <tbody>
           {data.actualCosts.map((a) => (
             <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800">
@@ -238,7 +238,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
     <Card>
       <SectionTitle sub="Material (qty × unit cost) and Manpower (rate × mandays)">Direct Cost</SectionTitle>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="prima-rows w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
               <th className="py-2">Type</th><th>Item</th><th>Detail</th><th className="text-right">Amount</th><th></th>
@@ -382,7 +382,7 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
   return (
     <Card>
       <SectionTitle sub="Transportation, accommodation, entertainment">Indirect Cost</SectionTitle>
-      <table className="w-full text-sm">
+      <table className="prima-rows w-full text-sm">
         <tbody>
           {data.indirectCosts.map((i) => (
             <tr key={i.id} className="border-b border-slate-100 dark:border-slate-800">

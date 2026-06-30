@@ -66,10 +66,10 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
       ) : !data?.entries.length ? (
         <p className="py-4 text-center text-slate-400 dark:text-slate-500">No audit entries match.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="max-h-[32rem] overflow-auto">
+          <table className="prima-rows w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+              <tr className="sticky top-0 z-10 border-b bg-white text-left text-xs uppercase text-slate-400 dark:bg-slate-900 dark:text-slate-500">
                 <th className="py-2">When</th><th>User</th><th>Role</th><th>Entity</th><th>Action</th>
               </tr>
             </thead>

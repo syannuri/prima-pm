@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary } from '../api/types';
-import { Badge, Card, Field, Input, Spinner } from './ui';
+import { Badge, Card, Field, Input, Skeleton } from './ui';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
@@ -42,9 +42,14 @@ export default function PortfolioSummary() {
 
   if (isLoading) {
     return (
-      <Card>
-        <div className="flex justify-center py-6"><Spinner /></div>
-      </Card>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Card key={i} className="!p-3 space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-6 w-28" />
+          </Card>
+        ))}
+      </div>
     );
   }
   if (!data || data.totals.count === 0) return null;
@@ -187,7 +192,7 @@ export default function PortfolioSummary() {
             <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">No manpower loaded yet. Add manpower lines (from the resource pool) in each project's Cost tab.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="prima-rows w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
                     <th className="py-2">Project</th>
@@ -244,7 +249,7 @@ export default function PortfolioSummary() {
             <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">No cost/revenue captured yet. Set them per project under “Edit details”.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="prima-rows w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
                     <th className="py-2">Project</th>
@@ -293,7 +298,7 @@ export default function PortfolioSummary() {
       {/* Per-project EVM table */}
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="prima-rows w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
                 <th className="py-2">Project</th><th>Status</th>

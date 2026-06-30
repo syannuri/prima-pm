@@ -19,6 +19,17 @@
   }
 }
 
+/* Subtle row hover for data tables — add class "prima-rows" to the <table>. */
+.prima-rows tbody tr {
+  transition: background-color 0.12s ease;
+}
+.prima-rows tbody tr:hover {
+  background-color: theme('colors.slate.50');
+}
+html.dark .prima-rows tbody tr:hover {
+  background-color: rgb(30 41 59 / 0.45); /* slate-800 @ 45% */
+}
+
 /* Toast entry animation (reduced-motion guarded). */
 @keyframes prima-toast-in {
   from {

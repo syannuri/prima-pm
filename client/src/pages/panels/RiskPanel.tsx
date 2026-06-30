@@ -67,7 +67,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
       <Card>
         <SectionTitle sub="Identified risks with qualitative & quantitative analysis">Risk Register</SectionTitle>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="prima-rows w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
                 <th className="py-2">Code</th><th>Title</th><th>Kind</th><th>P×I</th><th>Severity</th>
