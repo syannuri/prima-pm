@@ -31,29 +31,29 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-white via-white to-slate-50 dark:from-black dark:via-slate-950 dark:to-black">
-      {/* aurora mesh — coral stays the hero, cool violet + sky accents add depth (light);
-          dark mode keeps its coral-glow drama (dark: variants unchanged) */}
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-indigo-50 dark:from-[#0b1020] dark:via-slate-950 dark:to-black">
+      {/* Midnight Aurora — deep navy/black with coral + violet + indigo glows (dark-first);
+          light gets a softer tinted version of the same mesh */}
       <style>{`
         @keyframes prima-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(22px,-26px)} }
         @keyframes prima-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-26px,20px)} }
         @keyframes prima-drift3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(18px,24px)} }
         @media (prefers-reduced-motion: reduce){ .prima-orb{animation:none!important} }
       `}</style>
-      {/* coral hero — top-left */}
-      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-brand-300/35 blur-3xl dark:bg-brand-700/30" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
-      {/* sky accent — bottom-left */}
-      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/4 h-[34rem] w-[34rem] rounded-full bg-sky-300/40 blur-3xl dark:bg-brand-800/35" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
-      {/* violet accent — top-right, haloes the sign-in card */}
-      <div className="prima-orb pointer-events-none absolute -right-16 top-1/4 h-[26rem] w-[26rem] rounded-full bg-violet-300/40 blur-3xl dark:bg-brand-700/25" style={{ animation: 'prima-drift3 22s ease-in-out infinite' }} />
-      {/* warm coral tie-in — lower-right, gives the card a soft warm halo (light only) */}
-      <div className="prima-orb pointer-events-none absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-brand-200/25 blur-3xl dark:hidden" style={{ animation: 'prima-drift1 26s ease-in-out infinite' }} />
+      {/* coral glow — top-left */}
+      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-brand-300/30 blur-3xl dark:bg-brand-600/30" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
+      {/* indigo glow — bottom-left */}
+      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/4 h-[34rem] w-[34rem] rounded-full bg-indigo-300/30 blur-3xl dark:bg-indigo-700/40" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
+      {/* violet glow — top-right, haloes the sign-in card */}
+      <div className="prima-orb pointer-events-none absolute -right-16 top-1/4 h-[28rem] w-[28rem] rounded-full bg-violet-300/30 blur-3xl dark:bg-violet-700/40" style={{ animation: 'prima-drift3 22s ease-in-out infinite' }} />
+      {/* deep-blue centre glow — adds midnight depth (mostly dark) */}
+      <div className="prima-orb pointer-events-none absolute left-1/3 top-1/3 h-80 w-80 rounded-full bg-sky-200/15 blur-3xl dark:bg-blue-800/30" style={{ animation: 'prima-drift1 26s ease-in-out infinite' }} />
 
-      {/* soft light wash from the top — lowered so the aurora colours read through */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(255,255,255,0.5),transparent)] dark:bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(244,103,95,0.18),transparent)]" />
+      {/* top wash — soft white (light) / violet glow (dark) */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(255,255,255,0.5),transparent)] dark:bg-[radial-gradient(ellipse_70%_55%_at_50%_0%,rgba(139,92,246,0.18),transparent)]" />
 
-      {/* dark-mode drama: glossy top sheen + vignette for depth */}
-      <div className="pointer-events-none absolute inset-0 hidden dark:block bg-[radial-gradient(120%_80%_at_50%_-10%,rgba(255,255,255,0.07),transparent_50%),radial-gradient(110%_90%_at_50%_120%,rgba(0,0,0,0.6),transparent_55%)]" />
+      {/* dark-mode drama: glossy top sheen + bottom vignette for depth */}
+      <div className="pointer-events-none absolute inset-0 hidden dark:block bg-[radial-gradient(120%_80%_at_50%_-10%,rgba(255,255,255,0.06),transparent_50%),radial-gradient(120%_90%_at_50%_120%,rgba(0,0,0,0.7),transparent_55%)]" />
 
       <div className="relative z-10 flex min-h-screen">
         {/* ---------- LEFT · tagline space (large screens) ---------- */}
