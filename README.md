@@ -6,6 +6,10 @@
 Precise gives PMs, PMO and finance one clear, role-aware view of project **health, cost, schedule and risk** —
 turning scattered updates into Earned Value insight (CPI/SPI), resource utilization and an auditable trail.
 
+![Precise — portfolio dashboard (dark mode)](docs/screenshots/dashboard.png)
+
+<p align="center"><em>Portfolio dashboard — KPIs, needs-attention, EVM health & status distribution.</em></p>
+
 > **Naming:** "Precise" is the user-facing brand. Internal identifiers stay `prima*` on purpose
 > (repo dir, DB `prima_pm`, systemd unit, `prima_*` localStorage keys) — do not rename them.
 
