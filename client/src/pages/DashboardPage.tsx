@@ -5,19 +5,13 @@ import { api } from '../api/client';
 import type { Project, ProjectCategory, User } from '../api/types';
 import { Badge, Button, Card, Field, Input, Modal, Select, SectionTitle, Spinner } from '../components/ui';
 import { formatIdr } from '../lib/format';
-import { PROJECT_CATEGORIES } from '../lib/labels';
+import { PROJECT_CATEGORIES, PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import ResourceCapacity from '../components/ResourceCapacity';
 import NeedsAttention from '../components/NeedsAttention';
 
-const STATUS_COLOR: Record<string, string> = {
-  DRAFT: 'slate',
-  CHARTERED: 'indigo',
-  IN_PROGRESS: 'amber',
-  ON_HOLD: 'amber',
-  CLOSED: 'green',
-};
+const STATUS_COLOR = PROJECT_STATUS_BADGE;
 
 export default function DashboardPage() {
   const qc = useQueryClient();

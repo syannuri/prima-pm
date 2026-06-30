@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { useAuth } from '../context/AuthContext';
+import { PROJECT_STATUS_DOT } from '../lib/labels';
 import Logo from './Logo';
 
 function Icon({ path }: { path: string }) {
@@ -19,13 +20,7 @@ const ICONS = {
   settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
 };
 
-const STATUS_DOT: Record<string, string> = {
-  DRAFT: 'bg-slate-500',
-  CHARTERED: 'bg-brand-400',
-  IN_PROGRESS: 'bg-amber-400',
-  ON_HOLD: 'bg-amber-400',
-  CLOSED: 'bg-green-400',
-};
+const STATUS_DOT = PROJECT_STATUS_DOT;
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
 const linkIdle = 'text-slate-300 hover:bg-slate-800 hover:text-white';

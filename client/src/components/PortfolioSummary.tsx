@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import type { PortfolioSummary as Summary } from '../api/types';
 import { Badge, Card, Field, Input, Spinner } from './ui';
 import { formatDateInput, formatIdr, formatNum } from '../lib/format';
+import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
 import PieChart, { type Slice } from './PieChart';
 
@@ -298,7 +299,7 @@ export default function PortfolioSummary() {
                     </Link>
                     {p.clientName && <div className="text-xs text-slate-400 dark:text-slate-500">Client: {p.clientName}</div>}
                   </td>
-                  <td><Badge color="slate">{p.status}</Badge></td>
+                  <td><Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge></td>
                   <td className="text-right">{formatIdr(p.bac)}</td>
                   <td className="text-right">{formatIdr(p.ev)}</td>
                   <td className="text-right">{formatIdr(p.ac)}</td>
@@ -346,10 +347,12 @@ export default function PortfolioSummary() {
 function Kpi({ label, value, strong, warn }: { label: string; value: string; strong?: boolean; warn?: boolean }) {
   // Uniform size for every KPI so the longest currency value (Total BAC) can't overflow
   // its narrow card. tabular-nums keeps digits aligned; break-words is overflow insurance.
-  const tone = strong
-    ? 'font-bold text-brand-700 dark:text-brand-400'
-    : warn
-      ? 'font-semibold text-red-600 dark:text-red-400'
+  // `strong` (e.g. Total BAC) is a neutral figure — emphasised by weight, not by an
+  // alarm colour. Red is reserved for `warn` (genuine attention) only.
+  const tone = warn
+    ? 'font-semibold text-red-600 dark:text-red-400'
+    : strong
+      ? 'font-bold text-slate-900 dark:text-white'
       : 'font-semibold text-slate-800 dark:text-slate-100';
   return (
     <Card className="!p-3">

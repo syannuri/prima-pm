@@ -138,7 +138,7 @@ function Stat({ label, value, hint, strong }: { label: string; value: string; hi
   return (
     <Card className="!p-3">
       <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-1 ${strong ? 'text-base font-bold text-brand-700' : 'text-sm font-semibold text-slate-800 dark:text-slate-100'}`}>
+      <div className={`mt-1 ${strong ? 'text-base font-bold text-slate-900 dark:text-white' : 'text-sm font-semibold text-slate-800 dark:text-slate-100'}`}>
         {value}
       </div>
       {hint && <div className="text-[10px] text-slate-400 dark:text-slate-500">{hint}</div>}

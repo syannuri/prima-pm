@@ -7,7 +7,7 @@ import { Badge, Button, Card, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
 import { formatIdr } from '../lib/format';
-import { categoryLabel } from '../lib/labels';
+import { categoryLabel, PROJECT_STATUS_BADGE } from '../lib/labels';
 import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
 import RiskPanel from './panels/RiskPanel';
@@ -73,7 +73,7 @@ export default function ProjectPage() {
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <span className="font-mono text-sm text-slate-400 dark:text-slate-500">{project.code}</span>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{project.name}</h1>
-          <Badge color={chartered ? 'indigo' : 'slate'}>{project.status}</Badge>
+          <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'}>{project.status}</Badge>
           <div className="ml-auto flex flex-wrap gap-2">
             <EditProjectModal project={project} />
             {chartered && (

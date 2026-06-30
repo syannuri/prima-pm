@@ -69,7 +69,10 @@ export function Badge({ children, color = 'slate' }: { children: ReactNode; colo
     green: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
     amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     red: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    indigo: 'bg-brand-100 text-brand-700 dark:bg-brand-600/25 dark:text-brand-100',
+    sky: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+    indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+    // Brand coral — reserved for positive/brand states (e.g. a closed project).
+    coral: 'bg-brand-100 text-brand-700 dark:bg-brand-600/25 dark:text-brand-100',
   };
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${map[color] ?? map.slate}`}>{children}</span>;
 }
