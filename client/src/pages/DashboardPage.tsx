@@ -2,10 +2,17 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { Project, ProjectCategory, User } from '../api/types';
+import type { Project, ProjectCategory, PortfolioSummary as Summary, User } from '../api/types';
 import { Badge, Button, Card, Field, Input, Modal, Select, SectionTitle, Spinner } from '../components/ui';
-import { formatIdr } from '../lib/format';
-import { PROJECT_CATEGORIES, PROJECT_STATUS_BADGE } from '../lib/labels';
+import { formatIdr, formatIdrShort } from '../lib/format';
+import { PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
+
+// Health → calm pill (label + Badge colour). Shown on a card only when meaningful.
+const HEALTH_PILL: Record<string, [string, string]> = {
+  GREEN: ['green', 'On track'],
+  AMBER: ['amber', 'At risk'],
+  RED: ['red', 'Behind'],
+};
 import { useAuth } from '../context/AuthContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import ResourceCapacity from '../components/ResourceCapacity';
@@ -31,6 +38,13 @@ export default function DashboardPage() {
     queryKey: ['projects'],
     queryFn: () => api.get<{ projects: Project[] }>('/projects'),
   });
+  // Card view enriches each project with % complete + health from the portfolio roll-up.
+  const cardsMeta = useQuery({
+    queryKey: ['portfolio', 'cards'],
+    queryFn: () => api.get<Summary>('/portfolio/summary'),
+    enabled: view === 'cards',
+  });
+  const metaById = new Map((cardsMeta.data?.projects ?? []).map((r) => [r.id, r]));
   // PMO assigns the project to a PM at creation.
   const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory'), enabled: showForm });
 
@@ -155,32 +169,57 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data.projects.map((p) => (
-            <Link key={p.id} to={`/projects/${p.id}`}>
-              <Card className="h-full transition hover:border-brand-300 hover:shadow-md">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-mono text-slate-400 dark:text-slate-500">{p.code}</span>
-                  <Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge>
-                </div>
-                <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">{p.name}</h3>
-                <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                  {p.clientName ? `Client: ${p.clientName}` : (p.sponsor ?? 'No client')}
-                </p>
-                <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">PM: {p.pm?.name ?? '—'}</span>
-                  <span className="font-medium text-slate-700 dark:text-slate-200">
-                    {p.costBaseline ? formatIdr(p.costBaseline.budgetAtCompletion) : '—'}
-                  </span>
-                </div>
-                {!!p.changeCount && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
-                    <span>🕓</span>
-                    <span><span className="font-medium text-slate-600 dark:text-slate-300">{p.changeCount}</span> changes</span>
+          {data.projects.map((p) => {
+            const meta = metaById.get(p.id);
+            const pct = meta ? Math.round(Math.min(1, Math.max(0, meta.scheduleProgress)) * 100) : null;
+            const pill = meta && HEALTH_PILL[meta.health];
+            const bacFull = p.costBaseline ? formatIdr(p.costBaseline.budgetAtCompletion) : undefined;
+            return (
+              <Link key={p.id} to={`/projects/${p.id}`}>
+                <Card className="relative h-full overflow-hidden transition duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg dark:hover:border-brand-700">
+                  {/* status accent bar (calm palette) */}
+                  <span className={`absolute inset-x-0 top-0 h-1 ${PROJECT_STATUS_DOT[p.status] ?? 'bg-slate-400'}`} />
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>
+                    <Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge>
                   </div>
-                )}
-              </Card>
-            </Link>
-          ))}
+                  <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">{p.name}</h3>
+                  <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                    {p.clientName ? `Client: ${p.clientName}` : (p.sponsor ?? 'No client')}
+                  </p>
+
+                  {/* progress + health */}
+                  {pct != null && (
+                    <div className="mb-3">
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                          Progress
+                          {pill && <Badge color={pill[0]}>{pill[1]}</Badge>}
+                        </span>
+                        <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div className="h-full rounded-full bg-brand-500 transition-[width] duration-500" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 text-sm">
+                    <span className="truncate text-slate-500 dark:text-slate-400">PM: {p.pm?.name ?? '—'}</span>
+                    <span title={bacFull} className="shrink-0 font-medium text-slate-700 dark:text-slate-200">
+                      {p.costBaseline ? formatIdrShort(p.costBaseline.budgetAtCompletion) : '—'}
+                    </span>
+                  </div>
+                  {!!p.changeCount && (
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+                      <span>🕓</span>
+                      <span><span className="font-medium text-slate-600 dark:text-slate-300">{p.changeCount}</span> changes</span>
+                    </div>
+                  )}
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       ))}
     </div>

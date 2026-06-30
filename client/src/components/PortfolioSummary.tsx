@@ -4,12 +4,24 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary } from '../api/types';
 import { Badge, Card, Field, Input, Spinner } from './ui';
-import { formatDateInput, formatIdr, formatNum } from '../lib/format';
+import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
 import PieChart, { type Slice } from './PieChart';
 
 const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#f4675f' };
+
+// Mono line-icons (feather-style) for the KPI cards — purely for scannability.
+const KPI_ICON = {
+  projects: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+  bac: 'M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16v-5M18 12a2 2 0 0 0 0 4h4v-4z',
+  ev: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6',
+  ac: 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
+  cpi: 'M22 12h-4l-3 9L9 3l-3 9H2',
+  spi: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+  percent: 'M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z',
+  schedule: 'M3 4h18v18H3zM3 10h18M8 2v4M16 2v4',
+};
 
 const HEALTH_COLOR: Record<string, string> = { GREEN: 'green', AMBER: 'amber', RED: 'red', NO_DATA: 'slate' };
 // Human-friendly labels instead of the raw enum (GREEN/NO_DATA/…).
@@ -95,17 +107,18 @@ export default function PortfolioSummary() {
 
       {/* KPI cards — wider cards (4 cols) so full IDR values fit on one line. */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        <Kpi label="Projects" value={String(t.count)} />
-        <Kpi label="Total BAC" value={formatIdr(t.bac)} strong />
-        <Kpi label="Earned Value" value={formatIdr(t.ev)} />
-        <Kpi label="Actual Cost" value={formatIdr(t.ac)} />
-        <Kpi label={showPies ? 'Portfolio CPI' : 'CPI'} value={t.cpi ? formatNum(t.cpi, 2) : '—'} warn={t.cpi > 0 && t.cpi < 1} />
-        <Kpi label={showPies ? 'Portfolio SPI' : 'SPI'} value={t.spi ? formatNum(t.spi, 2) : '—'} warn={spiBehind} />
-        <Kpi label="% Complete" value={`${formatNum(t.scheduleProgress * 100, 1)}%`} />
+        <Kpi label="Projects" value={String(t.count)} icon={KPI_ICON.projects} />
+        <Kpi label="Total BAC" value={formatIdrShort(t.bac)} title={formatIdr(t.bac)} strong icon={KPI_ICON.bac} />
+        <Kpi label="Earned Value" value={formatIdrShort(t.ev)} title={formatIdr(t.ev)} icon={KPI_ICON.ev} />
+        <Kpi label="Actual Cost" value={formatIdrShort(t.ac)} title={formatIdr(t.ac)} icon={KPI_ICON.ac} />
+        <Kpi label={showPies ? 'Portfolio CPI' : 'CPI'} value={t.cpi ? formatNum(t.cpi, 2) : '—'} warn={t.cpi > 0 && t.cpi < 1} icon={KPI_ICON.cpi} />
+        <Kpi label={showPies ? 'Portfolio SPI' : 'SPI'} value={t.spi ? formatNum(t.spi, 2) : '—'} warn={spiBehind} icon={KPI_ICON.spi} />
+        <Kpi label="% Complete" value={`${formatNum(t.scheduleProgress * 100, 1)}%`} icon={KPI_ICON.percent} />
         <Kpi
           label="Schedule slip"
           value={t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule'}
           warn={t.slippedCount > 0}
+          icon={KPI_ICON.schedule}
         />
       </div>
 
@@ -344,11 +357,10 @@ export default function PortfolioSummary() {
   );
 }
 
-function Kpi({ label, value, strong, warn }: { label: string; value: string; strong?: boolean; warn?: boolean }) {
-  // Uniform size for every KPI so the longest currency value (Total BAC) can't overflow
-  // its narrow card. tabular-nums keeps digits aligned; break-words is overflow insurance.
-  // `strong` (e.g. Total BAC) is a neutral figure — emphasised by weight, not by an
-  // alarm colour. Red is reserved for `warn` (genuine attention) only.
+function Kpi({ label, value, strong, warn, icon, title }: { label: string; value: string; strong?: boolean; warn?: boolean; icon?: string; title?: string }) {
+  // Uniform size for every KPI so the longest currency value can't overflow its narrow
+  // card. tabular-nums keeps digits aligned. `strong` (e.g. Total BAC) is a neutral
+  // figure — emphasised by weight, not an alarm colour. Red is reserved for `warn` only.
   const tone = warn
     ? 'font-semibold text-red-600 dark:text-red-400'
     : strong
@@ -356,8 +368,15 @@ function Kpi({ label, value, strong, warn }: { label: string; value: string; str
       : 'font-semibold text-slate-800 dark:text-slate-100';
   return (
     <Card className="!p-3">
-      <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-1 text-lg leading-tight tabular-nums ${tone}`}>{value}</div>
+      <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+        {icon && (
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d={icon} />
+          </svg>
+        )}
+        <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
+      </div>
+      <div title={title} className={`mt-1 text-lg leading-tight tabular-nums ${tone}`}>{value}</div>
     </Card>
   );
 }
