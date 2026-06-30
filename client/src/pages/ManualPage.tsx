@@ -1,175 +1,333 @@
 import { Badge, Card } from '../components/ui';
+import { useLang, type Lang } from '../context/LanguageContext';
 
-// In-app user manual (Bahasa Indonesia). Static content — references the English UI labels.
+// Bilingual in-app user manual (ID/EN). Content is data-driven so both languages
+// share one render tree. Follows the global language (Settings / browser) and has
+// an inline ID/EN switch. References the English UI labels in either language.
 
-const TOC: { id: string; label: string }[] = [
-  { id: 'mulai', label: 'Mulai cepat' },
-  { id: 'konsep', label: 'Konsep penting (EVM)' },
-  { id: 'peran', label: 'Peran & hak akses' },
-  { id: 'alur', label: 'Alur kerja proyek' },
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'charter', label: 'Charter' },
-  { id: 'schedule', label: 'WBS & Schedule' },
-  { id: 'cost', label: 'Cost & EVM' },
-  { id: 'risk', label: 'Risk' },
-  { id: 'change', label: 'Change Request' },
-  { id: 'audit', label: 'Audit' },
-  { id: 'lainnya', label: 'Resource, Export & lainnya' },
-  { id: 'settings', label: 'Settings' },
-  { id: 'faq', label: 'FAQ' },
-];
+type Block =
+  | { type: 'p'; text: string }
+  | { type: 'steps'; items: string[] }
+  | { type: 'bullets'; items: string[] }
+  | { type: 'roles'; rows: { role: string; color: string; desc: string }[] }
+  | { type: 'faq'; rows: { q: string; a: string }[] };
 
-function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+type Sec = { id: string; nav: string; heading: string; blocks: Block[] };
+type Doc = { title: string; intro: string; switchLabel: string; sections: Sec[] };
+
+const ROLE_COLOR: Record<string, string> = {
+  ADMIN: 'coral', PMO: 'indigo', PROJECT_MANAGER: 'sky', FINANCE: 'amber', RISK_OFFICER: 'amber', TEAM_MEMBER: 'slate', VIEWER: 'slate',
+};
+
+// Bold the "Term — definition" lead (split on em dash) for a consistent glossary look.
+function Lead({ text }: { text: string }) {
+  const i = text.indexOf(' — ');
+  if (i === -1) return <>{text}</>;
   return (
-    <Card className="scroll-mt-4">
-      <h2 id={id} className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
-      <div className="space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{children}</div>
-    </Card>
+    <>
+      <span className="font-medium text-slate-800 dark:text-slate-100">{text.slice(0, i)}</span>
+      {text.slice(i)}
+    </>
   );
 }
 
-const Term = ({ children }: { children: React.ReactNode }) => (
-  <span className="font-medium text-slate-800 dark:text-slate-100">{children}</span>
-);
+const DOC: Record<Lang, Doc> = {
+  id: {
+    title: 'Manual Pengguna',
+    intro: 'Panduan memakai Precise — aplikasi manajemen proyek end-to-end. Label menu di aplikasi memakai bahasa Inggris; panduan ini menjelaskannya dalam Bahasa Indonesia.',
+    switchLabel: 'Bahasa',
+    sections: [
+      { id: 'mulai', nav: 'Mulai cepat', heading: '🚀 Mulai cepat', blocks: [
+        { type: 'p', text: 'Precise membantu Anda merencanakan & memantau proyek dari awal sampai selesai: Charter → WBS/Jadwal → Biaya → Risiko → Perubahan, dengan analisis kinerja Earned Value (EVM).' },
+        { type: 'steps', items: [
+          'Masuk dengan akun Anda. Tampilan default dark mode (bisa diganti di Settings).',
+          'Dari Dashboard, lihat ringkasan portfolio atau buka satu proyek dari sidebar kiri.',
+          'Proyek baru dibuat oleh Admin/PMO lewat tombol “+ New Project”.',
+          'Di dalam proyek, kerjakan tiap tab berurutan: Charter → Schedule → Cost → Risk.',
+        ] },
+      ] },
+      { id: 'konsep', nav: 'Konsep penting (EVM)', heading: '📐 Konsep penting (EVM)', blocks: [
+        { type: 'p', text: 'Beberapa istilah inti yang dipakai di seluruh aplikasi:' },
+        { type: 'bullets', items: [
+          'BAC (PMB) — Budget at Completion = biaya langsung + tak langsung + cadangan kontingensi. Tidak termasuk management reserve (ditampilkan terpisah sebagai “Total Budget”).',
+          'EV (Earned Value) — nilai pekerjaan yang sudah selesai = % progress × anggaran. Digerakkan oleh progress, bukan pengeluaran.',
+          'AC (Actual Cost) — uang yang benar-benar dikeluarkan. Diinput manual di tab Cost.',
+          'PV (Planned Value) — nilai pekerjaan yang seharusnya selesai pada tanggal status, mengacu baseline jadwal.',
+          'CPI — EV ÷ AC. > 1 hemat, < 1 boros. Jika AC = 0, CPI tampil “—”.',
+          'SPI — EV ÷ PV. > 1 lebih cepat dari jadwal, < 1 terlambat.',
+          'Status date — tanggal acuan perhitungan EVM (diubah di Dashboard). Tanggal sebelum proyek mulai menghasilkan “No data”.',
+        ] },
+      ] },
+      { id: 'peran', nav: 'Peran & hak akses', heading: '👥 Peran & hak akses (RBAC)', blocks: [
+        { type: 'p', text: 'Apa yang bisa Anda lihat/ubah tergantung peran:' },
+        { type: 'roles', rows: [
+          { role: 'ADMIN', color: ROLE_COLOR.ADMIN, desc: 'Akses penuh + kelola pengguna.' },
+          { role: 'PMO', color: ROLE_COLOR.PMO, desc: 'Lihat semua proyek, buat & tetapkan PM, setujui Change Request.' },
+          { role: 'PROJECT_MANAGER', color: ROLE_COLOR.PROJECT_MANAGER, desc: 'Kelola proyek yang ditugaskan (Charter, WBS, Cost, Risk).' },
+          { role: 'FINANCE', color: ROLE_COLOR.FINANCE, desc: 'Lihat & kelola biaya lintas proyek; audit domain biaya.' },
+          { role: 'RISK_OFFICER', color: ROLE_COLOR.RISK_OFFICER, desc: 'Lihat & kelola risiko; audit domain risiko.' },
+          { role: 'TEAM_MEMBER', color: ROLE_COLOR.TEAM_MEMBER, desc: 'Anggota tim / PIC tugas.' },
+          { role: 'VIEWER', color: ROLE_COLOR.VIEWER, desc: 'Hanya melihat.' },
+        ] },
+      ] },
+      { id: 'alur', nav: 'Alur kerja proyek', heading: '🔄 Alur kerja proyek (end-to-end)', blocks: [
+        { type: 'steps', items: [
+          'Charter — isi piagam proyek, lalu Commit untuk mengunci baseline & membuka modul lain.',
+          'Schedule/WBS — susun rincian pekerjaan, atur tanggal & progress, lalu Set Baseline.',
+          'Cost — masukkan biaya langsung/tak langsung & rencana manpower; catat Actual Cost berkala.',
+          'Risk — daftarkan risiko; EMV otomatis mengisi cadangan kontingensi.',
+          'Saat ada perubahan setelah commit → ajukan Change Request untuk disetujui PMO/Admin.',
+          'Pantau kesehatan di Dashboard & ekspor laporan PDF/Excel kapan saja.',
+        ] },
+      ] },
+      { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
+        { type: 'p', text: 'Tiga tampilan lewat tombol di kanan atas:' },
+        { type: 'bullets', items: [
+          'Portfolio EVM — KPI (Total BAC, EV, AC, CPI, SPI, % Complete), panel “Needs attention”, kesehatan jadwal, & diagram status.',
+          'Utilization — heatmap beban vs kapasitas sumber daya; sel merah = over-alokasi.',
+          'Project Cards — kartu ringkas tiap proyek (progress, status, BAC).',
+        ] },
+        { type: 'p', text: 'Atur Status date ke tanggal yang relevan agar CPI/SPI terisi. Warna merah hanya untuk hal yang benar-benar perlu perhatian.' },
+      ] },
+      { id: 'charter', nav: 'Charter', heading: '📜 Charter', blocks: [
+        { type: 'p', text: 'Piagam proyek: deskripsi, tujuan, lingkup, kategori, PM, jadwal & biaya tingkat-tinggi. Klik Commit Charter untuk mengunci baseline — setelah ini perubahan harus lewat Change Request. Dokumen pendukung bisa dilampirkan.' },
+      ] },
+      { id: 'schedule', nav: 'WBS & Schedule', heading: '🗓️ WBS & Schedule', blocks: [
+        { type: 'bullets', items: [
+          'WBS — struktur rincian kerja (tugas & subtugas), nomor outline, %-progress, PIC, kamus WBS (deliverable, kriteria).',
+          'Gantt interaktif — geser bar untuk menjadwal ulang, tarik untuk membuat dependensi.',
+          'Set Baseline — simpan tanggal rencana sebagai acuan; kolom “Var” menampilkan selisih jadwal.',
+          'Klik lingkaran centang untuk menandai tugas selesai (otomatis mengisi tanggal aktual).',
+        ] },
+      ] },
+      { id: 'cost', nav: 'Cost & EVM', heading: '💰 Cost & EVM', blocks: [
+        { type: 'bullets', items: [
+          'Direct Cost — material (qty × harga) & manpower (rate × mandays); manpower bisa ditautkan ke resource & tugas.',
+          'Indirect Cost — transport, akomodasi, dll.',
+          'Actual Cost — catat pengeluaran nyata (tanggal + jumlah). Ini yang memunculkan CPI.',
+          'Strip EVM — menampilkan EV / AC / CV / CPI. Ingat: progress menggerakkan EV, AC diinput manual.',
+        ] },
+      ] },
+      { id: 'risk', nav: 'Risk', heading: '⚠️ Risk', blocks: [
+        { type: 'p', text: 'Daftarkan risiko dengan probabilitas & dampak. Aplikasi menghitung skor (P×I), menampilkan heatmap 5×5, dan EMV (Expected Monetary Value). Risiko terbuka yang ditandai “include in reserve” menambah cadangan kontingensi (dan ikut ke BAC).' },
+      ] },
+      { id: 'change', nav: 'Change Request', heading: '🔁 Change Request', blocks: [
+        { type: 'p', text: 'Setelah charter di-commit, perubahan diajukan sebagai Change Request: pilih magnitudo (MINOR/MAJOR), area dampak (biaya/jadwal/dll.), & apakah chargeable. PMO/Admin menyetujui atau menolak; persetujuan membuka charter untuk revisi & menaikkan versi.' },
+      ] },
+      { id: 'audit', nav: 'Audit', heading: '🧾 Audit', blocks: [
+        { type: 'p', text: 'Jejak tak-terubah (immutable) atas semua perubahan: siapa, apa, kapan. Bisa difilter per entitas/aksi. Cakupannya menyesuaikan peran (mis. Finance hanya melihat domain biaya).' },
+      ] },
+      { id: 'lainnya', nav: 'Resource, Export & lainnya', heading: '🧰 Resource, Export, Notifikasi & Lampiran', blocks: [
+        { type: 'bullets', items: [
+          'Resource Pool (Admin/PMO/Finance) — master sumber daya & rate card; dipakai pada manpower & tampilan Utilization.',
+          'Export — tombol Excel/PDF di header proyek untuk laporan lengkap.',
+          'Notifikasi — ikon lonceng 🔔 di topbar merangkum peringatan lintas proyek (tugas telat, risiko tinggi, over-budget).',
+          'Lampiran — unggah berkas pada charter atau tiap risiko.',
+        ] },
+      ] },
+      { id: 'settings', nav: 'Settings', heading: '⚙️ Settings', blocks: [
+        { type: 'p', text: 'Buka lewat ikon gear di topbar atau “Settings” di sidebar. Anda bisa mengganti tema (gelap/terang), memilih bahasa, dan mengganti password (min. 10 karakter, ada huruf & angka).' },
+      ] },
+      { id: 'faq', nav: 'FAQ', heading: '❓ FAQ', blocks: [
+        { type: 'faq', rows: [
+          { q: 'Kenapa CPI/SPI kosong (“—” / No data)?', a: 'Status date sebelum proyek mulai, atau Actual Cost masih 0. Pilih tanggal status yang relevan & catat AC.' },
+          { q: 'Kenapa angka tampil ringkas (mis. “Rp 2,07 M”)?', a: 'Untuk ringkas; arahkan kursor (hover) untuk melihat nilai penuh.' },
+          { q: 'Saya tidak bisa membuat proyek / mengubah sesuatu.', a: 'Itu dibatasi peran (RBAC). Hubungi Admin/PMO bila perlu akses.' },
+          { q: 'Ingin ganti password?', a: 'Settings → Change password. Admin juga bisa mereset.' },
+        ] },
+      ] },
+    ],
+  },
+  en: {
+    title: 'User Manual',
+    intro: 'A guide to using Precise — an end-to-end project management app. This manual is in English and refers to the in-app labels directly.',
+    switchLabel: 'Language',
+    sections: [
+      { id: 'mulai', nav: 'Quick start', heading: '🚀 Quick start', blocks: [
+        { type: 'p', text: 'Precise helps you plan & track projects from start to finish: Charter → WBS/Schedule → Cost → Risk → Change, with Earned Value (EVM) performance analysis.' },
+        { type: 'steps', items: [
+          'Sign in with your account. The default theme is dark mode (changeable in Settings).',
+          'From the Dashboard, review the portfolio or open a project from the left sidebar.',
+          'New projects are created by Admin/PMO via the “+ New Project” button.',
+          'Inside a project, work each tab in order: Charter → Schedule → Cost → Risk.',
+        ] },
+      ] },
+      { id: 'konsep', nav: 'Key concepts (EVM)', heading: '📐 Key concepts (EVM)', blocks: [
+        { type: 'p', text: 'Core terms used throughout the app:' },
+        { type: 'bullets', items: [
+          'BAC (PMB) — Budget at Completion = direct + indirect + contingency reserve. Excludes management reserve (shown separately as “Total Budget”).',
+          'EV (Earned Value) — value of work completed = % progress × budget. Driven by progress, not spending.',
+          'AC (Actual Cost) — money actually spent. Entered manually on the Cost tab.',
+          'PV (Planned Value) — value of work that should be done by the status date, against the schedule baseline.',
+          'CPI — EV ÷ AC. > 1 under budget, < 1 over budget. With AC = 0, CPI shows “—”.',
+          'SPI — EV ÷ PV. > 1 ahead of schedule, < 1 behind.',
+          'Status date — the reference date for EVM (set on the Dashboard). A date before the project starts yields “No data”.',
+        ] },
+      ] },
+      { id: 'peran', nav: 'Roles & access', heading: '👥 Roles & access (RBAC)', blocks: [
+        { type: 'p', text: 'What you can see/change depends on your role:' },
+        { type: 'roles', rows: [
+          { role: 'ADMIN', color: ROLE_COLOR.ADMIN, desc: 'Full access + user management.' },
+          { role: 'PMO', color: ROLE_COLOR.PMO, desc: 'See all projects, create & assign PMs, approve Change Requests.' },
+          { role: 'PROJECT_MANAGER', color: ROLE_COLOR.PROJECT_MANAGER, desc: 'Manage assigned projects (Charter, WBS, Cost, Risk).' },
+          { role: 'FINANCE', color: ROLE_COLOR.FINANCE, desc: 'View & manage costs across projects; cost-domain audit.' },
+          { role: 'RISK_OFFICER', color: ROLE_COLOR.RISK_OFFICER, desc: 'View & manage risks; risk-domain audit.' },
+          { role: 'TEAM_MEMBER', color: ROLE_COLOR.TEAM_MEMBER, desc: 'Team member / task PIC.' },
+          { role: 'VIEWER', color: ROLE_COLOR.VIEWER, desc: 'Read-only.' },
+        ] },
+      ] },
+      { id: 'alur', nav: 'Project workflow', heading: '🔄 Project workflow (end-to-end)', blocks: [
+        { type: 'steps', items: [
+          'Charter — fill in the project charter, then Commit to lock the baseline & unlock the other modules.',
+          'Schedule/WBS — build the work breakdown, set dates & progress, then Set Baseline.',
+          'Cost — enter direct/indirect costs & planned manpower; record Actual Cost over time.',
+          'Risk — register risks; EMV auto-fills the contingency reserve.',
+          'For changes after commit → raise a Change Request for PMO/Admin approval.',
+          'Monitor health on the Dashboard & export PDF/Excel reports anytime.',
+        ] },
+      ] },
+      { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
+        { type: 'p', text: 'Three views via the buttons at the top right:' },
+        { type: 'bullets', items: [
+          'Portfolio EVM — KPIs (Total BAC, EV, AC, CPI, SPI, % Complete), the “Needs attention” panel, schedule health & status charts.',
+          'Utilization — resource load vs capacity heatmap; red cells = over-allocation.',
+          'Project Cards — a compact card per project (progress, status, BAC).',
+        ] },
+        { type: 'p', text: 'Set the Status date to a relevant date so CPI/SPI populate. Red is reserved for things that genuinely need attention.' },
+      ] },
+      { id: 'charter', nav: 'Charter', heading: '📜 Charter', blocks: [
+        { type: 'p', text: 'The project charter: description, goals, scope, category, PM, high-level schedule & cost. Click Commit Charter to lock the baseline — after this, changes must go through a Change Request. Supporting documents can be attached.' },
+      ] },
+      { id: 'schedule', nav: 'WBS & Schedule', heading: '🗓️ WBS & Schedule', blocks: [
+        { type: 'bullets', items: [
+          'WBS — the work breakdown (tasks & subtasks), outline numbering, % progress, PIC, WBS dictionary (deliverable, criteria).',
+          'Interactive Gantt — drag a bar to reschedule, drag to create dependencies.',
+          'Set Baseline — capture the plan dates as a reference; the “Var” column shows schedule variance.',
+          'Click the check circle to mark a task complete (auto-stamps actual dates).',
+        ] },
+      ] },
+      { id: 'cost', nav: 'Cost & EVM', heading: '💰 Cost & EVM', blocks: [
+        { type: 'bullets', items: [
+          'Direct Cost — material (qty × price) & manpower (rate × mandays); manpower can link to a resource & task.',
+          'Indirect Cost — transport, accommodation, etc.',
+          'Actual Cost — record real spend (date + amount). This is what produces CPI.',
+          'EVM strip — shows EV / AC / CV / CPI. Remember: progress drives EV, AC is entered manually.',
+        ] },
+      ] },
+      { id: 'risk', nav: 'Risk', heading: '⚠️ Risk', blocks: [
+        { type: 'p', text: 'Register risks with probability & impact. The app computes the score (P×I), shows a 5×5 heatmap, and EMV (Expected Monetary Value). Open risks flagged “include in reserve” add to the contingency reserve (and into BAC).' },
+      ] },
+      { id: 'change', nav: 'Change Request', heading: '🔁 Change Request', blocks: [
+        { type: 'p', text: 'After the charter is committed, changes are raised as a Change Request: pick magnitude (MINOR/MAJOR), impact areas (cost/schedule/etc.), and whether it is chargeable. PMO/Admin approve or reject; approval unlocks the charter for revision & bumps the version.' },
+      ] },
+      { id: 'audit', nav: 'Audit', heading: '🧾 Audit', blocks: [
+        { type: 'p', text: 'An immutable trail of every change: who, what, when. Filterable by entity/action. Scope adapts to your role (e.g. Finance only sees the cost domain).' },
+      ] },
+      { id: 'lainnya', nav: 'Resource, Export & more', heading: '🧰 Resource, Export, Notifications & Attachments', blocks: [
+        { type: 'bullets', items: [
+          'Resource Pool (Admin/PMO/Finance) — the master resource list & rate cards; used for manpower & the Utilization view.',
+          'Export — Excel/PDF buttons in the project header for a full report.',
+          'Notifications — the 🔔 bell in the topbar summarises portfolio alerts (overdue tasks, high risks, over-budget).',
+          'Attachments — upload files on the charter or on each risk.',
+        ] },
+      ] },
+      { id: 'settings', nav: 'Settings', heading: '⚙️ Settings', blocks: [
+        { type: 'p', text: 'Open it via the gear icon in the topbar or “Settings” in the sidebar. You can switch theme (dark/light), choose the language, and change your password (min. 10 chars with a letter & number).' },
+      ] },
+      { id: 'faq', nav: 'FAQ', heading: '❓ FAQ', blocks: [
+        { type: 'faq', rows: [
+          { q: 'Why are CPI/SPI empty (“—” / No data)?', a: 'The status date is before the project starts, or Actual Cost is still 0. Pick a relevant status date & record AC.' },
+          { q: 'Why are numbers abbreviated (e.g. “Rp 2,07 M”)?', a: 'For compactness; hover to see the full value.' },
+          { q: 'I can’t create a project / change something.', a: 'That is limited by your role (RBAC). Contact an Admin/PMO if you need access.' },
+          { q: 'Want to change your password?', a: 'Settings → Change password. An Admin can also reset it.' },
+        ] },
+      ] },
+    ],
+  },
+};
+
+function renderBlock(b: Block, i: number) {
+  switch (b.type) {
+    case 'p':
+      return <p key={i}>{b.text}</p>;
+    case 'steps':
+      return <ol key={i} className="ml-5 list-decimal space-y-1.5">{b.items.map((t, j) => <li key={j}><Lead text={t} /></li>)}</ol>;
+    case 'bullets':
+      return <ul key={i} className="ml-5 list-disc space-y-1.5">{b.items.map((t, j) => <li key={j}><Lead text={t} /></li>)}</ul>;
+    case 'roles':
+      return (
+        <div key={i} className="overflow-x-auto">
+          <table className="prima-rows w-full text-sm">
+            <tbody>
+              {b.rows.map((r, j) => (
+                <tr key={j} className={j < b.rows.length - 1 ? 'border-b border-slate-100 dark:border-slate-800' : ''}>
+                  <td className="py-2 pr-3 align-top"><Badge color={r.color}>{r.role}</Badge></td>
+                  <td className="py-2">{r.desc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    case 'faq':
+      return (
+        <div key={i} className="space-y-2">
+          {b.rows.map((r, j) => (
+            <p key={j}><span className="font-medium text-slate-800 dark:text-slate-100">{r.q}</span> {r.a}</p>
+          ))}
+        </div>
+      );
+  }
+}
 
 export default function ManualPage() {
+  const { lang, setLang } = useLang();
+  const doc = DOC[lang];
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Manual Pengguna</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Panduan memakai <strong>Precise</strong> — aplikasi manajemen proyek end-to-end. Label menu di aplikasi memakai bahasa Inggris; panduan ini menjelaskannya dalam Bahasa Indonesia.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{doc.title}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">{doc.intro}</p>
+        </div>
+        {/* Inline language switch (also changes the app-wide greeting language). */}
+        <div className="inline-flex shrink-0 rounded-lg bg-slate-200/70 p-0.5 dark:bg-slate-700/60" aria-label={doc.switchLabel}>
+          {(['id', 'en'] as Lang[]).map((l) => (
+            <button
+              key={l}
+              onClick={() => setLang(l)}
+              aria-pressed={lang === l}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition ${
+                lang === l ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              {l === 'id' ? 'Indonesia' : 'English'}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Daftar isi */}
+      {/* Table of contents */}
       <Card>
         <div className="flex flex-wrap gap-2">
-          {TOC.map((t) => (
-            <a key={t.id} href={`#${t.id}`} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-700 dark:hover:text-brand-300">
-              {t.label}
+          {doc.sections.map((s) => (
+            <a key={s.id} href={`#${s.id}`} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-700 dark:hover:text-brand-300">
+              {s.nav}
             </a>
           ))}
         </div>
       </Card>
 
-      <Section id="mulai" title="🚀 Mulai cepat">
-        <p>Precise membantu Anda merencanakan dan memantau proyek dari awal sampai selesai: <Term>Charter → WBS/Jadwal → Biaya → Risiko → Perubahan</Term>, dengan analisis kinerja <Term>Earned Value (EVM)</Term>.</p>
-        <ol className="ml-5 list-decimal space-y-1">
-          <li>Masuk dengan akun Anda. Tampilan default <Term>dark mode</Term> (bisa diganti di Settings).</li>
-          <li>Dari <Term>Dashboard</Term>, lihat ringkasan portfolio atau buka satu proyek dari sidebar kiri.</li>
-          <li>Proyek baru dibuat oleh <Term>Admin/PMO</Term> lewat tombol <Term>“+ New Project”</Term>.</li>
-          <li>Di dalam proyek, kerjakan tiap tab berurutan: <Term>Charter → Schedule → Cost → Risk</Term>.</li>
-        </ol>
-      </Section>
+      {doc.sections.map((s) => (
+        <Card key={s.id} className="scroll-mt-4">
+          <h2 id={s.id} className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">{s.heading}</h2>
+          <div className="space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            {s.blocks.map(renderBlock)}
+          </div>
+        </Card>
+      ))}
 
-      <Section id="konsep" title="📐 Konsep penting (EVM)">
-        <p>Beberapa istilah inti yang dipakai di seluruh aplikasi:</p>
-        <ul className="ml-5 list-disc space-y-1.5">
-          <li><Term>BAC (PMB)</Term> — Budget at Completion / Performance Measurement Baseline = biaya langsung + tak langsung + cadangan kontingensi. <em>Tidak termasuk</em> management reserve (itu ditampilkan terpisah sebagai “Total Budget”).</li>
-          <li><Term>EV (Earned Value)</Term> — nilai pekerjaan yang sudah diselesaikan = % progress × anggaran. Digerakkan oleh <em>progress</em>, bukan oleh pengeluaran.</li>
-          <li><Term>AC (Actual Cost)</Term> — uang yang benar-benar dikeluarkan. <em>Diinput manual</em> di tab Cost.</li>
-          <li><Term>PV (Planned Value)</Term> — nilai pekerjaan yang seharusnya selesai pada tanggal status, mengacu pada baseline jadwal.</li>
-          <li><Term>CPI</Term> = EV ÷ AC. &gt; 1 hemat, &lt; 1 boros. Jika AC = 0, CPI tampil “—”.</li>
-          <li><Term>SPI</Term> = EV ÷ PV. &gt; 1 lebih cepat dari jadwal, &lt; 1 terlambat.</li>
-          <li><Term>Status date</Term> — tanggal acuan perhitungan EVM (bisa diubah di Dashboard). Tanggal sebelum proyek mulai akan menghasilkan “No data”.</li>
-        </ul>
-      </Section>
-
-      <Section id="peran" title="👥 Peran & hak akses (RBAC)">
-        <p>Apa yang bisa Anda lihat/ubah tergantung peran:</p>
-        <div className="overflow-x-auto">
-          <table className="prima-rows w-full text-sm">
-            <thead><tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500"><th className="py-2">Peran</th><th>Akses utama</th></tr></thead>
-            <tbody>
-              <tr className="border-b border-slate-100 dark:border-slate-800"><td className="py-2"><Badge color="coral">ADMIN</Badge></td><td>Akses penuh + kelola pengguna.</td></tr>
-              <tr className="border-b border-slate-100 dark:border-slate-800"><td className="py-2"><Badge color="indigo">PMO</Badge></td><td>Lihat semua proyek, buat & tetapkan PM, setujui Change Request.</td></tr>
-              <tr className="border-b border-slate-100 dark:border-slate-800"><td className="py-2"><Badge color="sky">PROJECT_MANAGER</Badge></td><td>Kelola proyek yang ditugaskan (Charter, WBS, Cost, Risk).</td></tr>
-              <tr className="border-b border-slate-100 dark:border-slate-800"><td className="py-2"><Badge color="amber">FINANCE</Badge></td><td>Lihat & kelola biaya lintas proyek; audit domain biaya.</td></tr>
-              <tr className="border-b border-slate-100 dark:border-slate-800"><td className="py-2"><Badge color="amber">RISK_OFFICER</Badge></td><td>Lihat & kelola risiko; audit domain risiko.</td></tr>
-              <tr className="border-b border-slate-100 dark:border-slate-800"><td className="py-2"><Badge color="slate">TEAM_MEMBER</Badge></td><td>Anggota tim / PIC tugas.</td></tr>
-              <tr><td className="py-2"><Badge color="slate">VIEWER</Badge></td><td>Hanya melihat.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </Section>
-
-      <Section id="alur" title="🔄 Alur kerja proyek (end-to-end)">
-        <ol className="ml-5 list-decimal space-y-1.5">
-          <li><Term>Charter</Term> — isi piagam proyek, lalu <Term>Commit</Term> untuk mengunci baseline & membuka modul lain.</li>
-          <li><Term>Schedule/WBS</Term> — susun rincian pekerjaan, atur tanggal & progress, lalu <Term>Set Baseline</Term>.</li>
-          <li><Term>Cost</Term> — masukkan biaya langsung/tak langsung & rencana manpower; catat Actual Cost berkala.</li>
-          <li><Term>Risk</Term> — daftarkan risiko; EMV otomatis mengisi cadangan kontingensi.</li>
-          <li>Saat ada perubahan setelah commit → ajukan <Term>Change Request</Term> untuk disetujui PMO/Admin.</li>
-          <li>Pantau kesehatan di <Term>Dashboard</Term> & ekspor laporan PDF/Excel kapan saja.</li>
-        </ol>
-      </Section>
-
-      <Section id="dashboard" title="📊 Dashboard">
-        <p>Tiga tampilan lewat tombol di kanan atas:</p>
-        <ul className="ml-5 list-disc space-y-1">
-          <li><Term>Portfolio EVM</Term> — KPI (Total BAC, EV, AC, CPI, SPI, % Complete), panel <Term>“Needs attention”</Term>, kesehatan jadwal, dan diagram status.</li>
-          <li><Term>Utilization</Term> — heatmap beban vs kapasitas sumber daya; sel merah = over-alokasi.</li>
-          <li><Term>Project Cards</Term> — kartu ringkas tiap proyek (progress, status, BAC).</li>
-        </ul>
-        <p>Atur <Term>Status date</Term> ke tanggal yang relevan agar CPI/SPI terisi. Warna merah hanya untuk hal yang benar-benar perlu perhatian.</p>
-      </Section>
-
-      <Section id="charter" title="📜 Charter">
-        <p>Piagam proyek: deskripsi, tujuan, lingkup, kategori, PM, jadwal & biaya tingkat-tinggi. Klik <Term>Commit Charter</Term> untuk mengunci baseline — setelah ini perubahan harus lewat Change Request. Dokumen pendukung bisa dilampirkan.</p>
-      </Section>
-
-      <Section id="schedule" title="🗓️ WBS & Schedule">
-        <ul className="ml-5 list-disc space-y-1">
-          <li><Term>WBS</Term> — struktur rincian kerja (tugas & subtugas), nomor outline, %-progress, PIC, dan kamus WBS (deliverable, kriteria).</li>
-          <li><Term>Gantt</Term> interaktif — geser bar untuk menjadwal ulang, tarik untuk membuat dependensi.</li>
-          <li><Term>Set Baseline</Term> — simpan tanggal rencana sebagai acuan; kolom “Var” menampilkan selisih jadwal (tracking Gantt).</li>
-          <li>Klik lingkaran centang untuk menandai tugas selesai (auto mengisi tanggal aktual).</li>
-        </ul>
-      </Section>
-
-      <Section id="cost" title="💰 Cost & EVM">
-        <ul className="ml-5 list-disc space-y-1">
-          <li><Term>Direct Cost</Term> — material (qty × harga) dan manpower (rate × mandays); manpower bisa ditautkan ke resource & tugas.</li>
-          <li><Term>Indirect Cost</Term> — transport, akomodasi, dll.</li>
-          <li><Term>Actual Cost</Term> — catat pengeluaran nyata (tanggal + jumlah). Ini yang memunculkan CPI.</li>
-          <li>Strip <Term>EVM</Term> menampilkan EV / AC / CV / CPI. Ingat: progress menggerakkan EV, AC diinput manual.</li>
-        </ul>
-      </Section>
-
-      <Section id="risk" title="⚠️ Risk">
-        <p>Daftarkan risiko dengan probabilitas & dampak. Aplikasi menghitung skor (P×I), menampilkan <Term>heatmap 5×5</Term>, dan <Term>EMV</Term> (Expected Monetary Value). Risiko terbuka yang ditandai “include in reserve” akan menambah cadangan kontingensi (dan ikut ke BAC).</p>
-      </Section>
-
-      <Section id="change" title="🔁 Change Request">
-        <p>Setelah charter di-commit, perubahan diajukan sebagai Change Request: pilih magnitudo (MINOR/MAJOR), area dampak (biaya/jadwal/dll.), dan apakah <em>chargeable</em>. <Term>PMO/Admin</Term> menyetujui atau menolak; persetujuan membuka charter untuk revisi & menaikkan versi.</p>
-      </Section>
-
-      <Section id="audit" title="🧾 Audit">
-        <p>Jejak tak-terubah (immutable) atas semua perubahan: siapa, apa, kapan. Bisa difilter per entitas/aksi. Cakupannya menyesuaikan peran (mis. Finance hanya melihat domain biaya).</p>
-      </Section>
-
-      <Section id="lainnya" title="🧰 Resource, Export, Notifikasi & Lampiran">
-        <ul className="ml-5 list-disc space-y-1">
-          <li><Term>Resource Pool</Term> (Admin/PMO/Finance) — master sumber daya & rate card; dipakai pada manpower dan tampilan Utilization.</li>
-          <li><Term>Export</Term> — tombol Excel/PDF di header proyek untuk laporan lengkap.</li>
-          <li><Term>Notifikasi</Term> — ikon lonceng 🔔 di topbar merangkum peringatan lintas proyek (tugas telat, risiko tinggi, over-budget).</li>
-          <li><Term>Lampiran</Term> — unggah berkas pada charter atau tiap risiko.</li>
-        </ul>
-      </Section>
-
-      <Section id="settings" title="⚙️ Settings">
-        <p>Buka lewat ikon gear di topbar atau “Settings” di sidebar. Anda bisa: mengganti <Term>tema</Term> (gelap/terang), memilih <Term>bahasa</Term> sapaan (otomatis dari browser), dan <Term>mengganti password</Term> (min. 10 karakter, ada huruf & angka).</p>
-      </Section>
-
-      <Section id="faq" title="❓ FAQ">
-        <p><Term>Kenapa CPI/SPI kosong (“—” / No data)?</Term> Karena Status date sebelum proyek mulai, atau Actual Cost masih 0. Pilih tanggal status yang lebih relevan & catat AC.</p>
-        <p><Term>Kenapa angka tampil ringkas (mis. “Rp 2,07 M”)?</Term> Untuk ringkas; arahkan kursor (hover) untuk melihat nilai penuh.</p>
-        <p><Term>Saya tidak bisa membuat proyek / mengubah sesuatu.</Term> Itu dibatasi peran (RBAC). Hubungi Admin/PMO bila perlu akses.</p>
-        <p><Term>Lupa/ingin ganti password?</Term> Settings → Change password. Admin juga bisa mereset.</p>
-      </Section>
-
-      <p className="pb-2 text-center text-xs text-slate-400 dark:text-slate-500">Precise — rencanakan dengan jelas, deliver dengan percaya diri.</p>
+      <p className="pb-2 text-center text-xs text-slate-400 dark:text-slate-500">Precise — plan with clarity, deliver with confidence.</p>
     </div>
   );
 }
