@@ -7,13 +7,15 @@
     <title>Precise</title>
     <script>
       // Apply theme before first paint to avoid a flash of the wrong mode.
+      // Dark is the default: only an explicit 'light' choice opts out.
       (function () {
         try {
-          var t = localStorage.getItem('prima_theme');
-          if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          if (localStorage.getItem('prima_theme') !== 'light') {
             document.documentElement.classList.add('dark');
           }
-        } catch (e) {}
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
       })();
     </script>
   </head>

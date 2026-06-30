@@ -11,10 +11,9 @@ const ThemeContext = createContext<ThemeState | undefined>(undefined);
 
 function initialTheme(): Theme {
   // Mirrors the inline boot script in index.html (which sets the class pre-paint).
+  // Dark is the default: only an explicit 'light' choice opts out.
   if (typeof document !== 'undefined' && document.documentElement.classList.contains('dark')) return 'dark';
-  const stored = localStorage.getItem(KEY);
-  if (stored === 'dark' || stored === 'light') return stored;
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark';
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

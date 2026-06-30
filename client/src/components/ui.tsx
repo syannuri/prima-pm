@@ -78,6 +78,36 @@ export function Spinner() {
   return <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600 dark:border-slate-700 dark:border-t-brand-500" />;
 }
 
+// Accessible on/off switch (role="switch"). Controlled via checked/onChange.
+export function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
+        checked ? 'bg-brand-600' : 'bg-slate-300 dark:bg-slate-700'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+}
+
 // Accessible modal dialog: portalled, role="dialog" + aria-modal, labelled by its
 // title, focus-trapped (Tab cycles inside), Esc to close, restores focus to the
 // trigger on close, and locks body scroll. Mount it conditionally — it renders

@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import ProjectPage from './pages/ProjectPage';
 import AdminUsersPage from './pages/AdminUsersPage';
 import AdminResourcesPage from './pages/AdminResourcesPage';
+import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/projects/:projectId/*" element={<ProjectPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/resources" element={<AdminResourcesPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

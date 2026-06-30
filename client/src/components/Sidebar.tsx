@@ -16,6 +16,7 @@ const ICONS = {
   home: 'M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5',
   users: 'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13 10v-2a4 4 0 0 0-3-3.9M16 3.1A4 4 0 0 1 16 11',
   resources: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m13-1-2 2-1-1m1-4v6',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -93,6 +94,12 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
           </NavLink>
         ))}
       </nav>
+
+      <div className="border-t border-slate-800 px-3 py-2">
+        <NavLink to="/settings" onClick={onNavigate} title="Settings" className={({ isActive }) => cx(isActive)}>
+          <Icon path={ICONS.settings} /> {!collapsed && 'Settings'}
+        </NavLink>
+      </div>
 
       <div className={`flex items-center gap-3 border-t border-slate-800 py-3 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600/80 text-sm font-semibold text-white" title={user?.name}>
