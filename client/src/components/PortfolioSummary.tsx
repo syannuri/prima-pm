@@ -9,6 +9,7 @@ import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
 import PieChart, { type Slice } from './PieChart';
 import ProgressChart from './ProgressChart';
+import DonutChart, { type DonutSlice } from './DonutChart';
 
 const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#f4675f' };
 
@@ -40,6 +41,7 @@ export default function PortfolioSummary() {
   // Who can open a project detail: ADMIN/PMO (any) or PM (their list is owned-only).
   // FINANCE sees the portfolio for oversight but can't drill in, so names aren't links.
   const canOpen = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const isPM = user?.role === 'PROJECT_MANAGER';
   const [statusDate, setStatusDate] = useState(formatDateInput(new Date()));
   const { data, isLoading } = useQuery({
     queryKey: ['portfolio', statusDate],
@@ -83,6 +85,16 @@ export default function PortfolioSummary() {
     { label: 'On Progress', value: onProgress, color: PIE.amber },
     { label: 'Delay', value: delayed, color: PIE.red },
   ];
+
+  // PM/Finance donuts (with hover project lists), grouped by cost-health (CPI) and
+  // schedule-health (SPI). Scoped to the caller's projects by the API already.
+  const groupSlices = (field: 'costHealth' | 'health', labels: Record<string, string>): DonutSlice[] =>
+    (['GREEN', 'AMBER', 'RED', 'NO_DATA'] as const).map((key) => {
+      const items = data.projects.filter((p) => p[field] === key).map((p) => p.name);
+      return { label: labels[key], value: items.length, color: PIE[key === 'GREEN' ? 'green' : key === 'AMBER' ? 'amber' : key === 'RED' ? 'red' : 'slate'], items };
+    });
+  const cpiSlices = groupSlices('costHealth', { GREEN: 'On budget', AMBER: 'At risk', RED: 'Over budget', NO_DATA: 'Not tracked' });
+  const spiSlices = groupSlices('health', { GREEN: 'On track', AMBER: 'At risk', RED: 'Behind', NO_DATA: 'No data' });
 
   // Changes breakdown (PMO dashboard) — most-changed projects first.
   const changeRows = [...data.projects].sort((a, b) => b.changeCount - a.changeCount);
@@ -159,11 +171,19 @@ export default function PortfolioSummary() {
         </div>
       )}
 
-      {/* PM & Finance — CPI distribution + per-project progress */}
+      {/* PM & Finance — CPI (and SPI for PM) for THEIR assigned projects + progress.
+          Donuts hover to reveal which projects fall in each slice. */}
       {showPmCharts && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <PieChart title="Cost performance (by CPI)" data={financialSlices} />
-          <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, progress: p.scheduleProgress }))} />
+          <DonutChart title="Cost performance (by CPI)" slices={cpiSlices} />
+          {isPM ? <DonutChart title="Schedule performance (by SPI)" slices={spiSlices} /> : (
+            <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, progress: p.scheduleProgress }))} />
+          )}
+          {isPM && (
+            <div className="sm:col-span-2">
+              <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, progress: p.scheduleProgress }))} />
+            </div>
+          )}
         </div>
       )}
 
