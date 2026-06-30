@@ -43,9 +43,9 @@ export default function LoginPage() {
       {/* coral hero — top-left */}
       <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-brand-300/35 blur-3xl dark:bg-brand-700/30" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
       {/* sky accent — bottom-left */}
-      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/4 h-[34rem] w-[34rem] rounded-full bg-sky-300/25 blur-3xl dark:bg-brand-800/35" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/4 h-[34rem] w-[34rem] rounded-full bg-sky-300/40 blur-3xl dark:bg-brand-800/35" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
       {/* violet accent — top-right, haloes the sign-in card */}
-      <div className="prima-orb pointer-events-none absolute -right-16 top-1/4 h-[26rem] w-[26rem] rounded-full bg-violet-300/25 blur-3xl dark:bg-brand-700/25" style={{ animation: 'prima-drift3 22s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute -right-16 top-1/4 h-[26rem] w-[26rem] rounded-full bg-violet-300/40 blur-3xl dark:bg-brand-700/25" style={{ animation: 'prima-drift3 22s ease-in-out infinite' }} />
       {/* warm coral tie-in — lower-right, gives the card a soft warm halo (light only) */}
       <div className="prima-orb pointer-events-none absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-brand-200/25 blur-3xl dark:hidden" style={{ animation: 'prima-drift1 26s ease-in-out infinite' }} />
 
