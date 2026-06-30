@@ -8,6 +8,7 @@ import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/fo
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
 import PieChart, { type Slice } from './PieChart';
+import ProgressChart from './ProgressChart';
 
 const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#f4675f' };
 
@@ -34,6 +35,11 @@ const NODATA_HINT = {
 export default function PortfolioSummary() {
   const { user } = useAuth();
   const showPies = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  // PM & Finance get a CPI donut + a per-project progress chart on their dashboard.
+  const showPmCharts = !!user && ['PROJECT_MANAGER', 'FINANCE'].includes(user.role);
+  // Who can open a project detail: ADMIN/PMO (any) or PM (their list is owned-only).
+  // FINANCE sees the portfolio for oversight but can't drill in, so names aren't links.
+  const canOpen = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
   const [statusDate, setStatusDate] = useState(formatDateInput(new Date()));
   const { data, isLoading } = useQuery({
     queryKey: ['portfolio', statusDate],
@@ -150,6 +156,14 @@ export default function PortfolioSummary() {
         <div className="grid gap-3 sm:grid-cols-2">
           <PieChart title="Project Financial Status (by CPI)" data={financialSlices} />
           <PieChart title="Project Status" data={statusSlices} />
+        </div>
+      )}
+
+      {/* PM & Finance — CPI distribution + per-project progress */}
+      {showPmCharts && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <PieChart title="Cost performance (by CPI)" data={financialSlices} />
+          <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, progress: p.scheduleProgress }))} />
         </div>
       )}
 
@@ -311,10 +325,17 @@ export default function PortfolioSummary() {
               {data.projects.map((p) => (
                 <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                   <td className="py-2">
-                    <Link to={`/projects/${p.id}`} className="block">
-                      <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>
-                      <div className="font-medium text-brand-600 hover:underline">{p.name}</div>
-                    </Link>
+                    {canOpen ? (
+                      <Link to={`/projects/${p.id}`} className="block">
+                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>
+                        <div className="font-medium text-brand-600 hover:underline">{p.name}</div>
+                      </Link>
+                    ) : (
+                      <div>
+                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>
+                        <div className="font-medium text-slate-700 dark:text-slate-200">{p.name}</div>
+                      </div>
+                    )}
                     {p.clientName && <div className="text-xs text-slate-400 dark:text-slate-500">Client: {p.clientName}</div>}
                   </td>
                   <td><Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge></td>

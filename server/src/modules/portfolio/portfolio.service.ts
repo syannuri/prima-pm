@@ -3,7 +3,9 @@ import { prisma } from '../../lib/prisma.js';
 import { getEvm } from '../schedule/schedule.service.js';
 import { round2 } from '../../calc/money.js';
 
-const GLOBAL_ROLES: Role[] = ['ADMIN', 'PMO'];
+// FINANCE oversees cost across the whole portfolio, so it sees all projects (like PMO),
+// not just ones it owns — otherwise its dashboard charts would be empty.
+const GLOBAL_ROLES: Role[] = ['ADMIN', 'PMO', 'FINANCE'];
 const dec = (v: Prisma.Decimal | number | null | undefined): number => (v == null ? 0 : Number(v));
 
 type Health = 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
