@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Button, Card, Field, Input, SectionTitle, Toggle } from '../components/ui';
 import { useTheme } from '../context/ThemeContext';
+import { useLang, type Lang } from '../context/LanguageContext';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,12 +25,18 @@ export default function SettingsPage() {
   );
 }
 
+const LANGS: { value: Lang; label: string }[] = [
+  { value: 'id', label: 'Indonesia' },
+  { value: 'en', label: 'English' },
+];
+
 function AppearanceCard() {
   const { theme, toggle } = useTheme();
+  const { lang, setLang } = useLang();
   const dark = theme === 'dark';
   return (
-    <Card>
-      <SectionTitle sub="Choose how Precise looks on this device.">Appearance</SectionTitle>
+    <Card className="space-y-3">
+      <SectionTitle sub="Choose how Precise looks and greets you on this device.">Appearance &amp; language</SectionTitle>
       <div className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
         <div>
           <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Dark mode</div>
@@ -38,6 +45,28 @@ function AppearanceCard() {
           </div>
         </div>
         <Toggle checked={dark} onChange={() => toggle()} label="Toggle dark mode" />
+      </div>
+      <div className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+        <div>
+          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Language</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">Greeting &amp; dates. Auto-detected from your browser.</div>
+        </div>
+        <div className="inline-flex rounded-lg bg-slate-200/70 p-0.5 dark:bg-slate-700/60">
+          {LANGS.map((l) => (
+            <button
+              key={l.value}
+              onClick={() => setLang(l.value)}
+              aria-pressed={lang === l.value}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition ${
+                lang === l.value
+                  ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-white'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
       </div>
     </Card>
   );

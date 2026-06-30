@@ -14,6 +14,7 @@ const HEALTH_PILL: Record<string, [string, string]> = {
   RED: ['red', 'Behind'],
 };
 import { useAuth } from '../context/AuthContext';
+import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import ResourceCapacity from '../components/ResourceCapacity';
 import NeedsAttention from '../components/NeedsAttention';
@@ -23,6 +24,7 @@ const STATUS_COLOR = PROJECT_STATUS_BADGE;
 export default function DashboardPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { lang } = useLang();
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState<'portfolio' | 'resources' | 'cards'>('portfolio');
   const [name, setName] = useState('');
@@ -71,16 +73,19 @@ export default function DashboardPage() {
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const canCreate = isPmo;
 
-  // Warm header: time-based greeting + today's date + a one-line portfolio pulse.
+  // Warm header: time-based greeting + today's date + a one-line portfolio pulse,
+  // in the user's chosen language (auto-detected from the browser, overridable in Settings).
   const now = new Date();
-  const hour = now.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const firstName = user?.name?.split(' ')[0] ?? 'there';
-  const today = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const greeting = greet(lang, now.getHours());
+  const firstName = user?.name?.split(' ')[0] ?? (lang === 'id' ? 'Anda' : 'there');
+  const today = now.toLocaleDateString(dateLocale(lang), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const projectCount = data?.projects.length ?? 0;
+  const noun = projectCount === 1 ? 'project' : 'projects';
   const pulse = projectCount === 0
-    ? 'No projects yet'
-    : `${projectCount} ${projectCount === 1 ? 'project' : 'projects'} ${isPmo ? 'in the portfolio' : 'assigned to you'}`;
+    ? (lang === 'id' ? 'Belum ada proyek' : 'No projects yet')
+    : lang === 'id'
+      ? `${projectCount} proyek ${isPmo ? 'di portfolio' : 'untuk Anda'}`
+      : `${projectCount} ${noun} ${isPmo ? 'in the portfolio' : 'assigned to you'}`;
 
   return (
     <div className="space-y-5">
