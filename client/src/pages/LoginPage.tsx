@@ -87,7 +87,7 @@ export default function LoginPage() {
             </ul>
           </div>
 
-          <p className="text-xs text-slate-400 dark:text-slate-500">© 2026 Precise · Xapiens</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">© 2026 Precise</p>
         </div>
 
         {/* ---------- RIGHT · sign-in card (right-aligned) ---------- */}
