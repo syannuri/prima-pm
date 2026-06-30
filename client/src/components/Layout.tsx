@@ -53,6 +53,18 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="flex-1" />
           <NotificationBell />
           <Link
+            to="/manual"
+            title="Manual / Help"
+            aria-label="Manual"
+            className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </Link>
+          <Link
             to="/settings"
             title="Settings"
             aria-label="Settings"
