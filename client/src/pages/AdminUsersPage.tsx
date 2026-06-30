@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { AdminUser, Role } from '../api/types';
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
+import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/format';
 
@@ -64,17 +66,25 @@ export default function AdminUsersPage() {
 }
 
 function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSelf: boolean; onChange: () => void; onReset: () => void; onEdit: () => void }) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [err, setErr] = useState('');
   const setRole = useMutation({
     mutationFn: (role: Role) => api.patch(`/users/${u.id}/role`, { role }),
-    onSuccess: () => { setErr(''); onChange(); },
+    onSuccess: () => { setErr(''); onChange(); toast.success(`Role updated for ${u.name}`); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
   const setActive = useMutation({
     mutationFn: (isActive: boolean) => api.patch(`/users/${u.id}/active`, { isActive }),
-    onSuccess: () => { setErr(''); onChange(); },
+    onSuccess: (_d, isActive) => { setErr(''); onChange(); toast.success(`${u.name} ${isActive ? 'activated' : 'deactivated'}`); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
+  const toggleActive = async () => {
+    if (u.isActive) {
+      if (!(await confirm({ title: 'Deactivate user?', message: <>Deactivate <strong>{u.name}</strong>? They will be signed out and unable to log in until reactivated.</>, confirmLabel: 'Deactivate', danger: true }))) return;
+    }
+    setActive.mutate(!u.isActive);
+  };
 
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 align-middle">
@@ -101,7 +111,7 @@ function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSel
         <button onClick={onReset} className="ml-3 text-xs text-brand-600 hover:underline">Reset password</button>
         {!isSelf && (
           <button
-            onClick={() => setActive.mutate(!u.isActive)}
+            onClick={toggleActive}
             disabled={setActive.isPending}
             className={`ml-3 text-xs hover:underline ${u.isActive ? 'text-red-500' : 'text-green-600'}`}
           >

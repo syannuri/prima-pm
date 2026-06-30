@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Risk, RiskAnalysis } from '../../api/types';
 import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from '../../components/ui';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { formatIdr } from '../../lib/format';
 import Attachments from '../../components/Attachments';
 
@@ -89,7 +91,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
                     >
                       📎 files
                     </button>
-                    <DeleteRisk base={base} id={r.id} onDone={invalidate} />
+                    <DeleteRisk base={base} id={r.id} title={r.title} onDone={invalidate} />
                   </td>
                 </tr>
               ))}
@@ -110,9 +112,18 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
   );
 }
 
-function DeleteRisk({ base, id, onDone }: { base: string; id: string; onDone: () => void }) {
-  const del = useMutation({ mutationFn: () => api.del(`${base}/${id}`), onSuccess: onDone });
-  return <button onClick={() => del.mutate()} className="text-xs text-red-500 hover:underline">delete</button>;
+function DeleteRisk({ base, id, title, onDone }: { base: string; id: string; title: string; onDone: () => void }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const del = useMutation({
+    mutationFn: () => api.del(`${base}/${id}`),
+    onSuccess: () => { onDone(); toast.success('Risk deleted'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete risk'),
+  });
+  const onClick = async () => {
+    if (await confirm({ title: 'Delete risk?', message: <>Delete <strong>{title}</strong>? This recalculates the contingency reserve.</>, confirmLabel: 'Delete', danger: true })) del.mutate();
+  };
+  return <button onClick={onClick} className="text-xs text-red-500 hover:underline">delete</button>;
 }
 
 function Heatmap({ cells }: { cells: RiskAnalysis['heatmap'] }) {

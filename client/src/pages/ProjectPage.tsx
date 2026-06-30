@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { Badge, Button, Card, Spinner } from '../components/ui';
+import { useToast } from '../components/Toast';
+import { ApiError } from '../api/client';
 import { formatIdr } from '../lib/format';
 import { categoryLabel } from '../lib/labels';
 import CharterPanel from './panels/CharterPanel';
@@ -21,7 +23,22 @@ type Tab = (typeof TABS)[number];
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
+  const toast = useToast();
   const [tab, setTab] = useState<Tab>('Charter');
+  const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
+
+  const exportReport = async (kind: 'excel' | 'pdf') => {
+    setExporting(kind);
+    try {
+      await api.download(`/projects/${projectId}/export/${kind}`, `report.${kind === 'excel' ? 'xlsx' : 'pdf'}`);
+    } catch (e) {
+      // api.download throws a generic ApiError; show an export-specific message instead.
+      const status = e instanceof ApiError ? ` (${e.status})` : '';
+      toast.error(`Couldn't generate the ${kind.toUpperCase()} report${status}. Please try again.`);
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['project', projectId],
@@ -61,11 +78,11 @@ export default function ProjectPage() {
             <EditProjectModal project={project} />
             {chartered && (
               <>
-                <Button variant="secondary" onClick={() => api.download(`/projects/${projectId}/export/excel`, 'report.xlsx')}>
-                  ⬇ Excel
+                <Button variant="secondary" onClick={() => exportReport('excel')} disabled={exporting !== null}>
+                  {exporting === 'excel' ? 'Exporting…' : '⬇ Excel'}
                 </Button>
-                <Button variant="secondary" onClick={() => api.download(`/projects/${projectId}/export/pdf`, 'report.pdf')}>
-                  ⬇ PDF
+                <Button variant="secondary" onClick={() => exportReport('pdf')} disabled={exporting !== null}>
+                  {exporting === 'pdf' ? 'Exporting…' : '⬇ PDF'}
                 </Button>
               </>
             )}

@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { GanttNode, ResourceItem, TaskDependency } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
 
@@ -179,17 +181,23 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [fullscreen]);
 
+  const toast = useToast();
+  const confirm = useConfirm();
+
   const progress = useMutation({
     mutationFn: ({ id, pct }: { id: string; pct: number }) => api.patch(`${base}/tasks/${id}/progress`, { progressPct: pct }),
     onSuccess: invalidate,
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update progress'),
   });
   const baseline = useMutation({
     mutationFn: () => api.post(`${base}/baseline`),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success('Schedule baseline captured'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to set baseline'),
   });
   const del = useMutation({
     mutationFn: (id: string) => api.del(`${base}/tasks/${id}`),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success('Task deleted'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete task'),
   });
 
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
@@ -225,7 +233,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             {baselinedAt ? `Baselined ${formatDate(baselinedAt)}` : 'No baseline set'}
           </span>
           {canEdit && rows.length > 0 && (
-            <Button variant="secondary" disabled={baseline.isPending} onClick={() => { if (confirm(baselinedAt ? 'Re-capture the schedule baseline from current plan dates?' : 'Capture the current plan dates as the schedule baseline?')) baseline.mutate(); }}>
+            <Button variant="secondary" disabled={baseline.isPending} onClick={async () => { if (await confirm({ title: baselinedAt ? 'Re-capture baseline?' : 'Set schedule baseline?', message: baselinedAt ? 'Re-capture the schedule baseline from the current plan dates? This overwrites the existing baseline used for variance.' : 'Capture the current plan dates as the schedule baseline?', confirmLabel: baselinedAt ? 'Re-baseline' : 'Set baseline' })) baseline.mutate(); }}>
               {baseline.isPending ? 'Saving…' : baselinedAt ? 'Re-baseline' : 'Set Baseline'}
             </Button>
           )}
@@ -329,7 +337,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       <td className="whitespace-nowrap text-right text-xs">
                         <button onClick={() => setForm({ parentId: node.id })} className="text-brand-600 hover:underline" title="Add subtask">+ Sub</button>
                         <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400">Edit</button>
-                        <button onClick={() => { if (confirm(`Delete “${node.name}” and its subtasks?`)) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
+                        <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
                       </td>
                     )}
                     <td>

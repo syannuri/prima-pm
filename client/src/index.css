@@ -18,3 +18,23 @@
     border-color: theme('colors.slate.800');
   }
 }
+
+/* Toast entry animation (reduced-motion guarded). */
+@keyframes prima-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.prima-toast {
+  animation: prima-toast-in 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .prima-toast {
+    animation: none;
+  }
+}

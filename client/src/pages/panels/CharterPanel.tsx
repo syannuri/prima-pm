@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Charter, ProjectCategory, User } from '../../api/types';
 import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDateInput } from '../../lib/format';
 import Attachments from '../../components/Attachments';
 
@@ -35,6 +36,7 @@ export default function CharterPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<Form>(empty);
   const [msg, setMsg] = useState('');
+  const confirm = useConfirm();
 
   const charterQ = useQuery({
     queryKey: ['charter', projectId],
@@ -86,6 +88,13 @@ export default function CharterPanel({ projectId }: { projectId: string }) {
 
   const set = (k: keyof Form, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const allFilled = Object.values(form).every((v) => String(v).trim() !== '') && Number(form.hiCostIdr) > 0;
+  const commitCharter = async () => {
+    if (await confirm({
+      title: 'Commit charter?',
+      message: 'Committing locks the charter baseline and unlocks Cost, Risk & Schedule. After this, changes require a Change Request.',
+      confirmLabel: 'Commit charter',
+    })) commit.mutate();
+  };
 
   if (charterQ.isLoading) return <Spinner />;
 
@@ -156,7 +165,7 @@ export default function CharterPanel({ projectId }: { projectId: string }) {
             <Button variant="secondary" onClick={() => save.mutate()} disabled={save.isPending}>
               Save draft
             </Button>
-            <Button onClick={() => commit.mutate()} disabled={!charter || !allFilled || commit.isPending}>
+            <Button onClick={commitCharter} disabled={!charter || !allFilled || commit.isPending}>
               {commit.isPending ? 'Committing…' : 'Commit Charter'}
             </Button>
             {!charter && <span className="text-xs text-slate-400 dark:text-slate-500">Save the draft first, then Commit.</span>}

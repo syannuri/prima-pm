@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
 import { Button, Card, Input, SectionTitle, Select, Spinner } from '../../components/ui';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
 
 const DIRECT_TYPES = [
@@ -61,6 +63,8 @@ export default function CostPanel({ projectId }: { projectId: string }) {
 }
 
 function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string; onChange: () => void }) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -72,9 +76,17 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
 
   const add = useMutation({
     mutationFn: () => api.post(`${base}/actuals`, { date, amount: Number(amount), description: description || undefined }),
-    onSuccess: () => { setAmount(''); setDescription(''); onChange(); },
+    onSuccess: () => { setAmount(''); setDescription(''); onChange(); toast.success('Actual cost recorded'); },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to record actual cost'),
   });
-  const del = useMutation({ mutationFn: (id: string) => api.del(`${base}/actuals/${id}`), onSuccess: onChange });
+  const del = useMutation({
+    mutationFn: (id: string) => api.del(`${base}/actuals/${id}`),
+    onSuccess: () => { onChange(); toast.success('Actual cost entry deleted'); },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to delete entry'),
+  });
+  const confirmDelete = async (id: string) => {
+    if (await confirm({ title: 'Delete actual cost entry?', message: 'This removes the recorded spend and recalculates CPI.', confirmLabel: 'Delete', danger: true })) del.mutate(id);
+  };
 
   return (
     <Card>
@@ -105,7 +117,7 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
               <td>{a.description ?? '—'}</td>
               <td className="text-right font-medium">{formatIdr(a.amount)}</td>
               <td className="text-right">
-                <button onClick={() => del.mutate(a.id)} className="text-xs text-red-500 hover:underline">delete</button>
+                <button onClick={() => confirmDelete(a.id)} className="text-xs text-red-500 hover:underline">delete</button>
               </td>
             </tr>
           ))}
@@ -150,6 +162,8 @@ function CharterVariance({ charter, bac }: { charter: number; bac: number }) {
 }
 
 function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string; onChange: () => void }) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [type, setType] = useState('TECHNOLOGY_CLOUD');
   const [label, setLabel] = useState('');
   const [qty, setQty] = useState('1');
@@ -180,8 +194,12 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
   });
   const del = useMutation({
     mutationFn: (id: string) => api.del(`${base}/direct/${id}`),
-    onSuccess: onChange,
+    onSuccess: () => { onChange(); toast.success('Cost line deleted'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete cost line'),
   });
+  const confirmDelete = async (d: DirectCost) => {
+    if (await confirm({ title: 'Delete cost line?', message: <>Delete <strong>{d.label}</strong> from direct costs? This recalculates the cost baseline.</>, confirmLabel: 'Delete', danger: true })) del.mutate(d.id);
+  };
   // Inline reassignment: resend the manpower line pointing at a new resource. Rate &
   // role are re-derived server-side from that resource; taskId preserved so the
   // manpower↔schedule link survives the edit.
@@ -274,7 +292,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                 </td>
                 <td className="text-right font-medium">{formatIdr(d.type === 'MANPOWER' ? d.manpowerCost : d.amount)}</td>
                 <td className="text-right">
-                  <button onClick={() => del.mutate(d.id)} className="text-xs text-red-500 hover:underline">delete</button>
+                  <button onClick={() => confirmDelete(d)} className="text-xs text-red-500 hover:underline">delete</button>
                 </td>
               </tr>
             ))}
@@ -341,6 +359,8 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
 }
 
 function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: string; onChange: () => void }) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [type, setType] = useState('TRANSPORTATION');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -348,8 +368,16 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
   const add = useMutation({
     mutationFn: () => api.post(`${base}/indirect`, { type, description, amount: Number(amount) }),
     onSuccess: () => { setDescription(''); setAmount(''); onChange(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to add indirect cost'),
   });
-  const del = useMutation({ mutationFn: (id: string) => api.del(`${base}/indirect/${id}`), onSuccess: onChange });
+  const del = useMutation({
+    mutationFn: (id: string) => api.del(`${base}/indirect/${id}`),
+    onSuccess: () => { onChange(); toast.success('Indirect cost deleted'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete'),
+  });
+  const confirmDelete = async (i: { id: string; description: string }) => {
+    if (await confirm({ title: 'Delete indirect cost?', message: <>Delete <strong>{i.description}</strong>?</>, confirmLabel: 'Delete', danger: true })) del.mutate(i.id);
+  };
 
   return (
     <Card>
@@ -362,7 +390,7 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
               <td>{i.description}</td>
               <td className="text-right font-medium">{formatIdr(i.amount)}</td>
               <td className="text-right">
-                <button onClick={() => del.mutate(i.id)} className="text-xs text-red-500 hover:underline">delete</button>
+                <button onClick={() => confirmDelete(i)} className="text-xs text-red-500 hover:underline">delete</button>
               </td>
             </tr>
           ))}

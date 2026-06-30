@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { PersonnelRole, RateCard, ResourceItem, ResourceType, User } from '../api/types';
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
+import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import { formatIdr } from '../lib/format';
 
@@ -69,16 +70,18 @@ function RateCardsSection({ canEditRates }: { canEditRates: boolean }) {
 }
 
 function RateCardRow({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolean; onChange: () => void }) {
+  const toast = useToast();
   const [rate, setRate] = useState(String(rc.unitCostPerManday));
   const [err, setErr] = useState('');
   const save = useMutation({
     mutationFn: () => api.put(`/ratecards/${rc.id}`, { roleName: rc.roleName, level: rc.level ?? undefined, unitCostPerManday: Number(rate), isActive: rc.isActive }),
-    onSuccess: () => { setErr(''); onChange(); },
+    onSuccess: () => { setErr(''); onChange(); toast.success('Rate card updated'); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
   const toggle = useMutation({
     mutationFn: () => api.patch(`/ratecards/${rc.id}/active`, { isActive: !rc.isActive }),
     onSuccess: onChange,
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update rate card'),
   });
   const dirty = Number(rate) !== Number(rc.unitCostPerManday);
   return (
@@ -166,8 +169,17 @@ function ResourcesSection({ canEdit }: { canEdit: boolean }) {
 }
 
 function ResourceRow({ r, canEdit, onEdit, onChange }: { r: ResourceItem; canEdit: boolean; onEdit: () => void; onChange: () => void }) {
-  const toggle = useMutation({ mutationFn: () => api.patch(`/resources/${r.id}/active`, { isActive: !r.isActive }), onSuccess: onChange });
-  const refresh = useMutation({ mutationFn: () => api.post(`/resources/${r.id}/refresh-rate`, {}), onSuccess: onChange });
+  const toast = useToast();
+  const toggle = useMutation({
+    mutationFn: () => api.patch(`/resources/${r.id}/active`, { isActive: !r.isActive }),
+    onSuccess: () => { onChange(); toast.success(`${r.name} ${r.isActive ? 'deactivated' : 'activated'}`); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update resource'),
+  });
+  const refresh = useMutation({
+    mutationFn: () => api.post(`/resources/${r.id}/refresh-rate`, {}),
+    onSuccess: () => { onChange(); toast.success('Rate refreshed from rate card'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to refresh rate'),
+  });
   const rcLabel = r.rateCard ? `${r.rateCard.roleName}${r.rateCard.level ? ` · ${r.rateCard.level}` : ''}` : null;
   // Flag when the stored rate has drifted from the linked rate card's current rate.
   const cardRate = r.rateCard ? Number(r.rateCard.unitCostPerManday) : null;

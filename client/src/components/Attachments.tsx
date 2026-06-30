@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Button } from './ui';
+import { useToast } from './Toast';
+import { useConfirm } from './ConfirmDialog';
 import { formatDate } from '../lib/format';
 
 interface AttachmentDto {
@@ -30,6 +32,8 @@ export default function Attachments({
   ownerId: string;
   readOnly?: boolean;
 }) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const base = `/projects/${projectId}/attachments`;
   const key = ['attachments', projectId, ownerType, ownerId];
@@ -55,8 +59,20 @@ export default function Attachments({
 
   const del = useMutation({
     mutationFn: (id: string) => api.del(`${base}/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success('File deleted'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete file'),
   });
+  const confirmDelete = async (a: AttachmentDto) => {
+    if (await confirm({ title: 'Delete file?', message: <>Delete <strong>{a.fileName}</strong>?</>, confirmLabel: 'Delete', danger: true })) del.mutate(a.id);
+  };
+
+  const downloadFile = async (a: AttachmentDto) => {
+    try {
+      await api.download(`${base}/${a.id}/download`, a.fileName);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Download failed');
+    }
+  };
 
   const items = list.data?.attachments ?? [];
 
@@ -88,7 +104,7 @@ export default function Attachments({
           {items.map((a) => (
             <li key={a.id} className="flex items-center justify-between rounded bg-slate-50 dark:bg-slate-800 px-2 py-1 text-sm">
               <button
-                onClick={() => api.download(`${base}/${a.id}/download`, a.fileName)}
+                onClick={() => downloadFile(a)}
                 className="truncate text-brand-600 hover:underline"
                 title="Download"
               >
@@ -97,7 +113,7 @@ export default function Attachments({
               <span className="ml-2 flex shrink-0 items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
                 {humanSize(a.sizeBytes)} · {formatDate(a.createdAt)}
                 {!readOnly && (
-                  <button onClick={() => del.mutate(a.id)} className="text-red-500 hover:underline">delete</button>
+                  <button onClick={() => confirmDelete(a)} className="text-red-500 hover:underline">delete</button>
                 )}
               </span>
             </li>
