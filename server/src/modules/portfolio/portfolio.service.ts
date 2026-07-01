@@ -1,6 +1,7 @@
 import type { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { getEvm } from '../schedule/schedule.service.js';
+import { getAgileEvm } from '../agile/agile.service.js';
 import { round2 } from '../../calc/money.js';
 
 // FINANCE oversees cost across the whole portfolio, so it sees all projects (like PMO),
@@ -101,7 +102,10 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
     let finishVarianceDays: number | null = null;
     // Only chartered projects can have a schedule; AC resolved from stored time-phased entries.
     if (p.status !== 'DRAFT') {
-      const evm = await getEvm(p.id, undefined, statusDate);
+      // Agile projects measure EVM from story points; predictive/hybrid from the WBS schedule.
+      const evm = p.deliveryApproach === 'AGILE'
+        ? await getAgileEvm(p.id, undefined, statusDate)
+        : await getEvm(p.id, undefined, statusDate);
       pv = evm.pv; ev = evm.ev; ac = evm.ac; spi = evm.spi; cpi = evm.cpi;
       percentComplete = evm.percentComplete; leafTaskCount = evm.leafTaskCount;
       scheduleProgress = evm.scheduleProgress; scheduleWeight = evm.scheduleWeight;

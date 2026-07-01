@@ -1,6 +1,8 @@
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound } from '../../lib/errors.js';
+import { actualCostAsOf } from '../cost/cost.service.js';
+import { round2 } from '../../calc/money.js';
 import type { BacklogItemInput, SprintInput } from './agile.schemas.js';
 
 // Full agile board payload: sprints + backlog items (with assignee) + burndown snapshots.
@@ -26,6 +28,57 @@ export async function getAgile(projectId: string) {
 }
 
 const points = (arr: { storyPoints: number | null }[]) => arr.reduce((s, i) => s + (i.storyPoints ?? 0), 0);
+
+// Agile-EVM: derive an EVM reading from story points so agile projects roll into the
+// same Portfolio EVM as predictive ones. % complete = done points ÷ total; planned %
+// (PV) comes from the sprint schedule vs the status date; EV/PV are valued at the
+// cost baseline (BAC). Returns the same fields the portfolio reads from getEvm().
+export async function getAgileEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
+  const [items, sprints, cb, ac] = await Promise.all([
+    prisma.backlogItem.findMany({ where: { projectId }, select: { storyPoints: true, status: true, sprintId: true } }),
+    prisma.sprint.findMany({ where: { projectId }, select: { id: true, startDate: true, endDate: true } }),
+    prisma.costBaseline.findFirst({ where: { projectId }, select: { costBaseline: true } }),
+    actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
+  ]);
+  const bac = cb ? Number(cb.costBaseline) : 0;
+  const totalPts = points(items);
+  const donePts = points(items.filter((i) => i.status === 'DONE'));
+  const progress = totalPts > 0 ? donePts / totalPts : 0;
+
+  // Planned points that should be complete by the status date, from the sprint plan.
+  let plannedPts = 0;
+  const now = statusDate.getTime();
+  for (const sp of sprints) {
+    if (!sp.startDate || !sp.endDate) continue;
+    const start = sp.startDate.getTime();
+    const end = sp.endDate.getTime();
+    if (end <= start) continue;
+    const sprintPts = points(items.filter((i) => i.sprintId === sp.id));
+    if (now >= end) plannedPts += sprintPts;
+    else if (now > start) plannedPts += sprintPts * ((now - start) / (end - start));
+  }
+  const plannedProgress = totalPts > 0 ? plannedPts / totalPts : 0;
+
+  const ev = round2(progress * bac);
+  const pv = round2(plannedProgress * bac);
+  const resolvedAc = round2(ac);
+  const spi = plannedProgress > 0 ? round2(progress / plannedProgress) : 0; // points-based
+  const cpi = resolvedAc > 0 ? round2(ev / resolvedAc) : 0;
+  return {
+    bac,
+    pv,
+    ev,
+    ac: resolvedAc,
+    cv: round2(ev - resolvedAc),
+    spi,
+    cpi,
+    percentComplete: round2(progress),
+    scheduleProgress: progress,
+    scheduleWeight: bac > 0 ? bac : totalPts,
+    leafTaskCount: items.length, // >0 so schedule health isn't NO_DATA when a backlog exists
+    finishVarianceDays: null as number | null,
+  };
+}
 
 async function recordSnapshots(
   sprints: { id: string; status: string }[],
