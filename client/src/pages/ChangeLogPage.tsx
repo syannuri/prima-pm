@@ -14,18 +14,19 @@ const label = (s: string) => s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpp
 
 export default function ChangeLogPage() {
   const { user } = useAuth();
-  const isApprover = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  const isGlobal = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  const canView = isGlobal || user?.role === 'PROJECT_MANAGER';
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL');
   const [detail, setDetail] = useState<PendingApproval | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['change-log'],
     queryFn: () => api.get<{ items: PendingApproval[] }>('/notifications/change-log'),
-    enabled: isApprover,
+    enabled: canView,
   });
 
-  if (!isApprover) {
-    return <Card><EmptyState icon="M12 9v4 M12 17h.01 M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" title="PMO access only" hint="The change log is available to Admin and PMO." /></Card>;
+  if (!canView) {
+    return <Card><EmptyState icon="M12 9v4 M12 17h.01 M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" title="No access" hint="The change log is available to Admin, PMO and Project Managers." /></Card>;
   }
 
   const items = data?.items ?? [];
@@ -35,7 +36,7 @@ export default function ChangeLogPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Change Log</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Every change request across the portfolio — status, timeline and details.</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Every change request {isGlobal ? 'across the portfolio' : 'on the projects you manage'} — status, timeline and details.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">

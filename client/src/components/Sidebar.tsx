@@ -72,7 +72,7 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
             <Icon path={ICONS.resources} /> {!collapsed && 'Resource Pool'}
           </NavLink>
         )}
-        {!!user && ['ADMIN', 'PMO'].includes(user.role) && (
+        {!!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role) && (
           <NavLink to="/change-log" onClick={onNavigate} title="Change Log" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.changeLog} /> {!collapsed && 'Change Log'}
           </NavLink>

@@ -166,11 +166,13 @@ export async function getPendingApprovals(role: string) {
   return { items, count: items.length };
 }
 
-// Full change-request log across all live projects (PMO/ADMIN) — every status.
-export async function getChangeLog(role: string) {
-  if (!GLOBAL_ROLES.includes(role as Role)) return { items: [] };
+// Full change-request log — every status. PMO/ADMIN see all live projects; other
+// roles (e.g. a Project Manager) are scoped to the projects they manage.
+export async function getChangeLog(role: string, userId: string) {
+  const project: Prisma.ProjectWhereInput = { deletedAt: null };
+  if (!GLOBAL_ROLES.includes(role as Role)) project.pmUserId = userId;
   const items = await prisma.changeRequest.findMany({
-    where: { project: { deletedAt: null } },
+    where: { project },
     orderBy: { createdAt: 'desc' },
     include: CR_INCLUDE,
   });

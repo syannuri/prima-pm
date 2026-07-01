@@ -65,11 +65,11 @@ router.get(
   }),
 );
 
-// Full change-request log across projects (PMO/ADMIN only).
+// Full change-request log. PMO/ADMIN see all projects; a PM sees only theirs.
 router.get(
   '/change-log',
   asyncHandler(async (req, res) => {
-    res.json(await getChangeLog(req.user!.role));
+    res.json(await getChangeLog(req.user!.role, req.user!.id));
   }),
 );
 
