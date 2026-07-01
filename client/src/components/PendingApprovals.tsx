@@ -7,7 +7,7 @@ import { Badge, Button, Card } from './ui';
 import { useToast } from './Toast';
 import { useConfirm } from './ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../lib/format';
+import { formatDate, formatIdr } from '../lib/format';
 import CrDetailModal from './CrDetailModal';
 
 // PMO/Admin dashboard panel: change requests awaiting a decision, with inline
@@ -35,16 +35,27 @@ export default function PendingApprovals() {
   const openReview = (cr: PendingApproval) => { setDetail(cr); if (cr.status === 'SUBMITTED') review.mutate(cr); };
 
   const decide = useMutation({
-    mutationFn: ({ cr, decision }: { cr: PendingApproval; decision: 'APPROVED' | 'REJECTED' }) =>
-      api.patch(`/projects/${cr.project.id}/charter/change-requests/${cr.id}`, { decision }),
+    mutationFn: ({ cr, decision, applyToRevenue }: { cr: PendingApproval; decision: 'APPROVED' | 'REJECTED'; applyToRevenue?: boolean }) =>
+      api.patch(`/projects/${cr.project.id}/charter/change-requests/${cr.id}`, { decision, applyToRevenue }),
     onSuccess: (_d, v) => {
       ['pending-approvals', 'charter-crs', 'notifications', 'inbox', 'projects', 'portfolio', 'charter'].forEach((k) =>
         qc.invalidateQueries({ queryKey: [k] }),
       );
-      toast.success(`Change request ${v.decision === 'APPROVED' ? 'approved' : 'rejected'}`);
+      toast.success(`Change request ${v.decision === 'APPROVED' ? 'approved' : 'rejected'}${v.applyToRevenue ? ' · revenue updated' : ''}`);
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to decide'),
   });
+
+  // A chargeable CR carrying an agreed amount → confirm adding it to Total Revenue.
+  const approve = async (cr: PendingApproval) => {
+    const amt = cr.chargeable && cr.amountIdr != null && Number(cr.amountIdr) > 0 ? Number(cr.amountIdr) : 0;
+    if (amt > 0) {
+      if (await confirm({ title: 'Approve chargeable change?', message: <>This chargeable change is <strong>{formatIdr(amt)}</strong>. Approving will add it to <strong>{cr.project.code}</strong>&rsquo;s Total Revenue.</>, confirmLabel: 'Approve & add to revenue' }))
+        decide.mutate({ cr, decision: 'APPROVED', applyToRevenue: true });
+    } else {
+      decide.mutate({ cr, decision: 'APPROVED' });
+    }
+  };
 
   if (!isApprover || !data?.count) return null;
 
@@ -74,7 +85,7 @@ export default function PendingApprovals() {
             <div className="flex shrink-0 gap-2">
               <Button variant="secondary" onClick={() => openReview(cr)}>Review</Button>
               <Button
-                onClick={() => decide.mutate({ cr, decision: 'APPROVED' })}
+                onClick={() => approve(cr)}
                 disabled={decide.isPending}
               >
                 Approve

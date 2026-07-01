@@ -33,16 +33,31 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
   const confirm = useConfirm();
   const canDecide = !!user && ['ADMIN', 'PMO'].includes(user.role) && (cr.status === 'SUBMITTED' || cr.status === 'UNDER_REVIEW');
 
+  const paidAmount = cr.chargeable && cr.amountIdr != null && Number(cr.amountIdr) > 0 ? Number(cr.amountIdr) : 0;
+
   const decide = useMutation({
-    mutationFn: (decision: 'APPROVED' | 'REJECTED') =>
-      api.patch(`/projects/${cr.project.id}/charter/change-requests/${cr.id}`, { decision }),
-    onSuccess: (_d, decision) => {
+    mutationFn: (vars: { decision: 'APPROVED' | 'REJECTED'; applyToRevenue?: boolean }) =>
+      api.patch(`/projects/${cr.project.id}/charter/change-requests/${cr.id}`, vars),
+    onSuccess: (_d, vars) => {
       ['pending-approvals', 'charter-crs', 'charter-versions', 'notifications', 'inbox', 'projects', 'portfolio', 'charter'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-      toast.success(`Change request ${decision === 'APPROVED' ? 'approved' : 'rejected'}`);
+      toast.success(`Change request ${vars.decision === 'APPROVED' ? 'approved' : 'rejected'}${vars.applyToRevenue ? ` · +${formatIdr(paidAmount)} revenue` : ''}`);
       onClose();
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to decide'),
   });
+
+  const approve = async () => {
+    if (paidAmount > 0) {
+      const ok = await confirm({
+        title: 'Approve chargeable change?',
+        message: <>This chargeable change is <strong>{formatIdr(paidAmount)}</strong>. Approving will add it to the project&rsquo;s <strong>Total Revenue</strong> (a client-funded change order).</>,
+        confirmLabel: 'Approve & add to revenue',
+      });
+      if (ok) decide.mutate({ decision: 'APPROVED', applyToRevenue: true });
+    } else {
+      decide.mutate({ decision: 'APPROVED' });
+    }
+  };
 
   const decisionTone = cr.status === 'REJECTED' ? 'bg-red-500' : cr.status === 'APPROVED' ? 'bg-green-500' : undefined;
   const decisionLabel = cr.status === 'REJECTED' ? 'Rejected' : cr.status === 'APPROVED' ? 'Approved' : 'Decision';
@@ -98,12 +113,12 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
                 variant="danger"
                 disabled={decide.isPending}
                 onClick={async () => {
-                  if (await confirm({ title: 'Reject change request?', message: <>Reject <strong>{cr.title}</strong>?</>, confirmLabel: 'Reject', danger: true })) decide.mutate('REJECTED');
+                  if (await confirm({ title: 'Reject change request?', message: <>Reject <strong>{cr.title}</strong>?</>, confirmLabel: 'Reject', danger: true })) decide.mutate({ decision: 'REJECTED' });
                 }}
               >
                 Reject
               </Button>
-              <Button disabled={decide.isPending} onClick={() => decide.mutate('APPROVED')}>Approve</Button>
+              <Button disabled={decide.isPending} onClick={approve}>Approve</Button>
             </>
           )}
         </div>

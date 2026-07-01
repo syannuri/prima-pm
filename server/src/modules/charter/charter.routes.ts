@@ -97,6 +97,7 @@ router.patch(
       req.params.crId,
       req.body.decision,
       req.user!.id,
+      req.body.applyToRevenue,
     );
     res.json({ changeRequest: cr });
   }),

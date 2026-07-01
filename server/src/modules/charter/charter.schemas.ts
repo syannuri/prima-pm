@@ -39,6 +39,8 @@ export const changeRequestSchema = z
 
 export const crDecisionSchema = z.object({
   decision: z.enum(['APPROVED', 'REJECTED']),
+  // When approving a chargeable CR, add its agreed amount to project Total Revenue.
+  applyToRevenue: z.boolean().optional().default(false),
 });
 
 export type UpsertCharterInput = z.infer<typeof upsertCharterSchema>;

@@ -182,6 +182,7 @@ export async function decideChangeRequest(
   crId: string,
   decision: 'APPROVED' | 'REJECTED',
   actorId: string,
+  applyToRevenue = false,
 ) {
   const cr = await prisma.changeRequest.findUnique({ where: { id: crId } });
   if (!cr || cr.projectId !== projectId) throw NotFound('Change Request not found');
@@ -189,7 +190,11 @@ export async function decideChangeRequest(
     throw Conflict('Change Request has already been decided');
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  // Only a chargeable CR carrying an agreed amount can be applied to revenue.
+  const chargeAmount = cr.amountIdr == null ? 0 : Number(cr.amountIdr);
+  const willApplyRevenue = decision === 'APPROVED' && applyToRevenue && cr.chargeable && chargeAmount > 0;
+
+  const { result, revenueChange } = await prisma.$transaction(async (tx) => {
     const updatedCr = await tx.changeRequest.update({
       where: { id: crId },
       data: { status: decision, decidedBy: actorId, decidedAt: new Date() },
@@ -202,7 +207,19 @@ export async function decideChangeRequest(
         data: { locked: false, version: { increment: 1 } },
       });
     }
-    return updatedCr;
+
+    // Approved chargeable change order → raise the project's Total Revenue by the
+    // agreed amount (the client-funded contract increase). Read-then-set so a null
+    // starting revenue is treated as 0 (SQL NULL + x would stay NULL).
+    let revenueChange: { before: number; after: number } | null = null;
+    if (willApplyRevenue) {
+      const project = await tx.project.findUnique({ where: { id: projectId }, select: { totalRevenueIdr: true } });
+      const before = project?.totalRevenueIdr == null ? 0 : Number(project.totalRevenueIdr);
+      const after = before + chargeAmount;
+      await tx.project.update({ where: { id: projectId }, data: { totalRevenueIdr: after } });
+      revenueChange = { before, after };
+    }
+    return { result: updatedCr, revenueChange };
   });
 
   await writeAudit({ projectId,
@@ -212,6 +229,18 @@ export async function decideChangeRequest(
     action: decision === 'APPROVED' ? 'APPROVE' : 'REJECT',
     after: result,
   });
+
+  if (revenueChange) {
+    await writeAudit({
+      projectId,
+      userId: actorId,
+      entity: 'Project',
+      entityId: projectId,
+      action: 'UPDATE',
+      before: { totalRevenueIdr: revenueChange.before },
+      after: { totalRevenueIdr: revenueChange.after, reason: `Chargeable change "${cr.title}" (+${chargeAmount})` },
+    });
+  }
 
   // Notify the requester (the PM who raised it) of the decision — mirrors the
   // CR_SUBMITTED notification that approvers receive. Skip self-decisions.
