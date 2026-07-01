@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { DeliveryApproach, Project, ProjectCategory, PortfolioSummary as Summary, User } from '../api/types';
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Skeleton } from '../components/ui';
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, MoneyInput, Select, Skeleton } from '../components/ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
 
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                   <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SOC Modernization" />
                 </Field>
                 <Field label="Project code">
-                  <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="auto-generated if blank" />
+                  <Input value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} placeholder="auto-generated if blank" />
                 </Field>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -164,10 +164,10 @@ export default function DashboardPage() {
                   </Select>
                 </Field>
                 <Field label="Cost Baseline (IDR)">
-                  <Input type="number" min={0} value={costBaseline} onChange={(e) => setCostBaseline(e.target.value)} placeholder="e.g. 1000000000" />
+                  <MoneyInput value={costBaseline} onValueChange={setCostBaseline} placeholder="e.g. 1.000.000.000" />
                 </Field>
                 <Field label="Total Revenue (IDR)">
-                  <Input type="number" min={0} value={revenue} onChange={(e) => setRevenue(e.target.value)} placeholder="e.g. 1500000000" />
+                  <MoneyInput value={revenue} onValueChange={setRevenue} placeholder="e.g. 1.500.000.000" />
                 </Field>
               </div>
               {costBaseline && revenue && (

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
-import { Button, Card, Input, SectionTitle, Select, Spinner } from '../../components/ui';
+import { Button, Card, Input, MoneyInput, SectionTitle, Select, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
@@ -126,7 +126,7 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
       </table>
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
         <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <Input type="number" aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <MoneyInput aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
         <Input aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
         <Button onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
       </div>
@@ -314,12 +314,11 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                 <option key={r.id} value={r.id}>{r.name} · {formatIdr(Number(r.unitCostPerManday))}/md</option>
               ))}
             </Select>
-            <Input
-              type="number"
+            <MoneyInput
               aria-label="Rate override (IDR per manday)"
               placeholder={picked ? `${formatIdr(Number(picked.unitCostPerManday))} (rate)` : 'Rate override'}
               value={rateOverride}
-              onChange={(e) => setRateOverride(e.target.value)}
+              onValueChange={setRateOverride}
               title="Leave blank to use the resource's rate"
             />
             <Input
@@ -340,7 +339,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
         ) : (
           <>
             <Input type="number" aria-label="Quantity" placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
-            <Input type="number" aria-label="Unit cost (IDR)" placeholder="Unit cost" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+            <MoneyInput aria-label="Unit cost (IDR)" placeholder="Unit cost" value={unitCost} onValueChange={setUnitCost} />
             <div />
             <div />
           </>
@@ -402,7 +401,7 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
           {INDIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </Select>
         <Input aria-label="Indirect cost description" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <Input type="number" aria-label="Indirect cost amount (IDR)" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <MoneyInput aria-label="Indirect cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
         <Button onClick={() => add.mutate()} disabled={!description || !amount || add.isPending}>Add</Button>
       </div>
     </Card>

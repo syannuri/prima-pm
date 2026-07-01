@@ -5,7 +5,7 @@ import { Badge, Button, Modal } from './ui';
 import { useToast } from './Toast';
 import { useConfirm } from './ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../lib/format';
+import { formatDate, formatIdr } from '../lib/format';
 
 export type CrWithProject = ChangeRequest & { project: { id: string; code: string; name: string } };
 
@@ -37,7 +37,7 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
     mutationFn: (decision: 'APPROVED' | 'REJECTED') =>
       api.patch(`/projects/${cr.project.id}/charter/change-requests/${cr.id}`, { decision }),
     onSuccess: (_d, decision) => {
-      ['pending-approvals', 'change-log', 'charter-crs', 'notifications', 'inbox', 'projects', 'portfolio', 'charter'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      ['pending-approvals', 'charter-crs', 'charter-versions', 'notifications', 'inbox', 'projects', 'portfolio', 'charter'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(`Change request ${decision === 'APPROVED' ? 'approved' : 'rejected'}`);
       onClose();
     },
@@ -60,6 +60,11 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
           <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
             <span className="font-mono">{cr.project.code}</span> · {cr.project.name}
           </div>
+          {cr.chargeable && (
+            <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              Amount: <span className="font-semibold text-slate-800 dark:text-slate-100">{cr.amountIdr != null ? formatIdr(cr.amountIdr) : '—'}</span>
+            </div>
+          )}
         </div>
 
         <div>

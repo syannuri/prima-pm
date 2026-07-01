@@ -9,7 +9,6 @@ import AdminUsersPage from './pages/AdminUsersPage';
 import AdminResourcesPage from './pages/AdminResourcesPage';
 import SettingsPage from './pages/SettingsPage';
 import ManualPage from './pages/ManualPage';
-import ChangeLogPage from './pages/ChangeLogPage';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -40,7 +39,6 @@ export default function App() {
         <Route path="/admin/resources" element={<AdminResourcesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/manual" element={<ManualPage />} />
-        <Route path="/change-log" element={<ChangeLogPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

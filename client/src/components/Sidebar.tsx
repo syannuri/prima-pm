@@ -72,12 +72,6 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
             <Icon path={ICONS.resources} /> {!collapsed && 'Resource Pool'}
           </NavLink>
         )}
-        {!!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role) && (
-          <NavLink to="/change-log" onClick={onNavigate} title="Change Log" className={({ isActive }) => cx(isActive)}>
-            <Icon path={ICONS.changeLog} /> {!collapsed && 'Change Log'}
-          </NavLink>
-        )}
-
         {!collapsed && <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Projects</div>}
         {collapsed && <div className="my-2 border-t border-slate-800" />}
         {!collapsed && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-500">No projects yet</div>}

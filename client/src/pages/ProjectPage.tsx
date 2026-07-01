@@ -155,7 +155,7 @@ export default function ProjectPage() {
       {tab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
       {tab === 'Issues' && <IssuePanel projectId={projectId} />}
       {tab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
-      {tab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} />}
+      {tab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
       {tab === 'Audit' && <AuditPanel projectId={projectId} />}
     </div>
   );

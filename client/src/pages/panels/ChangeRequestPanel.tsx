@@ -2,23 +2,27 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Charter, ChangeImpact, ChangeRequest, CharterVersion } from '../../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
-import { formatDate } from '../../lib/format';
+import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { formatDate, formatIdr } from '../../lib/format';
 import { CHANGE_IMPACTS } from '../../lib/labels';
-import { useAuth } from '../../context/AuthContext';
+import CrDetailModal from '../../components/CrDetailModal';
 
-const CR_COLOR: Record<string, string> = { SUBMITTED: 'amber', UNDER_REVIEW: 'amber', APPROVED: 'green', REJECTED: 'red' };
+const CR_COLOR: Record<string, string> = { SUBMITTED: 'amber', UNDER_REVIEW: 'sky', APPROVED: 'green', REJECTED: 'red' };
+const FILTERS = ['ALL', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'] as const;
+const label = (s: string) => s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-export default function ChangeRequestPanel({ projectId }: { projectId: string }) {
+export default function ChangeRequestPanel({ projectId, projectCode, projectName }: { projectId: string; projectCode: string; projectName: string }) {
   const qc = useQueryClient();
-  const { user } = useAuth();
   const base = `/projects/${projectId}/charter`;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [chargeable, setChargeable] = useState(false);
+  const [amount, setAmount] = useState('');
   const [magnitude, setMagnitude] = useState<'MINOR' | 'MAJOR'>('MINOR');
   const [impactAreas, setImpactAreas] = useState<ChangeImpact[]>([]);
   const [err, setErr] = useState('');
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL');
+  const [detail, setDetail] = useState<ChangeRequest | null>(null);
 
   const charterQ = useQuery({ queryKey: ['charter', projectId], queryFn: () => api.get<{ charter: Charter | null }>(base) });
   const crQ = useQuery({ queryKey: ['charter-crs', projectId], queryFn: () => api.get<{ changeRequests: ChangeRequest[] }>(`${base}/change-requests`) });
@@ -29,26 +33,22 @@ export default function ChangeRequestPanel({ projectId }: { projectId: string })
   };
 
   const raise = useMutation({
-    mutationFn: () => api.post(`${base}/change-requests`, { title, description, chargeable, magnitude, impactAreas }),
-    onSuccess: () => { setTitle(''); setDescription(''); setChargeable(false); setMagnitude('MINOR'); setImpactAreas([]); setErr(''); refresh(); },
+    mutationFn: () => api.post(`${base}/change-requests`, { title, description, chargeable, amountIdr: chargeable ? Number(amount) : undefined, magnitude, impactAreas }),
+    onSuccess: () => { setTitle(''); setDescription(''); setChargeable(false); setAmount(''); setMagnitude('MINOR'); setImpactAreas([]); setErr(''); refresh(); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
-  });
-  const decide = useMutation({
-    mutationFn: ({ id, decision }: { id: string; decision: 'APPROVED' | 'REJECTED' }) => api.patch(`${base}/change-requests/${id}`, { decision }),
-    onSuccess: refresh,
   });
 
   const toggleImpact = (a: ChangeImpact) => setImpactAreas((s) => (s.includes(a) ? s.filter((x) => x !== a) : [...s, a]));
-  const isApprover = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const locked = charterQ.data?.charter?.locked ?? false;
   const crs = crQ.data?.changeRequests ?? [];
+  const filtered = filter === 'ALL' ? crs : crs.filter((c) => c.status === filter);
 
   if (charterQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
   return (
     <Card>
-      <SectionTitle sub="Controlled changes to a committed charter — approval bumps the version and unlocks editing.">
-        Change Requests
+      <SectionTitle sub="Controlled changes to a committed charter — the full log with status, lifecycle and details. Approval bumps the version and unlocks editing.">
+        Change Requests &amp; Log
       </SectionTitle>
 
       {!locked ? (
@@ -68,7 +68,7 @@ export default function ChangeRequestPanel({ projectId }: { projectId: string })
               </Select>
             </Field>
             <Field label="Chargeable">
-              <Select value={chargeable ? 'paid' : 'free'} onChange={(e) => setChargeable(e.target.value === 'paid')}>
+              <Select value={chargeable ? 'paid' : 'free'} onChange={(e) => { const paid = e.target.value === 'paid'; setChargeable(paid); if (!paid) setAmount(''); }}>
                 <option value="free">No-cost (unpaid)</option>
                 <option value="paid">Chargeable (paid)</option>
               </Select>
@@ -77,6 +77,12 @@ export default function ChangeRequestPanel({ projectId }: { projectId: string })
           <Field label="Reason / description">
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Why the charter must change" />
           </Field>
+          {/* Amount only shown for a chargeable (paid) change */}
+          {chargeable && (
+            <Field label="Amount (IDR)" hint="Billable amount for this chargeable change.">
+              <MoneyInput value={amount} onValueChange={setAmount} placeholder="e.g. 50.000.000" />
+            </Field>
+          )}
           <div>
             <span className="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-300">Impact areas</span>
             <div className="flex flex-wrap gap-3">
@@ -89,7 +95,7 @@ export default function ChangeRequestPanel({ projectId }: { projectId: string })
             </div>
           </div>
           <div className="md:col-span-2 flex items-center gap-2">
-            <Button onClick={() => raise.mutate()} disabled={!title || !description || raise.isPending}>
+            <Button onClick={() => raise.mutate()} disabled={!title || !description || (chargeable && !amount) || raise.isPending}>
               {raise.isPending ? 'Submitting…' : 'Submit Change Request'}
             </Button>
             {err && <span className="text-sm text-red-600">{err}</span>}
@@ -99,39 +105,54 @@ export default function ChangeRequestPanel({ projectId }: { projectId: string })
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="mb-2 text-xs font-medium uppercase text-slate-400 dark:text-slate-500">Change Requests</div>
-          {!crs.length && <p className="text-sm text-slate-400 dark:text-slate-500">No change requests.</p>}
-          <div className="space-y-2">
-            {crs.map((cr) => (
-              <div key={cr.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{cr.title}</span>
-                  <Badge color={CR_COLOR[cr.status]}>{cr.status}</Badge>
-                  <Badge color={cr.magnitude === 'MAJOR' ? 'red' : 'slate'}>{cr.magnitude}</Badge>
-                  <Badge color={cr.chargeable ? 'amber' : 'green'}>{cr.chargeable ? 'Chargeable' : 'No-cost'}</Badge>
-                </div>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{cr.description}</p>
-                {cr.impactAreas?.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Impact:</span>
-                    {cr.impactAreas.map((a) => (
-                      <span key={a} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">{a}</span>
-                    ))}
-                  </div>
-                )}
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                  by {cr.requester?.name ?? '—'} · {formatDate(cr.createdAt)}
-                  {cr.decider && ` · decided by ${cr.decider.name}`}
-                </p>
-                {isApprover && (cr.status === 'SUBMITTED' || cr.status === 'UNDER_REVIEW') && (
-                  <div className="mt-2 flex gap-2">
-                    <Button onClick={() => decide.mutate({ id: cr.id, decision: 'APPROVED' })} disabled={decide.isPending}>Approve</Button>
-                    <Button variant="danger" onClick={() => decide.mutate({ id: cr.id, decision: 'REJECTED' })} disabled={decide.isPending}>Reject</Button>
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium uppercase text-slate-400 dark:text-slate-500">Change Log</span>
+            {FILTERS.map((f) => {
+              const n = f === 'ALL' ? crs.length : crs.filter((c) => c.status === f).length;
+              return (
+                <button key={f} onClick={() => setFilter(f)}
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${filter === f ? 'border-brand-500 bg-brand-600/10 text-brand-700 dark:text-brand-300' : 'border-slate-200 text-slate-500 hover:border-brand-300 dark:border-slate-700 dark:text-slate-400'}`}>
+                  {f === 'ALL' ? 'All' : label(f)} <span className="text-slate-400 dark:text-slate-500">{n}</span>
+                </button>
+              );
+            })}
           </div>
+          {!filtered.length ? (
+            <p className="py-4 text-sm text-slate-400 dark:text-slate-500">No change requests{filter !== 'ALL' ? ` with status ${label(filter)}` : ''}.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="prima-rows w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                    <th className="py-2">Change request</th><th>Status</th><th>Requested</th><th>Reviewed</th><th>Decided</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((cr) => (
+                    <tr key={cr.id} className="border-b border-slate-100 align-top dark:border-slate-800">
+                      <td className="py-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-slate-700 dark:text-slate-200">{cr.title}</span>
+                          <Badge color={cr.magnitude === 'MAJOR' ? 'red' : 'slate'}>{cr.magnitude}</Badge>
+                          {cr.chargeable
+                            ? <Badge color="amber">{cr.amountIdr != null ? formatIdr(cr.amountIdr) : 'Chargeable'}</Badge>
+                            : <Badge color="green">No-cost</Badge>}
+                        </div>
+                        <div className="text-xs text-slate-400 dark:text-slate-500">by {cr.requester?.name ?? '—'}</div>
+                      </td>
+                      <td className="py-2"><Badge color={CR_COLOR[cr.status] ?? 'slate'}>{label(cr.status)}</Badge></td>
+                      <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{formatDate(cr.createdAt)}</td>
+                      <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{cr.reviewedAt ? `${formatDate(cr.reviewedAt)}${cr.reviewer ? ` · ${cr.reviewer.name}` : ''}` : '—'}</td>
+                      <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{cr.decidedAt ? `${formatDate(cr.decidedAt)}${cr.decider ? ` · ${cr.decider.name}` : ''}` : '—'}</td>
+                      <td className="py-2 text-right">
+                        <button onClick={() => setDetail(cr)} className="text-xs font-medium text-brand-600 hover:underline">View</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div>
@@ -147,6 +168,8 @@ export default function ChangeRequestPanel({ projectId }: { projectId: string })
           </div>
         </div>
       </div>
+
+      {detail && <CrDetailModal cr={{ ...detail, project: { id: projectId, code: projectCode, name: projectName } }} onClose={() => setDetail(null)} />}
     </Card>
   );
 }

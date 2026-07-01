@@ -54,10 +54,35 @@ const inputCls =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500';
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={inputCls} {...props} />;
+  // Native browser spellcheck on by default (English prose fields get red-underline
+  // suggestions). Callers pass spellCheck={false} for codes/emails/numeric fields.
+  return <input className={inputCls} spellCheck {...props} />;
+}
+
+// Money field that displays Indonesian thousand separators ("1.204.500.000") while
+// storing a plain digit string. `value` is the raw digits (empty allowed); the parent
+// keeps doing Number(value) on submit. Uses a text input because <input type="number">
+// never renders grouping separators.
+export function MoneyInput({
+  value,
+  onValueChange,
+  ...rest
+}: { value: string; onValueChange: (raw: string) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  const digits = String(value ?? '').split('.')[0].replace(/\D/g, '');
+  const display = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return (
+    <Input
+      {...rest}
+      type="text"
+      inputMode="numeric"
+      spellCheck={false}
+      value={display}
+      onChange={(e) => onValueChange(e.target.value.replace(/\D/g, ''))}
+    />
+  );
 }
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={inputCls} rows={3} {...props} />;
+  return <textarea className={inputCls} rows={3} spellCheck {...props} />;
 }
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={inputCls} {...props} />;

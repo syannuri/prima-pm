@@ -23,13 +23,19 @@ export const upsertCharterSchema = z
 
 export const CHANGE_IMPACTS = ['COST', 'SCHEDULE', 'RESOURCE', 'QUALITY', 'RISK'] as const;
 
-export const changeRequestSchema = z.object({
-  title: z.string().min(3).max(160),
-  description: z.string().min(5).max(4000),
-  chargeable: z.boolean().default(false),
-  magnitude: z.enum(['MINOR', 'MAJOR']).default('MINOR'),
-  impactAreas: z.array(z.enum(CHANGE_IMPACTS)).default([]),
-});
+export const changeRequestSchema = z
+  .object({
+    title: z.string().min(3).max(160),
+    description: z.string().min(5).max(4000),
+    chargeable: z.boolean().default(false),
+    amountIdr: z.coerce.number().nonnegative().optional(),
+    magnitude: z.enum(['MINOR', 'MAJOR']).default('MINOR'),
+    impactAreas: z.array(z.enum(CHANGE_IMPACTS)).default([]),
+  })
+  .refine((d) => !d.chargeable || (d.amountIdr != null && d.amountIdr > 0), {
+    message: 'A chargeable change request needs an amount greater than zero',
+    path: ['amountIdr'],
+  });
 
 export const crDecisionSchema = z.object({
   decision: z.enum(['APPROVED', 'REJECTED']),

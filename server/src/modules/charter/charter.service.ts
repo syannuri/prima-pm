@@ -150,6 +150,7 @@ export async function createChangeRequest(
       title: input.title,
       description: input.description,
       chargeable: input.chargeable,
+      amountIdr: input.chargeable ? input.amountIdr ?? null : null,
       magnitude: input.magnitude,
       impactAreas: input.impactAreas,
       status: 'SUBMITTED',

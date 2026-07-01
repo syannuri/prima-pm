@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { DeliveryApproach, Project, ProjectCategory } from '../api/types';
-import { Button, Field, Input, Modal, Select } from './ui';
+import { Button, Field, Input, Modal, MoneyInput, Select } from './ui';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../lib/labels';
 
 const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
@@ -75,7 +75,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
                 <Field label="Project code">
-                  <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. PRJ-2026-0001" />
+                  <Input value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} placeholder="e.g. PRJ-2026-0001" />
                 </Field>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -97,10 +97,10 @@ export default function EditProjectModal({ project }: { project: Project }) {
                   </Select>
                 </Field>
                 <Field label="Cost Baseline (IDR)">
-                  <Input type="number" min={0} value={costBaseline} onChange={(e) => setCostBaseline(e.target.value)} />
+                  <MoneyInput value={costBaseline} onValueChange={setCostBaseline} />
                 </Field>
                 <Field label="Total Revenue (IDR)">
-                  <Input type="number" min={0} value={revenue} onChange={(e) => setRevenue(e.target.value)} />
+                  <MoneyInput value={revenue} onValueChange={setRevenue} />
                 </Field>
               </div>
               {costBaseline !== '' && revenue !== '' && (

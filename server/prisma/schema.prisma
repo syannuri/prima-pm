@@ -571,6 +571,7 @@ model ChangeRequest {
   description String
 
   chargeable  Boolean             @default(false) // paid (billable) vs no-cost change
+  amountIdr   Decimal?            @db.Decimal(18, 2) // billable amount (only when chargeable)
   magnitude   ChangeMagnitude     @default(MINOR)
   impactAreas ChangeImpact[]      // areas affected: cost/schedule/resource/quality/risk
 

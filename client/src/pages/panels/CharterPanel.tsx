@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Charter, DeliveryApproach, ProjectCategory, User } from '../../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { DELIVERY_APPROACH_LABEL } from '../../lib/labels';
 import { formatDateInput } from '../../lib/format';
@@ -155,7 +155,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
           <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office / CTO" />
         </Field>
         <Field label="High-Level Project Cost (IDR)">
-          <Input type="number" value={form.hiCostIdr} onChange={(e) => set('hiCostIdr', e.target.value)} />
+          <MoneyInput value={form.hiCostIdr} onValueChange={(v) => set('hiCostIdr', v)} placeholder="e.g. 1.000.000.000" />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Schedule Start">

@@ -198,6 +198,7 @@ export interface ChangeRequest {
   title: string;
   description: string;
   chargeable: boolean;
+  amountIdr: string | null;
   magnitude: 'MINOR' | 'MAJOR';
   impactAreas: ChangeImpact[];
   status: CRStatus;
