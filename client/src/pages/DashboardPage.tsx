@@ -171,7 +171,7 @@ export default function DashboardPage() {
               {costBaseline && revenue && (
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Projected margin: {formatIdr(Number(revenue) - Number(costBaseline))}
-                  {Number(costBaseline) > 0 && ` (${(((Number(revenue) - Number(costBaseline)) / Number(costBaseline)) * 100).toFixed(1)}%)`}
+                  {Number(revenue) > 0 && ` (${(((Number(revenue) - Number(costBaseline)) / Number(revenue)) * 100).toFixed(1)}%)`}
                 </p>
               )}
               {create.isError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{(create.error as Error).message}</p>}
