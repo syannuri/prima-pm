@@ -17,7 +17,6 @@ import { useAuth } from '../context/AuthContext';
 import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import ResourceCapacity from '../components/ResourceCapacity';
-import NeedsAttention from '../components/NeedsAttention';
 
 const STATUS_COLOR = PROJECT_STATUS_BADGE;
 
@@ -119,7 +118,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {view === 'portfolio' && <NeedsAttention />}
       {view === 'portfolio' && <PortfolioSummary />}
       {view === 'resources' && <ResourceCapacity />}
 
