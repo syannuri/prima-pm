@@ -29,23 +29,16 @@ export async function getAgile(projectId: string) {
 
 const points = (arr: { storyPoints: number | null }[]) => arr.reduce((s, i) => s + (i.storyPoints ?? 0), 0);
 
-// Agile-EVM: derive an EVM reading from story points so agile projects roll into the
-// same Portfolio EVM as predictive ones. % complete = done points ÷ total; planned %
-// (PV) comes from the sprint schedule vs the status date; EV/PV are valued at the
-// cost baseline (BAC). Returns the same fields the portfolio reads from getEvm().
-export async function getAgileEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
-  const [items, sprints, cb, ac] = await Promise.all([
+// Story-point progress fractions for a project: actual (done ÷ total) and planned
+// (from the sprint schedule vs the status date). Shared by agile & hybrid EVM.
+async function agileFractions(projectId: string, statusDate: Date) {
+  const [items, sprints] = await Promise.all([
     prisma.backlogItem.findMany({ where: { projectId }, select: { storyPoints: true, status: true, sprintId: true } }),
     prisma.sprint.findMany({ where: { projectId }, select: { id: true, startDate: true, endDate: true } }),
-    prisma.costBaseline.findFirst({ where: { projectId }, select: { costBaseline: true } }),
-    actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
   ]);
-  const bac = cb ? Number(cb.costBaseline) : 0;
   const totalPts = points(items);
   const donePts = points(items.filter((i) => i.status === 'DONE'));
   const progress = totalPts > 0 ? donePts / totalPts : 0;
-
-  // Planned points that should be complete by the status date, from the sprint plan.
   let plannedPts = 0;
   const now = statusDate.getTime();
   for (const sp of sprints) {
@@ -58,26 +51,75 @@ export async function getAgileEvm(projectId: string, actualCost: number | undefi
     else if (now > start) plannedPts += sprintPts * ((now - start) / (end - start));
   }
   const plannedProgress = totalPts > 0 ? plannedPts / totalPts : 0;
+  return { progress, plannedProgress, itemCount: items.length, totalPts };
+}
 
-  const ev = round2(progress * bac);
-  const pv = round2(plannedProgress * bac);
-  const resolvedAc = round2(ac);
-  const spi = plannedProgress > 0 ? round2(progress / plannedProgress) : 0; // points-based
-  const cpi = resolvedAc > 0 ? round2(ev / resolvedAc) : 0;
+async function bacOf(projectId: string): Promise<number> {
+  const cb = await prisma.costBaseline.findUnique({ where: { projectId }, select: { costBaseline: true } });
+  return cb ? Number(cb.costBaseline) : 0;
+}
+
+// Budget of the predictive stream = direct costs linked to WBS tasks. The rest of the
+// BAC funds the agile stream (so combining the two never double-counts the BAC).
+async function predictiveBudget(projectId: string): Promise<number> {
+  const rows = await prisma.costItemDirect.findMany({
+    where: { projectId, taskId: { not: null } },
+    select: { type: true, amount: true, manpowerCost: true },
+  });
+  return rows.reduce((s, r) => s + Number(r.type === 'MANPOWER' ? (r.manpowerCost ?? 0) : (r.amount ?? 0)), 0);
+}
+
+function evmOut(bac: number, ev: number, pv: number, ac: number, progress: number, leafTaskCount: number, finishVarianceDays: number | null) {
   return {
     bac,
-    pv,
-    ev,
-    ac: resolvedAc,
-    cv: round2(ev - resolvedAc),
-    spi,
-    cpi,
+    pv: round2(pv),
+    ev: round2(ev),
+    ac: round2(ac),
+    cv: round2(ev - ac),
+    spi: pv > 0 ? round2(ev / pv) : 0,
+    cpi: ac > 0 ? round2(ev / ac) : 0,
     percentComplete: round2(progress),
     scheduleProgress: progress,
-    scheduleWeight: bac > 0 ? bac : totalPts,
-    leafTaskCount: items.length, // >0 so schedule health isn't NO_DATA when a backlog exists
-    finishVarianceDays: null as number | null,
+    scheduleWeight: bac > 0 ? bac : 1,
+    leafTaskCount,
+    finishVarianceDays,
   };
+}
+
+// Agile-EVM: derive an EVM reading from story points so agile projects roll into the
+// same Portfolio EVM as predictive ones. Returns the fields the portfolio reads.
+export async function getAgileEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
+  const [af, bac, ac] = await Promise.all([
+    agileFractions(projectId, statusDate),
+    bacOf(projectId),
+    actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
+  ]);
+  const out = evmOut(bac, af.progress * bac, af.plannedProgress * bac, ac, af.progress, af.itemCount, null);
+  // SPI is points-based (robust even with BAC=0): progress ÷ plannedProgress.
+  out.spi = af.plannedProgress > 0 ? round2(af.progress / af.plannedProgress) : 0;
+  return out;
+}
+
+// Hybrid-EVM: a predictive WBS backbone + an agile execution stream. Split the BAC into
+// a predictive share (cost linked to WBS tasks) and an agile share (the remainder), then
+// EV = wbsProgress×predictiveBAC + agileProgress×agileBAC (no BAC double-counting).
+export async function getHybridEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
+  const { getEvm } = await import('../schedule/schedule.service.js');
+  const [wbs, af, linked, ac] = await Promise.all([
+    getEvm(projectId, 0, statusDate),
+    agileFractions(projectId, statusDate),
+    predictiveBudget(projectId),
+    actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
+  ]);
+  const bac = wbs.costBaselineBAC || 0;
+  const predictiveBAC = bac > 0 ? Math.min(linked, bac) : linked;
+  const agileBAC = Math.max(0, bac - predictiveBAC);
+  const wProg = wbs.scheduleProgress;
+  const wPlanned = bac > 0 ? wbs.pv / bac : 0;
+  const ev = wProg * predictiveBAC + af.progress * agileBAC;
+  const pv = wPlanned * predictiveBAC + af.plannedProgress * agileBAC;
+  const progress = bac > 0 ? ev / bac : (wProg + af.progress) / 2;
+  return evmOut(bac, ev, pv, ac, progress, wbs.leafTaskCount + af.itemCount, wbs.finishVarianceDays);
 }
 
 async function recordSnapshots(
