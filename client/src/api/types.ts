@@ -209,6 +209,11 @@ export interface ChangeRequest {
   createdAt: string;
 }
 
+// A pending change request enriched with its project, for the PMO approvals panel.
+export interface PendingApproval extends ChangeRequest {
+  project: { id: string; code: string; name: string };
+}
+
 export interface CharterVersion {
   id: string;
   version: number;

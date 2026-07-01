@@ -157,6 +157,21 @@ export async function createChangeRequest(
     },
   });
   await writeAudit({ projectId, userId: actorId, entity: 'ChangeRequest', entityId: cr.id, action: 'CREATE', after: cr });
+  // Notify the approvers (ADMIN/PMO) that a change request awaits their decision.
+  const [project, approvers] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true } }),
+    prisma.user.findMany({ where: { role: { in: ['ADMIN', 'PMO'] }, isActive: true }, select: { id: true } }),
+  ]);
+  for (const a of approvers) {
+    if (a.id === actorId) continue;
+    await createNotification({
+      userId: a.id,
+      type: 'CR_SUBMITTED',
+      title: 'Change request awaits your decision',
+      body: `"${input.title}" on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''} needs approval.`,
+      projectId,
+    });
+  }
   return cr;
 }
 

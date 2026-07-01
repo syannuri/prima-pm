@@ -18,6 +18,7 @@ const HEALTH_PILL: Record<string, [string, string]> = {
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
+import PendingApprovals from '../components/PendingApprovals';
 import ResourceCapacity from '../components/ResourceCapacity';
 
 const STATUS_COLOR = PROJECT_STATUS_BADGE;
@@ -122,6 +123,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {view === 'portfolio' && <PendingApprovals />}
       {view === 'portfolio' && <PortfolioSummary />}
       {view === 'resources' && <ResourceCapacity />}
 
