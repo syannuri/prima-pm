@@ -597,8 +597,24 @@ model Sprint {
   updatedAt DateTime     @updatedAt
 
   items     BacklogItem[]
+  snapshots SprintSnapshot[]
 
   @@index([projectId])
+}
+
+// Daily snapshot of a sprint's remaining vs committed story points — powers the
+// burndown chart (recorded when the board is fetched, deduped per day).
+model SprintSnapshot {
+  id               String   @id @default(uuid())
+  sprintId         String
+  sprint           Sprint   @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  date             DateTime @db.Date
+  committedPoints  Int      @default(0)
+  remainingPoints  Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@unique([sprintId, date])
+  @@index([sprintId])
 }
 
 // A product-backlog work item (epic/story/task/bug). `sprintId` null = product

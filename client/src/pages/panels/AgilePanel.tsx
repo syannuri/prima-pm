@@ -7,6 +7,7 @@ import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { BACKLOG_STATUS_LABEL, BACKLOG_TYPE_BADGE } from '../../lib/labels';
+import AgileReports from './AgileReports';
 
 const TYPES: BacklogType[] = ['STORY', 'TASK', 'BUG', 'EPIC'];
 const STATUSES: BacklogStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
@@ -20,7 +21,7 @@ export default function AgilePanel({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const canEdit = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
   const base = `/projects/${projectId}/agile`;
-  const [view, setView] = useState<'board' | 'backlog'>('board');
+  const [view, setView] = useState<'board' | 'backlog' | 'reports'>('board');
 
   const { data, isLoading } = useQuery({ queryKey: ['agile', projectId], queryFn: () => api.get<AgileBoard>(base) });
   const dirQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory') });
@@ -48,13 +49,15 @@ export default function AgilePanel({ projectId }: { projectId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SectionTitle sub="Agile delivery — product backlog, sprints and a Kanban board.">Agile</SectionTitle>
         <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm dark:bg-slate-800">
-          {(['board', 'backlog'] as const).map((v) => (
+          {(['board', 'backlog', 'reports'] as const).map((v) => (
             <button key={v} onClick={() => setView(v)} className={`rounded-md px-3 py-1 capitalize transition ${view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}>{v}</button>
           ))}
         </div>
       </div>
 
-      {view === 'board' ? (
+      {view === 'reports' ? (
+        <AgileReports sprints={sprints} items={items} snapshots={data?.snapshots ?? []} />
+      ) : view === 'board' ? (
         <BoardView
           sprints={sprints}
           items={items}

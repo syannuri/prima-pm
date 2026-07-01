@@ -3,7 +3,7 @@ import { writeAudit } from '../../lib/audit.js';
 import { NotFound } from '../../lib/errors.js';
 import type { BacklogItemInput, SprintInput } from './agile.schemas.js';
 
-// Full agile board payload: all sprints + all backlog items (with assignee name).
+// Full agile board payload: sprints + backlog items (with assignee) + burndown snapshots.
 export async function getAgile(projectId: string) {
   const [sprints, items] = await Promise.all([
     prisma.sprint.findMany({
@@ -16,7 +16,33 @@ export async function getAgile(projectId: string) {
       include: { assignee: { select: { id: true, name: true } } },
     }),
   ]);
-  return { sprints, items };
+  // Passively record today's burndown snapshot for ACTIVE sprints (deduped per day).
+  await recordSnapshots(sprints, items).catch((e) => console.error('[agile] snapshot failed', e));
+  const snapshots = await prisma.sprintSnapshot.findMany({
+    where: { sprint: { projectId } },
+    orderBy: { date: 'asc' },
+  });
+  return { sprints, items, snapshots };
+}
+
+const points = (arr: { storyPoints: number | null }[]) => arr.reduce((s, i) => s + (i.storyPoints ?? 0), 0);
+
+async function recordSnapshots(
+  sprints: { id: string; status: string }[],
+  items: { sprintId: string | null; status: string; storyPoints: number | null }[],
+) {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  for (const sp of sprints.filter((s) => s.status === 'ACTIVE')) {
+    const inSprint = items.filter((i) => i.sprintId === sp.id);
+    const committed = points(inSprint);
+    const remaining = points(inSprint.filter((i) => i.status !== 'DONE'));
+    await prisma.sprintSnapshot.upsert({
+      where: { sprintId_date: { sprintId: sp.id, date: today } },
+      create: { sprintId: sp.id, date: today, committedPoints: committed, remainingPoints: remaining },
+      update: { committedPoints: committed, remainingPoints: remaining },
+    });
+  }
 }
 
 // ---- Sprints ----

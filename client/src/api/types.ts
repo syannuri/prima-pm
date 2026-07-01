@@ -84,7 +84,14 @@ export interface BacklogItem {
   assignee: { id: string; name: string } | null;
   sortOrder: number;
 }
-export interface AgileBoard { sprints: Sprint[]; items: BacklogItem[] }
+export interface SprintSnapshot {
+  id: string;
+  sprintId: string;
+  date: string;
+  committedPoints: number;
+  remainingPoints: number;
+}
+export interface AgileBoard { sprints: Sprint[]; items: BacklogItem[]; snapshots: SprintSnapshot[] }
 
 export interface Project {
   id: string;
