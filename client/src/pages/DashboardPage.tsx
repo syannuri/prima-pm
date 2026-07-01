@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { Project, ProjectCategory, PortfolioSummary as Summary, User } from '../api/types';
+import type { DeliveryApproach, Project, ProjectCategory, PortfolioSummary as Summary, User } from '../api/types';
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Skeleton } from '../components/ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
-import { PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
+import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
+
+const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
 
 // Health → calm pill (label + Badge colour). Shown on a card only when meaningful.
 const HEALTH_PILL: Record<string, [string, string]> = {
@@ -31,6 +33,7 @@ export default function DashboardPage() {
   const [clientName, setClientName] = useState('');
   const [sponsor, setSponsor] = useState('');
   const [category, setCategory] = useState<ProjectCategory | ''>('');
+  const [deliveryApproach, setDeliveryApproach] = useState<DeliveryApproach>('PREDICTIVE');
   const [costBaseline, setCostBaseline] = useState('');
   const [revenue, setRevenue] = useState('');
   const [pmUserId, setPmUserId] = useState('');
@@ -49,7 +52,7 @@ export default function DashboardPage() {
   // PMO assigns the project to a PM at creation.
   const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory'), enabled: showForm });
 
-  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setCostBaseline(''); setRevenue(''); setPmUserId(''); };
+  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setDeliveryApproach('PREDICTIVE'); setCostBaseline(''); setRevenue(''); setPmUserId(''); };
   const create = useMutation({
     mutationFn: () => api.post<{ project: Project }>('/projects', {
       name,
@@ -57,6 +60,7 @@ export default function DashboardPage() {
       clientName: clientName || undefined,
       sponsor: sponsor || undefined,
       category: category || undefined,
+      deliveryApproach,
       costBaselineIdr: costBaseline ? Number(costBaseline) : undefined,
       totalRevenueIdr: revenue ? Number(revenue) : undefined,
       pmUserId: pmUserId || undefined,
@@ -144,6 +148,11 @@ export default function DashboardPage() {
                   <Select value={category} onChange={(e) => setCategory(e.target.value as ProjectCategory | '')}>
                     <option value="">— select —</option>
                     {PROJECT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Delivery approach" hint="Agile/Hybrid unlocks the Backlog & Board">
+                  <Select value={deliveryApproach} onChange={(e) => setDeliveryApproach(e.target.value as DeliveryApproach)}>
+                    {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
                   </Select>
                 </Field>
                 <Field label="Assign Project Manager">

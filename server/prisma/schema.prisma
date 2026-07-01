@@ -120,6 +120,33 @@ enum ChangeRequestStatus {
   REJECTED
 }
 
+// Delivery methodology for a project (predictive/waterfall, agile, or hybrid).
+enum DeliveryApproach {
+  PREDICTIVE
+  AGILE
+  HYBRID
+}
+
+enum BacklogType {
+  EPIC
+  STORY
+  TASK
+  BUG
+}
+
+// Board columns for an agile work item.
+enum BacklogStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  CLOSED
+}
+
 enum AttachmentOwner {
   CHARTER
   RISK
@@ -152,6 +179,7 @@ model User {
   changeRequests    ChangeRequest[] @relation("CRRequester")
   decidedCRs        ChangeRequest[] @relation("CRDecider")
   resourceProfiles  Resource[]      @relation("ResourceUser")
+  assignedBacklog   BacklogItem[]   @relation("BacklogAssignee")
 
   @@index([role])
 }
@@ -170,6 +198,7 @@ model Project {
   costBaselineIdr Decimal? @db.Decimal(18, 2) // high-level planning cost baseline
   totalRevenueIdr Decimal? @db.Decimal(18, 2) // expected total revenue
   status    ProjectStatus @default(DRAFT)
+  deliveryApproach DeliveryApproach @default(PREDICTIVE)
   pmUserId  String?
   pm        User?         @relation("ProjectManager", fields: [pmUserId], references: [id])
   createdAt DateTime      @default(now())
@@ -187,6 +216,8 @@ model Project {
   changeRequests   ChangeRequest[]
   attachments      Attachment[]
   actualCosts      ActualCostEntry[]
+  sprints          Sprint[]
+  backlogItems     BacklogItem[]
 
   @@index([status])
   @@index([pmUserId])
@@ -546,4 +577,51 @@ model Attachment {
   riskRelId  String?
 
   @@index([ownerType, ownerId])
+}
+
+// ---- Agile ----
+
+// A time-boxed iteration (Scrum). Optional for Kanban projects (items can live in
+// the product backlog / on the board without a sprint).
+model Sprint {
+  id        String       @id @default(uuid())
+  projectId String
+  project   Project      @relation(fields: [projectId], references: [id])
+  name      String
+  goal      String?      @db.Text
+  startDate DateTime?
+  endDate   DateTime?
+  status    SprintStatus @default(PLANNED)
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  items     BacklogItem[]
+
+  @@index([projectId])
+}
+
+// A product-backlog work item (epic/story/task/bug). `sprintId` null = product
+// backlog; when in a sprint it shows on the board by `status`.
+model BacklogItem {
+  id                 String        @id @default(uuid())
+  projectId          String
+  project            Project       @relation(fields: [projectId], references: [id])
+  sprintId           String?
+  sprint             Sprint?       @relation(fields: [sprintId], references: [id])
+  type               BacklogType   @default(STORY)
+  title              String
+  description        String?       @db.Text
+  acceptanceCriteria String?       @db.Text
+  storyPoints        Int?
+  priority           Int           @default(0) // MoSCoW-ish rank; lower = higher priority
+  status             BacklogStatus @default(TODO)
+  assigneeUserId     String?
+  assignee           User?         @relation("BacklogAssignee", fields: [assigneeUserId], references: [id])
+  sortOrder          Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([projectId])
+  @@index([sprintId])
 }

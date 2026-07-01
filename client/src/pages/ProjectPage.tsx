@@ -17,9 +17,10 @@ import AuditPanel from './panels/AuditPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
+import AgilePanel from './panels/AgilePanel';
+import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-const TABS = ['Charter', 'Cost', 'Risk', 'Schedule', 'Change Req', 'Audit'] as const;
-type Tab = (typeof TABS)[number];
+type Tab = 'Charter' | 'Agile' | 'Cost' | 'Risk' | 'Schedule' | 'Change Req' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -63,6 +64,9 @@ export default function ProjectPage() {
   if (!project) return <Card>Project not found.</Card>;
 
   const chartered = project.status !== 'DRAFT';
+  const isAgile = project.deliveryApproach === 'AGILE' || project.deliveryApproach === 'HYBRID';
+  // The Agile tab appears for agile/hybrid projects (right after Charter).
+  const tabs: Tab[] = ['Charter', ...(isAgile ? (['Agile'] as Tab[]) : []), 'Cost', 'Risk', 'Schedule', 'Change Req', 'Audit'];
 
   return (
     <div className="space-y-5">
@@ -74,6 +78,7 @@ export default function ProjectPage() {
           <span className="font-mono text-sm text-slate-400 dark:text-slate-500">{project.code}</span>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{project.name}</h1>
           <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'}>{project.status}</Badge>
+          <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>
           <div className="ml-auto flex flex-wrap gap-2">
             <EditProjectModal project={project} />
             {chartered && (
@@ -107,7 +112,7 @@ export default function ProjectPage() {
       <ProjectAlerts projectId={projectId} onJump={(t) => setTab(t as Tab)} />
 
       <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -127,7 +132,7 @@ export default function ProjectPage() {
         ))}
       </div>
 
-      {!chartered && tab !== 'Charter' && tab !== 'Audit' && (
+      {!chartered && tab !== 'Charter' && tab !== 'Audit' && tab !== 'Agile' && (
         <Card>
           <p className="text-center text-amber-600">
             Commit the Project Charter first to unlock {tab} Management.
@@ -136,6 +141,7 @@ export default function ProjectPage() {
       )}
 
       {tab === 'Charter' && <CharterPanel projectId={projectId} />}
+      {tab === 'Agile' && <AgilePanel projectId={projectId} />}
       {tab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
       {tab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
       {tab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}

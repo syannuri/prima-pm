@@ -54,6 +54,38 @@ export type ProjectCategory =
   | 'CYBERSECURITY_INFRA'
   | 'APP_DEV';
 
+export type DeliveryApproach = 'PREDICTIVE' | 'AGILE' | 'HYBRID';
+export type BacklogType = 'EPIC' | 'STORY' | 'TASK' | 'BUG';
+export type BacklogStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
+export type SprintStatus = 'PLANNED' | 'ACTIVE' | 'CLOSED';
+
+export interface Sprint {
+  id: string;
+  projectId: string;
+  name: string;
+  goal: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  status: SprintStatus;
+  sortOrder: number;
+}
+export interface BacklogItem {
+  id: string;
+  projectId: string;
+  sprintId: string | null;
+  type: BacklogType;
+  title: string;
+  description: string | null;
+  acceptanceCriteria: string | null;
+  storyPoints: number | null;
+  priority: number;
+  status: BacklogStatus;
+  assigneeUserId: string | null;
+  assignee: { id: string; name: string } | null;
+  sortOrder: number;
+}
+export interface AgileBoard { sprints: Sprint[]; items: BacklogItem[] }
+
 export interface Project {
   id: string;
   code: string;
@@ -61,6 +93,7 @@ export interface Project {
   clientName: string | null;
   sponsor: string | null;
   category: ProjectCategory | null;
+  deliveryApproach: DeliveryApproach;
   costBaselineIdr: string | null;
   totalRevenueIdr: string | null;
   status: ProjectStatus;

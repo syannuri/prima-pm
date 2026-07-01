@@ -1,4 +1,26 @@
-import type { ProjectCategory, ChangeImpact } from '../api/types';
+import type { ProjectCategory, ChangeImpact, DeliveryApproach, BacklogType, BacklogStatus } from '../api/types';
+
+export const DELIVERY_APPROACH_LABEL: Record<DeliveryApproach, string> = {
+  PREDICTIVE: 'Predictive',
+  AGILE: 'Agile',
+  HYBRID: 'Hybrid',
+};
+export const DELIVERY_APPROACH_BADGE: Record<DeliveryApproach, string> = {
+  PREDICTIVE: 'sky',
+  AGILE: 'indigo',
+  HYBRID: 'amber',
+};
+export const BACKLOG_TYPE_BADGE: Record<BacklogType, string> = {
+  EPIC: 'indigo',
+  STORY: 'sky',
+  TASK: 'slate',
+  BUG: 'red',
+};
+export const BACKLOG_STATUS_LABEL: Record<BacklogStatus, string> = {
+  TODO: 'To Do',
+  IN_PROGRESS: 'In Progress',
+  DONE: 'Done',
+};
 
 export const PROJECT_CATEGORIES: { value: ProjectCategory; label: string }[] = [
   { value: 'NETWORK_INFRA', label: 'Network Infrastructure' },

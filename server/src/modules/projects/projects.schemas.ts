@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const PROJECT_CATEGORIES = ['NETWORK_INFRA', 'SERVER_INFRA', 'CLOUD_INFRA', 'CYBERSECURITY_INFRA', 'APP_DEV'] as const;
+export const DELIVERY_APPROACHES = ['PREDICTIVE', 'AGILE', 'HYBRID'] as const;
 
 export const createProjectSchema = z.object({
   name: z.string().min(2).max(160),
@@ -9,6 +10,7 @@ export const createProjectSchema = z.object({
   sponsor: z.string().max(160).optional(),
   pmUserId: z.string().uuid().optional(),
   category: z.enum(PROJECT_CATEGORIES).optional(),
+  deliveryApproach: z.enum(DELIVERY_APPROACHES).optional(),
   costBaselineIdr: z.coerce.number().nonnegative().optional(),
   totalRevenueIdr: z.coerce.number().nonnegative().optional(),
 });
@@ -19,6 +21,7 @@ export const updateProjectSchema = z.object({
   clientName: z.string().max(160).nullable().optional(),
   sponsor: z.string().max(160).nullable().optional(),
   category: z.enum(PROJECT_CATEGORIES).nullable().optional(),
+  deliveryApproach: z.enum(DELIVERY_APPROACHES).optional(),
   costBaselineIdr: z.coerce.number().nonnegative().nullable().optional(),
   totalRevenueIdr: z.coerce.number().nonnegative().nullable().optional(),
   pmUserId: z.string().uuid().nullable().optional(),

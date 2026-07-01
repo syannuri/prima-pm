@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import type { Project, ProjectCategory } from '../api/types';
+import type { DeliveryApproach, Project, ProjectCategory } from '../api/types';
 import { Button, Field, Input, Modal, Select } from './ui';
-import { PROJECT_CATEGORIES } from '../lib/labels';
+import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../lib/labels';
+
+const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
 import { formatIdr } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
 
@@ -18,6 +20,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
   const [clientName, setClientName] = useState(project.clientName ?? '');
   const [sponsor, setSponsor] = useState(project.sponsor ?? '');
   const [category, setCategory] = useState<ProjectCategory | ''>(project.category ?? '');
+  const [deliveryApproach, setDeliveryApproach] = useState<DeliveryApproach>(project.deliveryApproach);
   const [costBaseline, setCostBaseline] = useState(project.costBaselineIdr ?? '');
   const [revenue, setRevenue] = useState(project.totalRevenueIdr ?? '');
   const [err, setErr] = useState('');
@@ -30,6 +33,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
     setClientName(project.clientName ?? '');
     setSponsor(project.sponsor ?? '');
     setCategory(project.category ?? '');
+    setDeliveryApproach(project.deliveryApproach);
     setCostBaseline(project.costBaselineIdr ?? '');
     setRevenue(project.totalRevenueIdr ?? '');
     setErr('');
@@ -43,6 +47,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
       clientName: clientName || null,
       sponsor: sponsor || null,
       category: category || null,
+      deliveryApproach,
       costBaselineIdr: costBaseline === '' ? null : Number(costBaseline),
       totalRevenueIdr: revenue === '' ? null : Number(revenue),
     }),
@@ -85,7 +90,11 @@ export default function EditProjectModal({ project }: { project: Project }) {
                     {PROJECT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </Select>
                 </Field>
-                <div />
+                <Field label="Delivery approach" hint="Agile/Hybrid unlocks the Backlog & Board">
+                  <Select value={deliveryApproach} onChange={(e) => setDeliveryApproach(e.target.value as DeliveryApproach)}>
+                    {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
+                  </Select>
+                </Field>
                 <Field label="Cost Baseline (IDR)">
                   <Input type="number" min={0} value={costBaseline} onChange={(e) => setCostBaseline(e.target.value)} />
                 </Field>
