@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { DragEvent as ReactDragEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { AgileBoard, BacklogItem, BacklogStatus, BacklogType, Sprint, User } from '../../api/types';
@@ -11,6 +12,12 @@ import AgileReports from './AgileReports';
 
 const TYPES: BacklogType[] = ['STORY', 'TASK', 'BUG', 'EPIC'];
 const STATUSES: BacklogStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
+// Column accent (top border) per status — a calm visual cue on the board.
+const STATUS_ACCENT: Record<BacklogStatus, string> = {
+  TODO: 'border-t-slate-400',
+  IN_PROGRESS: 'border-t-sky-500',
+  DONE: 'border-t-green-500',
+};
 const SPRINT_STATUSES = ['PLANNED', 'ACTIVE', 'CLOSED'] as const;
 const sumPoints = (arr: BacklogItem[]) => arr.reduce((s, i) => s + (i.storyPoints ?? 0), 0);
 
@@ -98,34 +105,69 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, on
   sprints: Sprint[]; items: BacklogItem[]; activeSprintId: string; setBoardSprint: (id: string) => void; canEdit: boolean;
   onMove: (id: string, status: BacklogStatus) => void;
 }) {
-  if (!sprints.length) return <Card><EmptyState icon="M3 3h18v18H3z M3 9h18 M9 21V9" title="No sprints yet" hint="Create a sprint in the Backlog view, then drag items into it to plan work." /></Card>;
+  // Drag state: which card is being dragged, and which column is hovered.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<BacklogStatus | null>(null);
+
+  if (!sprints.length) return <Card><EmptyState icon="M3 3h18v18H3z M3 9h18 M9 21V9" title="No sprints yet" hint="Create a sprint in the Backlog view, then assign items into it to plan work." /></Card>;
   const sprintItems = items.filter((i) => i.sprintId === activeSprintId);
+  const dragged = dragId ? sprintItems.find((i) => i.id === dragId) : null;
+
   const move = (it: BacklogItem, dir: -1 | 1) => {
-    const idx = STATUSES.indexOf(it.status);
-    const next = STATUSES[idx + dir];
+    const next = STATUSES[STATUSES.indexOf(it.status) + dir];
     if (next) onMove(it.id, next);
   };
+  // Read the dragged id from dataTransfer (set on dragstart) so the drop never
+  // depends on React state having re-rendered between the drag events.
+  const drop = (e: ReactDragEvent, st: BacklogStatus) => {
+    const id = e.dataTransfer.getData('text/plain') || dragId || '';
+    const item = sprintItems.find((i) => i.id === id);
+    if (id && item && item.status !== st) onMove(id, st);
+    setDragId(null); setOverCol(null);
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Sprint</span>
         <Select value={activeSprintId} onChange={(e) => setBoardSprint(e.target.value)} className="!w-auto">
           {sprints.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.status})</option>)}
         </Select>
         <span className="text-xs text-slate-400 dark:text-slate-500">{sprintItems.length} items · {sumPoints(sprintItems)} pts</span>
+        {canEdit && <span className="ml-auto hidden items-center gap-1 text-xs text-slate-400 dark:text-slate-500 sm:flex">✥ Drag cards between columns</span>}
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         {STATUSES.map((st) => {
           const col = sprintItems.filter((i) => i.status === st);
+          const isTarget = overCol === st && !!dragged && dragged.status !== st;
           return (
-            <div key={st} className="rounded-xl border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-900/40">
+            <div
+              key={st}
+              data-col={st}
+              onDragOver={canEdit ? (e) => { e.preventDefault(); if (overCol !== st) setOverCol(st); } : undefined}
+              onDragLeave={canEdit ? () => setOverCol((c) => (c === st ? null : c)) : undefined}
+              onDrop={canEdit ? (e) => { e.preventDefault(); drop(e, st); } : undefined}
+              className={`rounded-xl border border-t-2 p-2.5 transition-colors ${STATUS_ACCENT[st]} ${
+                isTarget
+                  ? 'border-brand-400 bg-brand-50/70 ring-2 ring-brand-300 dark:bg-brand-600/10'
+                  : 'border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/40'
+              }`}
+            >
               <div className="mb-2 flex items-center justify-between px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 <span>{BACKLOG_STATUS_LABEL[st]}</span>
                 <span className="text-xs font-normal text-slate-400 dark:text-slate-500">{col.length} · {sumPoints(col)} pts</span>
               </div>
-              <div className="space-y-2">
+              <div className="min-h-[3.5rem] space-y-2">
                 {col.map((it) => (
-                  <div key={it.id} className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                  <div
+                    key={it.id}
+                    draggable={canEdit}
+                    onDragStart={canEdit ? (e) => { setDragId(it.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', it.id); } catch { /* older browsers */ } } : undefined}
+                    onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                    className={`group rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm transition dark:border-slate-700 dark:bg-slate-800 ${
+                      canEdit ? 'cursor-grab hover:-translate-y-px hover:shadow-md active:cursor-grabbing' : ''
+                    } ${dragId === it.id ? 'opacity-40 ring-2 ring-brand-300' : ''}`}
+                  >
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <TypeBadge t={it.type} />
                       <Points n={it.storyPoints} />
@@ -135,14 +177,20 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, on
                       <span className="truncate text-xs text-slate-400 dark:text-slate-500">{it.assignee ? `👤 ${it.assignee.name}` : 'Unassigned'}</span>
                       {canEdit && (
                         <span className="flex gap-1">
-                          <button onClick={() => move(it, -1)} disabled={it.status === 'TODO'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move left">◀</button>
-                          <button onClick={() => move(it, 1)} disabled={it.status === 'DONE'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move right">▶</button>
+                          <button onClick={() => move(it, -1)} disabled={it.status === 'TODO'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to previous column">◀</button>
+                          <button onClick={() => move(it, 1)} disabled={it.status === 'DONE'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to next column">▶</button>
                         </span>
                       )}
                     </div>
                   </div>
                 ))}
-                {!col.length && <p className="px-1 py-3 text-center text-xs text-slate-400 dark:text-slate-500">—</p>}
+                {!col.length && (
+                  <p className={`rounded-lg border border-dashed px-1 py-4 text-center text-xs transition-colors ${
+                    isTarget ? 'border-brand-400 text-brand-600 dark:text-brand-300' : 'border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
+                  }`}>
+                    {isTarget ? 'Drop here' : 'No items'}
+                  </p>
+                )}
               </div>
             </div>
           );
@@ -174,8 +222,10 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
     setTitle(''); setPoints(''); setAssignee('');
   };
 
+  const addSprint = () => { if (sprintName.trim()) { onCreateSprint({ name: sprintName.trim() }); setSprintName(''); } };
+
   const ItemRow = ({ it }: { it: BacklogItem }) => (
-    <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 py-2 dark:border-slate-800">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
       <TypeBadge t={it.type} />
       <span className="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-200">{it.title}</span>
       <Points n={it.storyPoints} />
@@ -192,6 +242,28 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
 
   return (
     <div className="space-y-4">
+      {/* Product backlog first — capturing an item is the most common action, so the
+          composer sits right at the top (no scrolling past the sprints list). */}
+      <Card>
+        <SectionTitle sub="Add stories, tasks and bugs here, then assign them to a sprint (or drag them across the Board).">Product Backlog</SectionTitle>
+        {canEdit && (
+          <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Add backlog item</div>
+            <div className="grid gap-2 sm:grid-cols-[7rem_1fr_5.5rem_9rem_auto]">
+              <Select value={type} onChange={(e) => setType(e.target.value as BacklogType)} aria-label="Type">{TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</Select>
+              <Input placeholder="What needs doing?" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Title" onKeyDown={(e) => e.key === 'Enter' && add()} />
+              <Input type="number" min={0} placeholder="Points" value={points} onChange={(e) => setPoints(e.target.value)} aria-label="Story points" title="Story points (effort estimate)" />
+              <Select value={assignee} onChange={(e) => setAssignee(e.target.value)} aria-label="Assignee"><option value="">Unassigned</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
+              <Button onClick={add} disabled={!title.trim()}>+ Add</Button>
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">Tip: press <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">Enter</kbd> in the title to add quickly.</p>
+          </div>
+        )}
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          {backlog.length ? backlog.map((it) => <ItemRow key={it.id} it={it} />) : <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">Backlog is empty — add your first item above.</p>}
+        </div>
+      </Card>
+
       {/* Sprints */}
       <Card>
         <SectionTitle sub="Time-boxed iterations. Leave a project without sprints to run pure Kanban.">Sprints</SectionTitle>
@@ -215,25 +287,10 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
         </div>
         {canEdit && (
           <div className="mt-3 flex gap-2">
-            <Input placeholder="New sprint name (e.g. Sprint 1)" value={sprintName} onChange={(e) => setSprintName(e.target.value)} />
-            <Button variant="secondary" disabled={!sprintName.trim()} onClick={() => { onCreateSprint({ name: sprintName.trim() }); setSprintName(''); }}>+ Sprint</Button>
+            <Input placeholder="New sprint name (e.g. Sprint 1)" value={sprintName} onChange={(e) => setSprintName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addSprint()} />
+            <Button variant="secondary" disabled={!sprintName.trim()} onClick={addSprint}>+ Sprint</Button>
           </div>
         )}
-      </Card>
-
-      {/* Product backlog */}
-      <Card>
-        <SectionTitle sub="Prioritised list of stories, tasks and bugs waiting to be scheduled into a sprint.">Product Backlog</SectionTitle>
-        {canEdit && (
-          <div className="mb-3 grid gap-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800 md:grid-cols-[8rem,1fr,6rem,10rem,auto]">
-            <Select value={type} onChange={(e) => setType(e.target.value as BacklogType)} aria-label="Type">{TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</Select>
-            <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Title" onKeyDown={(e) => e.key === 'Enter' && add()} />
-            <Input type="number" placeholder="Points" value={points} onChange={(e) => setPoints(e.target.value)} aria-label="Story points" />
-            <Select value={assignee} onChange={(e) => setAssignee(e.target.value)} aria-label="Assignee"><option value="">Unassigned</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
-            <Button onClick={add} disabled={!title.trim()}>Add</Button>
-          </div>
-        )}
-        {backlog.length ? backlog.map((it) => <ItemRow key={it.id} it={it} />) : <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">Backlog is empty.</p>}
       </Card>
     </div>
   );
