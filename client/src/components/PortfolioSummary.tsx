@@ -128,23 +128,37 @@ export default function PortfolioSummary() {
         </div>
       </div>
 
-      {/* KPI cards — compact; all 8 fit on one row on wide screens (xl), wrapping to
-          4 then 2 columns on smaller ones. Values use the short IDR form ("Rp 2,24 M"). */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
-        <Kpi label="Projects" value={String(t.count)} icon={KPI_ICON.projects} />
-        <Kpi label="Total BAC" value={formatIdrShort(t.bac)} title={formatIdr(t.bac)} strong icon={KPI_ICON.bac} />
-        <Kpi label="Earned Value" value={formatIdrShort(t.ev)} title={formatIdr(t.ev)} icon={KPI_ICON.ev} />
-        <Kpi label="Actual Cost" value={formatIdrShort(t.ac)} title={formatIdr(t.ac)} icon={KPI_ICON.ac} />
-        <Kpi label={showPies ? 'Portfolio CPI' : 'CPI'} value={t.cpi ? formatNum(t.cpi, 2) : '—'} warn={t.cpi > 0 && t.cpi < 1} icon={KPI_ICON.cpi} />
-        <Kpi label={showPies ? 'Portfolio SPI' : 'SPI'} value={t.spi ? formatNum(t.spi, 2) : '—'} warn={spiBehind} icon={KPI_ICON.spi} />
-        <Kpi label="% Complete" value={`${formatNum(t.scheduleProgress * 100, 1)}%`} icon={KPI_ICON.percent} />
-        <Kpi
-          label="Schedule slip"
-          value={t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule'}
-          warn={t.slippedCount > 0}
-          icon={KPI_ICON.schedule}
-        />
-      </div>
+      {/* KPI stat strip — one cohesive card with divided cells. All 8 sit on a single
+          row on wide screens; on narrow ones the strip scrolls horizontally. */}
+      <Card className="overflow-hidden !p-0">
+        <div className="flex divide-x divide-slate-200 overflow-x-auto dark:divide-slate-800">
+          {([
+            { label: 'Projects', value: String(t.count), icon: KPI_ICON.projects },
+            { label: 'Total BAC', value: formatIdrShort(t.bac), title: formatIdr(t.bac), strong: true, icon: KPI_ICON.bac },
+            { label: 'Earned Value', value: formatIdrShort(t.ev), title: formatIdr(t.ev), icon: KPI_ICON.ev },
+            { label: 'Actual Cost', value: formatIdrShort(t.ac), title: formatIdr(t.ac), icon: KPI_ICON.ac },
+            { label: showPies ? 'Portfolio CPI' : 'CPI', value: t.cpi ? formatNum(t.cpi, 2) : '—', warn: t.cpi > 0 && t.cpi < 1, icon: KPI_ICON.cpi },
+            { label: showPies ? 'Portfolio SPI' : 'SPI', value: t.spi ? formatNum(t.spi, 2) : '—', warn: spiBehind, icon: KPI_ICON.spi },
+            { label: '% Complete', value: `${formatNum(t.scheduleProgress * 100, 1)}%`, icon: KPI_ICON.percent },
+            { label: 'Schedule slip', value: t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule', warn: t.slippedCount > 0, icon: KPI_ICON.schedule },
+          ] as Array<{ label: string; value: string; icon: string; title?: string; strong?: boolean; warn?: boolean }>).map((s) => (
+            <div key={s.label} className="min-w-[7.25rem] flex-1 px-3.5 py-2.5">
+              <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={s.icon} /></svg>
+                <span className="truncate text-[10px] font-medium uppercase tracking-wide" title={s.label}>{s.label}</span>
+              </div>
+              <div
+                title={s.title}
+                className={`mt-0.5 truncate text-base leading-tight tabular-nums ${
+                  s.warn ? 'font-semibold text-red-600 dark:text-red-400' : s.strong ? 'font-bold text-slate-900 dark:text-white' : 'font-semibold text-slate-800 dark:text-slate-100'
+                }`}
+              >
+                {s.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {/* Health distribution */}
       <Card className="!p-3">
@@ -398,26 +412,3 @@ export default function PortfolioSummary() {
   );
 }
 
-function Kpi({ label, value, strong, warn, icon, title }: { label: string; value: string; strong?: boolean; warn?: boolean; icon?: string; title?: string }) {
-  // Uniform size for every KPI so the longest currency value can't overflow its narrow
-  // card. tabular-nums keeps digits aligned. `strong` (e.g. Total BAC) is a neutral
-  // figure — emphasised by weight, not an alarm colour. Red is reserved for `warn` only.
-  const tone = warn
-    ? 'font-semibold text-red-600 dark:text-red-400'
-    : strong
-      ? 'font-bold text-slate-900 dark:text-white'
-      : 'font-semibold text-slate-800 dark:text-slate-100';
-  return (
-    <Card className="!p-2.5">
-      <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
-        {icon && (
-          <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d={icon} />
-          </svg>
-        )}
-        <span className="truncate text-[10px] font-medium uppercase tracking-wide" title={label}>{label}</span>
-      </div>
-      <div title={title} className={`mt-0.5 truncate text-base leading-tight tabular-nums ${tone}`}>{value}</div>
-    </Card>
-  );
-}
