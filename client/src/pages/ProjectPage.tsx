@@ -10,6 +10,7 @@ import { formatIdr } from '../lib/format';
 import { categoryLabel, PROJECT_STATUS_BADGE } from '../lib/labels';
 import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
+import ForecastPanel from './panels/ForecastPanel';
 import RiskPanel from './panels/RiskPanel';
 import IssuePanel from './panels/IssuePanel';
 import SchedulePanel from './panels/SchedulePanel';
@@ -21,7 +22,7 @@ import EditProjectModal from '../components/EditProjectModal';
 import AgilePanel from './panels/AgilePanel';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Agile' | 'Cost' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Audit';
+type Tab = 'Charter' | 'Agile' | 'Cost' | 'Forecast' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -72,7 +73,7 @@ export default function ProjectPage() {
   const tabs: Tab[] = [
     'Charter',
     ...(isAgile ? (['Agile'] as Tab[]) : []),
-    'Cost', 'Risk', 'Issues',
+    'Cost', 'Forecast', 'Risk', 'Issues',
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     'Change Req', 'Audit',
   ];
@@ -152,6 +153,7 @@ export default function ProjectPage() {
       {tab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} />}
       {tab === 'Agile' && <AgilePanel projectId={projectId} />}
       {tab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
+      {tab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
       {tab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
       {tab === 'Issues' && <IssuePanel projectId={projectId} />}
       {tab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}

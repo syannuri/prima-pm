@@ -374,3 +374,19 @@ export interface Evm {
   currentFinish: string | null;
   finishVarianceDays: number | null;
 }
+
+export interface Forecast {
+  statusDate: string;
+  bac: number; ev: number; ac: number; pv: number; cpi: number; spi: number;
+  etc: number; vac: number; tcpi: number;
+  eac: { optimistic: number; likely: number; pessimistic: number };
+  schedule: {
+    plannedStart: string | null;
+    plannedFinish: string | null;
+    forecastFinish: string | null;
+    varianceDays: number | null;
+  };
+  margin: { revenue: number; planned: number; projected: number };
+  hasData: boolean;
+  sCurve: { t: string; pv: number; ac: number | null; forecast: number | null }[];
+}

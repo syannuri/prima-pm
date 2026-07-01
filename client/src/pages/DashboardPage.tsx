@@ -18,6 +18,7 @@ const HEALTH_PILL: Record<string, [string, string]> = {
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
+import PortfolioForecast from '../components/PortfolioForecast';
 import PendingApprovals from '../components/PendingApprovals';
 import ResourceCapacity from '../components/ResourceCapacity';
 
@@ -28,7 +29,7 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { lang } = useLang();
   const [showForm, setShowForm] = useState(false);
-  const [view, setView] = useState<'portfolio' | 'resources' | 'cards'>('portfolio');
+  const [view, setView] = useState<'portfolio' | 'forecast' | 'resources' | 'cards'>('portfolio');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [clientName, setClientName] = useState('');
@@ -107,6 +108,12 @@ export default function DashboardPage() {
               {isPmo ? 'Portfolio EVM' : 'My Projects'}
             </button>
             <button
+              onClick={() => setView('forecast')}
+              className={`rounded-md px-3 py-1 transition ${view ==='forecast' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
+            >
+              Forecast
+            </button>
+            <button
               onClick={() => setView('resources')}
               className={`rounded-md px-3 py-1 transition ${view ==='resources' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
             >
@@ -125,6 +132,7 @@ export default function DashboardPage() {
 
       {view === 'portfolio' && <PendingApprovals />}
       {view === 'portfolio' && <PortfolioSummary />}
+      {view === 'forecast' && <PortfolioForecast />}
       {view === 'resources' && <ResourceCapacity />}
 
       {showForm && (
