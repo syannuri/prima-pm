@@ -177,7 +177,7 @@ export default function PortfolioSummary() {
         <div className={`grid gap-3 sm:grid-cols-2 ${isPM ? 'lg:grid-cols-3' : ''}`}>
           <DonutChart title="Cost performance (by CPI)" slices={cpiSlices} />
           {isPM && <DonutChart title="Schedule performance (by SPI)" slices={spiSlices} />}
-          <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, progress: p.scheduleProgress }))} />
+          <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, actual: p.scheduleProgress, baseline: p.bac > 0 ? p.pv / p.bac : 0 }))} />
         </div>
       )}
 
