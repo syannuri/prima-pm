@@ -8,7 +8,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ![Precise — portfolio dashboard (dark mode)](docs/screenshots/dashboard.png)
 
-<p align="center"><em>Portfolio dashboard — KPIs, needs-attention, EVM health & status distribution.</em></p>
+<p align="center"><em>Portfolio dashboard — a compact KPI stat strip, EVM health & status distribution, activity and resource load.</em></p>
 
 > **Naming:** "Precise" is the user-facing brand. Internal identifiers stay `prima*` on purpose
 > (repo dir, DB `prima_pm`, systemd unit, `prima_*` localStorage keys) — do not rename them.
@@ -17,19 +17,30 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ## ✨ Features
 
-- **Role-aware dashboard** — Portfolio EVM (KPIs, CPI/SPI, pie charts, "Needs attention"), Resource Utilization heatmap, and project cards. Personalised, time-based greeting (auto **ID/EN** from the browser).
-- **Project Charter** — goals, scope, high-level cost; commit locks a baseline and unlocks the other modules.
-- **WBS & Schedule** — work-breakdown tree, interactive Gantt (drag to reschedule / link dependencies), schedule **baseline & variance** (tracking Gantt), per-task progress, PIC and WBS dictionary.
-- **Cost** — direct (material + manpower) & indirect costs, management reserve, manual **Actual Cost**, and live **EVM** (EV/PV/AC, CV, **CPI**). `BAC = PMB` = cost baseline excluding management reserve.
-- **Risk** — qualitative (P×I, 5×5 heatmap) and quantitative (**EMV**) analysis; EMV drives the contingency reserve.
-- **Change Requests** — raise → assess impact (cost/schedule/magnitude) → PMO/Admin approve, with charter versioning.
+- **Role-aware dashboard** — Admin/PMO get **Portfolio EVM** (a compact KPI **stat strip**, CPI/SPI, status & health charts, activity-by-project, resource load); **Project Managers** get a *"My Projects"* view with elegant **CPI/SPI donut charts** and a **baseline-vs-actual progress** chart — plus a Resource **Utilization** heatmap and project cards. Personalised, time-based greeting (auto **ID/EN**).
+- **⌘K Command Palette** — jump to any project, page or quick action from anywhere (**Ctrl/⌘ K**), keyboard-first.
+- **Project Charter** — goals, scope, sponsor, high-level cost, and the **delivery approach** (Predictive / Agile / Hybrid) chosen at initiation; committing locks a baseline and unlocks the other modules.
+- **Agile & Hybrid delivery** — product **backlog**, **sprints**, and a **Kanban board with smooth drag-and-drop**; **velocity** & **burndown** reports; **Agile-EVM** (story-point based) and **Hybrid-EVM** blended into the same portfolio.
+- **WBS & Schedule** (predictive) — work-breakdown tree, interactive Gantt (drag to reschedule / link dependencies), schedule **baseline & variance** (tracking Gantt), per-task progress, PIC and WBS dictionary.
+- **Cost** — direct (material + manpower) & indirect costs with **inline edit** + live amount preview, management reserve, manual **Actual Cost**, and live **EVM** (EV/PV/AC, CV, **CPI**). `BAC = PMB` = cost baseline excluding management reserve.
+- **Risk** — qualitative (P×I, **5×5 heatmap**) and quantitative (**EMV**, with a live preview) analysis; EMV drives the contingency reserve.
+- **Change Requests & per-project Change Log** — raise → review → PMO/Admin approve/reject, with a full **lifecycle log** (requested / reviewed / decided) and charter versioning. A **chargeable** change carries an agreed amount that can be **added to project revenue on approval** (with confirmation).
+- **Issue Log** — track problems that have occurred (category, impact, owner, resolution, status) per project; included in exports.
 - **Audit log** — immutable, role-scoped trail of who changed what and when.
-- **Notifications** — on-demand alerts (overdue tasks, high risks, budget overrun/overspend) + a portfolio bell.
+- **Notifications** — a personal **inbox** (assigned as PM, change-request submitted / decided) plus on-demand alerts (overdue tasks, high risks, budget overrun) in a portfolio bell.
 - **Attachments** — upload/download files against charter, risks or the project.
-- **Exports** — per-project **PDF** (PDFKit) and **Excel** (ExcelJS) reports — pure JS, no headless browser.
+- **Exports** — per-project **PDF** (PDFKit) and **Excel** (ExcelJS) reports incl. cost, risk, schedule, EVM and the Issue Log — pure JS, no headless browser.
 - **Resource master pool** — named/generic resources with rate cards; cross-project capacity & over-allocation.
-- **Admin** — user management (create / role / reset password / activate), project reassignment, rate cards.
-- **UX** — **dark mode by default** (light optional), accessible modals/toasts/confirm dialogs, skeleton loaders, IDR currency.
+- **Admin** — user management (create / role / reset password / activate), project (PM) reassignment, rate cards.
+- **UX** — **dark mode by default** (light optional), **IDR thousand-separator inputs**, native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
+
+## 📸 Screenshots
+
+| Project Manager dashboard — CPI/SPI donuts & progress | Agile board — drag & drop Kanban |
+|:---:|:---:|
+| ![PM dashboard with CPI/SPI donut charts and baseline-vs-actual progress](docs/screenshots/pm-charts.png) | ![Agile Kanban board with drag and drop](docs/screenshots/agile-board.png) |
+| **Risk — 5×5 heatmap & EMV contingency reserve** | **⌘K command palette** |
+| ![Risk heatmap and EMV reserve](docs/screenshots/risk.png) | ![Command palette quick jump](docs/screenshots/command-palette.png) |
 
 ## 🧱 Tech stack
 
@@ -45,7 +56,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 ## 🏛️ Architecture
 
 - **Pure calc core** (`server/src/calc/*`): money, cost rollup, risk EMV, EVM — all pure & unit-tested. Money is `Decimal`.
-- **Modular API** under `/api/v1`: `auth`, `users`, `projects`, `charter`, `cost`, `ratecard`, `risk`, `schedule`, `portfolio`, `resource`, `attachment`, `audit`, `notification`, `export`.
+- **Modular API** under `/api/v1`: `auth`, `users`, `projects`, `charter`, `cost`, `ratecard`, `risk`, `issue`, `schedule`, `agile`, `portfolio`, `resource`, `attachment`, `audit`, `notification`, `export`.
 - **RBAC middleware**: role guards + project-ownership checks; functional roles (Finance/Risk) bypass ownership where appropriate.
 - **Single-origin in production**: one Node process serves the **API and the built React app** from the same port, so the client's relative `/api/v1` calls need no proxy or CORS.
 
@@ -56,6 +67,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **BAC = PMB** = direct + indirect + contingency, **excludes** management reserve (shown separately as "Total Budget").
 - **Actual Cost is entered manually**; **progress drives Earned Value**, not AC. With AC = 0, CPI shows "—".
 - Contingency reserve = Σ EMV of open risks flagged "include in reserve".
+- **Agile-EVM** derives % complete from **story points** (done ÷ total); **Hybrid** splits BAC between the WBS-linked (predictive) and backlog (agile) streams so nothing is double-counted.
 
 ---
 
