@@ -129,8 +129,26 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
   kv('Contingency Reserve', formatIdr(data.riskAnalysis.reserve.contingencyReserve));
   kv('Severity breakdown', Object.entries(data.riskAnalysis.bySeverity).map(([k, v]) => `${k}:${v}`).join('  '));
 
+  // ---------- Issue Log ----------
+  heading('4. Issue Log');
+  if (data.issues.length) {
+    table(
+      [
+        { title: 'Code', w: 38 }, { title: 'Issue', w: 120 }, { title: 'Category', w: 60 },
+        { title: 'Impact', w: 45 }, { title: 'Owner', w: 60 }, { title: 'Status', w: 55 },
+        { title: 'Raised', w: 52 }, { title: 'Resolution', w: 120 },
+      ],
+      data.issues.map((is) => [
+        is.code, is.title, is.category ?? '—', is.impact, is.owner?.name ?? '—',
+        is.status.replace('_', ' '), iso(is.raisedAt), is.resolution ?? '—',
+      ]),
+    );
+  } else {
+    doc.text('No issues logged.');
+  }
+
   // ---------- Schedule ----------
-  heading('4. Schedule Management');
+  heading('5. Schedule Management');
   table(
     [
       { title: 'WBS', w: 45 }, { title: 'Task', w: 155 }, { title: 'Plan Start', w: 65 },

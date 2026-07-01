@@ -17,9 +17,14 @@ export async function gatherProjectExport(projectId: string, opts: ExportOptions
   });
   if (!project) throw NotFound('Project not found');
 
-  const [charter, risks, cost, riskAnalysis, gantt, evm] = await Promise.all([
+  const [charter, risks, issues, cost, riskAnalysis, gantt, evm] = await Promise.all([
     prisma.projectCharter.findUnique({ where: { projectId } }),
     prisma.risk.findMany({ where: { projectId }, orderBy: { code: 'asc' } }),
+    prisma.issue.findMany({
+      where: { projectId },
+      include: { owner: { select: { name: true } } },
+      orderBy: { raisedAt: 'desc' },
+    }),
     getCostSummary(projectId),
     getRiskAnalysis(projectId),
     getGantt(projectId),
@@ -29,7 +34,7 @@ export async function gatherProjectExport(projectId: string, opts: ExportOptions
     getEvm(projectId, opts.actualCost, opts.statusDate ?? new Date()),
   ]);
 
-  return { project, charter, risks, cost, riskAnalysis, gantt, evm, generatedAt: new Date() };
+  return { project, charter, risks, issues, cost, riskAnalysis, gantt, evm, generatedAt: new Date() };
 }
 
 export type ProjectExport = Awaited<ReturnType<typeof gatherProjectExport>>;

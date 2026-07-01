@@ -110,6 +110,23 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
   reserveRow.font = { bold: true };
   reserveRow.getCell(10).numFmt = IDR;
 
+  // --- Issue Log ---
+  const isw = wb.addWorksheet('Issues');
+  isw.columns = [
+    { width: 8 }, { width: 40 }, { width: 16 }, { width: 10 }, { width: 18 },
+    { width: 14 }, { width: 12 }, { width: 12 }, { width: 50 },
+  ];
+  styleHeader(isw.addRow(['Code', 'Issue', 'Category', 'Impact', 'Owner', 'Status', 'Raised', 'Resolved', 'Resolution']));
+  const isoD = (d: Date | null) => (d ? new Date(d).toISOString().slice(0, 10) : '—');
+  for (const is of data.issues) {
+    const row = isw.addRow([
+      is.code, is.title, is.category ?? '—', is.impact, is.owner?.name ?? '—',
+      is.status.replace('_', ' '), isoD(is.raisedAt), isoD(is.resolvedAt), is.resolution ?? '—',
+    ]);
+    row.getCell(9).alignment = { wrapText: true };
+  }
+  if (!data.issues.length) isw.addRow(['—', 'No issues logged']);
+
   // --- Schedule ---
   const sc = wb.addWorksheet('Schedule');
   sc.columns = [
