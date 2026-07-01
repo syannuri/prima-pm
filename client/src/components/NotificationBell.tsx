@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -62,6 +62,23 @@ export default function NotificationBell() {
   const unread = isAdminPmo ? changes?.unread ?? 0 : 0;
   const total = alertTotal + unread;
 
+  // Gentle, faint reminder that fades in → holds → fades out. Shown once per browser
+  // session (so it reminds when you open the app, without nagging on every navigation).
+  const REMIND_MS = 6000;
+  const [remind, setRemind] = useState(false);
+  const firedRef = useRef(false);
+  useEffect(() => {
+    if (firedRef.current || !attn || attn.total === 0) return;
+    firedRef.current = true;
+    try {
+      if (sessionStorage.getItem('prima_attn_reminded')) return;
+      sessionStorage.setItem('prima_attn_reminded', '1');
+    } catch { /* ignore */ }
+    setRemind(true);
+    const t = setTimeout(() => setRemind(false), REMIND_MS);
+    return () => clearTimeout(t);
+  }, [attn]);
+
   function toggle() {
     setOpen((o) => {
       const next = !o;
@@ -85,6 +102,21 @@ export default function NotificationBell() {
           </span>
         )}
       </button>
+
+      {/* Faint, self-dismissing reminder — nudges you toward the bell without nagging. */}
+      {remind && !open && (
+        <button
+          onClick={() => { setRemind(false); setOpen(true); }}
+          style={{ ['--remind-ms' as string]: `${REMIND_MS}ms` }}
+          className="prima-remind absolute right-0 top-full z-20 mt-2 flex items-center gap-2 whitespace-nowrap rounded-full border border-amber-300/40 bg-amber-50/70 px-3 py-1.5 text-xs font-medium text-amber-800 shadow-lg backdrop-blur-md dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200"
+        >
+          <span className="relative flex h-2 w-2">
+            <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${high > 0 ? 'bg-red-400' : 'bg-amber-400'}`} />
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${high > 0 ? 'bg-red-500' : 'bg-amber-500'}`} />
+          </span>
+          {alertTotal} {alertTotal === 1 ? 'item needs' : 'items need'} attention{high > 0 ? ` · ${high} high` : ''}
+        </button>
+      )}
 
       {open && (
         <>

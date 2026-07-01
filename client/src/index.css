@@ -30,6 +30,20 @@ html.dark .prima-rows tbody tr:hover {
   background-color: rgb(30 41 59 / 0.45); /* slate-800 @ 45% */
 }
 
+/* Gentle "needs attention" reminder: fade in → hold → fade out over its lifetime. */
+@keyframes prima-remind {
+  0% { opacity: 0; transform: translateY(-6px); }
+  8% { opacity: 1; transform: translateY(0); }
+  85% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+.prima-remind {
+  animation: prima-remind var(--remind-ms, 6000ms) ease-in-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .prima-remind { animation: none; opacity: 0.85; }
+}
+
 /* Toast entry animation (reduced-motion guarded). */
 @keyframes prima-toast-in {
   from {
