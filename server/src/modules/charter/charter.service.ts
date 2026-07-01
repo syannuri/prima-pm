@@ -50,6 +50,7 @@ export async function upsertCharter(
       data: {
         pmUserId: input.pmUserId,
         ...(input.deliveryApproach ? { deliveryApproach: input.deliveryApproach } : {}),
+        ...(input.sponsor !== undefined ? { sponsor: input.sponsor } : {}),
       },
     });
     return saved;

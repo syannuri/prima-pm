@@ -35,13 +35,15 @@ const empty: Form = {
   hiScheduleStart: '', hiScheduleEnd: '', hiDeliverables: '', pmUserId: '',
 };
 
-export default function CharterPanel({ projectId, approach: initialApproach }: { projectId: string; approach: DeliveryApproach }) {
+export default function CharterPanel({ projectId, approach: initialApproach, sponsor: initialSponsor }: { projectId: string; approach: DeliveryApproach; sponsor: string | null }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<Form>(empty);
   const [approach, setApproach] = useState<DeliveryApproach>(initialApproach);
+  const [sponsor, setSponsor] = useState<string>(initialSponsor ?? '');
   const [msg, setMsg] = useState('');
   const confirm = useConfirm();
   useEffect(() => { setApproach(initialApproach); }, [initialApproach]);
+  useEffect(() => { setSponsor(initialSponsor ?? ''); }, [initialSponsor]);
 
   const charterQ = useQuery({
     queryKey: ['charter', projectId],
@@ -73,7 +75,7 @@ export default function CharterPanel({ projectId, approach: initialApproach }: {
 
   const save = useMutation({
     mutationFn: () =>
-      api.put(`/projects/${projectId}/charter`, { ...form, hiCostIdr: Number(form.hiCostIdr), deliveryApproach: approach }),
+      api.put(`/projects/${projectId}/charter`, { ...form, hiCostIdr: Number(form.hiCostIdr), deliveryApproach: approach, sponsor: sponsor.trim() || null }),
     onSuccess: () => {
       setMsg('Charter saved (draft).');
       qc.invalidateQueries({ queryKey: ['charter', projectId] });
@@ -148,6 +150,9 @@ export default function CharterPanel({ projectId, approach: initialApproach }: {
               <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
             ))}
           </Select>
+        </Field>
+        <Field label="Project Sponsor" hint="The authorizing party who funds & champions the project">
+          <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office / CTO" />
         </Field>
         <Field label="High-Level Project Cost (IDR)">
           <Input type="number" value={form.hiCostIdr} onChange={(e) => set('hiCostIdr', e.target.value)} />

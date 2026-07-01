@@ -14,6 +14,7 @@ export const upsertCharterSchema = z
     hiDeliverables: z.string().min(5).max(4000),
     pmUserId: z.string().uuid(),
     deliveryApproach: z.enum(['PREDICTIVE', 'AGILE', 'HYBRID']).optional(),
+    sponsor: z.string().max(160).optional().nullable(),
   })
   .refine((d) => d.hiScheduleEnd.getTime() > d.hiScheduleStart.getTime(), {
     message: 'hiScheduleEnd must be after hiScheduleStart',
