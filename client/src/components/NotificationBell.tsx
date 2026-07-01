@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -62,22 +62,32 @@ export default function NotificationBell() {
   const unread = isAdminPmo ? changes?.unread ?? 0 : 0;
   const total = alertTotal + unread;
 
-  // Gentle, faint reminder that fades in → holds → fades out. Shown once per browser
-  // session (so it reminds when you open the app, without nagging on every navigation).
+  // Gentle, faint reminder that fades in → holds → fades out — shown every time the
+  // user opens the dashboard (the bell lives in the persistent layout, so we re-arm on
+  // each navigation back to the dashboard route).
   const REMIND_MS = 8000;
+  const onDashboard = useLocation().pathname === '/';
   const [remind, setRemind] = useState(false);
-  const firedRef = useRef(false);
+  const [fireKey, setFireKey] = useState(0);
+  const armedRef = useRef(onDashboard);
+
   useEffect(() => {
-    if (firedRef.current || !attn || attn.total === 0) return;
-    firedRef.current = true;
-    try {
-      if (sessionStorage.getItem('prima_attn_reminded')) return;
-      sessionStorage.setItem('prima_attn_reminded', '1');
-    } catch { /* ignore */ }
+    if (onDashboard) armedRef.current = true;
+    else setRemind(false); // hide when leaving the dashboard
+  }, [onDashboard]);
+
+  useEffect(() => {
+    if (!armedRef.current || (attn?.total ?? 0) === 0) return;
+    armedRef.current = false; // consume for this visit
+    setFireKey((k) => k + 1); // restart the fade animation
     setRemind(true);
+  }, [attn, onDashboard]);
+
+  useEffect(() => {
+    if (!remind) return;
     const t = setTimeout(() => setRemind(false), REMIND_MS);
     return () => clearTimeout(t);
-  }, [attn]);
+  }, [remind]);
 
   function toggle() {
     setOpen((o) => {
@@ -106,6 +116,7 @@ export default function NotificationBell() {
       {/* Faint, self-dismissing reminder — nudges you toward the bell without nagging. */}
       {remind && !open && (
         <button
+          key={fireKey}
           onClick={() => { setRemind(false); setOpen(true); }}
           style={{ ['--remind-ms' as string]: `${REMIND_MS}ms` }}
           className="prima-remind absolute right-0 top-full z-20 mt-2 flex items-center gap-2 whitespace-nowrap rounded-full border border-amber-300/40 bg-amber-50/70 px-3 py-1.5 text-xs font-medium text-amber-800 shadow-lg backdrop-blur-md dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200"
