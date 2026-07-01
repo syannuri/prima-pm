@@ -25,7 +25,8 @@ export default function EditProjectModal({ project }: { project: Project }) {
   const [revenue, setRevenue] = useState(project.totalRevenueIdr ?? '');
   const [err, setErr] = useState('');
 
-  const canEdit = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  // Editing top-level project details is a PMO/portfolio governance action.
+  const canEdit = !!user && ['ADMIN', 'PMO'].includes(user.role);
 
   const start = () => {
     setName(project.name);

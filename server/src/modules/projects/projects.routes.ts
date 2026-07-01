@@ -47,9 +47,12 @@ router.get(
   }),
 );
 
+// Project-level details (identity, financials, methodology, status) are a
+// portfolio/governance decision — ADMIN/PMO only. PMs manage execution via the
+// charter (while draft) and Change Requests, not top-level project edits.
 router.patch(
   '/:id',
-  requireProjectAccess({ write: true }),
+  requireRole('ADMIN', 'PMO'),
   validateBody(updateProjectSchema),
   asyncHandler(async (req, res) => {
     const project = await svc.updateProject(req.params.id, req.body, req.user!.id);
