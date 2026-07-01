@@ -128,8 +128,9 @@ export default function PortfolioSummary() {
         </div>
       </div>
 
-      {/* KPI cards — wider cards (4 cols) so full IDR values fit on one line. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* KPI cards — compact; all 8 fit on one row on wide screens (xl), wrapping to
+          4 then 2 columns on smaller ones. Values use the short IDR form ("Rp 2,24 M"). */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
         <Kpi label="Projects" value={String(t.count)} icon={KPI_ICON.projects} />
         <Kpi label="Total BAC" value={formatIdrShort(t.bac)} title={formatIdr(t.bac)} strong icon={KPI_ICON.bac} />
         <Kpi label="Earned Value" value={formatIdrShort(t.ev)} title={formatIdr(t.ev)} icon={KPI_ICON.ev} />
@@ -407,16 +408,16 @@ function Kpi({ label, value, strong, warn, icon, title }: { label: string; value
       ? 'font-bold text-slate-900 dark:text-white'
       : 'font-semibold text-slate-800 dark:text-slate-100';
   return (
-    <Card className="!p-3">
-      <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+    <Card className="!p-2.5">
+      <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
         {icon && (
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d={icon} />
           </svg>
         )}
-        <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
+        <span className="truncate text-[10px] font-medium uppercase tracking-wide" title={label}>{label}</span>
       </div>
-      <div title={title} className={`mt-1 text-lg leading-tight tabular-nums ${tone}`}>{value}</div>
+      <div title={title} className={`mt-0.5 truncate text-base leading-tight tabular-nums ${tone}`}>{value}</div>
     </Card>
   );
 }
