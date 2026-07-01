@@ -7,6 +7,7 @@ import * as svc from './projects.service.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
 import riskRoutes from '../risk/risk.routes.js';
+import issueRoutes from '../issue/issue.routes.js';
 import scheduleRoutes from '../schedule/schedule.routes.js';
 import exportRoutes from '../export/export.routes.js';
 import attachmentRoutes from '../attachment/attachment.routes.js';
@@ -85,6 +86,7 @@ router.delete(
 router.use('/:projectId/charter', charterRoutes);
 router.use('/:projectId/cost', costRoutes);
 router.use('/:projectId/risk', riskRoutes);
+router.use('/:projectId/issues', issueRoutes);
 router.use('/:projectId/schedule', scheduleRoutes);
 router.use('/:projectId/export', exportRoutes);
 router.use('/:projectId/attachments', attachmentRoutes);

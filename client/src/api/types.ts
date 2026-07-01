@@ -203,6 +203,9 @@ export interface ChangeRequest {
   status: CRStatus;
   requestedBy: string;
   requester?: { name: string } | null;
+  reviewedBy: string | null;
+  reviewer?: { name: string } | null;
+  reviewedAt: string | null;
   decidedBy: string | null;
   decider?: { name: string } | null;
   decidedAt: string | null;
@@ -285,6 +288,26 @@ export interface RiskAnalysis {
   bySeverity: Record<Severity, number>;
   topByEmv: { id: string; code: string; title: string; emv: number }[];
   reserve: { threatReserve: number; opportunityOffset: number; confidenceFactor: number; contingencyReserve: number };
+}
+
+export type IssueImpact = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type IssueStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+
+export interface Issue {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  impact: IssueImpact;
+  status: IssueStatus;
+  ownerUserId: string | null;
+  owner?: { id: string; name: string } | null;
+  resolution: string | null;
+  raisedAt: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Task {

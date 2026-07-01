@@ -148,18 +148,33 @@ export async function markInboxSeen(userId: string) {
   return { ok: true };
 }
 
+const CR_INCLUDE = {
+  requester: { select: { name: true } },
+  reviewer: { select: { name: true } },
+  decider: { select: { name: true } },
+  project: { select: { id: true, code: true, name: true } },
+} as const;
+
 // Change requests awaiting a PMO/ADMIN decision, across all live projects.
 export async function getPendingApprovals(role: string) {
   if (!GLOBAL_ROLES.includes(role as Role)) return { items: [], count: 0 };
   const items = await prisma.changeRequest.findMany({
     where: { status: { in: ['SUBMITTED', 'UNDER_REVIEW'] }, project: { deletedAt: null } },
     orderBy: { createdAt: 'asc' },
-    include: {
-      requester: { select: { name: true } },
-      project: { select: { id: true, code: true, name: true } },
-    },
+    include: CR_INCLUDE,
   });
   return { items, count: items.length };
+}
+
+// Full change-request log across all live projects (PMO/ADMIN) — every status.
+export async function getChangeLog(role: string) {
+  if (!GLOBAL_ROLES.includes(role as Role)) return { items: [] };
+  const items = await prisma.changeRequest.findMany({
+    where: { project: { deletedAt: null } },
+    orderBy: { createdAt: 'desc' },
+    include: CR_INCLUDE,
+  });
+  return { items };
 }
 
 export async function getRecentChanges(userId: string, role: string, limit = 25) {

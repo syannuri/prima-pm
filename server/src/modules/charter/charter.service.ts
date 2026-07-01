@@ -227,7 +227,26 @@ export async function listChangeRequests(projectId: string) {
     orderBy: { createdAt: 'desc' },
     include: {
       requester: { select: { name: true } },
+      reviewer: { select: { name: true } },
       decider: { select: { name: true } },
     },
+  });
+}
+
+// Mark a submitted CR as under review (records who reviewed it and when). Idempotent
+// once it has moved past SUBMITTED.
+export async function reviewChangeRequest(projectId: string, crId: string, actorId: string) {
+  const cr = await prisma.changeRequest.findUnique({ where: { id: crId } });
+  if (!cr || cr.projectId !== projectId) throw NotFound('Change Request not found');
+  if (cr.status === 'SUBMITTED') {
+    await prisma.changeRequest.update({
+      where: { id: crId },
+      data: { status: 'UNDER_REVIEW', reviewedBy: actorId, reviewedAt: new Date() },
+    });
+    await writeAudit({ projectId, userId: actorId, entity: 'ChangeRequest', entityId: crId, action: 'UPDATE', before: { status: cr.status }, after: { status: 'UNDER_REVIEW' } });
+  }
+  return prisma.changeRequest.findUnique({
+    where: { id: crId },
+    include: { requester: { select: { name: true } }, reviewer: { select: { name: true } }, decider: { select: { name: true } } },
   });
 }

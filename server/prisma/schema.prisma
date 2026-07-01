@@ -173,10 +173,12 @@ model User {
   managedProjects   Project[]       @relation("ProjectManager")
   charters          ProjectCharter[] @relation("CharterPM")
   ownedRisks        Risk[]          @relation("RiskOwner")
+  ownedIssues       Issue[]         @relation("IssueOwner")
   assignedTasks     Task[]          @relation("TaskPIC")
   manpowerItems     CostItemDirect[] @relation("ManpowerResource")
   auditLogs         AuditLog[]
   changeRequests    ChangeRequest[] @relation("CRRequester")
+  reviewedCRs       ChangeRequest[] @relation("CRReviewer")
   decidedCRs        ChangeRequest[] @relation("CRDecider")
   resourceProfiles  Resource[]      @relation("ResourceUser")
   assignedBacklog   BacklogItem[]   @relation("BacklogAssignee")
@@ -212,6 +214,7 @@ model Project {
   directCosts      CostItemDirect[]
   indirectCosts    CostItemIndirect[]
   risks            Risk[]
+  issues           Issue[]
   tasks            Task[]
   costBaseline     CostBaseline?
   changeRequests   ChangeRequest[]
@@ -451,6 +454,47 @@ model Risk {
   @@index([projectId, severity])
 }
 
+enum IssueImpact {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// Issue Log — problems that have already occurred (distinct from Risk, which is
+// a potential future event). Lightweight register: no EVM/reserve impact.
+model Issue {
+  id          String      @id @default(uuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code        String
+  title       String
+  description String?
+  category    String?
+  impact      IssueImpact @default(MEDIUM)
+  status      IssueStatus @default(OPEN)
+
+  ownerUserId String?
+  owner       User?       @relation("IssueOwner", fields: [ownerUserId], references: [id])
+
+  resolution  String?     @db.Text
+  raisedAt    DateTime    @default(now()) // when the issue was logged/occurred
+  resolvedAt  DateTime?                   // auto-stamped when status → RESOLVED/CLOSED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, code])
+  @@index([projectId, status])
+}
+
 // =====================================================================
 // SCHEDULE MANAGEMENT (Module 4)
 // =====================================================================
@@ -533,6 +577,9 @@ model ChangeRequest {
   status      ChangeRequestStatus @default(SUBMITTED)
   requestedBy String
   requester   User                @relation("CRRequester", fields: [requestedBy], references: [id])
+  reviewedBy  String?
+  reviewer    User?               @relation("CRReviewer", fields: [reviewedBy], references: [id])
+  reviewedAt  DateTime?
   decidedBy   String?
   decider     User?               @relation("CRDecider", fields: [decidedBy], references: [id])
   decidedAt   DateTime?

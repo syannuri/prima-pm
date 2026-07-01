@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
@@ -7,6 +8,7 @@ import { useToast } from './Toast';
 import { useConfirm } from './ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/format';
+import CrDetailModal from './CrDetailModal';
 
 // PMO/Admin dashboard panel: change requests awaiting a decision, with inline
 // Approve/Reject. Only rendered (for approvers) when something is pending.
@@ -16,6 +18,7 @@ export default function PendingApprovals() {
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
+  const [detail, setDetail] = useState<PendingApproval | null>(null);
 
   const { data } = useQuery({
     queryKey: ['pending-approvals'],
@@ -23,6 +26,13 @@ export default function PendingApprovals() {
     enabled: isApprover,
     refetchInterval: 60_000,
   });
+
+  // Opening the detail marks the CR "under review" (records who/when).
+  const review = useMutation({
+    mutationFn: (cr: PendingApproval) => api.patch(`/projects/${cr.project.id}/charter/change-requests/${cr.id}/review`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pending-approvals'] }),
+  });
+  const openReview = (cr: PendingApproval) => { setDetail(cr); if (cr.status === 'SUBMITTED') review.mutate(cr); };
 
   const decide = useMutation({
     mutationFn: ({ cr, decision }: { cr: PendingApproval; decision: 'APPROVED' | 'REJECTED' }) =>
@@ -62,6 +72,7 @@ export default function PendingApprovals() {
               </div>
             </div>
             <div className="flex shrink-0 gap-2">
+              <Button variant="secondary" onClick={() => openReview(cr)}>Review</Button>
               <Button
                 onClick={() => decide.mutate({ cr, decision: 'APPROVED' })}
                 disabled={decide.isPending}
@@ -82,6 +93,7 @@ export default function PendingApprovals() {
           </li>
         ))}
       </ul>
+      {detail && <CrDetailModal cr={detail} onClose={() => setDetail(null)} />}
     </Card>
   );
 }

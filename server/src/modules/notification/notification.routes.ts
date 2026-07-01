@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { getAttentionItems, getInbox, getPendingApprovals, getPortfolioAlerts, getRecentChanges, markChangesSeen, markInboxSeen } from './notification.service.js';
+import { getAttentionItems, getChangeLog, getInbox, getPendingApprovals, getPortfolioAlerts, getRecentChanges, markChangesSeen, markInboxSeen } from './notification.service.js';
 
 // Portfolio-wide alerts for the header bell. Mounted at /api/v1/notifications.
 const router = Router();
@@ -62,6 +62,14 @@ router.get(
   '/pending-approvals',
   asyncHandler(async (req, res) => {
     res.json(await getPendingApprovals(req.user!.role));
+  }),
+);
+
+// Full change-request log across projects (PMO/ADMIN only).
+router.get(
+  '/change-log',
+  asyncHandler(async (req, res) => {
+    res.json(await getChangeLog(req.user!.role));
   }),
 );
 

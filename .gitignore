@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 build/
+*.tsbuildinfo
 
 # Environment / secrets — never commit real .env (keep the *.example templates)
 .env

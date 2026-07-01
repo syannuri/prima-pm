@@ -74,6 +74,17 @@ router.post(
   }),
 );
 
+// Mark a Change Request as under review — PMO/ADMIN only.
+router.patch(
+  '/change-requests/:crId/review',
+  requireProjectAccess(),
+  requireRole('ADMIN', 'PMO'),
+  asyncHandler(async (req, res) => {
+    const cr = await svc.reviewChangeRequest(req.params.projectId, req.params.crId, req.user!.id);
+    res.json({ changeRequest: cr });
+  }),
+);
+
 // Decide a Change Request — PMO/ADMIN only.
 router.patch(
   '/change-requests/:crId',

@@ -11,6 +11,7 @@ import { categoryLabel, PROJECT_STATUS_BADGE } from '../lib/labels';
 import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
 import RiskPanel from './panels/RiskPanel';
+import IssuePanel from './panels/IssuePanel';
 import SchedulePanel from './panels/SchedulePanel';
 import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
@@ -20,7 +21,7 @@ import EditProjectModal from '../components/EditProjectModal';
 import AgilePanel from './panels/AgilePanel';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Agile' | 'Cost' | 'Risk' | 'Schedule' | 'Change Req' | 'Audit';
+type Tab = 'Charter' | 'Agile' | 'Cost' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -71,7 +72,7 @@ export default function ProjectPage() {
   const tabs: Tab[] = [
     'Charter',
     ...(isAgile ? (['Agile'] as Tab[]) : []),
-    'Cost', 'Risk',
+    'Cost', 'Risk', 'Issues',
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     'Change Req', 'Audit',
   ];
@@ -140,7 +141,7 @@ export default function ProjectPage() {
         ))}
       </div>
 
-      {!chartered && tab !== 'Charter' && tab !== 'Audit' && tab !== 'Agile' && (
+      {!chartered && tab !== 'Charter' && tab !== 'Audit' && tab !== 'Agile' && tab !== 'Issues' && (
         <Card>
           <p className="text-center text-amber-600">
             Commit the Project Charter first to unlock {tab} Management.
@@ -152,6 +153,7 @@ export default function ProjectPage() {
       {tab === 'Agile' && <AgilePanel projectId={projectId} />}
       {tab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
       {tab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
+      {tab === 'Issues' && <IssuePanel projectId={projectId} />}
       {tab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
       {tab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} />}
       {tab === 'Audit' && <AuditPanel projectId={projectId} />}
