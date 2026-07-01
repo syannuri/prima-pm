@@ -65,8 +65,16 @@ export default function ProjectPage() {
 
   const chartered = project.status !== 'DRAFT';
   const isAgile = project.deliveryApproach === 'AGILE' || project.deliveryApproach === 'HYBRID';
-  // The Agile tab appears for agile/hybrid projects (right after Charter).
-  const tabs: Tab[] = ['Charter', ...(isAgile ? (['Agile'] as Tab[]) : []), 'Cost', 'Risk', 'Schedule', 'Change Req', 'Audit'];
+  // Agile tab for agile/hybrid; the predictive Schedule (WBS/Gantt) is hidden for pure
+  // Agile (its scheduling lives in sprints/board) but kept for predictive & hybrid.
+  const showSchedule = project.deliveryApproach !== 'AGILE';
+  const tabs: Tab[] = [
+    'Charter',
+    ...(isAgile ? (['Agile'] as Tab[]) : []),
+    'Cost', 'Risk',
+    ...(showSchedule ? (['Schedule'] as Tab[]) : []),
+    'Change Req', 'Audit',
+  ];
 
   return (
     <div className="space-y-5">
@@ -140,7 +148,7 @@ export default function ProjectPage() {
         </Card>
       )}
 
-      {tab === 'Charter' && <CharterPanel projectId={projectId} />}
+      {tab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} />}
       {tab === 'Agile' && <AgilePanel projectId={projectId} />}
       {tab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
       {tab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}

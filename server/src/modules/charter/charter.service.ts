@@ -43,7 +43,13 @@ export async function upsertCharter(
     const saved = existing
       ? await tx.projectCharter.update({ where: { projectId }, data })
       : await tx.projectCharter.create({ data: { ...data, projectId, version: 1, locked: false } });
-    await tx.project.update({ where: { id: projectId }, data: { pmUserId: input.pmUserId } });
+    await tx.project.update({
+      where: { id: projectId },
+      data: {
+        pmUserId: input.pmUserId,
+        ...(input.deliveryApproach ? { deliveryApproach: input.deliveryApproach } : {}),
+      },
+    });
     return saved;
   });
 

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { Charter, ProjectCategory, User } from '../../api/types';
+import type { Charter, DeliveryApproach, ProjectCategory, User } from '../../api/types';
 import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useConfirm } from '../../components/ConfirmDialog';
+import { DELIVERY_APPROACH_LABEL } from '../../lib/labels';
 import { formatDateInput } from '../../lib/format';
+
+const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
 import Attachments from '../../components/Attachments';
 
 const CATEGORIES: { value: ProjectCategory; label: string }[] = [
@@ -32,11 +35,13 @@ const empty: Form = {
   hiScheduleStart: '', hiScheduleEnd: '', hiDeliverables: '', pmUserId: '',
 };
 
-export default function CharterPanel({ projectId }: { projectId: string }) {
+export default function CharterPanel({ projectId, approach: initialApproach }: { projectId: string; approach: DeliveryApproach }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<Form>(empty);
+  const [approach, setApproach] = useState<DeliveryApproach>(initialApproach);
   const [msg, setMsg] = useState('');
   const confirm = useConfirm();
+  useEffect(() => { setApproach(initialApproach); }, [initialApproach]);
 
   const charterQ = useQuery({
     queryKey: ['charter', projectId],
@@ -68,7 +73,7 @@ export default function CharterPanel({ projectId }: { projectId: string }) {
 
   const save = useMutation({
     mutationFn: () =>
-      api.put(`/projects/${projectId}/charter`, { ...form, hiCostIdr: Number(form.hiCostIdr) }),
+      api.put(`/projects/${projectId}/charter`, { ...form, hiCostIdr: Number(form.hiCostIdr), deliveryApproach: approach }),
     onSuccess: () => {
       setMsg('Charter saved (draft).');
       qc.invalidateQueries({ queryKey: ['charter', projectId] });
@@ -129,6 +134,11 @@ export default function CharterPanel({ projectId }: { projectId: string }) {
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
+          </Select>
+        </Field>
+        <Field label="Delivery Approach" hint="Locked at commit — change later via a Change Request">
+          <Select value={approach} onChange={(e) => setApproach(e.target.value as DeliveryApproach)}>
+            {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
           </Select>
         </Field>
         <Field label="Project Manager">
