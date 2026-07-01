@@ -234,6 +234,41 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
 
+  // --- Inline edit of an existing direct-cost line ---
+  const [editId, setEditId] = useState<string | null>(null);
+  const [ef, setEf] = useState({ type: 'TECHNOLOGY_CLOUD', label: '', qty: '1', unitCost: '', mandays: '', rate: '' });
+  const startEdit = (d: DirectCost) => {
+    setEditId(d.id);
+    setEf({
+      type: d.type,
+      label: d.label,
+      qty: d.qty != null ? String(d.qty) : '1',
+      unitCost: d.unitCost != null ? String(Math.trunc(Number(d.unitCost))) : '',
+      mandays: d.planMandays != null ? String(d.planMandays) : '',
+      rate: d.unitCostPerManday != null ? String(Math.trunc(Number(d.unitCostPerManday))) : '',
+    });
+  };
+  const update = useMutation({
+    mutationFn: (d: DirectCost) =>
+      api.put(`${base}/direct/${d.id}`, d.type === 'MANPOWER'
+        ? {
+            type: 'MANPOWER', label: ef.label || d.label, planMandays: Number(ef.mandays),
+            taskId: d.taskId ?? undefined, unitCostPerManday: Number(ef.rate),
+            ...(d.resourceId ? { resourceId: d.resourceId } : { personnelRole: d.personnelRole }),
+          }
+        : { type: ef.type, label: ef.label, qty: Number(ef.qty), unitCost: Number(ef.unitCost) }),
+    onSuccess: () => { setEditId(null); onChange(); toast.success('Cost line updated'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update cost line'),
+  });
+  // Live amount for the edit row and the add form (qty×unit or rate×mandays).
+  const editRow = data.directCosts.find((d) => d.id === editId);
+  const efAmount = !editRow ? 0 : editRow.type === 'MANPOWER'
+    ? Number(ef.rate || 0) * Number(ef.mandays || 0)
+    : Number(ef.qty || 0) * Number(ef.unitCost || 0);
+  const addAmount = isManpower
+    ? (rateOverride !== '' ? Number(rateOverride) : Number(picked?.unitCostPerManday ?? 0)) * Number(planMandays || 0)
+    : Number(qty || 0) * Number(unitCost || 0);
+
   return (
     <Card>
       <SectionTitle sub="Material (qty × unit cost) and Manpower (rate × mandays)">Direct Cost</SectionTitle>
@@ -245,57 +280,97 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
             </tr>
           </thead>
           <tbody>
-            {data.directCosts.map((d) => (
-              <tr key={d.id} className="border-b border-slate-100 dark:border-slate-800">
-                <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{d.type}</td>
+            {data.directCosts.map((d) => {
+              const editing = editId === d.id;
+              const isMp = d.type === 'MANPOWER';
+              return (
+              <tr key={d.id} className="border-b border-slate-100 align-top dark:border-slate-800">
+                <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
+                  {editing && !isMp ? (
+                    <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
+                      {DIRECT_TYPES.filter((t) => t.value !== 'MANPOWER').map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </Select>
+                  ) : d.type}
+                </td>
                 <td>
-                  <div>{d.label}</div>
-                  {d.type === 'MANPOWER' && (
-                    <div className="mt-0.5 flex flex-wrap gap-1">
-                      <select
-                        value={d.resourceId ?? ''}
-                        disabled={reassign.isPending}
-                        onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })}
-                        title="Assign / change resource"
-                        aria-label={`Assign resource to ${d.label}`}
-                        className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
-                          d.resourceId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
-                        }`}
-                      >
-                        <option value="">👤 Unassigned</option>
-                        {resourcesQ.data?.resources.map((r) => (
-                          <option key={r.id} value={r.id}>👤 {r.name}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={d.taskId ?? ''}
-                        disabled={reassignTask.isPending}
-                        onChange={(e) => reassignTask.mutate({ d, taskId: e.target.value })}
-                        title="Link / change task (work package)"
-                        aria-label={`Link ${d.label} to a task`}
-                        className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
-                          d.taskId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
-                        }`}
-                      >
-                        <option value="">📋 No task</option>
-                        {leafTasks.map((t) => (
-                          <option key={t.id} value={t.id}>📋 {t.wbsCode} {t.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                  {editing ? (
+                    <Input aria-label="Label" value={ef.label} onChange={(e) => setEf((p) => ({ ...p, label: e.target.value }))} placeholder="Label" />
+                  ) : (
+                    <>
+                      <div>{d.label}</div>
+                      {isMp && (
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          <select
+                            value={d.resourceId ?? ''}
+                            disabled={reassign.isPending}
+                            onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })}
+                            title="Assign / change resource"
+                            aria-label={`Assign resource to ${d.label}`}
+                            className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
+                              d.resourceId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
+                            }`}
+                          >
+                            <option value="">👤 Unassigned</option>
+                            {resourcesQ.data?.resources.map((r) => (
+                              <option key={r.id} value={r.id}>👤 {r.name}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={d.taskId ?? ''}
+                            disabled={reassignTask.isPending}
+                            onChange={(e) => reassignTask.mutate({ d, taskId: e.target.value })}
+                            title="Link / change task (work package)"
+                            aria-label={`Link ${d.label} to a task`}
+                            className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
+                              d.taskId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
+                            }`}
+                          >
+                            <option value="">📋 No task</option>
+                            {leafTasks.map((t) => (
+                              <option key={t.id} value={t.id}>📋 {t.wbsCode} {t.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </>
                   )}
                 </td>
                 <td className="text-xs text-slate-500 dark:text-slate-400">
-                  {d.type === 'MANPOWER'
-                    ? `${d.personnelRole} · ${formatIdr(d.unitCostPerManday)}/md × ${d.planMandays} md`
-                    : `${d.qty} × ${formatIdr(d.unitCost)}`}
+                  {!editing ? (
+                    isMp
+                      ? `${d.personnelRole} · ${formatIdr(d.unitCostPerManday)}/md × ${d.planMandays} md`
+                      : `${d.qty} × ${formatIdr(d.unitCost)}`
+                  ) : isMp ? (
+                    <div className="flex items-center gap-1">
+                      <div className="w-28"><MoneyInput aria-label="Rate per manday" value={ef.rate} onValueChange={(v) => setEf((p) => ({ ...p, rate: v }))} /></div>
+                      <span className="whitespace-nowrap">/md ×</span>
+                      <div className="w-16"><Input type="number" aria-label="Mandays" value={ef.mandays} onChange={(e) => setEf((p) => ({ ...p, mandays: e.target.value }))} /></div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <div className="w-16"><Input type="number" aria-label="Quantity" value={ef.qty} onChange={(e) => setEf((p) => ({ ...p, qty: e.target.value }))} /></div>
+                      <span>×</span>
+                      <div className="w-28"><MoneyInput aria-label="Unit cost" value={ef.unitCost} onValueChange={(v) => setEf((p) => ({ ...p, unitCost: v }))} /></div>
+                    </div>
+                  )}
                 </td>
-                <td className="text-right font-medium">{formatIdr(d.type === 'MANPOWER' ? d.manpowerCost : d.amount)}</td>
-                <td className="text-right">
-                  <button onClick={() => confirmDelete(d)} className="text-xs text-red-500 hover:underline">delete</button>
+                <td className="text-right font-medium tabular-nums">{formatIdr(editing ? efAmount : (isMp ? d.manpowerCost : d.amount))}</td>
+                <td className="text-right whitespace-nowrap">
+                  {editing ? (
+                    <>
+                      <button onClick={() => update.mutate(d)} disabled={update.isPending} className="mr-2 text-xs font-medium text-brand-600 hover:underline">save</button>
+                      <button onClick={() => setEditId(null)} className="text-xs text-slate-400 hover:underline">cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEdit(d)} className="mr-2 text-xs text-brand-600 hover:underline">edit</button>
+                      <button onClick={() => confirmDelete(d)} className="text-xs text-red-500 hover:underline">delete</button>
+                    </>
+                  )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {!data.directCosts.length && <tr><td colSpan={5} className="py-3 text-center text-slate-400 dark:text-slate-500">No direct costs yet.</td></tr>}
           </tbody>
         </table>
@@ -352,6 +427,10 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
           Add
         </Button>
       </div>
+      <div className="mt-2 flex items-center justify-end gap-2 text-sm">
+        <span className="text-slate-500 dark:text-slate-400">Amount (auto):</span>
+        <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(addAmount)}</span>
+      </div>
       {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
     </Card>
   );
@@ -363,11 +442,18 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
   const [type, setType] = useState('TRANSPORTATION');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [ef, setEf] = useState({ type: 'TRANSPORTATION', description: '', amount: '' });
 
   const add = useMutation({
     mutationFn: () => api.post(`${base}/indirect`, { type, description, amount: Number(amount) }),
     onSuccess: () => { setDescription(''); setAmount(''); onChange(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to add indirect cost'),
+  });
+  const update = useMutation({
+    mutationFn: (id: string) => api.put(`${base}/indirect/${id}`, { type: ef.type, description: ef.description, amount: Number(ef.amount) }),
+    onSuccess: () => { setEditId(null); onChange(); toast.success('Indirect cost updated'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update indirect cost'),
   });
   const del = useMutation({
     mutationFn: (id: string) => api.del(`${base}/indirect/${id}`),
@@ -377,25 +463,52 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
   const confirmDelete = async (i: { id: string; description: string }) => {
     if (await confirm({ title: 'Delete indirect cost?', message: <>Delete <strong>{i.description}</strong>?</>, confirmLabel: 'Delete', danger: true })) del.mutate(i.id);
   };
+  const startEdit = (i: { id: string; type: string; description: string; amount: string | number }) => {
+    setEditId(i.id);
+    setEf({ type: i.type, description: i.description, amount: String(Math.trunc(Number(i.amount))) });
+  };
 
   return (
     <Card>
       <SectionTitle sub="Transportation, accommodation, entertainment">Indirect Cost</SectionTitle>
-      <table className="prima-rows w-full text-sm">
-        <tbody>
-          {data.indirectCosts.map((i) => (
-            <tr key={i.id} className="border-b border-slate-100 dark:border-slate-800">
-              <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{i.type}</td>
-              <td>{i.description}</td>
-              <td className="text-right font-medium">{formatIdr(i.amount)}</td>
-              <td className="text-right">
-                <button onClick={() => confirmDelete(i)} className="text-xs text-red-500 hover:underline">delete</button>
-              </td>
-            </tr>
-          ))}
-          {!data.indirectCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-400 dark:text-slate-500">No indirect costs yet.</td></tr>}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="prima-rows w-full text-sm">
+          <tbody>
+            {data.indirectCosts.map((i) => {
+              const editing = editId === i.id;
+              return (
+              <tr key={i.id} className="border-b border-slate-100 align-top dark:border-slate-800">
+                <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
+                  {editing ? (
+                    <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
+                      {INDIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </Select>
+                  ) : i.type}
+                </td>
+                <td>{editing ? <Input aria-label="Description" value={ef.description} onChange={(e) => setEf((p) => ({ ...p, description: e.target.value }))} /> : i.description}</td>
+                <td className="text-right font-medium tabular-nums">
+                  {editing ? <div className="ml-auto w-32"><MoneyInput aria-label="Amount" value={ef.amount} onValueChange={(v) => setEf((p) => ({ ...p, amount: v }))} /></div> : formatIdr(i.amount)}
+                </td>
+                <td className="text-right whitespace-nowrap">
+                  {editing ? (
+                    <>
+                      <button onClick={() => update.mutate(i.id)} disabled={update.isPending} className="mr-2 text-xs font-medium text-brand-600 hover:underline">save</button>
+                      <button onClick={() => setEditId(null)} className="text-xs text-slate-400 hover:underline">cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEdit(i)} className="mr-2 text-xs text-brand-600 hover:underline">edit</button>
+                      <button onClick={() => confirmDelete(i)} className="text-xs text-red-500 hover:underline">delete</button>
+                    </>
+                  )}
+                </td>
+              </tr>
+              );
+            })}
+            {!data.indirectCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-400 dark:text-slate-500">No indirect costs yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
         <Select aria-label="Indirect cost type" value={type} onChange={(e) => setType(e.target.value)}>
           {INDIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -403,6 +516,10 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
         <Input aria-label="Indirect cost description" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
         <MoneyInput aria-label="Indirect cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
         <Button onClick={() => add.mutate()} disabled={!description || !amount || add.isPending}>Add</Button>
+      </div>
+      <div className="mt-2 flex items-center justify-end gap-2 text-sm">
+        <span className="text-slate-500 dark:text-slate-400">Amount (auto):</span>
+        <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(Number(amount || 0))}</span>
       </div>
     </Card>
   );
