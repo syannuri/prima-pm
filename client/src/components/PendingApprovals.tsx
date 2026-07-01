@@ -74,7 +74,7 @@ export default function PendingApprovals() {
                 <Badge color={cr.magnitude === 'MAJOR' ? 'red' : 'slate'}>{cr.magnitude}</Badge>
                 {cr.chargeable && <Badge color="amber">Chargeable</Badge>}
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-400 dark:text-slate-500">
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500 dark:text-slate-400">
                 <Link to={`/projects/${cr.project.id}`} className="font-mono hover:underline">{cr.project.code}</Link>
                 <span className="truncate">{cr.project.name}</span>
                 <span>· by {cr.requester?.name ?? '—'}</span>

@@ -4,14 +4,24 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from './ui';
 import NotificationBell from './NotificationBell';
 import Sidebar from './Sidebar';
+import CommandPalette from './CommandPalette';
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('prima_sidebar_collapsed') === '1');
   useEffect(() => {
     localStorage.setItem('prima_sidebar_collapsed', collapsed ? '1' : '0');
   }, [collapsed]);
+  // Global ⌘K / Ctrl-K opens the command palette.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setCmdOpen((o) => !o); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
@@ -50,7 +60,24 @@ export default function Layout({ children }: { children: ReactNode }) {
               <path d="M9 4v16" />
             </svg>
           </button>
+          {/* Command palette trigger — pill on desktop, icon on mobile */}
+          <button
+            onClick={() => setCmdOpen(true)}
+            className="ml-1 hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-400 transition hover:border-slate-300 hover:text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-slate-600 dark:hover:text-slate-300 sm:flex"
+            title="Search & jump (Ctrl/⌘ K)"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+            <span>Search…</span>
+            <kbd className="rounded border border-slate-300 px-1 text-[10px] dark:border-slate-600">⌘K</kbd>
+          </button>
           <div className="flex-1" />
+          <button
+            onClick={() => setCmdOpen(true)}
+            aria-label="Search"
+            className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 sm:hidden"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+          </button>
           <NotificationBell />
           <Link
             to="/manual"
@@ -82,6 +109,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="mx-auto max-w-7xl">{children}</div>
         </main>
       </div>
+
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
   );
 }

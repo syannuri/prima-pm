@@ -47,7 +47,7 @@ export default function IssuePanel({ projectId }: { projectId: string }) {
         <div className="mt-3 overflow-x-auto">
           <table className="prima-rows w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                 <th className="py-2">Code</th><th>Raised</th><th>Issue</th><th>Category</th>
                 <th>Impact</th><th>Owner</th><th>Status</th><th>Resolution</th><th></th>
               </tr>
@@ -59,7 +59,7 @@ export default function IssuePanel({ projectId }: { projectId: string }) {
                   <td className="py-2 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(i.raisedAt)}</td>
                   <td className="py-2">
                     <div className="font-medium text-slate-700 dark:text-slate-200">{i.title}</div>
-                    {i.description && <div className="max-w-[16rem] truncate text-xs text-slate-400 dark:text-slate-500">{i.description}</div>}
+                    {i.description && <div className="max-w-[16rem] truncate text-xs text-slate-500 dark:text-slate-400">{i.description}</div>}
                   </td>
                   <td className="py-2 text-slate-600 dark:text-slate-300">{i.category ?? '—'}</td>
                   <td className="py-2"><Badge color={IMPACT_COLOR[i.impact]}>{i.impact}</Badge></td>
@@ -67,8 +67,8 @@ export default function IssuePanel({ projectId }: { projectId: string }) {
                   <td className="py-2"><Badge color={STATUS_COLOR[i.status]}>{statusLabel(i.status)}</Badge></td>
                   <td className="py-2">
                     {i.resolution
-                      ? <div className="max-w-[16rem] whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300">{i.resolution}{i.resolvedAt && <span className="block text-slate-400 dark:text-slate-500">✓ {formatDate(i.resolvedAt)}</span>}</div>
-                      : <span className="text-slate-400 dark:text-slate-500">—</span>}
+                      ? <div className="max-w-[16rem] whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300">{i.resolution}{i.resolvedAt && <span className="block text-slate-500 dark:text-slate-400">✓ {formatDate(i.resolvedAt)}</span>}</div>
+                      : <span className="text-slate-500 dark:text-slate-400">—</span>}
                   </td>
                   <td className="py-2 text-right whitespace-nowrap">
                     {canWrite && <button onClick={() => setEditing(i)} className="mr-2 text-xs text-brand-600 hover:underline">edit</button>}
@@ -76,7 +76,7 @@ export default function IssuePanel({ projectId }: { projectId: string }) {
                   </td>
                 </tr>
               ))}
-              {!issues.length && <tr><td colSpan={9} className="py-4 text-center text-slate-400 dark:text-slate-500">No issues logged yet.</td></tr>}
+              {!issues.length && <tr><td colSpan={9} className="py-4 text-center text-slate-500 dark:text-slate-400">No issues logged yet.</td></tr>}
             </tbody>
           </table>
         </div>

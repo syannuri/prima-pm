@@ -152,12 +152,12 @@ export default function PortfolioSummary() {
           {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as const).map((h) => (
             <Badge key={h} color={HEALTH_COLOR[h]}>{HEALTH_LABEL[h]}: {data.byHealth[h] ?? 0}</Badge>
           ))}
-          <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">
+          <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
             Contingency held: {formatIdr(t.contingencyReserve)}
           </span>
         </div>
         {(data.byHealth.NO_DATA ?? 0) > 0 && (
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
             “No data” means the project hasn’t started by the status date (or has no recorded actual cost). Pick a later status date above to see progress.
           </p>
         )}
@@ -186,20 +186,20 @@ export default function PortfolioSummary() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Changes by project</span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">{totalChanges} total changes (WBS · Cost · Risk · …)</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{totalChanges} total changes (WBS · Cost · Risk · …)</span>
           </div>
           {totalChanges === 0 ? (
-            <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">No changes recorded yet.</p>
+            <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No changes recorded yet.</p>
           ) : (
             <ul className="space-y-2">
               {changeRows.map((p) => (
                 <li key={p.id} className="flex items-center gap-3">
                   <Link to={`/projects/${p.id}`} className="w-44 shrink-0 truncate text-sm hover:underline" title={p.name}>
-                    <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>{' '}
+                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>{' '}
                     <span className="text-brand-600">{p.name}</span>
                   </Link>
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className="h-full rounded-full bg-brand-500" style={{ width: `${(p.changeCount / maxChanges) * 100}%` }} />
+                    <div className="h-full rounded-full bg-sky-500/80" style={{ width: `${(p.changeCount / maxChanges) * 100}%` }} />
                   </div>
                   <span className="w-10 shrink-0 text-right text-sm font-medium tabular-nums text-slate-700 dark:text-slate-200">{p.changeCount}</span>
                 </li>
@@ -214,15 +214,15 @@ export default function PortfolioSummary() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resource load by project</span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">{resTotals.resources} resources · {formatNum(resTotals.mandays, 0)} mandays · {formatIdr(resTotals.cost)}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{resTotals.resources} resources · {formatNum(resTotals.mandays, 0)} mandays · {formatIdr(resTotals.cost)}</span>
           </div>
           {!hasResources ? (
-            <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">No manpower loaded yet. Add manpower lines (from the resource pool) in each project's Cost tab.</p>
+            <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No manpower loaded yet. Add manpower lines (from the resource pool) in each project's Cost tab.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="prima-rows w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                  <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                     <th className="py-2">Project</th>
                     <th className="text-right">Resources</th>
                     <th className="text-right">Mandays</th>
@@ -235,7 +235,7 @@ export default function PortfolioSummary() {
                     <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                       <td className="py-2">
                         <Link to={`/projects/${p.id}`} className="block">
-                          <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>{' '}
+                          <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>{' '}
                           <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
                         </Link>
                       </td>
@@ -266,7 +266,7 @@ export default function PortfolioSummary() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cost &amp; revenue by project</span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
               Cost {formatIdr(finTotals.cost)} · Revenue {formatIdr(finTotals.revenue)} · Profit{' '}
               <span className={finMargin < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
                 {formatIdr(finMargin)}{finTotals.revenue > 0 ? ` (${formatNum((finMargin / finTotals.revenue) * 100, 1)}%)` : ''}
@@ -274,12 +274,12 @@ export default function PortfolioSummary() {
             </span>
           </div>
           {!hasFinancials ? (
-            <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">No cost/revenue captured yet. Set them per project under “Edit details”.</p>
+            <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No cost/revenue captured yet. Set them per project under “Edit details”.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="prima-rows w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                  <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                     <th className="py-2">Project</th>
                     <th className="text-right">Cost</th>
                     <th className="text-right">Revenue</th>
@@ -294,7 +294,7 @@ export default function PortfolioSummary() {
                       <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                         <td className="py-2">
                           <Link to={`/projects/${p.id}`} className="block">
-                            <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>{' '}
+                            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>{' '}
                             <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
                           </Link>
                         </td>
@@ -328,7 +328,7 @@ export default function PortfolioSummary() {
         <div className="overflow-x-auto">
           <table className="prima-rows w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                 <th className="py-2">Project</th><th>Status</th>
                 <th className="text-right">BAC</th><th className="text-right">EV</th><th className="text-right">AC</th>
                 <th className="text-right">CPI</th><th className="text-right">SPI</th>
@@ -341,16 +341,16 @@ export default function PortfolioSummary() {
                   <td className="py-2">
                     {canOpen ? (
                       <Link to={`/projects/${p.id}`} className="block">
-                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>
+                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
                         <div className="font-medium text-brand-600 hover:underline">{p.name}</div>
                       </Link>
                     ) : (
                       <div>
-                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>
+                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
                         <div className="font-medium text-slate-700 dark:text-slate-200">{p.name}</div>
                       </div>
                     )}
-                    {p.clientName && <div className="text-xs text-slate-400 dark:text-slate-500">Client: {p.clientName}</div>}
+                    {p.clientName && <div className="text-xs text-slate-500 dark:text-slate-400">Client: {p.clientName}</div>}
                   </td>
                   <td><Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge></td>
                   <td className="text-right">{formatIdr(p.bac)}</td>
@@ -363,7 +363,7 @@ export default function PortfolioSummary() {
                     {p.finishVarianceDays == null ? (
                       <span className="text-slate-300 dark:text-slate-600" title="No baseline">—</span>
                     ) : (
-                      <span className={p.finishVarianceDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : p.finishVarianceDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-400 dark:text-slate-500'}>
+                      <span className={p.finishVarianceDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : p.finishVarianceDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}>
                         {p.finishVarianceDays > 0 ? `+${p.finishVarianceDays}d` : p.finishVarianceDays < 0 ? `${p.finishVarianceDays}d` : '0'}
                       </span>
                     )}
@@ -379,12 +379,12 @@ export default function PortfolioSummary() {
                   </td>
                   <td className="text-right">
                     {p.costHealth === 'NO_DATA'
-                      ? <span className="text-slate-400 dark:text-slate-500" title={NODATA_HINT.cost}>—</span>
+                      ? <span className="text-slate-500 dark:text-slate-400" title={NODATA_HINT.cost}>—</span>
                       : <Badge color={HEALTH_COLOR[p.costHealth]}>{HEALTH_LABEL[p.costHealth]}</Badge>}
                   </td>
                   <td className="text-right">
                     {p.health === 'NO_DATA'
-                      ? <span className="text-slate-400 dark:text-slate-500" title={NODATA_HINT.sched}>—</span>
+                      ? <span className="text-slate-500 dark:text-slate-400" title={NODATA_HINT.sched}>—</span>
                       : <Badge color={HEALTH_COLOR[p.health]}>{HEALTH_LABEL[p.health]}</Badge>}
                   </td>
                 </tr>
@@ -408,7 +408,7 @@ function Kpi({ label, value, strong, warn, icon, title }: { label: string; value
       : 'font-semibold text-slate-800 dark:text-slate-100';
   return (
     <Card className="!p-3">
-      <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+      <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
         {icon && (
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d={icon} />

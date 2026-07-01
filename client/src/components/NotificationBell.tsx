@@ -148,7 +148,7 @@ export default function NotificationBell() {
             {/* Personal inbox — assignment & other discrete events */}
             {!!inbox?.items.length && (
               <div className="mb-3">
-                <div className="mb-1 text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">For you</div>
+                <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">For you</div>
                 <ul className="space-y-0.5">
                   {inbox.items.slice(0, 6).map((n) => {
                     const isNew = !n.readAt && inboxUnread > 0;
@@ -157,7 +157,7 @@ export default function NotificationBell() {
                         <div className="flex items-center gap-1.5">
                           {isNew && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" title="New" />}
                           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{n.title}</span>
-                          <span className="ml-auto shrink-0 text-[10px] text-slate-400 dark:text-slate-500">{formatDate(n.createdAt)}</span>
+                          <span className="ml-auto shrink-0 text-[10px] text-slate-500 dark:text-slate-400">{formatDate(n.createdAt)}</span>
                         </div>
                         {n.body && <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{n.body}</div>}
                       </div>
@@ -177,11 +177,11 @@ export default function NotificationBell() {
               {alertTotal > 0 && (
                 <span className={`grid h-5 min-w-[20px] place-items-center rounded-full px-1 text-xs font-bold text-white ${high > 0 ? 'bg-red-600' : 'bg-amber-500'}`}>{alertTotal}</span>
               )}
-              {high > 0 && <span className="text-xs text-slate-400 dark:text-slate-500">{high} high</span>}
+              {high > 0 && <span className="text-xs text-slate-500 dark:text-slate-400">{high} high</span>}
             </div>
 
             {!attn?.items.length ? (
-              <p className="py-3 text-center text-sm text-slate-400 dark:text-slate-500">All clear — nothing needs attention 🎉</p>
+              <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">All clear — nothing needs attention 🎉</p>
             ) : (
               <ul className="max-h-72 space-y-0.5 overflow-y-auto">
                 {attn.items.map((it, i) => (
@@ -194,7 +194,7 @@ export default function NotificationBell() {
                       <span className={`h-2 w-2 shrink-0 rounded-full ${SEV_DOT[it.severity] ?? 'bg-slate-400'}`} title={it.severity} />
                       <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ATTN_AREA[it.tab] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{it.tab}</span>
                       <span className="truncate text-sm text-slate-700 dark:text-slate-200" title={it.message}>{it.message}</span>
-                      <span className="ml-auto shrink-0 font-mono text-[11px] text-slate-400 dark:text-slate-500">{it.projectCode}</span>
+                      <span className="ml-auto shrink-0 font-mono text-[11px] text-slate-500 dark:text-slate-400">{it.projectCode}</span>
                     </Link>
                   </li>
                 ))}
@@ -203,12 +203,12 @@ export default function NotificationBell() {
 
             {isAdminPmo && (
               <div className="mt-3 border-t border-slate-200/70 pt-2 dark:border-slate-800/70">
-                <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">
+                <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
                   Recent changes (WBS · Cost · Risk)
                   {unread > 0 && <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold normal-case text-white">{unread} new</span>}
                 </div>
                 {!changes?.changes.length ? (
-                  <p className="py-2 text-center text-xs text-slate-400 dark:text-slate-500">No recent changes</p>
+                  <p className="py-2 text-center text-xs text-slate-500 dark:text-slate-400">No recent changes</p>
                 ) : (
                   <ul className="max-h-64 space-y-0.5 overflow-y-auto">
                     {changes.changes.map((c) => (
@@ -218,9 +218,9 @@ export default function NotificationBell() {
                             {c.isNew && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" title="New" />}
                             <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${AREA_COLOR[c.area] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{c.area}</span>
                             <span className="text-slate-500 dark:text-slate-400">{ACTION_LABEL[c.action] ?? c.action.toLowerCase()}</span>
-                            <span className="ml-auto shrink-0 text-[10px] text-slate-400 dark:text-slate-500">{formatDate(c.at)}</span>
+                            <span className="ml-auto shrink-0 text-[10px] text-slate-500 dark:text-slate-400">{formatDate(c.at)}</span>
                           </div>
-                          <div className="truncate text-[11px] text-slate-400 dark:text-slate-500">
+                          <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">
                             <span className="font-mono">{c.projectCode}</span> · by {c.by}
                           </div>
                         </Link>

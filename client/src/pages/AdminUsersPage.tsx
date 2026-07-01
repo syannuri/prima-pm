@@ -45,7 +45,7 @@ export default function AdminUsersPage() {
           <div className="overflow-x-auto">
             <table className="prima-rows w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                   <th className="py-2">Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th></th>
                 </tr>
               </thead>
@@ -88,7 +88,7 @@ function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSel
 
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 align-middle">
-      <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{u.name}{isSelf && <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">(you)</span>}</td>
+      <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{u.name}{isSelf && <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">(you)</span>}</td>
       <td className="text-slate-500 dark:text-slate-400">{u.email}</td>
       <td>
         <Select
@@ -105,7 +105,7 @@ function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSel
       <td>
         <Badge color={u.isActive ? 'green' : 'slate'}>{u.isActive ? 'Active' : 'Inactive'}</Badge>
       </td>
-      <td className="text-xs text-slate-400 dark:text-slate-500">{formatDate(u.createdAt)}</td>
+      <td className="text-xs text-slate-500 dark:text-slate-400">{formatDate(u.createdAt)}</td>
       <td className="whitespace-nowrap text-right">
         <button onClick={onEdit} className="text-xs text-brand-600 hover:underline">Edit</button>
         <button onClick={onReset} className="ml-3 text-xs text-brand-600 hover:underline">Reset password</button>

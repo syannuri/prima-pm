@@ -87,7 +87,7 @@ export default function LoginPage() {
             </ul>
           </div>
 
-          <p className="text-xs text-slate-400 dark:text-slate-500">© 2026 Precise</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">© 2026 Precise</p>
         </div>
 
         {/* ---------- RIGHT · sign-in card (right-aligned) ---------- */}
@@ -123,7 +123,7 @@ export default function LoginPage() {
               </form>
 
               <div className="mt-7 border-t border-slate-200/70 pt-4 dark:border-slate-700/60">
-                <p className="text-center text-xs text-slate-400 dark:text-slate-500">Plan with clarity. Deliver with confidence.</p>
+                <p className="text-center text-xs text-slate-500 dark:text-slate-400">Plan with clarity. Deliver with confidence.</p>
               </div>
             </div>
           </div>

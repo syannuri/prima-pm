@@ -45,7 +45,7 @@ function RateCardsSection({ canEditRates }: { canEditRates: boolean }) {
     <Card>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Rate cards</h3>
-        <span className="text-xs text-slate-400 dark:text-slate-500">Day-rate per role/level — drives manpower cost</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">Day-rate per role/level — drives manpower cost</span>
       </div>
       {canEditRates && <AddRateCard onChange={invalidate} />}
       {isLoading ? (
@@ -54,13 +54,13 @@ function RateCardsSection({ canEditRates }: { canEditRates: boolean }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                 <th className="py-2">Role</th><th>Level</th><th className="text-right">Cost / manday</th><th>Status</th><th></th>
               </tr>
             </thead>
             <tbody>
               {data?.rateCards.map((rc) => <RateCardRow key={rc.id} rc={rc} canEdit={canEditRates} onChange={invalidate} />)}
-              {!data?.rateCards.length && <tr><td colSpan={5} className="py-3 text-center text-slate-400 dark:text-slate-500">No rate cards yet.</td></tr>}
+              {!data?.rateCards.length && <tr><td colSpan={5} className="py-3 text-center text-slate-500 dark:text-slate-400">No rate cards yet.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -152,13 +152,13 @@ function ResourcesSection({ canEdit }: { canEdit: boolean }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                 <th className="py-2">Name</th><th>Type</th><th>Role</th><th className="text-right">Rate / manday</th><th className="text-right">Cap/day</th><th>Dept</th><th>Login</th><th>Status</th><th></th>
               </tr>
             </thead>
             <tbody>
               {data?.resources.map((r) => <ResourceRow key={r.id} r={r} canEdit={canEdit} onEdit={() => setEditing(r)} onChange={invalidate} />)}
-              {!data?.resources.length && <tr><td colSpan={9} className="py-3 text-center text-slate-400 dark:text-slate-500">No resources yet. Add your manpower pool to use it in the WBS.</td></tr>}
+              {!data?.resources.length && <tr><td colSpan={9} className="py-3 text-center text-slate-500 dark:text-slate-400">No resources yet. Add your manpower pool to use it in the WBS.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -191,7 +191,7 @@ function ResourceRow({ r, canEdit, onEdit, onChange }: { r: ResourceItem; canEdi
       <td className="text-slate-500 dark:text-slate-400">{r.roleTitle || (r.personnelRole === 'PM' ? 'Project Manager' : 'Project Personnel')}</td>
       <td className="text-right tabular-nums">
         <span className={differs ? 'text-amber-600 dark:text-amber-400' : ''}>{formatIdr(Number(r.unitCostPerManday))}</span>
-        {rcLabel && <div className="text-[10px] text-slate-400 dark:text-slate-500">{rcLabel}</div>}
+        {rcLabel && <div className="text-[10px] text-slate-500 dark:text-slate-400">{rcLabel}</div>}
         {differs && (
           <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[10px] text-amber-600 dark:text-amber-400" title={`Linked rate card is now ${formatIdr(cardRate!)}`}>
             <span>≠ card {formatIdr(cardRate!)}</span>
@@ -289,7 +289,7 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
             </Select>
           </Field>
         </div>
-        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">Tip: pick a rate card to inherit its day-rate, or leave it blank and enter a custom rate.</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Tip: pick a rate card to inherit its day-rate, or leave it blank and enter a custom rate.</p>
         {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}
         <div className="mt-4 flex gap-2">
           <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>

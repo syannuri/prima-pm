@@ -183,7 +183,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
             <Button onClick={commitCharter} disabled={!charter || !allFilled || commit.isPending}>
               {commit.isPending ? 'Committing…' : 'Commit Charter'}
             </Button>
-            {!charter && <span className="text-xs text-slate-400 dark:text-slate-500">Save the draft first, then Commit.</span>}
+            {!charter && <span className="text-xs text-slate-500 dark:text-slate-400">Save the draft first, then Commit.</span>}
             {charter && !allFilled && <span className="text-xs text-amber-500">Fill all fields to enable Commit.</span>}
           </>
         )}

@@ -40,7 +40,7 @@ export default function ProjectAlerts({ projectId, onJump }: { projectId: string
           <span className="text-xs opacity-70">→ {a.tab}</span>
         </button>
       ))}
-      {sorted.length > 5 && <p className="text-xs text-slate-400 dark:text-slate-500">+ {sorted.length - 5} more alerts</p>}
+      {sorted.length > 5 && <p className="text-xs text-slate-500 dark:text-slate-400">+ {sorted.length - 5} more alerts</p>}
     </div>
   );
 }

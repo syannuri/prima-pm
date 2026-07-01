@@ -227,7 +227,7 @@ export default function DashboardPage() {
                   {/* status accent bar (calm palette) */}
                   <span className={`absolute inset-x-0 top-0 h-1 ${PROJECT_STATUS_DOT[p.status] ?? 'bg-slate-400'}`} />
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="font-mono text-xs text-slate-400 dark:text-slate-500">{p.code}</span>
+                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
                     <Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge>
                   </div>
                   <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">{p.name}</h3>
@@ -258,7 +258,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   {!!p.changeCount && (
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                       <span>🕓</span>
                       <span><span className="font-medium text-slate-600 dark:text-slate-300">{p.changeCount}</span> changes</span>
                     </div>

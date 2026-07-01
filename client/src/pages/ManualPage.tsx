@@ -327,7 +327,7 @@ export default function ManualPage() {
         </Card>
       ))}
 
-      <p className="pb-2 text-center text-xs text-slate-400 dark:text-slate-500">Precise — plan with clarity, deliver with confidence.</p>
+      <p className="pb-2 text-center text-xs text-slate-500 dark:text-slate-400">Precise — plan with clarity, deliver with confidence.</p>
     </div>
   );
 }

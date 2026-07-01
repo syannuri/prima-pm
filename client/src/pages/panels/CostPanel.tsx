@@ -121,7 +121,7 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
               </td>
             </tr>
           ))}
-          {!data.actualCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-400 dark:text-slate-500">No actual cost recorded yet.</td></tr>}
+          {!data.actualCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-500 dark:text-slate-400">No actual cost recorded yet.</td></tr>}
         </tbody>
       </table>
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
@@ -141,7 +141,7 @@ function Stat({ label, value, hint, strong }: { label: string; value: string; hi
       <div className={`mt-1 ${strong ? 'text-base font-bold text-slate-900 dark:text-white' : 'text-sm font-semibold text-slate-800 dark:text-slate-100'}`}>
         {value}
       </div>
-      {hint && <div className="text-[10px] text-slate-400 dark:text-slate-500">{hint}</div>}
+      {hint && <div className="text-[10px] text-slate-500 dark:text-slate-400">{hint}</div>}
     </Card>
   );
 }
@@ -275,7 +275,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
       <div className="overflow-x-auto">
         <table className="prima-rows w-full text-sm">
           <thead>
-            <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+            <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
               <th className="py-2">Type</th><th>Item</th><th>Detail</th><th className="text-right">Amount</th><th></th>
             </tr>
           </thead>
@@ -307,7 +307,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                             title="Assign / change resource"
                             aria-label={`Assign resource to ${d.label}`}
                             className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
-                              d.resourceId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
+                              d.resourceId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'
                             }`}
                           >
                             <option value="">👤 Unassigned</option>
@@ -322,7 +322,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                             title="Link / change task (work package)"
                             aria-label={`Link ${d.label} to a task`}
                             className={`rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-1 py-0.5 text-[11px] ${
-                              d.taskId ? 'text-brand-700' : 'text-slate-400 dark:text-slate-500'
+                              d.taskId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'
                             }`}
                           >
                             <option value="">📋 No task</option>
@@ -371,7 +371,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
               </tr>
               );
             })}
-            {!data.directCosts.length && <tr><td colSpan={5} className="py-3 text-center text-slate-400 dark:text-slate-500">No direct costs yet.</td></tr>}
+            {!data.directCosts.length && <tr><td colSpan={5} className="py-3 text-center text-slate-500 dark:text-slate-400">No direct costs yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -505,7 +505,7 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
               </tr>
               );
             })}
-            {!data.indirectCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-400 dark:text-slate-500">No indirect costs yet.</td></tr>}
+            {!data.indirectCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-500 dark:text-slate-400">No indirect costs yet.</td></tr>}
           </tbody>
         </table>
       </div>

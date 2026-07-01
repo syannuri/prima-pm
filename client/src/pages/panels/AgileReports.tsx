@@ -28,7 +28,7 @@ export default function AgileReports({ sprints, items, snapshots }: { sprints: S
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Sprint</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Sprint</span>
         <Select value={sprintId} onChange={(e) => setSel(e.target.value)} className="!w-auto">
           {sprints.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.status})</option>)}
         </Select>
@@ -59,9 +59,9 @@ export default function AgileReports({ sprints, items, snapshots }: { sprints: S
 function Stat({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {
   return (
     <Card className="!p-3">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</div>
+      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`mt-1 text-lg font-bold tabular-nums ${warn ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{value}</div>
-      {sub && <div className="text-xs text-slate-400 dark:text-slate-500">{sub}</div>}
+      {sub && <div className="text-xs text-slate-500 dark:text-slate-400">{sub}</div>}
     </Card>
   );
 }
@@ -117,7 +117,7 @@ function Burndown({ sprint, committed, snapshots }: { sprint: Sprint; committed:
     return { ideal, actual, actualPts: pts2.map((p) => ({ cx: x(p.d), cy: y(p.v) })), maxY };
   }, [sprint, committed, snapshots, plotW, plotH]);
 
-  if (!data) return <p className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">Set the sprint's start &amp; end dates to see the burndown.</p>;
+  if (!data) return <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">Set the sprint's start &amp; end dates to see the burndown.</p>;
 
   return (
     <div>

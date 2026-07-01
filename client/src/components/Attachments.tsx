@@ -79,7 +79,7 @@ export default function Attachments({
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-medium uppercase text-slate-400 dark:text-slate-500">Attachments</span>
+        <span className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Attachments</span>
         {!readOnly && (
           <>
             <input
@@ -98,7 +98,7 @@ export default function Attachments({
       {err && <p className="mb-2 text-sm text-red-600">{err}</p>}
 
       {!items.length ? (
-        <p className="text-sm text-slate-400 dark:text-slate-500">No files attached.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">No files attached.</p>
       ) : (
         <ul className="space-y-1">
           {items.map((a) => (
@@ -110,7 +110,7 @@ export default function Attachments({
               >
                 📎 {a.fileName}
               </button>
-              <span className="ml-2 flex shrink-0 items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+              <span className="ml-2 flex shrink-0 items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 {humanSize(a.sizeBytes)} · {formatDate(a.createdAt)}
                 {!readOnly && (
                   <button onClick={() => confirmDelete(a)} className="text-red-500 hover:underline">delete</button>

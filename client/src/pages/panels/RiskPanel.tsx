@@ -69,7 +69,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
         <div className="overflow-x-auto">
           <table className="prima-rows w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                 <th className="py-2">Code</th><th>Title</th><th>Kind</th><th>P×I</th><th>Severity</th>
                 <th className="text-right">EMV</th><th className="text-right">Residual</th><th></th>
               </tr>
@@ -95,7 +95,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
                   </td>
                 </tr>
               ))}
-              {!risksQ.data?.risks.length && <tr><td colSpan={8} className="py-3 text-center text-slate-400 dark:text-slate-500">No risks yet.</td></tr>}
+              {!risksQ.data?.risks.length && <tr><td colSpan={8} className="py-3 text-center text-slate-500 dark:text-slate-400">No risks yet.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -135,11 +135,11 @@ function Heatmap({ cells }: { cells: RiskAnalysis['heatmap'] }) {
     <div className="inline-block">
       <div className="flex">
         <div className="w-6" />
-        {[1, 2, 3, 4, 5].map((i) => <div key={i} className="w-12 text-center text-xs text-slate-400 dark:text-slate-500">{i}</div>)}
+        {[1, 2, 3, 4, 5].map((i) => <div key={i} className="w-12 text-center text-xs text-slate-500 dark:text-slate-400">{i}</div>)}
       </div>
       {[5, 4, 3, 2, 1].map((p) => (
         <div key={p} className="flex items-center">
-          <div className="w-6 text-center text-xs text-slate-400 dark:text-slate-500">{p}</div>
+          <div className="w-6 text-center text-xs text-slate-500 dark:text-slate-400">{p}</div>
           {[1, 2, 3, 4, 5].map((i) => {
             const cell = get(p, i);
             return (
@@ -150,7 +150,7 @@ function Heatmap({ cells }: { cells: RiskAnalysis['heatmap'] }) {
           })}
         </div>
       ))}
-      <div className="mt-1 text-center text-xs text-slate-400 dark:text-slate-500">Impact → / Probability ↑</div>
+      <div className="mt-1 text-center text-xs text-slate-500 dark:text-slate-400">Impact → / Probability ↑</div>
     </div>
   );
 }
@@ -224,11 +224,11 @@ function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
         <span className="text-slate-500 dark:text-slate-400" title="Expected Monetary Value = Probability % × Impact Cost">
           EMV (auto): <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(emvPreview)}</span>
         </span>
-        <span className="text-xs text-slate-400 dark:text-slate-500">= {f.probabilityPct || 0} × {formatIdr(Number(f.impactCostIdr) || 0)}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">= {f.probabilityPct || 0} × {formatIdr(Number(f.impactCostIdr) || 0)}</span>
         {residualEmvPreview != null && (
           <span className="text-slate-500 dark:text-slate-400">· Residual EMV: <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(residualEmvPreview)}</span></span>
         )}
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-xs text-slate-500 dark:text-slate-400">
           → {f.kind === 'OPPORTUNITY' ? 'reduces' : 'adds'} ~{formatIdr(Math.abs(reserveEmv))} {f.kind === 'OPPORTUNITY' ? 'from' : 'to'} the contingency reserve
         </span>
       </div>

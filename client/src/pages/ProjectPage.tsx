@@ -84,7 +84,7 @@ export default function ProjectPage() {
           ← All projects
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
-          <span className="font-mono text-sm text-slate-400 dark:text-slate-500">{project.code}</span>
+          <span className="font-mono text-sm text-slate-500 dark:text-slate-400">{project.code}</span>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{project.name}</h1>
           <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'}>{project.status}</Badge>
           <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>

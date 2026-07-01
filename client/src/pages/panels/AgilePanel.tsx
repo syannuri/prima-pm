@@ -129,12 +129,12 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, on
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Sprint</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Sprint</span>
         <Select value={activeSprintId} onChange={(e) => setBoardSprint(e.target.value)} className="!w-auto">
           {sprints.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.status})</option>)}
         </Select>
-        <span className="text-xs text-slate-400 dark:text-slate-500">{sprintItems.length} items · {sumPoints(sprintItems)} pts</span>
-        {canEdit && <span className="ml-auto hidden items-center gap-1 text-xs text-slate-400 dark:text-slate-500 sm:flex">✥ Drag cards between columns</span>}
+        <span className="text-xs text-slate-500 dark:text-slate-400">{sprintItems.length} items · {sumPoints(sprintItems)} pts</span>
+        {canEdit && <span className="ml-auto hidden items-center gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex">✥ Drag cards between columns</span>}
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         {STATUSES.map((st) => {
@@ -155,7 +155,7 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, on
             >
               <div className="mb-2 flex items-center justify-between px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 <span>{BACKLOG_STATUS_LABEL[st]}</span>
-                <span className="text-xs font-normal text-slate-400 dark:text-slate-500">{col.length} · {sumPoints(col)} pts</span>
+                <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{col.length} · {sumPoints(col)} pts</span>
               </div>
               <div className="min-h-[3.5rem] space-y-2">
                 {col.map((it) => (
@@ -174,7 +174,7 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, on
                     </div>
                     <div className="text-sm text-slate-700 dark:text-slate-200">{it.title}</div>
                     <div className="mt-1.5 flex items-center justify-between">
-                      <span className="truncate text-xs text-slate-400 dark:text-slate-500">{it.assignee ? `👤 ${it.assignee.name}` : 'Unassigned'}</span>
+                      <span className="truncate text-xs text-slate-500 dark:text-slate-400">{it.assignee ? `👤 ${it.assignee.name}` : 'Unassigned'}</span>
                       {canEdit && (
                         <span className="flex gap-1">
                           <button onClick={() => move(it, -1)} disabled={it.status === 'TODO'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to previous column">◀</button>
@@ -235,7 +235,7 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
           {sprints.map((s) => <option key={s.id} value={s.id}>🏃 {s.name}</option>)}
         </select>
       ) : it.sprintId ? <span className="text-xs text-slate-400">in sprint</span> : null}
-      <span className="w-24 truncate text-xs text-slate-400 dark:text-slate-500">{it.assignee ? it.assignee.name : '—'}</span>
+      <span className="w-24 truncate text-xs text-slate-500 dark:text-slate-400">{it.assignee ? it.assignee.name : '—'}</span>
       {canEdit && <button onClick={() => onDeleteItem(it)} className="text-xs text-red-500 hover:underline">delete</button>}
     </div>
   );
@@ -248,7 +248,7 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
         <SectionTitle sub="Add stories, tasks and bugs here, then assign them to a sprint (or drag them across the Board).">Product Backlog</SectionTitle>
         {canEdit && (
           <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Add backlog item</div>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Add backlog item</div>
             <div className="grid gap-2 sm:grid-cols-[7rem_1fr_5.5rem_9rem_auto]">
               <Select value={type} onChange={(e) => setType(e.target.value as BacklogType)} aria-label="Type">{TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</Select>
               <Input placeholder="What needs doing?" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Title" onKeyDown={(e) => e.key === 'Enter' && add()} />
@@ -256,11 +256,11 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
               <Select value={assignee} onChange={(e) => setAssignee(e.target.value)} aria-label="Assignee"><option value="">Unassigned</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
               <Button onClick={add} disabled={!title.trim()}>+ Add</Button>
             </div>
-            <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">Tip: press <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">Enter</kbd> in the title to add quickly.</p>
+            <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">Tip: press <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">Enter</kbd> in the title to add quickly.</p>
           </div>
         )}
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-          {backlog.length ? backlog.map((it) => <ItemRow key={it.id} it={it} />) : <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">Backlog is empty — add your first item above.</p>}
+          {backlog.length ? backlog.map((it) => <ItemRow key={it.id} it={it} />) : <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">Backlog is empty — add your first item above.</p>}
         </div>
       </Card>
 
@@ -273,7 +273,7 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
             return (
               <div key={s.id} className="flex flex-wrap items-center gap-2 border-b border-slate-100 py-2 dark:border-slate-800">
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700 dark:text-slate-200">{s.name}</span>
-                <span className="text-xs text-slate-400 dark:text-slate-500">{its.length} items · {sumPoints(its)} pts</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{its.length} items · {sumPoints(its)} pts</span>
                 {canEdit ? (
                   <select value={s.status} onChange={(e) => onPatchSprint(s.id, { status: e.target.value })} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900">
                     {SPRINT_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
@@ -283,7 +283,7 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
               </div>
             );
           })}
-          {!sprints.length && <p className="py-2 text-sm text-slate-400 dark:text-slate-500">No sprints yet.</p>}
+          {!sprints.length && <p className="py-2 text-sm text-slate-500 dark:text-slate-400">No sprints yet.</p>}
         </div>
         {canEdit && (
           <div className="mt-3 flex gap-2">

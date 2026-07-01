@@ -106,24 +106,24 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium uppercase text-slate-400 dark:text-slate-500">Change Log</span>
+            <span className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Change Log</span>
             {FILTERS.map((f) => {
               const n = f === 'ALL' ? crs.length : crs.filter((c) => c.status === f).length;
               return (
                 <button key={f} onClick={() => setFilter(f)}
                   className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${filter === f ? 'border-brand-500 bg-brand-600/10 text-brand-700 dark:text-brand-300' : 'border-slate-200 text-slate-500 hover:border-brand-300 dark:border-slate-700 dark:text-slate-400'}`}>
-                  {f === 'ALL' ? 'All' : label(f)} <span className="text-slate-400 dark:text-slate-500">{n}</span>
+                  {f === 'ALL' ? 'All' : label(f)} <span className="text-slate-500 dark:text-slate-400">{n}</span>
                 </button>
               );
             })}
           </div>
           {!filtered.length ? (
-            <p className="py-4 text-sm text-slate-400 dark:text-slate-500">No change requests{filter !== 'ALL' ? ` with status ${label(filter)}` : ''}.</p>
+            <p className="py-4 text-sm text-slate-500 dark:text-slate-400">No change requests{filter !== 'ALL' ? ` with status ${label(filter)}` : ''}.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="prima-rows w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                  <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                     <th className="py-2">Change request</th><th>Status</th><th>Requested</th><th>Reviewed</th><th>Decided</th><th></th>
                   </tr>
                 </thead>
@@ -138,7 +138,7 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
                             ? <Badge color="amber">{cr.amountIdr != null ? formatIdr(cr.amountIdr) : 'Chargeable'}</Badge>
                             : <Badge color="green">No-cost</Badge>}
                         </div>
-                        <div className="text-xs text-slate-400 dark:text-slate-500">by {cr.requester?.name ?? '—'}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">by {cr.requester?.name ?? '—'}</div>
                       </td>
                       <td className="py-2"><Badge color={CR_COLOR[cr.status] ?? 'slate'}>{label(cr.status)}</Badge></td>
                       <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{formatDate(cr.createdAt)}</td>
@@ -156,13 +156,13 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
         </div>
 
         <div>
-          <div className="mb-2 text-xs font-medium uppercase text-slate-400 dark:text-slate-500">Charter Version History</div>
-          {!verQ.data?.versions.length && <p className="text-sm text-slate-400 dark:text-slate-500">No committed versions yet.</p>}
+          <div className="mb-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Charter Version History</div>
+          {!verQ.data?.versions.length && <p className="text-sm text-slate-500 dark:text-slate-400">No committed versions yet.</p>}
           <div className="space-y-1">
             {verQ.data?.versions.map((v) => (
               <div key={v.id} className="flex items-center justify-between border-b border-slate-100 py-1 text-sm dark:border-slate-800">
                 <span className="font-medium">Version {v.version}</span>
-                <span className="text-xs text-slate-400 dark:text-slate-500">committed {formatDate(v.committedAt)}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">committed {formatDate(v.committedAt)}</span>
               </div>
             ))}
           </div>

@@ -31,7 +31,7 @@ function ManpowerSync({ rows }: { rows: ManpowerSyncRow[] }) {
       <SectionTitle sub="Reconcile Cost manpower mandays against schedule duration">Manpower ↔ Schedule Sync</SectionTitle>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+          <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
             <th className="py-2">Task</th><th className="text-right">Sched. days</th><th className="text-right">Mandays</th>
             <th className="text-right">Variance</th><th className="text-right">Status</th>
           </tr>
@@ -46,7 +46,7 @@ function ManpowerSync({ rows }: { rows: ManpowerSyncRow[] }) {
               <td className="text-right"><Badge color={SYNC_COLOR[r.status]}>{r.status}</Badge></td>
             </tr>
           ))}
-          {!rows.length && <tr><td colSpan={5} className="py-3 text-center text-slate-400 dark:text-slate-500">No tasks.</td></tr>}
+          {!rows.length && <tr><td colSpan={5} className="py-3 text-center text-slate-500 dark:text-slate-400">No tasks.</td></tr>}
         </tbody>
       </table>
     </Card>
@@ -108,7 +108,7 @@ function EvmPanel({ base }: { base: string }) {
               )}
             </div>
           ) : (
-            <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">No schedule baseline set — capture one in the WBS section below to track finish variance.</p>
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">No schedule baseline set — capture one in the WBS section below to track finish variance.</p>
           )}
         </>
       )}

@@ -218,7 +218,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           )}
           {rows.length > 0 && (
             <div className="inline-flex items-center gap-1.5">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Timeline</span>
+              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
               <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
                 {(['day', 'week', 'month'] as Scale[]).map((s) => (
                   <button key={s} onClick={() => setScale(s)}
@@ -229,7 +229,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               </div>
             </div>
           )}
-          <span className="text-xs text-slate-400 dark:text-slate-500">
+          <span className="text-xs text-slate-500 dark:text-slate-400">
             {baselinedAt ? `Baselined ${formatDate(baselinedAt)}` : 'No baseline set'}
           </span>
           {canEdit && rows.length > 0 && (
@@ -249,7 +249,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase text-slate-400 dark:text-slate-500 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-2 [&>th]:pr-3">
+              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-2 [&>th]:pr-3">
                 <th className="w-8 text-center" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
                 <th className="w-12">WBS</th>
                 <th className="min-w-[14rem]">Task</th>
@@ -294,7 +294,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
                       </div>
                     </td>
-                    <td className="font-mono text-xs text-slate-400 dark:text-slate-500">{wbs}</td>
+                    <td className="font-mono text-xs text-slate-500 dark:text-slate-400">{wbs}</td>
                     <td>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         <button onClick={() => toggle(node.id)} title="WBS dictionary" className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
@@ -318,7 +318,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                           className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                         />
                       ) : (
-                        <span className={`tabular-nums text-xs ${r.isParent ? 'text-slate-400 dark:text-slate-500' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
+                        <span className={`tabular-nums text-xs ${r.isParent ? 'text-slate-500 dark:text-slate-400' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
                           {r.pct}%{r.isParent && ' ∑'}
                         </span>
                       )}
@@ -328,7 +328,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       {varDays == null ? (
                         <span className="text-slate-300 dark:text-slate-600">—</span>
                       ) : (
-                        <span title={`Baseline finish ${formatDate(new Date(r.baseEnd!))}`} className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-400 dark:text-slate-500'}>
+                        <span title={`Baseline finish ${formatDate(new Date(r.baseEnd!))}`} className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}>
                           {varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}
                         </span>
                       )}
@@ -400,8 +400,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
 function DictionaryView({ node }: { node: GanttNode }) {
   const Item = ({ label, value }: { label: string; value: string | null | undefined }) => (
     <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</div>
-      <div className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{value || <span className="text-slate-400 dark:text-slate-500">—</span>}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{value || <span className="text-slate-500 dark:text-slate-400">—</span>}</div>
     </div>
   );
   return (
@@ -486,7 +486,7 @@ function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
 
           {/* WBS dictionary */}
           <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">WBS dictionary (optional)</div>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">WBS dictionary (optional)</div>
             <div className="space-y-3">
               <Field label="Owner (PIC)">
                 <Select value={picResourceId} onChange={(e) => setPic(e.target.value)}>

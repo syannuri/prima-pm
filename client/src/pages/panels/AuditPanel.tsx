@@ -42,7 +42,7 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
     <Card>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <SectionTitle sub="Immutable trail of who changed what, when (append-only)">
-          Audit Log {data?.total ? <span className="ml-1 text-sm font-normal text-slate-400 dark:text-slate-500">· {data.total} changes</span> : null}
+          Audit Log {data?.total ? <span className="ml-1 text-sm font-normal text-slate-500 dark:text-slate-400">· {data.total} changes</span> : null}
         </SectionTitle>
         <div className="flex items-end gap-2">
           <div className="w-44">
@@ -64,7 +64,7 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
       {isLoading ? (
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : !data?.entries.length ? (
-        <p className="py-4 text-center text-slate-400 dark:text-slate-500">No audit entries match.</p>
+        <p className="py-4 text-center text-slate-500 dark:text-slate-400">No audit entries match.</p>
       ) : (
         <div className="max-h-[32rem] overflow-auto">
           <table className="prima-rows w-full text-sm">
@@ -78,14 +78,14 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
                 <tr key={e.id} className="border-b border-slate-100 dark:border-slate-800">
                   <td className="py-2 text-slate-500 dark:text-slate-400">{fmt(e.createdAt)}</td>
                   <td>{e.user?.name ?? '—'}</td>
-                  <td className="text-xs text-slate-400 dark:text-slate-500">{e.user?.role ?? '—'}</td>
+                  <td className="text-xs text-slate-500 dark:text-slate-400">{e.user?.role ?? '—'}</td>
                   <td className="font-mono text-xs">{e.entity}</td>
                   <td><Badge color={ACTION_COLOR[e.action] ?? 'slate'}>{e.action}</Badge></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
             Showing latest {data.entries.length}{entity || action ? ' matching' : ` of ${data.total}`} entries.
           </p>
         </div>

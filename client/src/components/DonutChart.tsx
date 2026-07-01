@@ -47,7 +47,7 @@ export default function DonutChart({ title, slices }: { title: string; slices: D
     <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">{title}</div>
       {total === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">No data</p>
+        <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No data</p>
       ) : (
         <div className="relative flex items-center gap-4" onMouseLeave={() => setHover(null)}>
           <svg
@@ -113,7 +113,7 @@ export default function DonutChart({ title, slices }: { title: string; slices: D
                 <span className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: d.color }} />
                 <span className="flex-1 text-slate-600 dark:text-slate-300">{d.label}</span>
                 <span className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{d.value}</span>
-                <span className="w-10 text-right tabular-nums text-xs text-slate-400 dark:text-slate-500">{total ? Math.round((d.value / total) * 100) : 0}%</span>
+                <span className="w-10 text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{total ? Math.round((d.value / total) * 100) : 0}%</span>
               </li>
             ))}
           </ul>

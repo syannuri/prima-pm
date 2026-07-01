@@ -19,8 +19,8 @@ function Step({ label, by, at, active, tone }: { label: string; by?: string | nu
         {active && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
       </span>
       <div>
-        <div className={`text-sm ${active ? 'font-medium text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>{label}</div>
-        <div className="text-xs text-slate-400 dark:text-slate-500">{at ? `${dt(at)}${by ? ` · ${by}` : ''}` : 'Pending'}</div>
+        <div className={`text-sm ${active ? 'font-medium text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>{label}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">{at ? `${dt(at)}${by ? ` · ${by}` : ''}` : 'Pending'}</div>
       </div>
     </li>
   );
@@ -72,7 +72,7 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
             <Badge color={cr.magnitude === 'MAJOR' ? 'red' : 'slate'}>{cr.magnitude}</Badge>
             {cr.chargeable && <Badge color="amber">Chargeable</Badge>}
           </div>
-          <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             <span className="font-mono">{cr.project.code}</span> · {cr.project.name}
           </div>
           {cr.chargeable && (
@@ -83,13 +83,13 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
         </div>
 
         <div>
-          <div className="mb-1 text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">Description</div>
+          <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Description</div>
           <p className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{cr.description}</p>
         </div>
 
         {cr.impactAreas.length > 0 && (
           <div>
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">Impact areas</div>
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Impact areas</div>
             <div className="flex flex-wrap gap-1.5">
               {cr.impactAreas.map((a) => <Badge key={a} color="slate">{a}</Badge>)}
             </div>
@@ -97,7 +97,7 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
         )}
 
         <div>
-          <div className="mb-2 text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">Lifecycle</div>
+          <div className="mb-2 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Lifecycle</div>
           <ol className="space-y-3">
             <Step label="Submitted" by={cr.requester?.name} at={cr.createdAt} active />
             <Step label="Under review" by={cr.reviewer?.name} at={cr.reviewedAt} active={!!cr.reviewedAt} tone="bg-sky-500" />

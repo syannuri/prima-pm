@@ -23,11 +23,11 @@ export default function ProgressChart({ title, data }: { title: string; data: Pr
       </div>
 
       {data.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">No data</p>
+        <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No data</p>
       ) : (
         <div className="flex gap-2">
           {/* Y axis */}
-          <div className="flex h-28 flex-col justify-between text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
+          <div className="flex h-28 flex-col justify-between text-[10px] tabular-nums text-slate-500 dark:text-slate-400">
             {GRID.map((g) => <span key={g} className="leading-none">{g}%</span>)}
           </div>
 
@@ -60,7 +60,7 @@ export default function ProgressChart({ title, data }: { title: string; data: Pr
                 <div key={i} className="min-w-0 flex-1 text-center" title={d.name}>
                   <div className="truncate text-[10px] text-slate-500 dark:text-slate-400">{d.name}</div>
                   <div className="text-[11px] font-semibold tabular-nums">
-                    <span className="text-slate-400 dark:text-slate-500">{clampPct(d.baseline)}%</span>
+                    <span className="text-slate-500 dark:text-slate-400">{clampPct(d.baseline)}%</span>
                     <span className="text-slate-300 dark:text-slate-600"> · </span>
                     <span className="text-brand-600 dark:text-brand-400">{clampPct(d.actual)}%</span>
                   </div>
