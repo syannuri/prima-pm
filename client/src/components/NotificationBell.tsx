@@ -51,16 +51,27 @@ export default function NotificationBell() {
     enabled: isAdminPmo,
     refetchInterval: 60_000,
   });
+  // Personal inbox — discrete events for this user (e.g. being assigned as PM).
+  const { data: inbox } = useQuery({
+    queryKey: ['inbox'],
+    queryFn: () => api.get<{ items: import('../api/types').AppNotification[]; unread: number }>('/notifications/inbox'),
+    refetchInterval: 60_000,
+  });
 
   const markSeen = useMutation({
     mutationFn: () => api.post('/notifications/changes/seen', {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['changes'] }),
   });
+  const markInboxSeen = useMutation({
+    mutationFn: () => api.post('/notifications/inbox/seen', {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+  });
 
   const alertTotal = attn?.total ?? 0;
   const high = attn?.high ?? 0;
   const unread = isAdminPmo ? changes?.unread ?? 0 : 0;
-  const total = alertTotal + unread;
+  const inboxUnread = inbox?.unread ?? 0;
+  const total = alertTotal + unread + inboxUnread;
 
   // Gentle, faint reminder that fades in → holds → fades out — shown every time the
   // user opens the dashboard (the bell lives in the persistent layout, so we re-arm on
@@ -93,6 +104,7 @@ export default function NotificationBell() {
     setOpen((o) => {
       const next = !o;
       if (next && unread > 0 && !markSeen.isPending) markSeen.mutate();
+      if (next && inboxUnread > 0 && !markInboxSeen.isPending) markInboxSeen.mutate();
       return next;
     });
   }
@@ -132,7 +144,34 @@ export default function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="prima-toast absolute right-0 z-20 mt-2 w-80 rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90">
+          <div className="prima-toast absolute right-0 z-20 mt-2 max-h-[80vh] w-80 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90">
+            {/* Personal inbox — assignment & other discrete events */}
+            {!!inbox?.items.length && (
+              <div className="mb-3">
+                <div className="mb-1 text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">For you</div>
+                <ul className="space-y-0.5">
+                  {inbox.items.slice(0, 6).map((n) => {
+                    const isNew = !n.readAt && inboxUnread > 0;
+                    const inner = (
+                      <div className={`rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/70 ${isNew ? 'bg-brand-50/70 dark:bg-brand-600/15' : ''}`}>
+                        <div className="flex items-center gap-1.5">
+                          {isNew && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" title="New" />}
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{n.title}</span>
+                          <span className="ml-auto shrink-0 text-[10px] text-slate-400 dark:text-slate-500">{formatDate(n.createdAt)}</span>
+                        </div>
+                        {n.body && <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{n.body}</div>}
+                      </div>
+                    );
+                    return (
+                      <li key={n.id}>
+                        {n.projectId ? <Link to={`/projects/${n.projectId}`} onClick={() => setOpen(false)} className="block">{inner}</Link> : inner}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="mt-2 border-t border-slate-200/70 dark:border-slate-800/70" />
+              </div>
+            )}
             <div className="mb-2 flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Needs attention</span>
               {alertTotal > 0 && (

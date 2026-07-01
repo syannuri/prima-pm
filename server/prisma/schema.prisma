@@ -180,6 +180,7 @@ model User {
   decidedCRs        ChangeRequest[] @relation("CRDecider")
   resourceProfiles  Resource[]      @relation("ResourceUser")
   assignedBacklog   BacklogItem[]   @relation("BacklogAssignee")
+  notifications     Notification[]  @relation("UserNotifications")
 
   @@index([role])
 }
@@ -615,6 +616,22 @@ model SprintSnapshot {
 
   @@unique([sprintId, date])
   @@index([sprintId])
+}
+
+// Persistent per-user in-app notification (inbox) — for discrete events like being
+// assigned as a project's PM (not the on-demand "needs attention" alerts).
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation("UserNotifications", fields: [userId], references: [id])
+  type      String    // e.g. PROJECT_ASSIGNED
+  title     String
+  body      String?   @db.Text
+  projectId String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // A product-backlog work item (epic/story/task/bug). `sprintId` null = product

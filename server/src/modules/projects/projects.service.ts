@@ -3,7 +3,20 @@ import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { generateProjectCode } from '../charter/charter.helpers.js';
+import { createNotification } from '../notification/notification.service.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
+
+// Notify a user they've been assigned as a project's PM (skip self-assignment).
+export async function notifyPmAssigned(pmUserId: string | null | undefined, actorId: string, project: { id: string; name: string; code: string }) {
+  if (!pmUserId || pmUserId === actorId) return;
+  await createNotification({
+    userId: pmUserId,
+    type: 'PROJECT_ASSIGNED',
+    title: 'Assigned as Project Manager',
+    body: `You've been assigned as PM of "${project.name}" (${project.code}).`,
+    projectId: project.id,
+  });
+}
 
 const GLOBAL_ROLES: Role[] = ['ADMIN', 'PMO'];
 
@@ -93,6 +106,7 @@ export async function createProject(input: CreateProjectInput, actorId: string) 
   });
 
   await writeAudit({ projectId: project.id, userId: actorId, entity: 'Project', entityId: project.id, action: 'CREATE', after: project });
+  await notifyPmAssigned(project.pmUserId, actorId, project);
   return project;
 }
 
@@ -158,6 +172,7 @@ export async function reassignPm(projectId: string, pmUserId: string, actorId: s
     before: { pmUserId: project.pmUserId },
     after: { pmUserId },
   });
+  if (pmUserId !== project.pmUserId) await notifyPmAssigned(pmUserId, actorId, project);
   return getProject(projectId);
 }
 

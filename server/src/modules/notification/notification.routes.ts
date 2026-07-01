@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { getAttentionItems, getPortfolioAlerts, getRecentChanges, markChangesSeen } from './notification.service.js';
+import { getAttentionItems, getInbox, getPortfolioAlerts, getRecentChanges, markChangesSeen, markInboxSeen } from './notification.service.js';
 
 // Portfolio-wide alerts for the header bell. Mounted at /api/v1/notifications.
 const router = Router();
@@ -40,6 +40,20 @@ router.get(
   '/attention',
   asyncHandler(async (req, res) => {
     res.json(await getAttentionItems(req.user!.id, req.user!.role, new Date()));
+  }),
+);
+
+// Personal inbox — discrete events for the current user (e.g. project assignment).
+router.get(
+  '/inbox',
+  asyncHandler(async (req, res) => {
+    res.json(await getInbox(req.user!.id));
+  }),
+);
+router.post(
+  '/inbox/seen',
+  asyncHandler(async (req, res) => {
+    res.json(await markInboxSeen(req.user!.id));
   }),
 );
 

@@ -123,6 +123,31 @@ export async function markChangesSeen(userId: string) {
   return { ok: true };
 }
 
+// ---- Persistent per-user inbox (discrete events, e.g. project assignment) ----
+export async function createNotification(input: { userId: string; type: string; title: string; body?: string | null; projectId?: string | null }) {
+  try {
+    await prisma.notification.create({
+      data: { userId: input.userId, type: input.type, title: input.title, body: input.body ?? null, projectId: input.projectId ?? null },
+    });
+  } catch (err) {
+    // Notifications must never break the business operation that triggered them.
+    console.error('[notification] failed to create', err);
+  }
+}
+
+export async function getInbox(userId: string, limit = 20) {
+  const [items, unread] = await Promise.all([
+    prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: Math.min(limit, 50) }),
+    prisma.notification.count({ where: { userId, readAt: null } }),
+  ]);
+  return { items, unread };
+}
+
+export async function markInboxSeen(userId: string) {
+  await prisma.notification.updateMany({ where: { userId, readAt: null }, data: { readAt: new Date() } });
+  return { ok: true };
+}
+
 export async function getRecentChanges(userId: string, role: string, limit = 25) {
   if (!GLOBAL_ROLES.includes(role as Role)) return { changes: [], unread: 0 };
 

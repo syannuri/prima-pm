@@ -6,6 +6,7 @@ import {
   checkCharterCompleteness,
   buildCharterSnapshot,
 } from './charter.helpers.js';
+import { createNotification } from '../notification/notification.service.js';
 import type { UpsertCharterInput, ChangeRequestInput } from './charter.schemas.js';
 
 export async function getCharter(projectId: string) {
@@ -20,6 +21,7 @@ export async function upsertCharter(
   actorId: string,
 ) {
   const existing = await prisma.projectCharter.findUnique({ where: { projectId } });
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true, pmUserId: true } });
 
   const guard = canEditCharter(existing);
   if (!guard.allowed) throw Conflict(guard.reason!);
@@ -60,6 +62,16 @@ export async function upsertCharter(
     action: existing ? 'UPDATE' : 'CREATE',
     after: charter,
   });
+  // Notify the PM if the charter (re)assigned them to this project.
+  if (input.pmUserId && input.pmUserId !== project?.pmUserId && input.pmUserId !== actorId) {
+    await createNotification({
+      userId: input.pmUserId,
+      type: 'PROJECT_ASSIGNED',
+      title: 'Assigned as Project Manager',
+      body: `You've been assigned as PM of "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}.`,
+      projectId,
+    });
+  }
   return charter;
 }
 

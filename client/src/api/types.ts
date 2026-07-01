@@ -93,6 +93,16 @@ export interface SprintSnapshot {
 }
 export interface AgileBoard { sprints: Sprint[]; items: BacklogItem[]; snapshots: SprintSnapshot[] }
 
+export interface AppNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  projectId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   code: string;
