@@ -64,7 +64,7 @@ export default function NotificationBell() {
 
   // Gentle, faint reminder that fades in → holds → fades out. Shown once per browser
   // session (so it reminds when you open the app, without nagging on every navigation).
-  const REMIND_MS = 6000;
+  const REMIND_MS = 8000;
   const [remind, setRemind] = useState(false);
   const firedRef = useRef(false);
   useEffect(() => {
