@@ -211,6 +211,20 @@ export async function decideChangeRequest(
     action: decision === 'APPROVED' ? 'APPROVE' : 'REJECT',
     after: result,
   });
+
+  // Notify the requester (the PM who raised it) of the decision — mirrors the
+  // CR_SUBMITTED notification that approvers receive. Skip self-decisions.
+  if (cr.requestedBy && cr.requestedBy !== actorId) {
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true } });
+    const where = `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`;
+    await createNotification({
+      userId: cr.requestedBy,
+      type: decision === 'APPROVED' ? 'CR_APPROVED' : 'CR_REJECTED',
+      title: `Change request ${decision === 'APPROVED' ? 'approved' : 'rejected'}`,
+      body: `Your change request "${cr.title}" ${where} was ${decision === 'APPROVED' ? 'approved' : 'rejected'}.`,
+      projectId,
+    });
+  }
   return result;
 }
 
