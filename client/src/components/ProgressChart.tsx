@@ -15,13 +15,13 @@ export default function ProgressChart({ title, data }: { title: string; data: Pr
       ) : (
         <div className="flex gap-2">
           {/* Y axis */}
-          <div className="flex h-40 flex-col justify-between text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
+          <div className="flex h-28 flex-col justify-between text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
             {GRID.map((g) => <span key={g} className="leading-none">{g}%</span>)}
           </div>
 
           <div className="min-w-0 flex-1">
             {/* Plot: gridlines + bars */}
-            <div className="relative h-40">
+            <div className="relative h-28">
               {GRID.map((g) => (
                 <div key={g} className="absolute inset-x-0 border-t border-slate-100 dark:border-slate-800/80" style={{ top: `${100 - g}%` }} />
               ))}
@@ -31,7 +31,7 @@ export default function ProgressChart({ title, data }: { title: string; data: Pr
                   return (
                     <div key={i} className="flex h-full flex-1 items-end justify-center" title={`${d.name}: ${pct}%`}>
                       <div
-                        className="w-full max-w-[3rem] rounded-t bg-brand-500 transition-[height] duration-500"
+                        className="w-full max-w-[2rem] rounded-t bg-brand-500 transition-[height] duration-500"
                         style={{ height: `${Math.max(pct, 1.5)}%` }}
                       />
                     </div>

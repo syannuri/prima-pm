@@ -174,16 +174,10 @@ export default function PortfolioSummary() {
       {/* PM & Finance — CPI (and SPI for PM) for THEIR assigned projects + progress.
           Donuts hover to reveal which projects fall in each slice. */}
       {showPmCharts && (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={`grid gap-3 sm:grid-cols-2 ${isPM ? 'lg:grid-cols-3' : ''}`}>
           <DonutChart title="Cost performance (by CPI)" slices={cpiSlices} />
-          {isPM ? <DonutChart title="Schedule performance (by SPI)" slices={spiSlices} /> : (
-            <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, progress: p.scheduleProgress }))} />
-          )}
-          {isPM && (
-            <div className="sm:col-span-2">
-              <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, progress: p.scheduleProgress }))} />
-            </div>
-          )}
+          {isPM && <DonutChart title="Schedule performance (by SPI)" slices={spiSlices} />}
+          <ProgressChart title="Progress per project" data={data.projects.map((p) => ({ name: p.name, progress: p.scheduleProgress }))} />
         </div>
       )}
 
