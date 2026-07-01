@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Risk, RiskAnalysis } from '../../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatIdr } from '../../lib/format';
@@ -181,6 +181,15 @@ function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
 
+  // Live EMV preview: EMV = Probability % × Impact Cost (opportunities count as negative).
+  // If a residual (after-mitigation) pair is filled, that's what feeds the reserve.
+  const clamp01 = (x: number) => Math.min(1, Math.max(0, Number.isFinite(x) ? x : 0));
+  const sign = f.kind === 'OPPORTUNITY' ? -1 : 1;
+  const emvPreview = sign * clamp01(Number(f.probabilityPct)) * Math.abs(Number(f.impactCostIdr) || 0);
+  const hasResidual = f.residualProbabilityPct !== '' && f.residualImpactCost !== '';
+  const residualEmvPreview = hasResidual ? sign * clamp01(Number(f.residualProbabilityPct)) * Math.abs(Number(f.residualImpactCost) || 0) : null;
+  const reserveEmv = residualEmvPreview ?? emvPreview;
+
   return (
     <div className="mt-4 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
       <div className="grid gap-2 md:grid-cols-4">
@@ -190,13 +199,40 @@ function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
             <option value="THREAT">Threat</option><option value="OPPORTUNITY">Opportunity</option>
           </Select>
         </Field>
-        <Field label="Probability (1-5)"><Input type="number" min={1} max={5} value={f.probabilityScore} onChange={(e) => set('probabilityScore', e.target.value)} /></Field>
-        <Field label="Impact (1-5)"><Input type="number" min={1} max={5} value={f.impactScore} onChange={(e) => set('impactScore', e.target.value)} /></Field>
-        <Field label="Probability % (0-1)"><Input type="number" step={0.05} value={f.probabilityPct} onChange={(e) => set('probabilityPct', e.target.value)} /></Field>
-        <Field label="Impact Cost (IDR)"><Input type="number" value={f.impactCostIdr} onChange={(e) => set('impactCostIdr', e.target.value)} /></Field>
-        <Field label="Residual P% (opt)"><Input type="number" step={0.05} value={f.residualProbabilityPct} onChange={(e) => set('residualProbabilityPct', e.target.value)} /></Field>
-        <Field label="Residual Impact (opt)"><Input type="number" value={f.residualImpactCost} onChange={(e) => set('residualImpactCost', e.target.value)} /></Field>
+        <Field label="Probability (1-5)" hint="Qualitative — heatmap & severity">
+          <Input type="number" min={1} max={5} value={f.probabilityScore} onChange={(e) => set('probabilityScore', e.target.value)} title="Likelihood score 1–5 (qualitative). Sets the risk's row on the 5×5 heatmap and its severity — separate from Probability %." />
+        </Field>
+        <Field label="Impact (1-5)" hint="Qualitative — heatmap & severity">
+          <Input type="number" min={1} max={5} value={f.impactScore} onChange={(e) => set('impactScore', e.target.value)} title="Impact score 1–5 (qualitative). Sets the risk's column on the 5×5 heatmap and its severity." />
+        </Field>
+        <Field label="Probability % (0-1)" hint="Chance it happens (0.3 = 30%) — drives EMV">
+          <Input type="number" step={0.05} min={0} max={1} value={f.probabilityPct} onChange={(e) => set('probabilityPct', e.target.value)} title="Likelihood as a decimal 0–1 (e.g. 0.3 = 30%). Quantitative: EMV = Probability % × Impact Cost, which sets the contingency reserve. Different from the 1–5 score." />
+        </Field>
+        <Field label="Impact Cost (IDR)" hint="Loss if it happens · EMV = P% × this">
+          <MoneyInput value={f.impactCostIdr} onValueChange={(v) => set('impactCostIdr', v)} title="Rupiah loss if the risk occurs. EMV = Probability % × this amount." placeholder="e.g. 100.000.000" />
+        </Field>
+        <Field label="Residual P% (opt)" hint="Probability after mitigation">
+          <Input type="number" step={0.05} min={0} max={1} value={f.residualProbabilityPct} onChange={(e) => set('residualProbabilityPct', e.target.value)} title="Probability remaining AFTER your response/mitigation (0–1). If set with Residual Impact, the residual EMV is what's held in reserve." />
+        </Field>
+        <Field label="Residual Impact (opt)" hint="Impact cost after mitigation">
+          <MoneyInput value={f.residualImpactCost} onValueChange={(v) => set('residualImpactCost', v)} title="Impact cost remaining after mitigation. Residual EMV = Residual P% × this." placeholder="optional" />
+        </Field>
       </div>
+
+      {/* Live EMV preview — makes the money impact clear before saving. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-900/50">
+        <span className="text-slate-500 dark:text-slate-400" title="Expected Monetary Value = Probability % × Impact Cost">
+          EMV (auto): <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(emvPreview)}</span>
+        </span>
+        <span className="text-xs text-slate-400 dark:text-slate-500">= {f.probabilityPct || 0} × {formatIdr(Number(f.impactCostIdr) || 0)}</span>
+        {residualEmvPreview != null && (
+          <span className="text-slate-500 dark:text-slate-400">· Residual EMV: <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(residualEmvPreview)}</span></span>
+        )}
+        <span className="text-xs text-slate-400 dark:text-slate-500">
+          → {f.kind === 'OPPORTUNITY' ? 'reduces' : 'adds'} ~{formatIdr(Math.abs(reserveEmv))} {f.kind === 'OPPORTUNITY' ? 'from' : 'to'} the contingency reserve
+        </span>
+      </div>
+
       <div className="mt-2 flex items-center gap-2">
         <Button onClick={() => add.mutate()} disabled={!f.title || !f.impactCostIdr || add.isPending}>Add Risk</Button>
         {err && <span className="text-sm text-red-600">{err}</span>}
