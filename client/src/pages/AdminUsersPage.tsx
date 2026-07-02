@@ -144,7 +144,7 @@ function CreateUser({ onChange }: { onChange: () => void }) {
       <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Create user</h3>
       <div className="grid gap-2 md:grid-cols-5">
         <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>
-        <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prima.id" /></Field>
+        <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prismatix.id" /></Field>
         <Field label="Role">
           <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -184,7 +184,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: (
         <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Update name and email. Role, status and password are managed separately.</p>
         <div className="space-y-3">
           <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>
-          <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prima.id" /></Field>
+          <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prismatix.id" /></Field>
           {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>

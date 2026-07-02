@@ -6,9 +6,9 @@ import { Page, expect } from '@playwright/test';
 export type Role = 'Admin' | 'Project Manager' | 'Finance';
 
 const ACCOUNTS: Record<Role, { email: string; password: string }> = {
-  Admin: { email: 'mamed@prima.id', password: process.env.E2E_ADMIN_PASSWORD ?? 'Password123!' },
-  'Project Manager': { email: 'budi@prima.id', password: process.env.E2E_PM_PASSWORD ?? 'Budi-Prima-2026' },
-  Finance: { email: 'sari@prima.id', password: process.env.E2E_FINANCE_PASSWORD ?? 'Sari-Prima-2026' },
+  Admin: { email: 'mamed@prismatix.id', password: process.env.E2E_ADMIN_PASSWORD ?? 'Password123!' },
+  'Project Manager': { email: 'budi@prismatix.id', password: process.env.E2E_PM_PASSWORD ?? 'Budi-Prima-2026' },
+  Finance: { email: 'sari-fina@prismatix.id', password: process.env.E2E_FINANCE_PASSWORD ?? 'Sari-Prima-2026' },
 };
 
 /** Log in by typing the real account's email + password. */

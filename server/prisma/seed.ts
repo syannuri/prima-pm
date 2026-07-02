@@ -22,13 +22,13 @@ import { upsertTaskSchema } from '../src/modules/schedule/schedule.schemas.js';
 async function seedUsers() {
   const password = await hashPassword('Password123!');
   const defs: Array<{ name: string; email: string; role: any }> = [
-    { name: 'Alice Admin', email: 'admin@prima.id', role: 'ADMIN' },
-    { name: 'Pita PMO', email: 'pmo@prima.id', role: 'PMO' },
-    { name: 'Budi Project Manager', email: 'pm@prima.id', role: 'PROJECT_MANAGER' },
-    { name: 'Fani Finance', email: 'finance@prima.id', role: 'FINANCE' },
-    { name: 'Rudi Risk Officer', email: 'risk@prima.id', role: 'RISK_OFFICER' },
-    { name: 'Andi Team Member', email: 'pic@prima.id', role: 'TEAM_MEMBER' },
-    { name: 'Vera Viewer', email: 'viewer@prima.id', role: 'VIEWER' },
+    { name: 'Alice Admin', email: 'admin@prismatix.id', role: 'ADMIN' },
+    { name: 'Pita PMO', email: 'pmo@prismatix.id', role: 'PMO' },
+    { name: 'Budi Project Manager', email: 'pm@prismatix.id', role: 'PROJECT_MANAGER' },
+    { name: 'Fani Finance', email: 'finance@prismatix.id', role: 'FINANCE' },
+    { name: 'Rudi Risk Officer', email: 'risk@prismatix.id', role: 'RISK_OFFICER' },
+    { name: 'Andi Team Member', email: 'pic@prismatix.id', role: 'TEAM_MEMBER' },
+    { name: 'Vera Viewer', email: 'viewer@prismatix.id', role: 'VIEWER' },
   ];
   const users: Record<string, { id: string }> = {};
   for (const d of defs) {

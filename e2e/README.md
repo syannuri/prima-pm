@@ -31,9 +31,9 @@ E2E_ADMIN_PASSWORD=…   E2E_PM_PASSWORD=…   E2E_FINANCE_PASSWORD=…   npm te
 
 | Helper role        | Email           | Default env var        |
 |--------------------|-----------------|------------------------|
-| `Admin`            | mamed@prima.id  | `E2E_ADMIN_PASSWORD`   |
-| `Project Manager`  | budi@prima.id   | `E2E_PM_PASSWORD`      |
-| `Finance`          | sari@prima.id   | `E2E_FINANCE_PASSWORD` |
+| `Admin`            | mamed@prismatix.id     | `E2E_ADMIN_PASSWORD`   |
+| `Project Manager`  | budi@prismatix.id      | `E2E_PM_PASSWORD`      |
+| `Finance`          | sari-fina@prismatix.id | `E2E_FINANCE_PASSWORD` |
 
 If a teammate changes their password via the app, set the matching env var (or update
 the default in `tests/helpers.ts`) before running.

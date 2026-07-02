@@ -104,13 +104,13 @@ Open **http://localhost:5173** and sign in with a demo account.
 ### Demo logins (seed only — password `Password123!`)
 | Role | Email |
 |------|-------|
-| Admin | admin@prima.id |
-| PMO | pmo@prima.id |
-| Project Manager | pm@prima.id |
-| Finance | finance@prima.id |
-| Risk Officer | risk@prima.id |
-| Team Member | pic@prima.id |
-| Viewer | viewer@prima.id |
+| Admin | admin@prismatix.id |
+| PMO | pmo@prismatix.id |
+| Project Manager | pm@prismatix.id |
+| Finance | finance@prismatix.id |
+| Risk Officer | risk@prismatix.id |
+| Team Member | pic@prismatix.id |
+| Viewer | viewer@prismatix.id |
 
 > Demo accounts exist only in the seed/dev DB. In a real deployment, create proper accounts and disable the demos.
 

@@ -7,7 +7,7 @@ test.describe('Authentication & RBAC', () => {
     await page.evaluate(() => localStorage.removeItem('prima_token'));
     await page.reload();
 
-    await page.getByLabel('Email').fill('budi@prima.id');
+    await page.getByLabel('Email').fill('budi@prismatix.id');
     await page.getByLabel('Password').fill('wrong-password');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
@@ -70,8 +70,8 @@ test.describe('Authentication & RBAC', () => {
     await page.getByRole('link', { name: 'Users' }).click();
     await expect(page.getByRole('heading', { name: 'User management' })).toBeVisible();
     await expect(page.getByText('Create user')).toBeVisible();
-    await expect(page.getByText('mamed@prima.id')).toBeVisible();
-    await expect(page.getByText('budi@prima.id')).toBeVisible();
+    await expect(page.getByText('mamed@prismatix.id')).toBeVisible();
+    await expect(page.getByText('budi@prismatix.id')).toBeVisible();
     await page.screenshot({ path: 'test-results/admin-users.png', fullPage: true });
 
     // Non-admin (a Project Manager): no link, and direct navigation is blocked by a notice.
