@@ -42,6 +42,9 @@ export default function PortfolioSummary() {
   // FINANCE sees the portfolio for oversight but can't drill in, so names aren't links.
   const canOpen = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
   const isPM = user?.role === 'PROJECT_MANAGER';
+  // Cost & revenue table: ADMIN/PMO (whole portfolio) + PM (their OWN assigned projects —
+  // data.projects is already scoped to owned projects by the API for a PM).
+  const showFinancials = showPies || isPM;
   const [statusDate, setStatusDate] = useState(formatDateInput(new Date()));
   const { data, isLoading } = useQuery({
     queryKey: ['portfolio', statusDate],
@@ -276,8 +279,8 @@ export default function PortfolioSummary() {
         </Card>
       )}
 
-      {/* PMO dashboard — cost & revenue per project */}
-      {showPies && (
+      {/* Cost & revenue per project — PMO (portfolio) + PM (their own assigned projects) */}
+      {showFinancials && (
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cost &amp; revenue by project</span>
