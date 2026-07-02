@@ -48,7 +48,7 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
   return (
     <div className={`flex h-full flex-col bg-slate-900 text-slate-300 transition-[width] duration-200 ${collapsed ? 'w-16' : 'w-60'}`}>
       <div className={`flex h-14 items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <span className={`relative inline-block border-2 border-white font-brand font-bold tracking-wide text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
+        <span className={`relative inline-block border-[3px] border-white dark:border-white font-brand font-bold tracking-wide text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
           {collapsed ? 'P' : 'PRISMATIX'}
           <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-white" />
         </span>
