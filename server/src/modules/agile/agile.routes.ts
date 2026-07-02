@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
 import { sprintSchema, sprintUpdateSchema, backlogItemSchema, backlogItemUpdateSchema } from './agile.schemas.js';
+import { evmQuerySchema } from '../schedule/schedule.schemas.js';
 import * as svc from './agile.service.js';
 
 const router = Router({ mergeParams: true });
@@ -12,6 +13,13 @@ const canWrite = [requireProjectAccess({ write: true }), requireRole('ADMIN', 'P
 // Board payload: sprints + backlog items.
 router.get('/', canRead, asyncHandler(async (req, res) => {
   res.json(await svc.getAgile(req.params.projectId));
+}));
+
+// EVM metrics by methodology (?actualCost=&statusDate=) — powers the Agile-tab health
+// panel (AGILE → points-EVM, HYBRID → blended WBS+points).
+router.get('/evm', canRead, asyncHandler(async (req, res) => {
+  const q = evmQuerySchema.parse(req.query);
+  res.json(await svc.getProjectEvm(req.params.projectId, q.actualCost, q.statusDate ?? new Date()));
 }));
 
 // Sprints

@@ -3,6 +3,7 @@ import { writeAudit } from '../../lib/audit.js';
 import { NotFound } from '../../lib/errors.js';
 import { actualCostAsOf } from '../cost/cost.service.js';
 import { round2 } from '../../calc/money.js';
+import { deriveEvm } from '../../calc/evm.js';
 import type { BacklogItemInput, SprintInput } from './agile.schemas.js';
 
 // Full agile board payload: sprints + backlog items (with assignee) + burndown snapshots.
@@ -69,19 +70,24 @@ async function predictiveBudget(projectId: string): Promise<number> {
   return rows.reduce((s, r) => s + Number(r.type === 'MANPOWER' ? (r.manpowerCost ?? 0) : (r.amount ?? 0)), 0);
 }
 
-function evmOut(bac: number, ev: number, pv: number, ac: number, progress: number, leafTaskCount: number, finishVarianceDays: number | null) {
+function evmOut(
+  bac: number, ev: number, pv: number, ac: number, progress: number, leafTaskCount: number,
+  finishVarianceDays: number | null,
+  // scheduleBaselinedAt may be a Date (from getEvm) — JSON serializes it to an ISO string
+  // over the wire, matching the schedule endpoint and the frontend Evm type.
+  baseline?: { scheduleBaselinedAt: Date | string | null; baselineFinish: string | null; currentFinish: string | null },
+) {
+  // Reuse the shared EVM engine so agile/hybrid report the SAME fields + RAG health
+  // as the WBS (schedule) EVM — cv, sv, cpi, spi, eac, etc, vac, tcpi, health.
   return {
-    bac,
-    pv: round2(pv),
-    ev: round2(ev),
-    ac: round2(ac),
-    cv: round2(ev - ac),
-    spi: pv > 0 ? round2(ev / pv) : 0,
-    cpi: ac > 0 ? round2(ev / ac) : 0,
-    percentComplete: round2(progress),
+    ...deriveEvm(bac, ev, pv, ac, progress),
     scheduleProgress: progress,
     scheduleWeight: bac > 0 ? bac : 1,
+    costBaselineBAC: bac,
     leafTaskCount,
+    scheduleBaselinedAt: baseline?.scheduleBaselinedAt ?? null,
+    baselineFinish: baseline?.baselineFinish ?? null,
+    currentFinish: baseline?.currentFinish ?? null,
     finishVarianceDays,
   };
 }
@@ -119,7 +125,21 @@ export async function getHybridEvm(projectId: string, actualCost: number | undef
   const ev = wProg * predictiveBAC + af.progress * agileBAC;
   const pv = wPlanned * predictiveBAC + af.plannedProgress * agileBAC;
   const progress = bac > 0 ? ev / bac : (wProg + af.progress) / 2;
-  return evmOut(bac, ev, pv, ac, progress, wbs.leafTaskCount + af.itemCount, wbs.finishVarianceDays);
+  return evmOut(bac, ev, pv, ac, progress, wbs.leafTaskCount + af.itemCount, wbs.finishVarianceDays, {
+    scheduleBaselinedAt: wbs.scheduleBaselinedAt,
+    baselineFinish: wbs.baselineFinish,
+    currentFinish: wbs.currentFinish,
+  });
+}
+
+// Dispatch EVM by delivery methodology so the Agile tab (and any caller) gets the
+// right reading: AGILE → points-EVM, HYBRID → blended WBS+points, else → WBS EVM.
+export async function getProjectEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { deliveryApproach: true } });
+  if (project?.deliveryApproach === 'AGILE') return getAgileEvm(projectId, actualCost, statusDate);
+  if (project?.deliveryApproach === 'HYBRID') return getHybridEvm(projectId, actualCost, statusDate);
+  const { getEvm } = await import('../schedule/schedule.service.js');
+  return getEvm(projectId, actualCost, statusDate);
 }
 
 async function recordSnapshots(

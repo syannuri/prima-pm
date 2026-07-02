@@ -90,6 +90,17 @@ export function computeEvm(input: EvmInput): EvmResult {
   ev = round2(ev);
   const weightedProgress = totalWeight > 0 ? round4(weightedDone / totalWeight) : 0;
 
+  return deriveEvm(bac, ev, pv, ac, weightedProgress);
+}
+
+/**
+ * Derive the full EVM metric set from already-aggregated values (BAC, EV, PV, AC)
+ * plus a physical progress fraction (0..1). Shared by the WBS engine (computeEvm)
+ * and the agile / hybrid EVM (agile.service) so every methodology reports an
+ * identical field set + RAG health.
+ */
+export function deriveEvm(bac: number, ev: number, pv: number, ac: number, weightedProgress: number): EvmResult {
+  bac = round2(bac); ev = round2(ev); pv = round2(pv); ac = round2(ac);
   const hasCost = ac > 0;
   const hasSchedule = pv > 0;
   const cv = round2(ev - ac);
