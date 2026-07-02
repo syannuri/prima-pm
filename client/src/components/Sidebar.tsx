@@ -4,7 +4,6 @@ import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { useAuth } from '../context/AuthContext';
 import { PROJECT_STATUS_DOT } from '../lib/labels';
-import Logo from './Logo';
 
 function Icon({ path }: { path: string }) {
   return (
@@ -48,9 +47,10 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
 
   return (
     <div className={`flex h-full flex-col bg-slate-900 text-slate-300 transition-[width] duration-200 ${collapsed ? 'w-16' : 'w-60'}`}>
-      <div className={`flex h-14 items-center gap-2 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <Logo className="h-8 w-8 shrink-0" />
-        {!collapsed && <span className="font-brand text-base font-bold tracking-wide text-white">PRISMATIX</span>}
+      <div className={`flex h-14 items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
+        <span className={`inline-block rounded-md border-2 border-white/80 font-brand font-bold tracking-wide text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
+          {collapsed ? 'P' : 'PRISMATIX'}
+        </span>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
