@@ -59,14 +59,11 @@ export default function LoginPage() {
         {/* ---------- LEFT · tagline space (large screens) ---------- */}
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
           <div className="flex items-center gap-4">
-            <Logo className="h-14 w-14 drop-shadow-[0_10px_28px_rgba(99,102,241,0.45)]" />
+            <Logo className="h-14 w-14 drop-shadow-[0_8px_20px_rgba(244,103,95,0.4)]" />
             <span className="font-brand text-3xl font-bold tracking-wide text-slate-800 dark:text-slate-100">PRISMATIX</span>
           </div>
 
           <div className="max-w-2xl">
-            <p className="mb-4 whitespace-nowrap text-xs font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400 xl:text-[13px] xl:tracking-[0.22em]">
-              Projects · Risk · Earned Value · Cost · Investment · Schedule · Execution
-            </p>
             <h2 className="text-4xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-5xl">
               Clarity in every{' '}
               <span className="bg-gradient-to-r from-brand-500 via-amber-500 to-indigo-500 bg-clip-text text-transparent">project</span>.
