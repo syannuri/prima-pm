@@ -83,6 +83,10 @@ jobs:
     env:
       # Playwright auto-boots the server (config reads DATABASE_URL) against this seeded DB.
       DATABASE_URL: postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public
+      # src/config/env.ts requires these at import time — the seed loads server modules, so
+      # they must be present (any value; the seed only creates users, it never signs a token).
+      JWT_ACCESS_SECRET: ci-e2e-access
+      JWT_REFRESH_SECRET: ci-e2e-refresh
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
