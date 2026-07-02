@@ -61,6 +61,19 @@ async function seedRateCards() {
   console.log(`  ✓ ${cards.length} rate cards`);
 }
 
+// A small NAMED resource pool so the Cost-tab manpower picker + capacity view have
+// real people to assign (and so the e2e resource-picker specs have "Budi Santoso").
+async function seedResources() {
+  const pool = [
+    { name: 'Budi Santoso', personnelRole: 'PROJECT_PERSONNEL' as const, unitCostPerManday: 3_000_000, roleTitle: 'Solution Architect' },
+    { name: 'Sari Dewi', personnelRole: 'PM' as const, unitCostPerManday: 2_500_000, roleTitle: 'Project Manager' },
+    { name: 'Andi Nugroho', personnelRole: 'PROJECT_PERSONNEL' as const, unitCostPerManday: 1_500_000, roleTitle: 'Engineer' },
+  ];
+  await prisma.resource.deleteMany({ where: { name: { in: pool.map((r) => r.name) } } });
+  await prisma.resource.createMany({ data: pool });
+  console.log(`  ✓ ${pool.length} named resources (pool)`);
+}
+
 const DEMO_NAMES = ['SOC Modernization Program', 'Cloud Migration Wave 1'];
 
 async function resetDemoProject() {
@@ -231,6 +244,7 @@ async function main() {
   console.log('🌱 Seeding PRIMA-PM...');
   const users = await seedUsers();
   await seedRateCards();
+  await seedResources();
   await resetDemoProject();
   await seedDemoProject(users);
   await seedSecondProject(users);
