@@ -57,7 +57,10 @@ export default function LoginPage() {
       <div className="relative z-10 flex min-h-screen">
         {/* ---------- LEFT · tagline space (large screens) ---------- */}
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
-          <span className="self-start inline-block rounded-md border-[3px] border-slate-800 px-4 py-2 font-brand text-3xl font-bold tracking-wide text-slate-800 dark:border-slate-100 dark:text-slate-100">PRISMATIX</span>
+          <span className="relative self-start inline-block border-[3px] border-slate-900 px-4 py-2 font-brand text-3xl font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
+            PRISMATIX
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-slate-900 dark:bg-white" />
+          </span>
 
           <div className="max-w-2xl">
             <h2 className="text-4xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-5xl">
@@ -89,7 +92,10 @@ export default function LoginPage() {
             <div className="rounded-3xl border border-white/70 bg-white/75 p-7 shadow-[0_24px_70px_-20px_rgba(244,103,95,0.35)] backdrop-blur-xl sm:p-8 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.65)]">
               {/* logo on small screens (left pane hidden) */}
               <div className="mb-6 flex justify-center lg:hidden">
-                <span className="inline-block rounded-md border-[3px] border-slate-800 px-3 py-1.5 font-brand text-lg font-bold tracking-wide text-slate-800 dark:border-slate-100 dark:text-slate-100">PRISMATIX</span>
+                <span className="relative inline-block border-[3px] border-slate-900 px-3 py-1.5 font-brand text-lg font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
+                  PRISMATIX
+                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-slate-900 dark:bg-white" />
+                </span>
               </div>
 
               <div className="mb-7 text-center">
