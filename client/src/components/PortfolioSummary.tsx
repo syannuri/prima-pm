@@ -292,7 +292,7 @@ export default function PortfolioSummary() {
             <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No cost/revenue captured yet. Set them per project under “Edit details”.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="prima-rows w-full text-sm">
+              <table className="prima-rows w-full text-sm tabular-nums [&_th]:px-3 [&_td]:px-3 [&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                     <th className="py-2">Project</th>
@@ -313,10 +313,10 @@ export default function PortfolioSummary() {
                             <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
                           </Link>
                         </td>
-                        <td className="text-right tabular-nums">{p.plannedCost ? formatIdr(p.plannedCost) : '—'}</td>
-                        <td className="text-right tabular-nums">{p.revenue ? formatIdr(p.revenue) : '—'}</td>
-                        <td className={`text-right tabular-nums ${p.revenue || p.plannedCost ? (margin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : ''}`}>
-                          {p.revenue || p.plannedCost ? formatIdr(margin) : '—'}
+                        <td className="text-right whitespace-nowrap" title={p.plannedCost ? formatIdr(p.plannedCost) : undefined}>{p.plannedCost ? formatIdrShort(p.plannedCost) : '—'}</td>
+                        <td className="text-right whitespace-nowrap" title={p.revenue ? formatIdr(p.revenue) : undefined}>{p.revenue ? formatIdrShort(p.revenue) : '—'}</td>
+                        <td className={`text-right whitespace-nowrap ${p.revenue || p.plannedCost ? (margin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : ''}`} title={p.revenue || p.plannedCost ? formatIdr(margin) : undefined}>
+                          {p.revenue || p.plannedCost ? formatIdrShort(margin) : '—'}
                         </td>
                         <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((margin / p.revenue) * 100, 1)}%` : '—'}</td>
                       </tr>
@@ -326,9 +326,9 @@ export default function PortfolioSummary() {
                 <tfoot>
                   <tr className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                     <td className="py-2">Total</td>
-                    <td className="text-right tabular-nums">{formatIdr(finTotals.cost)}</td>
-                    <td className="text-right tabular-nums">{formatIdr(finTotals.revenue)}</td>
-                    <td className={`text-right tabular-nums ${finMargin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatIdr(finMargin)}</td>
+                    <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.cost)}>{formatIdrShort(finTotals.cost)}</td>
+                    <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.revenue)}>{formatIdrShort(finTotals.revenue)}</td>
+                    <td className={`text-right whitespace-nowrap ${finMargin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`} title={formatIdr(finMargin)}>{formatIdrShort(finMargin)}</td>
                     <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finTotals.revenue > 0 ? `${formatNum((finMargin / finTotals.revenue) * 100, 1)}%` : '—'}</td>
                   </tr>
                 </tfoot>
@@ -341,7 +341,7 @@ export default function PortfolioSummary() {
       {/* Per-project EVM table */}
       <Card>
         <div className="overflow-x-auto">
-          <table className="prima-rows w-full text-sm">
+          <table className="prima-rows w-full text-sm tabular-nums [&_th]:px-3 [&_td]:px-3 [&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                 <th className="py-2">Project</th><th>Status</th>
@@ -368,9 +368,9 @@ export default function PortfolioSummary() {
                     {p.clientName && <div className="text-xs text-slate-500 dark:text-slate-400">Client: {p.clientName}</div>}
                   </td>
                   <td><Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge></td>
-                  <td className="text-right">{formatIdr(p.bac)}</td>
-                  <td className="text-right">{formatIdr(p.ev)}</td>
-                  <td className="text-right">{formatIdr(p.ac)}</td>
+                  <td className="text-right whitespace-nowrap" title={formatIdr(p.bac)}>{formatIdrShort(p.bac)}</td>
+                  <td className="text-right whitespace-nowrap" title={formatIdr(p.ev)}>{formatIdrShort(p.ev)}</td>
+                  <td className="text-right whitespace-nowrap" title={formatIdr(p.ac)}>{formatIdrShort(p.ac)}</td>
                   <td className={`text-right ${p.cpi > 0 && p.cpi < 1 ? 'text-red-600' : ''}`}>{p.cpi ? formatNum(p.cpi, 2) : '—'}</td>
                   <td className={`text-right ${p.spi > 0 && p.spi < 1 ? 'text-red-600' : ''}`}>{p.spi ? formatNum(p.spi, 2) : '—'}</td>
                   <td className="text-right" title="Physical % complete — duration-weighted WBS roll-up (Schedule tab)">{formatNum(p.scheduleProgress * 100, 0)}%</td>
