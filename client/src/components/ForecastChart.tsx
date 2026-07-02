@@ -5,6 +5,24 @@ const PV = '#94a3b8'; // slate-400 — planned value baseline
 const AC = '#0ea5e9'; // sky-500 — actual cost to date
 const FC = '#f4675f'; // brand-500 — forecast cost to EAC
 
+// Month-start ticks spanning [t0, t1] for the time axis. The first tick uses the
+// month containing t0 (its label is pinned to the left edge), and any January (or
+// the first tick) carries the year so the timeline is unambiguous.
+function monthTicks(t0: number, t1: number): { ms: number; label: string }[] {
+  const start = new Date(t0);
+  let cur = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1);
+  const out: { ms: number; label: string }[] = [];
+  let first = true;
+  while (cur <= t1) {
+    const d = new Date(cur);
+    const mon = d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+    out.push({ ms: cur, label: first || d.getUTCMonth() === 0 ? `${mon} ${d.getUTCFullYear()}` : mon });
+    first = false;
+    cur = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+  }
+  return out;
+}
+
 // EVM cost S-curve: planned PV (baseline), actual AC (to today), and a dashed
 // forecast line projecting cost to the likely EAC at the forecast finish date.
 export default function ForecastChart({ data }: { data: Forecast }) {
@@ -30,6 +48,12 @@ export default function ForecastChart({ data }: { data: Forecast }) {
   const eacY = y(data.eac.likely);
   const finish = data.schedule.forecastFinish;
 
+  // Month labels along the time axis. Thin out to ≤ ~9 so long projects don't crowd.
+  const rawTicks = monthTicks(t0, t1);
+  const step = Math.max(1, Math.ceil(rawTicks.length / 9));
+  const ticks = rawTicks.filter((_, i) => i % step === 0);
+  const tickX = (ms: number) => Math.max(padL, Math.min(W - padR, x(ms)));
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
@@ -50,15 +74,25 @@ export default function ForecastChart({ data }: { data: Forecast }) {
         <path d={line((p) => p.pv)} fill="none" stroke={PV} strokeWidth="2" />
         <path d={line((p) => p.ac)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" />
         <path d={line((p) => p.forecast)} fill="none" stroke={FC} strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" />
+        {/* x-axis baseline + month ticks */}
+        <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeWidth="1" />
+        {ticks.map((tk) => (
+          <line key={tk.ms} x1={tickX(tk.ms)} x2={tickX(tk.ms)} y1={H - padB} y2={H - padB + 4} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" />
+        ))}
         {/* labels */}
         <text x={W - padR} y={bacY - 3} textAnchor="end" className="fill-slate-400 text-[10px]">BAC {formatIdrShort(data.bac)}</text>
         <text x={W - padR} y={eacY - 3} textAnchor="end" fill={FC} className="text-[10px]" opacity="0.9">EAC {formatIdrShort(data.eac.likely)}</text>
-        <text x={Math.min(nowX + 4, W - 40)} y={H - padB + 16} className="fill-slate-400 text-[10px]">today</text>
+        <text x={Math.min(nowX + 4, W - 40)} y={padT + 10} className="fill-slate-400 text-[10px]">today</text>
       </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-slate-400 dark:text-slate-500">
-        <span title={formatIdr(data.bac)}>{formatDate(pts[0].t)}</span>
-        {finish && <span>forecast finish · {formatDate(finish)}</span>}
+      {/* Month labels — HTML overlay (crisp; SVG text would stretch under preserveAspectRatio=none), aligned to the same x-scale as the curve. */}
+      <div className="relative mt-1 h-3 text-[10px] text-slate-400 dark:text-slate-500">
+        {ticks.map((tk) => (
+          <span key={tk.ms} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${(tickX(tk.ms) / W) * 100}%` }}>{tk.label}</span>
+        ))}
       </div>
+      {finish && (
+        <div className="mt-0.5 text-right text-[10px] text-slate-400 dark:text-slate-500" title={formatIdr(data.bac)}>forecast finish · {formatDate(finish)}</div>
+      )}
     </div>
   );
 }
