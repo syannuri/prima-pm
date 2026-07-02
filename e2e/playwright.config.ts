@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-const DATABASE_URL = 'postgresql://prima:prima@localhost:5432/prima_pm?schema=public';
+// Env-overridable so CI can point the auto-booted server at its seeded test DB.
+const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://prima:prima@localhost:5432/prima_pm?schema=public';
 
 export default defineConfig({
   testDir: './tests',

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers';
+import { login, ACCOUNTS } from './helpers';
 
 test.describe('Authentication & RBAC', () => {
   test('rejects invalid credentials', async ({ page }) => {
@@ -7,7 +7,7 @@ test.describe('Authentication & RBAC', () => {
     await page.evaluate(() => localStorage.removeItem('prima_token'));
     await page.reload();
 
-    await page.getByLabel('Email').fill('budi@prismatix.id');
+    await page.getByLabel('Email').fill(ACCOUNTS['Project Manager'].email);
     await page.getByLabel('Password').fill('wrong-password');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
@@ -72,8 +72,8 @@ test.describe('Authentication & RBAC', () => {
     await page.getByRole('link', { name: 'Users' }).click();
     await expect(page.getByRole('heading', { name: 'User management' })).toBeVisible();
     await expect(page.getByText('Create user')).toBeVisible();
-    await expect(page.getByText('mamed@prismatix.id')).toBeVisible();
-    await expect(page.getByText('budi@prismatix.id')).toBeVisible();
+    await expect(page.getByText(ACCOUNTS.Admin.email)).toBeVisible();
+    await expect(page.getByText(ACCOUNTS['Project Manager'].email)).toBeVisible();
     await page.screenshot({ path: 'test-results/admin-users.png', fullPage: true });
 
     // Non-admin (a Project Manager): no link, and direct navigation is blocked by a notice.
