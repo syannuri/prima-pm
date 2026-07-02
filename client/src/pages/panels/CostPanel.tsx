@@ -35,6 +35,9 @@ export default function CostPanel({ projectId }: { projectId: string }) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['cost', projectId] });
     qc.invalidateQueries({ queryKey: ['project', projectId] });
+    qc.invalidateQueries({ queryKey: ['evm'] }); // Cost-tab EV/AC/CV/CPI strip + Schedule-tab EvmPanel
+    qc.invalidateQueries({ queryKey: ['forecast'] }); // Forecast tab (EAC/ETC/VAC)
+    qc.invalidateQueries({ queryKey: ['portfolio'] }); // dashboard CPI/AC rollup
   };
 
   if (isLoading) return <Spinner />;
