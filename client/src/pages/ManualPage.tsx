@@ -34,11 +34,11 @@ function Lead({ text }: { text: string }) {
 const DOC: Record<Lang, Doc> = {
   id: {
     title: 'Manual Pengguna',
-    intro: 'Panduan memakai Precise — aplikasi manajemen proyek end-to-end. Label menu di aplikasi memakai bahasa Inggris; panduan ini menjelaskannya dalam Bahasa Indonesia.',
+    intro: 'Panduan memakai Prismatix — aplikasi manajemen proyek end-to-end. Label menu di aplikasi memakai bahasa Inggris; panduan ini menjelaskannya dalam Bahasa Indonesia.',
     switchLabel: 'Bahasa',
     sections: [
       { id: 'mulai', nav: 'Mulai cepat', heading: '🚀 Mulai cepat', blocks: [
-        { type: 'p', text: 'Precise membantu Anda merencanakan & memantau proyek dari awal sampai selesai: Charter → WBS/Jadwal → Biaya → Risiko → Perubahan, dengan analisis kinerja Earned Value (EVM).' },
+        { type: 'p', text: 'Prismatix membantu Anda merencanakan & memantau proyek dari awal sampai selesai: Charter → WBS/Jadwal → Biaya → Risiko → Perubahan, dengan analisis kinerja Earned Value (EVM).' },
         { type: 'steps', items: [
           'Masuk dengan akun Anda. Tampilan default dark mode (bisa diganti di Settings).',
           'Dari Dashboard, lihat ringkasan portfolio atau buka satu proyek dari sidebar kiri.',
@@ -140,11 +140,11 @@ const DOC: Record<Lang, Doc> = {
   },
   en: {
     title: 'User Manual',
-    intro: 'A guide to using Precise — an end-to-end project management app. This manual is in English and refers to the in-app labels directly.',
+    intro: 'A guide to using Prismatix — an end-to-end project management app. This manual is in English and refers to the in-app labels directly.',
     switchLabel: 'Language',
     sections: [
       { id: 'mulai', nav: 'Quick start', heading: '🚀 Quick start', blocks: [
-        { type: 'p', text: 'Precise helps you plan & track projects from start to finish: Charter → WBS/Schedule → Cost → Risk → Change, with Earned Value (EVM) performance analysis.' },
+        { type: 'p', text: 'Prismatix helps you plan & track projects from start to finish: Charter → WBS/Schedule → Cost → Risk → Change, with Earned Value (EVM) performance analysis.' },
         { type: 'steps', items: [
           'Sign in with your account. The default theme is dark mode (changeable in Settings).',
           'From the Dashboard, review the portfolio or open a project from the left sidebar.',
@@ -327,7 +327,7 @@ export default function ManualPage() {
         </Card>
       ))}
 
-      <p className="pb-2 text-center text-xs text-slate-500 dark:text-slate-400">Precise — plan with clarity, deliver with confidence.</p>
+      <p className="pb-2 text-center text-xs text-slate-500 dark:text-slate-400">Prismatix — plan with clarity, deliver with confidence.</p>
     </div>
   );
 }

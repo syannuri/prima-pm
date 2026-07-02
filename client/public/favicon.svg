@@ -1,26 +1,30 @@
-<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Precise">
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Prismatix">
   <defs>
     <linearGradient id="g" x1="4" y1="2" x2="44" y2="46" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#fb7d77" />
-      <stop offset="0.5" stop-color="#f4675f" />
-      <stop offset="1" stop-color="#be3b39" />
+      <stop stop-color="#4f46e5" />
+      <stop offset="1" stop-color="#1e1b4b" />
     </linearGradient>
     <linearGradient id="gloss" x1="24" y1="0" x2="24" y2="26" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#fff" stop-opacity="0.4" />
+      <stop stop-color="#fff" stop-opacity="0.34" />
       <stop offset="1" stop-color="#fff" stop-opacity="0" />
     </linearGradient>
     <clipPath id="b"><rect x="0" y="0" width="48" height="48" rx="11" /></clipPath>
   </defs>
   <!-- glossy badge (fills the canvas for crisp small sizes) -->
   <rect x="0" y="0" width="48" height="48" rx="11" fill="url(#g)" />
-  <g clip-path="url(#b)"><ellipse cx="24" cy="3" rx="28" ry="15" fill="url(#gloss)" /></g>
-  <!-- bold reticle (stays legible at 16px) -->
-  <circle cx="24" cy="24" r="10" fill="none" stroke="#fff" stroke-width="2.8" stroke-opacity="0.95" />
-  <g stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-opacity="0.95">
-    <path d="M24 5 V12" />
-    <path d="M24 36 V43" />
-    <path d="M5 24 H12" />
-    <path d="M36 24 H43" />
+  <g clip-path="url(#b)">
+    <ellipse cx="24" cy="3" rx="28" ry="15" fill="url(#gloss)" />
+    <!-- incoming white beam -->
+    <rect x="0" y="22.4" width="15" height="3.2" rx="1.6" fill="#fff" fill-opacity="0.92" />
+    <!-- refracted spectrum fan (bold for 16px legibility) -->
+    <g stroke-width="3" stroke-linecap="round" fill="none">
+      <path d="M22 24 L48 13" stroke="#f8776f" />
+      <path d="M22 24 L48 19" stroke="#fbbf24" />
+      <path d="M22 24 L48 24.5" stroke="#34d399" />
+      <path d="M22 24 L48 30" stroke="#38bdf8" />
+      <path d="M22 24 L48 36" stroke="#a78bfa" />
+    </g>
   </g>
-  <circle cx="24" cy="24" r="3.2" fill="#fff" />
+  <!-- glass prism -->
+  <path d="M22 9 L34 32 H10 Z" fill="#fff" fill-opacity="0.96" stroke="#fff" stroke-width="1.3" stroke-linejoin="round" />
 </svg>

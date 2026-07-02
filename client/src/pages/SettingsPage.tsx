@@ -36,7 +36,7 @@ function AppearanceCard() {
   const dark = theme === 'dark';
   return (
     <Card className="space-y-3">
-      <SectionTitle sub="Choose how Precise looks and greets you on this device.">Appearance &amp; language</SectionTitle>
+      <SectionTitle sub="Choose how Prismatix looks and greets you on this device.">Appearance &amp; language</SectionTitle>
       <div className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
         <div>
           <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Dark mode</div>

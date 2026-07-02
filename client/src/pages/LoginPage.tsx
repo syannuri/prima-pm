@@ -59,8 +59,8 @@ export default function LoginPage() {
         {/* ---------- LEFT · tagline space (large screens) ---------- */}
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
           <div className="flex items-center gap-4">
-            <Logo className="h-14 w-14 drop-shadow-[0_10px_28px_rgba(244,103,95,0.4)]" />
-            <span className="font-brand text-3xl font-bold tracking-wide text-slate-800 dark:text-slate-100">PRECISE</span>
+            <Logo className="h-14 w-14 drop-shadow-[0_10px_28px_rgba(99,102,241,0.45)]" />
+            <span className="font-brand text-3xl font-bold tracking-wide text-slate-800 dark:text-slate-100">PRISMATIX</span>
           </div>
 
           <div className="max-w-2xl">
@@ -68,12 +68,12 @@ export default function LoginPage() {
               Projects · Risk · Earned Value · Cost · Investment · Schedule · Execution
             </p>
             <h2 className="text-4xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-5xl">
-              Precision in every{' '}
-              <span className="bg-gradient-to-r from-brand-500 to-brand-600 bg-clip-text text-transparent">project</span>.
+              Clarity in every{' '}
+              <span className="bg-gradient-to-r from-brand-500 via-amber-500 to-indigo-500 bg-clip-text text-transparent">project</span>.
             </h2>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-slate-600 dark:text-slate-300">
-              Know exactly where your projects stand. From budget to schedule to risk, Precise
-              turns scattered updates into one clear view your team can actually act on.
+              Know exactly where your projects stand. From budget to schedule to risk, Prismatix
+              refracts scattered updates into one clear view your team can actually act on.
             </p>
             <ul className="mt-9 space-y-3.5 text-sm text-slate-600 dark:text-slate-300">
               {HIGHLIGHTS.map((t) => (
@@ -87,7 +87,7 @@ export default function LoginPage() {
             </ul>
           </div>
 
-          <p className="text-xs text-slate-500 dark:text-slate-400">© 2026 Precise</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">© 2026 Prismatix</p>
         </div>
 
         {/* ---------- RIGHT · sign-in card (right-aligned) ---------- */}
@@ -97,12 +97,12 @@ export default function LoginPage() {
               {/* logo on small screens (left pane hidden) */}
               <div className="mb-6 flex items-center justify-center gap-3 lg:hidden">
                 <Logo className="h-10 w-10" />
-                <span className="font-brand text-lg font-bold tracking-wide text-slate-800 dark:text-slate-100">PRECISE</span>
+                <span className="font-brand text-lg font-bold tracking-wide text-slate-800 dark:text-slate-100">PRISMATIX</span>
               </div>
 
               <div className="mb-7 text-center">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Welcome back</h1>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Sign in to your Precise workspace</p>
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Sign in to your Prismatix workspace</p>
               </div>
 
               <form onSubmit={submit} className="space-y-4">

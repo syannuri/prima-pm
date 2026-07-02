@@ -59,7 +59,7 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
   };
 
   // ---------- Header ----------
-  doc.fillColor(ACCENT).fontSize(20).font('Helvetica-Bold').text('Precise');
+  doc.fillColor(ACCENT).fontSize(20).font('Helvetica-Bold').text('Prismatix');
   doc.fillColor(GRAY).fontSize(9).font('Helvetica').text('Project Management Report');
   doc.moveDown(0.5);
   doc.fillColor('#0f172a').fontSize(15).font('Helvetica-Bold').text(`${data.project.code} — ${data.project.name}`);
