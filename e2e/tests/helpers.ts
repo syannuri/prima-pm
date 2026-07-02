@@ -19,7 +19,8 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   await page.evaluate(() => localStorage.removeItem('prima_token'));
   await page.reload();
 
-  await expect(page.getByRole('heading', { name: 'PRIMA' })).toBeVisible();
+  // Login form is ready (the brand wordmark is no longer a heading, so wait on the field).
+  await expect(page.getByLabel('Email')).toBeVisible();
   await page.getByLabel('Email').fill(acct.email);
   await page.getByLabel('Password').fill(acct.password);
   await page.getByRole('button', { name: 'Sign in' }).click();

@@ -18,7 +18,8 @@ test.describe('Authentication & RBAC', () => {
 
   test('PM can log in and reaches the dashboard', async ({ page }) => {
     await login(page, 'Project Manager');
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    // Dashboard greeting heading ("Good <time>, <name> 👋") — matched via the wave emoji.
+    await expect(page.getByRole('heading', { name: /👋/ })).toBeVisible();
     await expect(page.getByText('PROJECT_MANAGER', { exact: true })).toBeVisible();
   });
 
@@ -41,25 +42,26 @@ test.describe('Authentication & RBAC', () => {
     await expect(page.getByRole('button', { name: '+ New Project' })).toHaveCount(0);
   });
 
-  test('change-password modal validates without mutating the account', async ({ page }) => {
+  test('change-password form validates without mutating the account', async ({ page }) => {
     await login(page, 'Project Manager');
-    await page.getByRole('button', { name: 'Change password' }).click();
-    await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible();
+    // Change-password now lives on the Settings page (moved out of the header).
+    await page.goto('/settings');
+    await expect(page.getByLabel('Current password')).toBeVisible();
 
     // Client-side: mismatched confirmation is caught before any request.
-    await page.getByLabel('Current password').fill('Password123!');
+    await page.getByLabel('Current password').fill('Whatever-Current-1');
     await page.getByLabel('New password', { exact: true }).fill('Brand-New-Pass-1');
     await page.getByLabel('Confirm new password').fill('different-2');
-    await page.getByRole('button', { name: 'Update' }).click();
+    await page.getByRole('button', { name: 'Update password' }).click();
     await expect(page.getByText(/do not match/i)).toBeVisible();
-    await page.screenshot({ path: 'test-results/change-password-modal.png' });
+    await page.screenshot({ path: 'test-results/change-password-form.png' });
 
-    // Server-side: reusing the weak/known password is rejected (denylist) — no mutation,
-    // so the account keeps working (verified by every other test logging in).
-    await page.getByLabel('Confirm new password').fill('Password123!');
-    await page.getByLabel('New password', { exact: true }).fill('Password123!');
-    await page.getByRole('button', { name: 'Update' }).click();
-    await expect(page.getByText(/Invalid request|common|breach|differ/i)).toBeVisible();
+    // Server-side: a wrong current password is rejected → NO mutation, so the account
+    // keeps working (verified by every other test logging in).
+    await page.getByLabel('New password', { exact: true }).fill('Some-Strong-Pass-9');
+    await page.getByLabel('Confirm new password').fill('Some-Strong-Pass-9');
+    await page.getByRole('button', { name: 'Update password' }).click();
+    await expect(page.getByText(/incorrect|invalid|differ|common|breach/i)).toBeVisible();
   });
 
   test('admin sees the Users management page; non-admins do not', async ({ page }) => {

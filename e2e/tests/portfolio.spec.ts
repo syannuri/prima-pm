@@ -21,7 +21,7 @@ test.describe('Portfolio dashboard', () => {
   });
 
   test('resources view shows capacity heatmap and over-allocation', async ({ page }) => {
-    await page.getByRole('button', { name: 'Resources', exact: true }).click();
+    await page.getByRole('button', { name: 'Utilization', exact: true }).click();
     await expect(page.getByText('Over-allocated', { exact: true })).toBeVisible();
     await expect(page.getByText('Planned man-days')).toBeVisible();
     // Seed data has an over-allocated manpower line → at least one red "over" badge.

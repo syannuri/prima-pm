@@ -26,7 +26,7 @@ test.describe('Project workspace', () => {
     await typeSelect.selectOption('MANPOWER');
     // The add-form resource picker (scoped by its placeholder, to avoid the inline
     // per-row selects) appears with the seeded users.
-    const addResourceSelect = page.locator('select').filter({ hasText: 'Resource… (optional)' });
+    const addResourceSelect = page.locator('select').filter({ hasText: 'Resource…' });
     await expect(addResourceSelect).toBeVisible();
     await expect(addResourceSelect.getByRole('option', { name: 'Budi Santoso' })).toBeAttached();
     await page.screenshot({ path: 'test-results/manpower-resource-picker.png', fullPage: true });
@@ -55,7 +55,7 @@ test.describe('Project workspace', () => {
   });
 
   test('audit tab lists committed history', async ({ page }) => {
-    await page.getByRole('button', { name: 'Audit', exact: true }).click();
+    await page.getByRole('button', { name: /^Audit/ }).click(); // tab carries a change-count badge ("Audit N")
     // Seed data produces audit entries; expect at least one action badge in the table
     // (scoped to <table> to avoid matching the hidden filter <option> elements).
     await expect(page.locator('table').getByText(/COMMIT|CREATE|UPDATE/).first()).toBeVisible();
@@ -63,6 +63,6 @@ test.describe('Project workspace', () => {
 
   test('back link returns to the dashboard', async ({ page }) => {
     await page.getByRole('link', { name: /All projects/ }).click();
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /👋/ })).toBeVisible(); // dashboard greeting "…, <name> 👋"
   });
 });
