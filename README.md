@@ -1,17 +1,19 @@
-# Precise — Project Management Web App
+# Prismatix — Project Management Web App
+
+[![CI](https://github.com/syannuri/prima-pm/actions/workflows/ci.yml/badge.svg)](https://github.com/syannuri/prima-pm/actions/workflows/ci.yml)
 
 > Multi-project, multi-user project-management platform covering the full delivery lifecycle:
 > **Charter → WBS/Schedule → Cost → Risk → Change Control → EVM**, aligned to PMBOK.
 
-Precise gives PMs, PMO and finance one clear, role-aware view of project **health, cost, schedule and risk** —
+Prismatix gives PMs, PMO and finance one clear, role-aware view of project **health, cost, schedule and risk** —
 turning scattered updates into Earned Value insight (CPI/SPI), resource utilization and an auditable trail.
 
-![Precise — portfolio dashboard (dark mode)](docs/screenshots/dashboard.png)
+![Prismatix — portfolio dashboard (dark mode)](docs/screenshots/dashboard.png)
 
 <p align="center"><em>Portfolio dashboard — a compact KPI stat strip, EVM health & status distribution, activity and resource load.</em></p>
 
-> **Naming:** "Precise" is the user-facing brand. Internal identifiers stay `prima*` on purpose
-> (repo dir, DB `prima_pm`, systemd unit, `prima_*` localStorage keys) — do not rename them.
+> **Naming:** "Prismatix" is the user-facing brand (formerly PRIMA → Precise). Internal identifiers
+> stay `prima*` on purpose (repo dir, DB `prima_pm`, systemd unit, `prima_*` localStorage keys) — do not rename them.
 
 ---
 
