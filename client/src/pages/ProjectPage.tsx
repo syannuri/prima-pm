@@ -27,7 +27,7 @@ type Tab = 'Charter' | 'Agile' | 'Cost' | 'Forecast' | 'Risk' | 'Issues' | 'Sche
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>('Charter');
+  const [tab, setTab] = useState<Tab | null>(null);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
 
   const exportReport = async (kind: 'excel' | 'pdf') => {
@@ -71,12 +71,15 @@ export default function ProjectPage() {
   // Agile (its scheduling lives in sprints/board) but kept for predictive & hybrid.
   const showSchedule = project.deliveryApproach !== 'AGILE';
   const tabs: Tab[] = [
-    'Charter',
-    ...(isAgile ? (['Agile'] as Tab[]) : []),
-    'Cost', 'Forecast', 'Risk', 'Issues',
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
-    'Change Req', 'Audit',
+    ...(isAgile ? (['Agile'] as Tab[]) : []),
+    'Cost', 'Forecast', 'Risk', 'Issues', 'Change Req',
+    'Charter', 'Audit',
   ];
+  // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
+  // chartered, land on the first working tab (Schedule/Agile); Charter stays
+  // available near the end but is no longer the default landing tab.
+  const activeTab: Tab = tab ?? (chartered ? tabs[0] : 'Charter');
 
   return (
     <div className="space-y-5">
@@ -127,7 +130,7 @@ export default function ProjectPage() {
             key={t}
             onClick={() => setTab(t)}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm font-medium transition ${
-              tab === t
+              activeTab === t
                 ? 'border-b-2 border-brand-600 text-brand-700'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
@@ -142,23 +145,23 @@ export default function ProjectPage() {
         ))}
       </div>
 
-      {!chartered && tab !== 'Charter' && tab !== 'Audit' && tab !== 'Agile' && tab !== 'Issues' && (
+      {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && (
         <Card>
           <p className="text-center text-amber-600">
-            Commit the Project Charter first to unlock {tab} Management.
+            Commit the Project Charter first to unlock {activeTab} Management.
           </p>
         </Card>
       )}
 
-      {tab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} />}
-      {tab === 'Agile' && <AgilePanel projectId={projectId} />}
-      {tab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
-      {tab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
-      {tab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
-      {tab === 'Issues' && <IssuePanel projectId={projectId} />}
-      {tab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
-      {tab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
-      {tab === 'Audit' && <AuditPanel projectId={projectId} />}
+      {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} />}
+      {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
+      {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
+      {activeTab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
+      {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
+      {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}
+      {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
+      {activeTab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
+      {activeTab === 'Audit' && <AuditPanel projectId={projectId} />}
     </div>
   );
 }
