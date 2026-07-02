@@ -271,6 +271,9 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
   const addAmount = isManpower
     ? (rateOverride !== '' ? Number(rateOverride) : Number(picked?.unitCostPerManday ?? 0)) * Number(planMandays || 0)
     : Number(qty || 0) * Number(unitCost || 0);
+  // Running total of recorded direct lines (matches the per-row Amount cells) so the
+  // projected grand total can be previewed before the new line is submitted.
+  const directTotal = data.directCosts.reduce((s, d) => s + Number((d.type === 'MANPOWER' ? d.manpowerCost : d.amount) ?? 0), 0);
 
   return (
     <Card>
@@ -376,6 +379,15 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
             })}
             {!data.directCosts.length && <tr><td colSpan={5} className="py-3 text-center text-slate-500 dark:text-slate-400">No direct costs yet.</td></tr>}
           </tbody>
+          {data.directCosts.length > 0 && (
+            <tfoot>
+              <tr className="border-t-2 border-slate-200 text-sm font-semibold dark:border-slate-700">
+                <td colSpan={3} className="py-2 text-slate-600 dark:text-slate-300">Total ({data.directCosts.length} {data.directCosts.length === 1 ? 'line' : 'lines'})</td>
+                <td className="text-right tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
@@ -430,9 +442,10 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
           Add
         </Button>
       </div>
-      <div className="mt-2 flex items-center justify-end gap-2 text-sm">
-        <span className="text-slate-500 dark:text-slate-400">Amount (auto):</span>
-        <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(addAmount)}</span>
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-sm">
+        <span className="text-slate-500 dark:text-slate-400">Amount (auto): <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(addAmount)}</span></span>
+        <span className="text-slate-300 dark:text-slate-600">·</span>
+        <span className="text-slate-500 dark:text-slate-400" title="Recorded direct total + this new line">New Direct total: <span className="font-bold tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal + addAmount)}</span></span>
       </div>
       {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
     </Card>
@@ -470,6 +483,10 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
     setEditId(i.id);
     setEf({ type: i.type, description: i.description, amount: String(Math.trunc(Number(i.amount))) });
   };
+  // Running total of recorded indirect lines, so the projected grand total can be
+  // previewed before the new line is submitted.
+  const indirectTotal = data.indirectCosts.reduce((s, i) => s + Number(i.amount ?? 0), 0);
+  const addAmount = Number(amount || 0);
 
   return (
     <Card>
@@ -510,6 +527,15 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
             })}
             {!data.indirectCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-500 dark:text-slate-400">No indirect costs yet.</td></tr>}
           </tbody>
+          {data.indirectCosts.length > 0 && (
+            <tfoot>
+              <tr className="border-t-2 border-slate-200 text-sm font-semibold dark:border-slate-700">
+                <td colSpan={2} className="py-2 text-slate-600 dark:text-slate-300">Total ({data.indirectCosts.length} {data.indirectCosts.length === 1 ? 'line' : 'lines'})</td>
+                <td className="text-right tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
@@ -520,9 +546,10 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
         <MoneyInput aria-label="Indirect cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
         <Button onClick={() => add.mutate()} disabled={!description || !amount || add.isPending}>Add</Button>
       </div>
-      <div className="mt-2 flex items-center justify-end gap-2 text-sm">
-        <span className="text-slate-500 dark:text-slate-400">Amount (auto):</span>
-        <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(Number(amount || 0))}</span>
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-sm">
+        <span className="text-slate-500 dark:text-slate-400">Amount (auto): <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(addAmount)}</span></span>
+        <span className="text-slate-300 dark:text-slate-600">·</span>
+        <span className="text-slate-500 dark:text-slate-400" title="Recorded indirect total + this new line">New Indirect total: <span className="font-bold tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal + addAmount)}</span></span>
       </div>
     </Card>
   );
