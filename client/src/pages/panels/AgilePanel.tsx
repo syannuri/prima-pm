@@ -251,10 +251,10 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
   );
 
   return (
-    <div className="space-y-4">
-      {/* Product backlog first — capturing an item is the most common action, so the
-          composer sits right at the top (no scrolling past the sprints list). */}
-      <Card>
+    // Side by side on large screens to save vertical space: the product backlog is the
+    // primary (wider) column, sprints sit alongside as a narrower sidebar. Stacks on small.
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <Card className="lg:min-w-0 lg:flex-1">
         <SectionTitle sub="Add stories, tasks and bugs here, then assign them to a sprint (or drag them across the Board).">Product Backlog</SectionTitle>
         {canEdit && (
           <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
@@ -274,8 +274,8 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
         </div>
       </Card>
 
-      {/* Sprints */}
-      <Card>
+      {/* Sprints — narrower sidebar alongside the backlog on large screens. */}
+      <Card className="lg:w-80 lg:shrink-0">
         <SectionTitle sub="Time-boxed iterations. Leave a project without sprints to run pure Kanban.">Sprints</SectionTitle>
         <div className="space-y-1">
           {sprints.map((s) => {
