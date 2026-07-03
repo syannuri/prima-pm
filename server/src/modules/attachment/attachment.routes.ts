@@ -22,7 +22,30 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
   filename: (_req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname)}`),
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } }); // 10 MB cap
+
+// Whitelist of allowed document/image types (MIME -> permitted file extensions).
+// Blocks executables, scripts, archives, etc. Both the reported MIME type and the
+// filename extension must match an entry — a mismatch (e.g. `evil.exe` sent as a PDF
+// mimetype) is rejected too. MIME can be spoofed, so this is a guardrail, not proof.
+const ALLOWED_UPLOAD_TYPES: Record<string, string[]> = {
+  'application/pdf': ['.pdf'],
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+  'image/png': ['.png'],
+  'image/jpeg': ['.jpg', '.jpeg'],
+};
+
+const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const allowedExts = ALLOWED_UPLOAD_TYPES[file.mimetype];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!allowedExts || !allowedExts.includes(ext)) {
+    cb(BadRequest('Unsupported file type. Allowed: PDF, XLSX, DOCX, PNG, JPG'));
+    return;
+  }
+  cb(null, true);
+};
+
+const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } }); // 10 MB cap
 
 const canRead = requireProjectAccess({ allowRoles: ['FINANCE', 'RISK_OFFICER'] });
 const canWrite = requireProjectAccess({ write: true, allowRoles: ['RISK_OFFICER', 'FINANCE'] });

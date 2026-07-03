@@ -25,15 +25,6 @@ export const strongPassword = z
   .refine((v) => /[a-zA-Z]/.test(v) && /[0-9]/.test(v), 'Use at least one letter and one number')
   .refine((v) => !WEAK_PASSWORDS.has(v.toLowerCase()), 'That password is too common / known from breaches — pick a stronger one');
 
-// Self-registration defaults to VIEWER; elevated roles are assigned by ADMIN.
-// Uses the same strong-password policy as admin-create and self-change so a
-// self-registered account can't set a weaker password than everyone else.
-export const registerSchema = z.object({
-  name: z.string().min(2).max(120),
-  email: z.string().email().toLowerCase(),
-  password: strongPassword,
-});
-
 export const loginSchema = z.object({
   email: z.string().email().toLowerCase(),
   password: z.string().min(1),
@@ -53,7 +44,6 @@ export const changePasswordSchema = z
       ctx.addIssue({ code: 'custom', path: ['newPassword'], message: 'New password must differ from the current one' });
   });
 
-export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

@@ -2,9 +2,9 @@ import type { Role, User } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js';
-import { Conflict, Unauthorized } from '../../lib/errors.js';
+import { Unauthorized } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
-import type { ChangePasswordInput, LoginInput, RegisterInput } from './auth.schemas.js';
+import type { ChangePasswordInput, LoginInput } from './auth.schemas.js';
 
 interface AuthResult {
   user: { id: string; name: string; email: string; role: Role };
@@ -18,23 +18,6 @@ function toAuthResult(user: User): AuthResult {
     accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email }),
     refreshToken: signRefreshToken(user.id),
   };
-}
-
-export async function register(input: RegisterInput): Promise<AuthResult> {
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
-  if (existing) throw Conflict('Email is already registered');
-
-  const user = await prisma.user.create({
-    data: {
-      name: input.name,
-      email: input.email,
-      passwordHash: await hashPassword(input.password),
-      role: 'VIEWER', // elevation handled by admin endpoints
-    },
-  });
-
-  await writeAudit({ userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE' });
-  return toAuthResult(user);
 }
 
 export async function login(input: LoginInput): Promise<AuthResult> {
