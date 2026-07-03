@@ -6,12 +6,15 @@ import { Page, expect } from '@playwright/test';
 export type Role = 'Admin' | 'Project Manager' | 'Finance';
 
 // Emails + passwords are env-overridable so the suite runs against the live prod DB
-// (real accounts — the defaults) OR a freshly-seeded CI DB (seed accounts, all
-// Password123!): set E2E_{ADMIN,PM,FINANCE}_{EMAIL,PASSWORD}.
+// (real accounts) OR a freshly-seeded CI DB (seed accounts): set
+// E2E_{ADMIN,PM,FINANCE}_{EMAIL,PASSWORD}.
+// NO passwords are hard-coded here (this repo is public). CI sets E2E_*_PASSWORD for the
+// seed accounts (all Password123!); for a local run against the live DB, first export your
+// own E2E_ADMIN_PASSWORD / E2E_PM_PASSWORD / E2E_FINANCE_PASSWORD.
 export const ACCOUNTS: Record<Role, { email: string; password: string }> = {
-  Admin: { email: process.env.E2E_ADMIN_EMAIL ?? 'mamed@prismatix.id', password: process.env.E2E_ADMIN_PASSWORD ?? 'Password123!' },
-  'Project Manager': { email: process.env.E2E_PM_EMAIL ?? 'budi@prismatix.id', password: process.env.E2E_PM_PASSWORD ?? 'Budi-Prima-2026' },
-  Finance: { email: process.env.E2E_FINANCE_EMAIL ?? 'sari-fina@prismatix.id', password: process.env.E2E_FINANCE_PASSWORD ?? 'Sari-Prima-2026' },
+  Admin: { email: process.env.E2E_ADMIN_EMAIL ?? 'mamed@prismatix.id', password: process.env.E2E_ADMIN_PASSWORD ?? '' },
+  'Project Manager': { email: process.env.E2E_PM_EMAIL ?? 'budi@prismatix.id', password: process.env.E2E_PM_PASSWORD ?? '' },
+  Finance: { email: process.env.E2E_FINANCE_EMAIL ?? 'sari-fina@prismatix.id', password: process.env.E2E_FINANCE_PASSWORD ?? '' },
 };
 
 /** Log in by typing the real account's email + password. */
