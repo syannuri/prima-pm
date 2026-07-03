@@ -26,6 +26,11 @@ export const updateProjectSchema = z.object({
   totalRevenueIdr: z.coerce.number().nonnegative().nullable().optional(),
   pmUserId: z.string().uuid().nullable().optional(),
   status: z.enum(['DRAFT', 'CHARTERED', 'IN_PROGRESS', 'ON_HOLD', 'CLOSED']).optional(),
+  // Closure controls (only meaningful when status → CLOSED). forceClose lets an
+  // ADMIN/PMO override the readiness gate; closureNote is the summary/reason (and
+  // is mandatory when force-closing).
+  forceClose: z.boolean().optional(),
+  closureNote: z.string().trim().max(1000).optional(),
 });
 
 export const reassignPmSchema = z.object({

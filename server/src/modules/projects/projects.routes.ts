@@ -4,6 +4,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
 import { createProjectSchema, updateProjectSchema, reassignPmSchema } from './projects.schemas.js';
 import * as svc from './projects.service.js';
+import { getClosureReadiness } from './closure.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
 import riskRoutes from '../risk/risk.routes.js';
@@ -46,6 +47,16 @@ router.get(
   asyncHandler(async (req, res) => {
     const project = await svc.getProject(req.params.id);
     res.json({ project });
+  }),
+);
+
+// Closure readiness checklist (blockers + advisory warnings) — shown before closing.
+router.get(
+  '/:id/closure-readiness',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    const readiness = await getClosureReadiness(req.params.id);
+    res.json({ readiness });
   }),
 );
 

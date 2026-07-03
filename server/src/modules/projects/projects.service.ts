@@ -5,6 +5,7 @@ import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { generateProjectCode } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
+import { getClosureReadiness } from './closure.js';
 
 // Notify a user they've been assigned as a project's PM (skip self-assignment).
 export async function notifyPmAssigned(pmUserId: string | null | undefined, actorId: string, project: { id: string; name: string; code: string }) {
@@ -122,11 +123,30 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   }
 
   // Enforce the lifecycle: reject illegal status jumps (same status is a no-op).
+  const isClosing = input.status === 'CLOSED' && before.status !== 'CLOSED';
   if (input.status && input.status !== before.status) {
     const allowed = STATUS_TRANSITIONS[before.status] ?? [];
     if (!allowed.includes(input.status)) {
       throw BadRequest(`Cannot change status from ${before.status} to ${input.status}`);
     }
+  }
+
+  // Closure gate: moving to CLOSED must pass the readiness check (schedule 100%),
+  // unless an ADMIN/PMO force-closes with a mandatory reason (route is ADMIN/PMO-only).
+  let closureData: Prisma.ProjectUncheckedUpdateInput = {};
+  if (isClosing) {
+    const readiness = await getClosureReadiness(id);
+    const note = input.closureNote?.trim();
+    if (!readiness.canClose && !input.forceClose) {
+      throw BadRequest(
+        `Project isn't ready to close: ${readiness.blockers.map((b) => `${b.label} (${b.detail})`).join('; ')}. Resolve these or force-close with a reason.`,
+        { blockers: readiness.blockers, warnings: readiness.warnings },
+      );
+    }
+    if (input.forceClose && !readiness.canClose && !note) {
+      throw BadRequest('Force-closing requires a reason (closureNote).');
+    }
+    closureData = { closedAt: new Date(), closedById: actorId, closureNote: note || null };
   }
 
   const project = await prisma.project.update({
@@ -142,10 +162,19 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
       totalRevenueIdr: input.totalRevenueIdr === undefined ? undefined : input.totalRevenueIdr,
       pmUserId: input.pmUserId === undefined ? undefined : input.pmUserId,
       status: input.status ?? undefined,
+      ...closureData,
     },
   });
 
-  await writeAudit({ projectId: id, userId: actorId, entity: 'Project', entityId: id, action: 'UPDATE', before, after: project });
+  await writeAudit({
+    projectId: id,
+    userId: actorId,
+    entity: 'Project',
+    entityId: id,
+    action: isClosing && input.forceClose ? 'FORCE_CLOSE' : 'UPDATE',
+    before,
+    after: project,
+  });
   return project;
 }
 

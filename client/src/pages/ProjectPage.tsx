@@ -19,6 +19,7 @@ import AuditPanel from './panels/AuditPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
+import CloseProjectModal from '../components/CloseProjectModal';
 import AgilePanel from './panels/AgilePanel';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
@@ -94,6 +95,7 @@ export default function ProjectPage() {
           <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>
           <div className="ml-auto flex flex-wrap gap-2">
             <EditProjectModal project={project} />
+            <CloseProjectModal project={project} />
             {chartered && (
               <>
                 <Button variant="secondary" onClick={() => exportReport('excel')} disabled={exporting !== null}>
@@ -118,6 +120,12 @@ export default function ProjectPage() {
             {project.costBaselineIdr && project.totalRevenueIdr && (
               <span>· Margin: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span></span>
             )}
+          </div>
+        )}
+        {project.status === 'CLOSED' && project.closedAt && (
+          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+            🔒 Closed on {new Date(project.closedAt).toLocaleDateString()}
+            {project.closureNote && <> · <span className="italic">“{project.closureNote}”</span></>}
           </div>
         )}
       </div>

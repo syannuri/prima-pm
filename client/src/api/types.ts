@@ -115,10 +115,27 @@ export interface Project {
   totalRevenueIdr: string | null;
   status: ProjectStatus;
   pmUserId: string | null;
+  closedAt?: string | null;
+  closureNote?: string | null;
   pm?: { id: string; name: string; email: string } | null;
   charter?: { id: string; locked: boolean; version: number; category: ProjectCategory } | null;
   costBaseline?: { budgetAtCompletion: string } | null;
   changeCount?: number;
+}
+
+export interface ClosureItem {
+  key: string;
+  label: string;
+  severity: 'block' | 'warn';
+  ok: boolean;
+  detail?: string;
+}
+
+export interface ClosureReadiness {
+  items: ClosureItem[];
+  blockers: ClosureItem[];
+  warnings: ClosureItem[];
+  canClose: boolean;
 }
 
 export interface Charter {

@@ -8,7 +8,8 @@ type AuditAction =
   | 'APPROVE'
   | 'REJECT'
   | 'LOGIN'
-  | 'PASSWORD_CHANGE';
+  | 'PASSWORD_CHANGE'
+  | 'FORCE_CLOSE';
 
 interface AuditInput {
   userId?: string | null;
