@@ -30,10 +30,10 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **Issue Log** — track problems that have occurred (category, impact, owner, resolution, status) per project; included in exports.
 - **Audit log** — immutable, role-scoped trail of who changed what and when.
 - **Notifications** — a personal **inbox** (assigned as PM, change-request submitted / decided) plus on-demand alerts (overdue tasks, high risks, budget overrun) in a portfolio bell.
-- **Attachments** — upload/download files against charter, risks or the project.
+- **Attachments** — upload/download files against charter, risks or the project. Uploads are restricted to a **safe type whitelist** (PDF, XLSX, DOCX, PNG, JPG), stored under server-generated filenames with a 10 MB cap.
 - **Exports** — per-project **PDF** (PDFKit) and **Excel** (ExcelJS) reports incl. cost, risk, schedule, EVM and the Issue Log — pure JS, no headless browser.
 - **Resource master pool** — named/generic resources with rate cards; cross-project capacity & over-allocation.
-- **Admin** — user management (create / role / reset password / activate), project (PM) reassignment, rate cards.
+- **Admin** — user management (create / role / reset password / activate), project (PM) reassignment, rate cards. All accounts are **admin-provisioned** — there is no open self-registration.
 - **UX** — **dark mode by default** (light optional), **IDR thousand-separator inputs**, native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
 
 ## 📸 Screenshots
@@ -171,7 +171,7 @@ cd ../client && npm run typecheck && npm run build
 # End-to-end (Playwright, auto-boots server + client)
 cd ../e2e && npm test
 ```
-CI (`.github/workflows/ci.yml`) runs the server build + unit + Postgres-service integration tests and the client typecheck/build on every push and PR.
+CI (`.github/workflows/ci.yml`) runs the server build + unit + Postgres-service integration tests, the client typecheck/build, and a **Playwright E2E gate** (login/RBAC + portfolio + project specs against a seeded DB) on every push and PR.
 
 ---
 
@@ -195,4 +195,4 @@ prima-pm/
 
 ---
 
-_Internal project for Xapiens. Private repository._
+_Internal project for Xapiens. Source is public on [GitHub](https://github.com/syannuri/prima-pm)._
