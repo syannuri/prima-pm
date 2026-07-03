@@ -31,6 +31,8 @@ export const updateProjectSchema = z.object({
   // is mandatory when force-closing).
   forceClose: z.boolean().optional(),
   closureNote: z.string().trim().max(1000).optional(),
+  // Reason for putting a project ON_HOLD (mandatory when status → ON_HOLD).
+  holdReason: z.string().trim().max(500).optional(),
 });
 
 export const reassignPmSchema = z.object({

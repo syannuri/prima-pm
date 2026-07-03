@@ -211,6 +211,7 @@ model Project {
   closedAt    DateTime?    // when the project moved to CLOSED
   closedById  String?      // actor who closed it (plain id, no FK — kept light)
   closureNote String?      // closure summary, or the mandatory reason for a force-close
+  onHoldReason String?     // why the project is currently ON_HOLD (cleared on resume)
 
   charter          ProjectCharter?
   charterVersions  CharterVersion[]

@@ -131,9 +131,11 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
     }
   }
 
+  // Status-transition side effects (closure gate + on-hold reason) accumulate here.
+  let statusData: Prisma.ProjectUncheckedUpdateInput = {};
+
   // Closure gate: moving to CLOSED must pass the readiness check (schedule 100%),
   // unless an ADMIN/PMO force-closes with a mandatory reason (route is ADMIN/PMO-only).
-  let closureData: Prisma.ProjectUncheckedUpdateInput = {};
   if (isClosing) {
     const readiness = await getClosureReadiness(id);
     const note = input.closureNote?.trim();
@@ -146,7 +148,18 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
     if (input.forceClose && !readiness.canClose && !note) {
       throw BadRequest('Force-closing requires a reason (closureNote).');
     }
-    closureData = { closedAt: new Date(), closedById: actorId, closureNote: note || null };
+    statusData.closedAt = new Date();
+    statusData.closedById = actorId;
+    statusData.closureNote = note || null;
+  }
+
+  // On-hold requires a reason; leaving ON_HOLD (resume/activate) clears it.
+  if (input.status === 'ON_HOLD' && before.status !== 'ON_HOLD') {
+    const reason = input.holdReason?.trim();
+    if (!reason) throw BadRequest('A reason is required to put a project on hold (holdReason).');
+    statusData.onHoldReason = reason;
+  } else if (before.status === 'ON_HOLD' && input.status && input.status !== 'ON_HOLD') {
+    statusData.onHoldReason = null;
   }
 
   const project = await prisma.project.update({
@@ -162,7 +175,7 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
       totalRevenueIdr: input.totalRevenueIdr === undefined ? undefined : input.totalRevenueIdr,
       pmUserId: input.pmUserId === undefined ? undefined : input.pmUserId,
       status: input.status ?? undefined,
-      ...closureData,
+      ...statusData,
     },
   });
 
