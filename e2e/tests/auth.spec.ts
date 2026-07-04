@@ -3,7 +3,7 @@ import { login, ACCOUNTS } from './helpers';
 
 test.describe('Authentication & RBAC', () => {
   test('rejects invalid credentials', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/login');
     await page.evaluate(() => { sessionStorage.removeItem('prima_token'); localStorage.removeItem('prima_token'); });
     await page.reload();
 
@@ -91,9 +91,12 @@ test.describe('Authentication & RBAC', () => {
     await expect(page.getByText(/need the Admin role/i)).toBeVisible();
   });
 
-  test('logout returns to the login screen', async ({ page }) => {
+  test('logout returns to the public landing (with a Sign in link)', async ({ page }) => {
     await login(page, 'Admin');
     await page.getByRole('button', { name: 'Logout' }).click();
-    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    // After logout the guest lands on the public homepage at "/".
+    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+    // "Enter Prismatix" appears twice (hero + closing CTA) — scope to the first.
+    await expect(page.getByRole('link', { name: 'Enter Prismatix' }).first()).toBeVisible();
   });
 });

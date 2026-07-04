@@ -20,7 +20,7 @@ export const ACCOUNTS: Record<Role, { email: string; password: string }> = {
 /** Log in by typing the real account's email + password. */
 export async function login(page: Page, role: Role = 'Project Manager') {
   const acct = ACCOUNTS[role];
-  await page.goto('/');
+  await page.goto('/login');
   // If a stale token persists, the app skips the login screen — clear first.
   // Tokens live in sessionStorage now; clear localStorage too for the migration path.
   await page.evaluate(() => { sessionStorage.removeItem('prima_token'); localStorage.removeItem('prima_token'); });
