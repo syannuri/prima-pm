@@ -227,4 +227,4 @@ prima-pm/
 
 ---
 
-_Internal project for Xapiens. Proprietary — all rights reserved; see [LICENSE](LICENSE)._
+_Internal project. Proprietary — all rights reserved; see [LICENSE](LICENSE)._
