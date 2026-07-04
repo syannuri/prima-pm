@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { Button, Field, Input } from '../components/ui';
 import { ApiError } from '../api/client';
 
+const isEmailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
 const HIGHLIGHTS = [
   'See every project’s true health at a glance',
   'Catch slips, overruns and risks before they grow',
@@ -15,6 +17,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const emailOk = isEmailValid(email);
+  const canSubmit = emailOk && password.length > 0 && !busy;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,15 +110,16 @@ export default function LoginPage() {
 
               <form onSubmit={submit} className="space-y-4">
                 <Field label="Email">
-                  <Input type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <Input type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required state={!email ? undefined : emailOk ? 'valid' : 'invalid'} />
+                  {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">Enter a valid email address</span>}
                 </Field>
                 <Field label="Password">
-                  <Input type="password" autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <Input type="password" autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? 'valid' : undefined} />
                 </Field>
                 {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
                 <Button
                   type="submit"
-                  disabled={busy}
+                  disabled={!canSubmit}
                   className="w-full bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 text-white shadow-lg shadow-brand-500/30 hover:from-brand-600 hover:to-brand-700"
                 >
                   {busy ? 'Signing in…' : 'Sign in'}
