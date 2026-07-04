@@ -1,14 +1,34 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { AdminUser, Role } from '../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, type InputState } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/format';
 
 const ROLES: Role[] = ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER'];
+
+// Live field validation — mirrors the server rules so the form turns green only when a
+// value would actually be accepted (name ≥2 chars, real email, strong password).
+const isNameValid = (v: string) => v.trim().length >= 2;
+const isEmailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+const pwHasLen = (v: string) => v.length >= 10;
+const pwHasMix = (v: string) => /[a-zA-Z]/.test(v) && /[0-9]/.test(v);
+const isPasswordValid = (v: string) => pwHasLen(v) && pwHasMix(v);
+// undefined until the user types, then green/red — feeds <Input state>.
+const fieldState = (value: string, ok: boolean): InputState | undefined => (!value ? undefined : ok ? 'valid' : 'invalid');
+
+/** One live requirement line: green ✓ when met, muted • while pending. */
+function Rule({ ok, children }: { ok: boolean; children: ReactNode }) {
+  return (
+    <span className={`flex items-center gap-1 text-xs ${ok ? 'text-green-600' : 'text-slate-400 dark:text-slate-500'}`}>
+      <span className="w-3 text-center">{ok ? '✓' : '•'}</span>
+      {children}
+    </span>
+  );
+}
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
@@ -131,6 +151,11 @@ function CreateUser({ onChange }: { onChange: () => void }) {
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
 
+  const nameOk = isNameValid(name);
+  const emailOk = isEmailValid(email);
+  const pwOk = isPasswordValid(password);
+  const allValid = nameOk && emailOk && pwOk;
+
   const create = useMutation({
     mutationFn: () => api.post('/users', { name, email, role, password }),
     onSuccess: () => {
@@ -142,17 +167,31 @@ function CreateUser({ onChange }: { onChange: () => void }) {
   return (
     <Card>
       <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Create user</h3>
-      <div className="grid gap-2 md:grid-cols-5">
-        <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>
-        <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prismatix.id" /></Field>
+      <div className="grid items-start gap-2 md:grid-cols-5">
+        <Field label="Name">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" state={fieldState(name, nameOk)} />
+          {!!name && !nameOk && <span className="mt-1 block text-xs text-red-500">At least 2 characters</span>}
+        </Field>
+        <Field label="Email">
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prismatix.id" state={fieldState(email, emailOk)} />
+          {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">Enter a valid email address</span>}
+        </Field>
         <Field label="Role">
           <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
           </Select>
         </Field>
-        <Field label="Initial password"><Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="10+ chars, letter+number" /></Field>
-        <div className="flex items-end">
-          <Button className="w-full" disabled={!name || !email || !password || create.isPending} onClick={() => create.mutate()}>
+        <Field label="Initial password">
+          <Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="10+ chars, letter+number" state={fieldState(password, pwOk)} />
+          {!!password && (
+            <span className="mt-1 flex flex-col gap-0.5">
+              <Rule ok={pwHasLen(password)}>At least 10 characters</Rule>
+              <Rule ok={pwHasMix(password)}>A letter and a number</Rule>
+            </span>
+          )}
+        </Field>
+        <div className="flex items-end pt-6">
+          <Button className="w-full" disabled={!allValid || create.isPending} onClick={() => create.mutate()}>
             {create.isPending ? 'Creating…' : 'Create'}
           </Button>
         </div>
@@ -171,7 +210,9 @@ function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: (
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
   const changed = trimmedName !== user.name || trimmedEmail !== user.email;
-  const valid = trimmedName.length >= 2 && /.+@.+\..+/.test(trimmedEmail);
+  const nameOk = isNameValid(name);
+  const emailOk = isEmailValid(email);
+  const valid = nameOk && emailOk;
 
   const save = useMutation({
     mutationFn: () => api.patch(`/users/${user.id}/profile`, { name: trimmedName, email: trimmedEmail }),
@@ -183,8 +224,14 @@ function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: (
     <Modal onClose={onClose} title="Edit user" size="sm">
         <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Update name and email. Role, status and password are managed separately.</p>
         <div className="space-y-3">
-          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>
-          <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prismatix.id" /></Field>
+          <Field label="Name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" state={fieldState(name, nameOk)} />
+            {!!name && !nameOk && <span className="mt-1 block text-xs text-red-500">At least 2 characters</span>}
+          </Field>
+          <Field label="Email">
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prismatix.id" state={fieldState(email, emailOk)} />
+            {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">Enter a valid email address</span>}
+          </Field>
           {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
@@ -218,12 +265,18 @@ function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () =>
         ) : (
           <div className="space-y-3">
             <Field label="New password">
-              <Input type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="10+ chars, letter+number" />
+              <Input type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="10+ chars, letter+number" state={fieldState(pw, isPasswordValid(pw))} />
+              {!!pw && (
+                <span className="mt-1 flex flex-col gap-0.5">
+                  <Rule ok={pwHasLen(pw)}>At least 10 characters</Rule>
+                  <Rule ok={pwHasMix(pw)}>A letter and a number</Rule>
+                </span>
+              )}
             </Field>
             {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
-              <Button className="flex-1" disabled={!pw || reset.isPending} onClick={() => reset.mutate()}>
+              <Button className="flex-1" disabled={!isPasswordValid(pw) || reset.isPending} onClick={() => reset.mutate()}>
                 {reset.isPending ? 'Saving…' : 'Reset'}
               </Button>
             </div>

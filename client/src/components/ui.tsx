@@ -50,13 +50,25 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
-const inputCls =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500';
+const inputBase =
+  'w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-1 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500';
+// Border/ring colour reflects live validation: neutral until touched, green when the
+// value matches its required format, red when it's present but malformed.
+const inputBorder = {
+  none: 'border-slate-300 focus:border-brand-500 focus:ring-brand-500 dark:border-slate-700',
+  valid: 'border-green-500 focus:border-green-500 focus:ring-green-500 dark:border-green-600',
+  invalid: 'border-red-400 focus:border-red-400 focus:ring-red-400 dark:border-red-500',
+} as const;
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+export type InputState = keyof typeof inputBorder;
+
+// Neutral variant reused by Textarea/Select (no per-field validation state).
+const inputCls = `${inputBase} ${inputBorder.none}`;
+
+export function Input({ state = 'none', className, ...props }: InputHTMLAttributes<HTMLInputElement> & { state?: InputState }) {
   // Native browser spellcheck on by default (English prose fields get red-underline
   // suggestions). Callers pass spellCheck={false} for codes/emails/numeric fields.
-  return <input className={inputCls} spellCheck {...props} />;
+  return <input className={`${inputBase} ${inputBorder[state]} ${className ?? ''}`} spellCheck {...props} />;
 }
 
 // Money field that displays Indonesian thousand separators ("1.204.500.000") while
