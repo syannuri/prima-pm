@@ -1,6 +1,10 @@
 import { prisma } from '../../lib/prisma.js';
 import { NotFound } from '../../lib/errors.js';
-import { getEvm } from '../schedule/schedule.service.js';
+// Use the methodology dispatcher (AGILE → points-EVM, HYBRID → blended, else → WBS) so the
+// Forecast tab reports the SAME EVM as the Dashboard/Portfolio. Calling the WBS-only getEvm
+// here made agile/hybrid projects show BAC/EV/CPI/SPI ≈ 0 on Forecast while other surfaces
+// used story-point EVM.
+import { getProjectEvm } from '../agile/agile.service.js';
 
 const DAY = 86_400_000;
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -15,7 +19,7 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
   if (!project) throw NotFound('Project not found');
 
   const [evm, charter, tasks, actuals] = await Promise.all([
-    getEvm(projectId, undefined, statusDate),
+    getProjectEvm(projectId, undefined, statusDate),
     prisma.projectCharter.findUnique({ where: { projectId }, select: { hiScheduleStart: true, hiScheduleEnd: true } }),
     prisma.task.findMany({ where: { projectId }, select: { planStart: true, planEnd: true } }),
     prisma.actualCostEntry.findMany({ where: { projectId }, orderBy: { date: 'asc' }, select: { date: true, amount: true } }),
@@ -56,8 +60,8 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
     const marks = new Set<number>([now, plannedFinish, ...(forecastFinish ? [forecastFinish] : [])]);
     for (let i = 0; i <= N; i++) marks.add(Math.round(plannedStart + ((end - plannedStart) * i) / N));
     const dates = [...marks].filter((d) => d >= plannedStart && d <= end).sort((a, b) => a - b);
-    // PV is schedule-only; pass actualCost=0 to skip the (irrelevant) AC lookup per sample.
-    const pvs = await Promise.all(dates.map((d) => getEvm(projectId, 0, new Date(d)).then((e) => e.pv)));
+    // PV per methodology (points-based for agile); pass actualCost=0 to skip the AC lookup.
+    const pvs = await Promise.all(dates.map((d) => getProjectEvm(projectId, 0, new Date(d)).then((e) => e.pv)));
     dates.forEach((d, i) => {
       const forecast = forecastFinish && forecastFinish > now && d >= now
         ? r2(ac + (likely - ac) * ((d - now) / (forecastFinish - now)))
