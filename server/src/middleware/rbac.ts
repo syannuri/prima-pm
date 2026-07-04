@@ -55,6 +55,14 @@ export function requireProjectAccess(opts: { write?: boolean; allowRoles?: Role[
         throw Forbidden('Read-only role cannot modify project data');
       }
 
+      // A CLOSED project is frozen: no nested data (cost, schedule, risk, timesheet,
+      // charter, attachments…) may be mutated — governance/audit integrity. Reopen the
+      // project (ADMIN/PMO, with a reason) to make changes. The top-level status route
+      // uses requireRole only (not this guard), so reopening is still possible.
+      if (opts.write && project.status === 'CLOSED') {
+        throw Forbidden('This project is closed and read-only. Reopen it to make changes.');
+      }
+
       // Expose the loaded project to downstream handlers.
       (req as Request & { project?: typeof project }).project = project;
       next();

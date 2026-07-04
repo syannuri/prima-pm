@@ -33,6 +33,8 @@ export const updateProjectSchema = z.object({
   closureNote: z.string().trim().max(1000).optional(),
   // Reason for putting a project ON_HOLD (mandatory when status → ON_HOLD).
   holdReason: z.string().trim().max(500).optional(),
+  // Reason for reopening a CLOSED project (mandatory when status CLOSED → IN_PROGRESS).
+  reopenReason: z.string().trim().max(500).optional(),
 });
 
 export const reassignPmSchema = z.object({

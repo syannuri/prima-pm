@@ -31,7 +31,9 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   CHARTERED: ['IN_PROGRESS', 'ON_HOLD', 'CLOSED'],
   IN_PROGRESS: ['ON_HOLD', 'CLOSED'],
   ON_HOLD: ['IN_PROGRESS', 'CLOSED'],
-  CLOSED: [],
+  // CLOSED is terminal EXCEPT for a governed reopen (ADMIN/PMO, with a reason) back to
+  // execution — so a mistaken/premature closure can be corrected without losing history.
+  CLOSED: ['IN_PROGRESS'],
 };
 
 // List projects visible to the caller (global roles see all; others see owned).
@@ -134,6 +136,18 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   // Status-transition side effects (closure gate + on-hold reason) accumulate here.
   let statusData: Prisma.ProjectUncheckedUpdateInput = {};
 
+  // Reopen: CLOSED -> IN_PROGRESS. Requires a reason and clears the closure metadata so
+  // the project is a live, editable execution again. Logged as a distinct REOPEN action.
+  const isReopening = before.status === 'CLOSED' && input.status === 'IN_PROGRESS';
+  let reopenReason: string | undefined;
+  if (isReopening) {
+    reopenReason = input.reopenReason?.trim();
+    if (!reopenReason) throw BadRequest('Reopening a closed project requires a reason (reopenReason).');
+    statusData.closedAt = null;
+    statusData.closedById = null;
+    statusData.closureNote = null;
+  }
+
   // Closure gate: moving to CLOSED must pass the readiness check (schedule 100%),
   // unless an ADMIN/PMO force-closes with a mandatory reason (route is ADMIN/PMO-only).
   if (isClosing) {
@@ -184,9 +198,9 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
     userId: actorId,
     entity: 'Project',
     entityId: id,
-    action: isClosing && input.forceClose ? 'FORCE_CLOSE' : 'UPDATE',
+    action: isReopening ? 'REOPEN' : isClosing && input.forceClose ? 'FORCE_CLOSE' : 'UPDATE',
     before,
-    after: project,
+    after: isReopening ? { ...project, reopenReason } : project,
   });
   return project;
 }

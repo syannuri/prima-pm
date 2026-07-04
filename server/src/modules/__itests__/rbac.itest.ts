@@ -141,3 +141,42 @@ describe('RBAC enforcement (server-side, end-to-end)', () => {
     expect(write.status).toBe(404);
   });
 });
+
+describe('CLOSED projects are read-only, reopen is governed', () => {
+  let pid = '';
+  const addCost = () =>
+    request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN)).send({ type: 'MANPOWER', planMandays: 1 });
+
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Closable', pmUserId: ownerId });
+    pid = created.body.project.id;
+    // DRAFT -> CHARTERED -> CLOSED (no leaf tasks, so the schedule gate is only a warning).
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    const closed = await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CLOSED' });
+    expect(closed.status).toBe(200);
+    expect(closed.body.project.status).toBe('CLOSED');
+  });
+
+  it('blocks nested writes on a CLOSED project (403)', async () => {
+    const res = await addCost();
+    expect(res.status).toBe(403);
+    expect(String(res.body?.error?.message ?? '')).toMatch(/closed|read-only/i);
+  });
+
+  it('reopen requires a reason (400 without one)', async () => {
+    const res = await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'IN_PROGRESS' });
+    expect(res.status).toBe(400);
+  });
+
+  it('reopen with a reason restores an editable, in-progress project', async () => {
+    const reopen = await request(app)
+      .patch(api(`/projects/${pid}`))
+      .set(auth(tokens.ADMIN))
+      .send({ status: 'IN_PROGRESS', reopenReason: 'Warranty defect — reopening to log the fix.' });
+    expect(reopen.status).toBe(200);
+    expect(reopen.body.project.status).toBe('IN_PROGRESS');
+    expect(reopen.body.project.closedAt).toBeNull();
+    // Writes work again.
+    expect((await addCost()).status).not.toBe(403);
+  });
+});

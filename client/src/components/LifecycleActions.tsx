@@ -14,7 +14,8 @@ export default function LifecycleActions({ project }: { project: Project }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
-  const [holdOpen, setHoldOpen] = useState(false);
+  // Reason-required modal, shared by "hold" and "reopen".
+  const [modal, setModal] = useState<null | 'hold' | 'reopen'>(null);
   const [reason, setReason] = useState('');
 
   const canManage = !!user && ['ADMIN', 'PMO'].includes(user.role);
@@ -25,8 +26,13 @@ export default function LifecycleActions({ project }: { project: Project }) {
       qc.invalidateQueries({ queryKey: ['project', project.id] });
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: ['portfolio'] });
-      toast.success(body.status === 'ON_HOLD' ? 'Project put on hold' : body.status === 'IN_PROGRESS' ? 'Project active' : 'Status updated');
-      setHoldOpen(false);
+      toast.success(
+        body.status === 'ON_HOLD' ? 'Project put on hold'
+          : body.reopenReason ? 'Project reopened'
+          : body.status === 'IN_PROGRESS' ? 'Project active'
+          : 'Status updated',
+      );
+      setModal(null);
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update status'),
   });
@@ -37,8 +43,13 @@ export default function LifecycleActions({ project }: { project: Project }) {
   const canActivate = s === 'CHARTERED';
   const canResume = s === 'ON_HOLD';
   const canHold = s === 'CHARTERED' || s === 'IN_PROGRESS';
+  const canReopen = s === 'CLOSED';
 
-  if (!canActivate && !canResume && !canHold) return null;
+  if (!canActivate && !canResume && !canHold && !canReopen) return null;
+
+  const isReopen = modal === 'reopen';
+  const submit = () =>
+    change.mutate(isReopen ? { status: 'IN_PROGRESS', reopenReason: reason.trim() } : { status: 'ON_HOLD', holdReason: reason.trim() });
 
   return (
     <>
@@ -53,35 +64,39 @@ export default function LifecycleActions({ project }: { project: Project }) {
         </Button>
       )}
       {canHold && (
-        <Button variant="secondary" onClick={() => { setReason(''); setHoldOpen(true); }}>⏸ Put on hold</Button>
+        <Button variant="secondary" onClick={() => { setReason(''); setModal('hold'); }}>⏸ Put on hold</Button>
+      )}
+      {canReopen && (
+        <Button variant="secondary" onClick={() => { setReason(''); setModal('reopen'); }}>↩ Reopen</Button>
       )}
 
-      {holdOpen && (
-        <Modal onClose={() => setHoldOpen(false)} title="Put project on hold">
+      {modal && (
+        <Modal onClose={() => setModal(null)} title={isReopen ? 'Reopen closed project' : 'Put project on hold'}>
           <div className="space-y-3">
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Suspends <strong className="text-slate-700 dark:text-slate-200">{project.name}</strong>. A reason is
-              required and recorded in the audit trail; you can resume it any time.
+              {isReopen ? (
+                <>Reopens <strong className="text-slate-700 dark:text-slate-200">{project.name}</strong> back to execution so its
+                  data can be edited again. A reason is required and recorded in the audit trail.</>
+              ) : (
+                <>Suspends <strong className="text-slate-700 dark:text-slate-200">{project.name}</strong>. A reason is
+                  required and recorded in the audit trail; you can resume it any time.</>
+              )}
             </p>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Reason for hold (required)
+                {isReopen ? 'Reason for reopening (required)' : 'Reason for hold (required)'}
               </label>
               <Textarea
                 rows={3}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="e.g. Awaiting client budget approval; paused until Q4."
+                placeholder={isReopen ? 'e.g. Client raised a warranty defect; reopening to log the fix.' : 'e.g. Awaiting client budget approval; paused until Q4.'}
               />
             </div>
             <div className="flex gap-2 pt-1">
-              <Button variant="secondary" className="flex-1" onClick={() => setHoldOpen(false)}>Cancel</Button>
-              <Button
-                className="flex-1"
-                disabled={!reason.trim() || change.isPending}
-                onClick={() => change.mutate({ status: 'ON_HOLD', holdReason: reason.trim() })}
-              >
-                {change.isPending ? 'Saving…' : 'Put on hold'}
+              <Button variant="secondary" className="flex-1" onClick={() => setModal(null)}>Cancel</Button>
+              <Button className="flex-1" disabled={!reason.trim() || change.isPending} onClick={submit}>
+                {change.isPending ? 'Saving…' : isReopen ? 'Reopen' : 'Put on hold'}
               </Button>
             </div>
           </div>
