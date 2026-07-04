@@ -1,6 +1,7 @@
 // Pure closure-readiness policy — no I/O, so it stays unit-testable without a DB.
 // Per the agreed PMO policy: the ONLY hard blocker is schedule completeness
-// (WBS 100%); everything else is an advisory warning that does not stop closure.
+// (100% — judged by the project's methodology: WBS %, agile points, or a hybrid
+// blend); everything else is an advisory warning that does not stop closure.
 
 export type ClosureSeverity = 'block' | 'warn';
 
@@ -20,8 +21,8 @@ export interface ClosureReadiness {
 }
 
 export interface ClosureInputs {
-  leafTaskCount: number;
-  scheduleProgress: number; // 0..1 (WBS weighted % complete)
+  leafTaskCount: number; // schedule "leaves" per methodology: WBS leaves, agile backlog items, or both (hybrid)
+  scheduleProgress: number; // 0..1 (methodology-weighted % complete: WBS / agile points / hybrid blend)
   openChangeRequests: number; // SUBMITTED / UNDER_REVIEW
   openHighRisks: number; // HIGH|CRITICAL and still open
   openIssues: number; // OPEN | IN_PROGRESS
@@ -33,9 +34,9 @@ export interface ClosureInputs {
 export function assessClosureReadiness(i: ClosureInputs): ClosureReadiness {
   const items: ClosureItem[] = [];
 
-  // Hard block: schedule 100% — but only when the project actually has a WBS.
-  // A pure-Agile project (no WBS leaves) can't be judged on schedule, so we don't
-  // block it; we surface a warning instead so it's not silently skipped.
+  // Hard block: schedule 100% — but only when the project actually has a plan to judge
+  // (WBS tasks and/or agile backlog items). A project with neither can't be judged on
+  // schedule, so we don't block it; we surface a warning instead so it's not silently skipped.
   if (i.leafTaskCount > 0) {
     const pct = Math.round(i.scheduleProgress * 100);
     items.push({
@@ -48,10 +49,10 @@ export function assessClosureReadiness(i: ClosureInputs): ClosureReadiness {
   } else {
     items.push({
       key: 'schedule',
-      label: 'WBS schedule present',
+      label: 'Schedule or backlog present',
       severity: 'warn',
       ok: false,
-      detail: 'No WBS tasks to verify completion',
+      detail: 'No schedule or backlog to verify completion',
     });
   }
 

@@ -1,6 +1,10 @@
 import { prisma } from '../../lib/prisma.js';
 import { NotFound } from '../../lib/errors.js';
-import { getEvm } from '../schedule/schedule.service.js';
+// Methodology dispatcher (AGILE → points, HYBRID → blended, else → WBS) so the closure
+// schedule check reflects the project's ACTUAL delivery approach — matching the Dashboard/
+// Portfolio/Forecast. Using WBS-only getEvm made an agile project's schedule read as "no
+// WBS" and a hybrid project's read ignore its agile stream.
+import { getProjectEvm } from '../agile/agile.service.js';
 import { actualCostAsOf } from '../cost/cost.service.js';
 import { assessClosureReadiness, type ClosureReadiness } from './closure.helpers.js';
 
@@ -18,7 +22,7 @@ export async function getClosureReadiness(projectId: string): Promise<ClosureRea
 
   const now = new Date();
   const [evm, openChangeRequests, openHighRisks, openIssues, actualCost, openBacklogItems] = await Promise.all([
-    getEvm(projectId, undefined, now),
+    getProjectEvm(projectId, undefined, now),
     prisma.changeRequest.count({ where: { projectId, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } } }),
     prisma.risk.count({
       where: { projectId, severity: { in: ['HIGH', 'CRITICAL'] }, status: { in: ['IDENTIFIED', 'ANALYZING', 'PLANNED', 'OPEN'] } },
