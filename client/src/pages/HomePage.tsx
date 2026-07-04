@@ -192,9 +192,14 @@ const COPY: Record<Lang, Content> = {
 
 /* ------------------------------- primitives -------------------------------- */
 function Wordmark({ small = false, bare = false }: { small?: boolean; bare?: boolean }) {
-  // `bare` = just the wordmark (no box, no corner dot) — a clean, larger logo.
+  // `bare` = the wordmark with no box, but keeping the signature white accent dot.
   if (bare) {
-    return <span className="font-brand text-2xl font-bold tracking-wide text-white">PRISMATIX</span>;
+    return (
+      <span className="relative inline-block font-brand text-2xl font-bold tracking-wide text-white">
+        PRISMATIX
+        <span className="absolute -right-2 top-0 h-2 w-2 rounded-full bg-white" />
+      </span>
+    );
   }
   return (
     <span
@@ -281,26 +286,27 @@ export default function HomePage() {
         .pmx-orb { will-change: transform; }
 
         /* --- aurora borealis: soft light curtains that sway (transform-only) --- */
-        .pmx-aur { position:absolute; left:-30%; right:-30%; top:-16%; height:80%; border-radius:50%;
-          filter:blur(56px); opacity:.42; mix-blend-mode:screen; will-change:transform,opacity; }
-        .pmx-aur1 { background:linear-gradient(180deg, transparent 4%, rgba(74,222,128,.5) 32%, rgba(34,197,94,.22) 58%, transparent 84%);
+        .pmx-aur { position:absolute; left:-30%; right:-30%; top:-16%; height:82%; border-radius:50%;
+          filter:blur(52px); opacity:.55; mix-blend-mode:screen; will-change:transform,opacity; }
+        /* blue gradation echoing the login page (sky → blue → indigo → violet) */
+        .pmx-aur1 { background:linear-gradient(180deg, transparent 3%, rgba(56,189,248,.6) 28%, rgba(59,130,246,.42) 52%, rgba(99,102,241,.24) 72%, transparent 88%);
           animation:pmx-aurA 13s ease-in-out infinite; }
-        .pmx-aur2 { background:linear-gradient(180deg, transparent 8%, rgba(134,239,172,.42) 36%, rgba(16,185,129,.2) 62%, transparent 90%);
+        .pmx-aur2 { background:linear-gradient(180deg, transparent 8%, rgba(129,140,248,.55) 34%, rgba(139,92,246,.32) 60%, transparent 90%);
           animation:pmx-aurB 17s ease-in-out infinite; }
-        /* larger, multi-stop sway + an opacity shimmer so the curtains clearly dance */
+        /* larger, multi-stop sway + a brighter opacity shimmer so the curtains clearly dance */
         @keyframes pmx-aurA {
-          0%   { transform:translateX(-16%) skewX(-15deg) scaleY(1);    opacity:.32 }
-          25%  { transform:translateX(-4%)  skewX(5deg)   scaleY(1.2);  opacity:.52 }
-          50%  { transform:translateX(16%)  skewX(14deg)  scaleY(1.32); opacity:.4 }
-          75%  { transform:translateX(3%)   skewX(-7deg)  scaleY(1.12); opacity:.54 }
-          100% { transform:translateX(-16%) skewX(-15deg) scaleY(1);    opacity:.32 }
+          0%   { transform:translateX(-16%) skewX(-15deg) scaleY(1);    opacity:.48 }
+          25%  { transform:translateX(-4%)  skewX(5deg)   scaleY(1.2);  opacity:.72 }
+          50%  { transform:translateX(16%)  skewX(14deg)  scaleY(1.32); opacity:.56 }
+          75%  { transform:translateX(3%)   skewX(-7deg)  scaleY(1.12); opacity:.74 }
+          100% { transform:translateX(-16%) skewX(-15deg) scaleY(1);    opacity:.48 }
         }
         @keyframes pmx-aurB {
-          0%   { transform:translateX(15%)  skewX(14deg)  scaleY(1.18); opacity:.46 }
-          30%  { transform:translateX(2%)   skewX(-4deg)  scaleY(1);    opacity:.28 }
-          55%  { transform:translateX(-15%) skewX(-15deg) scaleY(1.26); opacity:.48 }
-          80%  { transform:translateX(-3%)  skewX(6deg)   scaleY(1.05); opacity:.3 }
-          100% { transform:translateX(15%)  skewX(14deg)  scaleY(1.18); opacity:.46 }
+          0%   { transform:translateX(15%)  skewX(14deg)  scaleY(1.18); opacity:.64 }
+          30%  { transform:translateX(2%)   skewX(-4deg)  scaleY(1);    opacity:.42 }
+          55%  { transform:translateX(-15%) skewX(-15deg) scaleY(1.26); opacity:.66 }
+          80%  { transform:translateX(-3%)  skewX(6deg)   scaleY(1.05); opacity:.44 }
+          100% { transform:translateX(15%)  skewX(14deg)  scaleY(1.18); opacity:.64 }
         }
 
         .pmx-nebula { position:absolute; inset:-20%; filter:blur(22px); opacity:.6; will-change:transform;
