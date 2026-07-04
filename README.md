@@ -1,7 +1,5 @@
 # Prismatix — Project Management Web App
 
-[![CI](https://github.com/syannuri/prima-pm/actions/workflows/ci.yml/badge.svg)](https://github.com/syannuri/prima-pm/actions/workflows/ci.yml)
-
 > Multi-project, multi-user project-management platform covering the full delivery lifecycle:
 > **Charter → WBS/Schedule → Cost → Risk → Change Control → EVM**, aligned to PMBOK.
 
