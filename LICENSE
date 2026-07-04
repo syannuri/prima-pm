@@ -1,0 +1,29 @@
+Prismatix — Proprietary Software License
+Copyright (c) 2026 Xapiens. All rights reserved.
+
+This software and its source code ("the Software"), including the "Prismatix"
+project-management application and all associated files in this repository, are
+the confidential and proprietary property of Xapiens.
+
+NO LICENSE IS GRANTED. Except as expressly permitted in writing by Xapiens, you
+may NOT, in whole or in part:
+
+  1. use, run, or deploy the Software;
+  2. copy, reproduce, or store the Software;
+  3. modify, adapt, translate, or create derivative works of the Software;
+  4. distribute, publish, sublicense, sell, rent, lease, or otherwise transfer
+     the Software; or
+  5. reverse engineer, decompile, or disassemble the Software, except to the
+     extent such restriction is prohibited by applicable law.
+
+Viewing this repository (e.g. via access granted by Xapiens) does not grant any
+of the rights above. The Software is for internal use by Xapiens and its
+authorized personnel only.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL XAPIENS BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+For licensing inquiries, contact: soc@xapiens.id

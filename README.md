@@ -195,4 +195,4 @@ prima-pm/
 
 ---
 
-_Internal project for Xapiens. Source is public on [GitHub](https://github.com/syannuri/prima-pm)._
+_Internal project for Xapiens. Proprietary — all rights reserved; see [LICENSE](LICENSE)._
