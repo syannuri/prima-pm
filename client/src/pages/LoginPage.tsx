@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Button, Field, Input } from '../components/ui';
 import { ApiError } from '../api/client';
-
-const isEmailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+import { isEmailValid } from '../lib/formValidation';
 
 const HIGHLIGHTS = [
   'See every project’s true health at a glance',

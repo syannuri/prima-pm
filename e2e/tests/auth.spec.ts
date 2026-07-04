@@ -48,12 +48,13 @@ test.describe('Authentication & RBAC', () => {
     await page.goto('/settings');
     await expect(page.getByLabel('Current password')).toBeVisible();
 
-    // Client-side: mismatched confirmation is caught before any request.
+    // Client-side: a mismatched confirmation is flagged inline and the submit button
+    // stays disabled — no request is ever made.
     await page.getByLabel('Current password').fill('Whatever-Current-1');
     await page.getByLabel('New password', { exact: true }).fill('Brand-New-Pass-1');
     await page.getByLabel('Confirm new password').fill('different-2');
-    await page.getByRole('button', { name: 'Update password' }).click();
-    await expect(page.getByText(/do not match/i)).toBeVisible();
+    await expect(page.getByText(/does not match the new password/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Update password' })).toBeDisabled();
     await page.screenshot({ path: 'test-results/change-password-form.png' });
 
     // Server-side: a wrong current password is rejected → NO mutation, so the account

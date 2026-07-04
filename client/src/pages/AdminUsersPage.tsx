@@ -1,34 +1,15 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { AdminUser, Role } from '../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, type InputState } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/format';
+import { fieldState, isEmailValid, isNameValid, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 const ROLES: Role[] = ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER'];
-
-// Live field validation — mirrors the server rules so the form turns green only when a
-// value would actually be accepted (name ≥2 chars, real email, strong password).
-const isNameValid = (v: string) => v.trim().length >= 2;
-const isEmailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-const pwHasLen = (v: string) => v.length >= 10;
-const pwHasMix = (v: string) => /[a-zA-Z]/.test(v) && /[0-9]/.test(v);
-const isPasswordValid = (v: string) => pwHasLen(v) && pwHasMix(v);
-// undefined until the user types, then green/red — feeds <Input state>.
-const fieldState = (value: string, ok: boolean): InputState | undefined => (!value ? undefined : ok ? 'valid' : 'invalid');
-
-/** One live requirement line: green ✓ when met, muted • while pending. */
-function Rule({ ok, children }: { ok: boolean; children: ReactNode }) {
-  return (
-    <span className={`flex items-center gap-1 text-xs ${ok ? 'text-green-600' : 'text-slate-400 dark:text-slate-500'}`}>
-      <span className="w-3 text-center">{ok ? '✓' : '•'}</span>
-      {children}
-    </span>
-  );
-}
 
 export default function AdminUsersPage() {
   const { user } = useAuth();

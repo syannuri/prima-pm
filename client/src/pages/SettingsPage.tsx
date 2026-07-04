@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLang, type Lang } from '../context/LanguageContext';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
+import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -87,6 +88,10 @@ function SecurityCard() {
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Could not change password'),
   });
 
+  const nextOk = isPasswordValid(next);
+  const confirmOk = confirm.length > 0 && confirm === next;
+  const canSubmit = current.length > 0 && nextOk && confirmOk && !submit.isPending;
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErr('');
@@ -101,17 +106,24 @@ function SecurityCard() {
       </SectionTitle>
       <form onSubmit={onSubmit} className="space-y-3">
         <Field label="Current password">
-          <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+          <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required state={current ? 'valid' : undefined} />
         </Field>
         <Field label="New password">
-          <Input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required />
+          <Input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required state={fieldState(next, nextOk)} />
+          {!!next && (
+            <span className="mt-1 flex flex-col gap-0.5">
+              <Rule ok={pwHasLen(next)}>At least 10 characters</Rule>
+              <Rule ok={pwHasMix(next)}>A letter and a number</Rule>
+            </span>
+          )}
         </Field>
         <Field label="Confirm new password">
-          <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+          <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required state={fieldState(confirm, confirmOk)} />
+          {!!confirm && !confirmOk && <span className="mt-1 block text-xs text-red-500">Does not match the new password</span>}
         </Field>
         {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}
         <div className="flex justify-end pt-1">
-          <Button type="submit" disabled={submit.isPending || !current || !next}>
+          <Button type="submit" disabled={!canSubmit}>
             {submit.isPending ? 'Saving…' : 'Update password'}
           </Button>
         </div>

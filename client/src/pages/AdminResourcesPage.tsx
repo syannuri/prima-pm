@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { PersonnelRole, RateCard, ResourceItem, ResourceType, User } from '../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, type InputState } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import { formatIdr } from '../lib/format';
+import { fieldState } from '../lib/formValidation';
 
-// Live field validation — mirrors the server rules so a field only turns green when its
-// value would be accepted. undefined until the user types, then green/red.
-const fieldState = (touched: boolean, ok: boolean): InputState | undefined => (!touched ? undefined : ok ? 'valid' : 'invalid');
 const isPositiveNum = (v: string) => v.trim() !== '' && Number(v) > 0;
 
 const PERSONNEL: { value: PersonnelRole; label: string }[] = [
