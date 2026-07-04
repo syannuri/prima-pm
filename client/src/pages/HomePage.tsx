@@ -336,7 +336,10 @@ export default function HomePage() {
       </div>
 
       {/* ---------- top nav ---------- */}
-      <header className={`fixed inset-x-0 top-0 z-30 transition-colors duration-300 ${scrolled ? 'border-b border-white/10 bg-[#05070e]/80 backdrop-blur-xl' : ''}`}>
+      {/* On scroll the bar becomes a translucent purple (blurred) instead of solid black. */}
+      <header className={`fixed inset-x-0 top-0 z-30 transition-all duration-300 ${scrolled ? 'border-b border-white/10 backdrop-blur-xl' : ''}`}>
+        {/* purple gradient wash across the top header */}
+        <div className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-violet-700/40 via-violet-900/15 to-transparent transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-75'}`} />
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5 sm:px-8">
           <Wordmark bare />
           <div className="flex items-center gap-2 sm:gap-3">
