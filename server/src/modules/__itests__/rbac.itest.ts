@@ -60,6 +60,32 @@ describe('auth', () => {
   });
 });
 
+// Uses a dedicated user so bumping its tokenVersion cannot disturb the RBAC tokens above.
+describe('session revocation (tokenVersion)', () => {
+  const email = 'revoke@test.local';
+  let access = '';
+  let refresh = '';
+
+  beforeAll(async () => {
+    await prisma.user.create({ data: { name: 'Revoke Me', email, role: 'VIEWER', passwordHash: await hashPassword(PW), isActive: true } });
+    const res = await request(app).post(api('/auth/login')).send({ email, password: PW });
+    access = res.body.accessToken;
+    refresh = res.body.refreshToken;
+  });
+
+  it('a fresh session can read /auth/me', async () => {
+    const res = await request(app).get(api('/auth/me')).set(auth(access));
+    expect(res.status).toBe(200);
+  });
+
+  it('logout revokes both the access token and the refresh token', async () => {
+    expect((await request(app).post(api('/auth/logout')).set(auth(access))).status).toBe(200);
+    // The same access token no longer verifies, and the old refresh token can't mint a new one.
+    expect((await request(app).get(api('/auth/me')).set(auth(access))).status).toBe(401);
+    expect((await request(app).post(api('/auth/refresh')).send({ refreshToken: refresh })).status).toBe(401);
+  });
+});
+
 describe('RBAC enforcement (server-side, end-to-end)', () => {
   let projectId = '';
 

@@ -15,8 +15,8 @@ interface AuthResult {
 function toAuthResult(user: User): AuthResult {
   return {
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
-    accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email }),
-    refreshToken: signRefreshToken(user.id),
+    accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email, tv: user.tokenVersion }),
+    refreshToken: signRefreshToken(user.id, user.tokenVersion),
   };
 }
 
@@ -41,24 +41,36 @@ export async function refresh(refreshToken: string): Promise<{ accessToken: stri
   }
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user || !user.isActive) throw Unauthorized('User no longer active');
+  // Reject refresh tokens minted before the user's sessions were revoked.
+  if ((payload.tv ?? 0) !== user.tokenVersion) throw Unauthorized('Session has been revoked');
 
   return {
-    accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email }),
+    accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email, tv: user.tokenVersion }),
   };
 }
 
-export async function changePassword(userId: string, input: ChangePasswordInput): Promise<void> {
+// Changing the password revokes every other outstanding session (tokenVersion bump) and
+// returns a fresh token pair so the CALLER's current session continues seamlessly.
+export async function changePassword(userId: string, input: ChangePasswordInput): Promise<AuthResult> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Unauthorized();
 
   const ok = await verifyPassword(input.currentPassword, user.passwordHash);
   if (!ok) throw Unauthorized('Current password is incorrect');
 
-  await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
-    data: { passwordHash: await hashPassword(input.newPassword) },
+    data: { passwordHash: await hashPassword(input.newPassword), tokenVersion: { increment: 1 } },
   });
   await writeAudit({ userId, entity: 'User', entityId: userId, action: 'PASSWORD_CHANGE' });
+  return toAuthResult(updated);
+}
+
+// Log out everywhere: bump tokenVersion so all currently-issued tokens for this user
+// stop verifying on the next request.
+export async function logoutAll(userId: string): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } });
+  await writeAudit({ userId, entity: 'User', entityId: userId, action: 'LOGOUT' });
 }
 
 export async function me(userId: string) {

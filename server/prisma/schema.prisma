@@ -165,6 +165,10 @@ model User {
   passwordHash String
   role         Role     @default(VIEWER)
   isActive     Boolean  @default(true)
+  // Bumped to revoke every outstanding token for this user (logout, password change/reset,
+  // deactivation). Access/refresh tokens embed the tv they were minted at; requireAuth
+  // rejects any token whose tv is stale.
+  tokenVersion Int      @default(0)
   changesSeenAt DateTime? // last time this user viewed the change-notification feed
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

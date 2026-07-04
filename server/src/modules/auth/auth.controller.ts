@@ -17,6 +17,13 @@ export async function meHandler(req: Request, res: Response): Promise<void> {
 }
 
 export async function changePasswordHandler(req: Request, res: Response): Promise<void> {
-  await authService.changePassword(req.user!.id, req.body);
+  // Returns a fresh token pair: changing the password revokes other sessions, so the
+  // caller needs new tokens to keep this one alive.
+  const result = await authService.changePassword(req.user!.id, req.body);
+  res.json(result);
+}
+
+export async function logoutHandler(req: Request, res: Response): Promise<void> {
+  await authService.logoutAll(req.user!.id);
   res.json({ ok: true });
 }

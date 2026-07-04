@@ -36,6 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    // Best-effort server-side revocation (bumps tokenVersion so the tokens can't be
+    // reused elsewhere); clear locally regardless of the network result.
+    api.post('/auth/logout').catch(() => {});
     tokenStore.clear();
     setUser(null);
   };

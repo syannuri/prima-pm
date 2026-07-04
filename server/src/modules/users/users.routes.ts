@@ -97,7 +97,8 @@ router.patch(
   asyncHandler(async (req, res) => {
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!target) throw NotFound('User not found');
-    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash: await hashPassword(req.body.newPassword) } });
+    // Bump tokenVersion too: an admin reset must invalidate the target's existing sessions.
+    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash: await hashPassword(req.body.newPassword), tokenVersion: { increment: 1 } } });
     await writeAudit({ userId: req.user!.id, entity: 'User', entityId: req.params.id, action: 'PASSWORD_CHANGE', after: { reset: true } });
     res.json({ ok: true });
   }),

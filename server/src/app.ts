@@ -25,6 +25,14 @@ const clientDist = process.env.CLIENT_DIST_PATH
 export function createApp() {
   const app = express();
 
+  // Behind a reverse proxy (nginx) we must trust its X-Forwarded-* headers so req.ip is
+  // the real client — the auth rate limiter keys on it. Only enable when TRUST_PROXY is
+  // set: trusting a spoofable header on a direct bind would defeat the limiter.
+  if (env.trustProxy !== undefined) {
+    const hops = Number(env.trustProxy);
+    app.set('trust proxy', Number.isNaN(hops) ? env.trustProxy : hops);
+  }
+
   // Serve the SPA same-origin in production, so the client's relative /api/v1 calls
   // need no proxy/CORS. CSP allows inline styles (the interactive Gantt positions
   // bars via style attributes) and data: images.
@@ -35,8 +43,7 @@ export function createApp() {
       serveClient
         ? {
             contentSecurityPolicy: {
-              // useDefaults:false so we DON'T inherit `upgrade-insecure-requests`,
-              // which would force assets over HTTPS and blank the page on plain-HTTP LAN.
+              // useDefaults:false so we control every directive explicitly.
               useDefaults: false,
               directives: {
                 defaultSrc: ["'self'"],
@@ -50,14 +57,19 @@ export function createApp() {
                 connectSrc: ["'self'"],
                 objectSrc: ["'none'"],
                 baseUri: ["'self'"],
+                // Force sub-resources to HTTPS only when we're actually on HTTPS —
+                // on a plain-http LAN this directive would blank the page.
+                ...(env.secure ? { upgradeInsecureRequests: [] } : {}),
               },
             },
-            // No TLS in front of this LAN deploy → don't advertise HSTS / HTTPS upgrades,
-            // and skip headers that only apply to "secure" origins (they'd just log
-            // ignored-over-HTTP warnings in the browser console).
-            strictTransportSecurity: false,
-            crossOriginOpenerPolicy: false,
-            originAgentCluster: false,
+            // HSTS + secure-origin-only headers are advertised only when SECURE=true
+            // (served over HTTPS behind a TLS proxy). On plain-http LAN they'd just log
+            // ignored-over-HTTP warnings.
+            strictTransportSecurity: env.secure
+              ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+              : false,
+            crossOriginOpenerPolicy: env.secure ? undefined : false,
+            originAgentCluster: env.secure ? undefined : false,
           }
         : undefined,
     ),

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, tokenStore } from '../api/client';
 import { Button, Card, Field, Input, SectionTitle, Toggle } from '../components/ui';
 import { useTheme } from '../context/ThemeContext';
 import { useLang, type Lang } from '../context/LanguageContext';
@@ -83,8 +83,16 @@ function SecurityCard() {
   const reset = () => { setCurrent(''); setNext(''); setConfirm(''); setErr(''); };
 
   const submit = useMutation({
-    mutationFn: () => api.post('/auth/change-password', { currentPassword: current, newPassword: next }),
-    onSuccess: () => { reset(); toast.success('Password updated. Use it the next time you sign in.'); },
+    mutationFn: () =>
+      api.post<{ accessToken: string; refreshToken: string }>('/auth/change-password', { currentPassword: current, newPassword: next }),
+    onSuccess: (res) => {
+      // The server revoked all sessions (incl. this token) and returned a fresh pair —
+      // adopt them so this tab keeps working; other sessions are now signed out.
+      if (res?.accessToken) tokenStore.set(res.accessToken);
+      if (res?.refreshToken) tokenStore.setRefresh(res.refreshToken);
+      reset();
+      toast.success('Password updated. Any other signed-in sessions have been logged out.');
+    },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Could not change password'),
   });
 

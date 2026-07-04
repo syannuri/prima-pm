@@ -19,5 +19,7 @@ router.post('/login', loginLimiter, validateBody(loginSchema), asyncHandler(ctrl
 router.post('/refresh', refreshLimiter, validateBody(refreshSchema), asyncHandler(ctrl.refreshHandler));
 router.get('/me', requireAuth, asyncHandler(ctrl.meHandler));
 router.post('/change-password', requireAuth, validateBody(changePasswordSchema), asyncHandler(ctrl.changePasswordHandler));
+// Logout revokes every outstanding token for the caller (tokenVersion bump).
+router.post('/logout', requireAuth, asyncHandler(ctrl.logoutHandler));
 
 export default router;

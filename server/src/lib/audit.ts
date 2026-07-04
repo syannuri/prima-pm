@@ -8,6 +8,7 @@ type AuditAction =
   | 'APPROVE'
   | 'REJECT'
   | 'LOGIN'
+  | 'LOGOUT'
   | 'PASSWORD_CHANGE'
   | 'FORCE_CLOSE';
 
