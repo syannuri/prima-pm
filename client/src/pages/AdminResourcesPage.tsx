@@ -2,10 +2,15 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { PersonnelRole, RateCard, ResourceItem, ResourceType, User } from '../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, type InputState } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import { formatIdr } from '../lib/format';
+
+// Live field validation — mirrors the server rules so a field only turns green when its
+// value would be accepted. undefined until the user types, then green/red.
+const fieldState = (touched: boolean, ok: boolean): InputState | undefined => (!touched ? undefined : ok ? 'valid' : 'invalid');
+const isPositiveNum = (v: string) => v.trim() !== '' && Number(v) > 0;
 
 const PERSONNEL: { value: PersonnelRole; label: string }[] = [
   { value: 'PROJECT_PERSONNEL', label: 'Project Personnel' },
@@ -84,6 +89,7 @@ function RateCardRow({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolean
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update rate card'),
   });
   const dirty = Number(rate) !== Number(rc.unitCostPerManday);
+  const rateOk = isPositiveNum(rate);
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 align-middle">
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{rc.roleName}</td>
@@ -91,8 +97,8 @@ function RateCardRow({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolean
       <td className="text-right">
         {canEdit ? (
           <div className="flex items-center justify-end gap-1">
-            <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} className="!w-36 !py-1 text-right text-xs" />
-            {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="text-xs text-brand-600 hover:underline">Save</button>}
+            <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} state={fieldState(dirty, rateOk)} className="!w-36 !py-1 text-right text-xs" />
+            {dirty && <button onClick={() => save.mutate()} disabled={save.isPending || !rateOk} className="text-xs text-brand-600 hover:underline disabled:opacity-40">Save</button>}
           </div>
         ) : formatIdr(Number(rc.unitCostPerManday))}
         {err && <div className="text-xs text-red-600">{err}</div>}
@@ -114,18 +120,26 @@ function AddRateCard({ onChange }: { onChange: () => void }) {
   const [level, setLevel] = useState('');
   const [rate, setRate] = useState('');
   const [err, setErr] = useState('');
+  const roleOk = roleName.trim().length >= 2;
+  const rateOk = isPositiveNum(rate);
   const create = useMutation({
     mutationFn: () => api.post('/ratecards', { roleName, level: level || undefined, unitCostPerManday: Number(rate) }),
     onSuccess: () => { setErr(''); setRoleName(''); setLevel(''); setRate(''); onChange(); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
   return (
-    <div className="mb-3 grid gap-2 sm:grid-cols-4">
-      <Field label="Role name"><Input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="e.g. Backend Engineer" /></Field>
+    <div className="mb-3 grid items-start gap-2 sm:grid-cols-4">
+      <Field label="Role name">
+        <Input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="e.g. Backend Engineer" state={fieldState(!!roleName, roleOk)} />
+        {!!roleName && !roleOk && <span className="mt-1 block text-xs text-red-500">At least 2 characters</span>}
+      </Field>
       <Field label="Level (optional)"><Input value={level} onChange={(e) => setLevel(e.target.value)} placeholder="e.g. Senior" /></Field>
-      <Field label="Cost / manday (IDR)"><Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 1500000" /></Field>
-      <div className="flex items-end">
-        <Button className="w-full" disabled={!roleName || !rate || create.isPending} onClick={() => create.mutate()}>{create.isPending ? 'Adding…' : 'Add rate card'}</Button>
+      <Field label="Cost / manday (IDR)">
+        <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 1500000" state={fieldState(!!rate, rateOk)} />
+        {!!rate && !rateOk && <span className="mt-1 block text-xs text-red-500">Must be greater than 0</span>}
+      </Field>
+      <div className="flex items-end pt-6">
+        <Button className="w-full" disabled={!roleOk || !rateOk || create.isPending} onClick={() => create.mutate()}>{create.isPending ? 'Adding…' : 'Add rate card'}</Button>
       </div>
       {err && <p className="text-sm text-red-600 sm:col-span-4">{err}</p>}
     </div>
@@ -256,10 +270,19 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
 
   const pickedRate = rateCardsQ.data?.rateCards.find((rc) => rc.id === rateCardId);
 
+  const nameOk = name.trim().length >= 1 && name.trim().length <= 160;
+  const capacityOk = isPositiveNum(capacity) && Number(capacity) <= 100;
+  // Cost is optional (a rate card can supply it); if typed, it must be a non-negative number.
+  const costOk = unitCost.trim() === '' || (Number.isFinite(Number(unitCost)) && Number(unitCost) >= 0);
+  const allValid = nameOk && capacityOk && costOk;
+
   return (
     <Modal onClose={onClose} title={editing ? 'Edit resource' : 'New resource'} size="lg">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Person or role" /></Field>
+        <div className="grid items-start gap-3 sm:grid-cols-2">
+          <Field label="Name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Person or role" state={fieldState(!!name, nameOk)} />
+            {!!name && !nameOk && <span className="mt-1 block text-xs text-red-500">Required (max 160 characters)</span>}
+          </Field>
           <Field label="Type">
             <Select value={resourceType} onChange={(e) => setResourceType(e.target.value as ResourceType)}>
               {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -278,9 +301,13 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
             </Select>
           </Field>
           <Field label="Cost / manday (IDR)">
-            <Input type="number" min={0} value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder={pickedRate ? `from rate card: ${formatIdr(Number(pickedRate.unitCostPerManday))}` : 'override / custom'} />
+            <Input type="number" min={0} value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder={pickedRate ? `from rate card: ${formatIdr(Number(pickedRate.unitCostPerManday))}` : 'override / custom'} state={fieldState(unitCost.trim() !== '', costOk)} />
+            {unitCost.trim() !== '' && !costOk && <span className="mt-1 block text-xs text-red-500">Must be 0 or more</span>}
           </Field>
-          <Field label="Capacity / day (mandays)"><Input type="number" min={0} step={0.25} value={capacity} onChange={(e) => setCapacity(e.target.value)} /></Field>
+          <Field label="Capacity / day (mandays)">
+            <Input type="number" min={0} step={0.25} value={capacity} onChange={(e) => setCapacity(e.target.value)} state={fieldState(!!capacity, capacityOk)} />
+            {!!capacity && !capacityOk && <span className="mt-1 block text-xs text-red-500">Between 0 and 100</span>}
+          </Field>
           <Field label="Department (optional)"><Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Engineering" /></Field>
           <Field label="Link login account (optional)">
             <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
@@ -293,7 +320,7 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
         {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}
         <div className="mt-4 flex gap-2">
           <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
-          <Button className="flex-1" disabled={!name || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create resource'}</Button>
+          <Button className="flex-1" disabled={!allValid || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create resource'}</Button>
         </div>
     </Modal>
   );
