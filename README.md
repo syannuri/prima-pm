@@ -32,7 +32,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **Exports** — per-project **PDF** (PDFKit) and **Excel** (ExcelJS) reports incl. cost, risk, schedule, EVM and the Issue Log — pure JS, no headless browser.
 - **Resource master pool** — named/generic resources with rate cards; cross-project capacity & over-allocation.
 - **Admin** — user management (create / role / reset password / activate), project (PM) reassignment, rate cards. All accounts are **admin-provisioned** — there is no open self-registration.
-- **UX** — **dark mode by default** (light optional), **IDR thousand-separator inputs**, native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
+- **UX** — **dark mode by default** (light optional), **IDR thousand-separator inputs**, **live inline form validation** (green/red field state with strong-password checklists on auth/admin forms), native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
 
 ## 📸 Screenshots
 
@@ -41,6 +41,8 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 | ![PM dashboard with CPI/SPI donut charts and baseline-vs-actual progress](docs/screenshots/pm-charts.png) | ![Agile Kanban board with drag and drop](docs/screenshots/agile-board.png) |
 | **Risk — 5×5 heatmap & EMV contingency reserve** | **⌘K command palette** |
 | ![Risk heatmap and EMV reserve](docs/screenshots/risk.png) | ![Command palette quick jump](docs/screenshots/command-palette.png) |
+| **Inline form validation — live green/red feedback** | **Strong-password checklist on change password** |
+| ![Create-user form with green-validated fields and a live password checklist](docs/screenshots/validation-user.png) | ![Change-password form with live requirement checklist and matching-confirmation check](docs/screenshots/validation-password.png) |
 
 ## 🧱 Tech stack
 
