@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang, type Lang } from '../context/LanguageContext';
 
+// Real product screenshots for the "A look inside" showcase (served from client/public).
+const SHOWCASE = ['/shot-gantt.png', '/shot-evm.png', '/shot-agile.png'];
+
 /**
  * Public landing page — the front door shown to guests at `/` before the login screen.
  * Aurora-dark, bilingual (EN/ID via the shared LanguageContext), and deliberately light:
@@ -18,6 +21,7 @@ type Content = {
   why: { eyebrow: string; body: string };
   what: { title: string; body: string };
   features: { title: string; sub: string; groups: Group[] };
+  showcase: { title: string; sub: string; labels: string[] };
   evm: { title: string; sub: string; items: [string, string][] };
   principles: { title: string; chips: string[] };
   community: { eyebrow: string; title: string; body: string };
@@ -78,6 +82,11 @@ const COPY: Record<Lang, Content> = {
         ]},
       ],
     },
+    showcase: {
+      title: 'A look inside',
+      sub: 'A few of the surfaces you work in every day.',
+      labels: ['Interactive WBS & Gantt', 'Earned-Value (EVM) health', 'Agile board — drag & drop'],
+    },
     evm: {
       title: 'The quiet language of Earned Value',
       sub: 'Four numbers that turn a status update into a decision.',
@@ -108,7 +117,7 @@ const COPY: Record<Lang, Content> = {
     },
     footer: {
       tagline: 'A contribution to the global project-management community.',
-      rights: '© 2026 Xapiens. All rights reserved.',
+      rights: '© 2026 PRISMATIX. All rights reserved.',
     },
   },
   id: {
@@ -155,6 +164,11 @@ const COPY: Record<Lang, Content> = {
         ]},
       ],
     },
+    showcase: {
+      title: 'Intip ke dalam',
+      sub: 'Beberapa layar yang Anda pakai setiap hari.',
+      labels: ['WBS & Gantt interaktif', 'Kesehatan Earned Value (EVM)', 'Papan Agile — seret & lepas'],
+    },
     evm: {
       title: 'Bahasa senyap Earned Value',
       sub: 'Empat angka yang mengubah laporan status menjadi keputusan.',
@@ -185,7 +199,7 @@ const COPY: Record<Lang, Content> = {
     },
     footer: {
       tagline: 'Sebuah kontribusi untuk komunitas manajemen proyek dunia.',
-      rights: '© 2026 Xapiens. Semua hak dilindungi.',
+      rights: '© 2026 PRISMATIX. Semua hak dilindungi.',
     },
   },
 };
@@ -403,10 +417,10 @@ export default function HomePage() {
               <img
                 src="/hero-dashboard.png"
                 width={1600}
-                height={900}
+                height={1000}
                 loading="eager"
                 decoding="async"
-                alt="Prismatix portfolio dashboard — EVM health, status distribution and resource load"
+                alt="Prismatix Project Manager dashboard — CPI/SPI donuts and baseline-vs-actual progress"
                 className="block w-full"
               />
             </div>
@@ -457,6 +471,35 @@ export default function HomePage() {
                     ))}
                   </ul>
                 </div>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        {/* ---------- showcase: real product screenshots ---------- */}
+        <section className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
+          <Reveal className="mb-12 text-center">
+            <SectionTitle>{t.showcase.title}</SectionTitle>
+            <p className="mx-auto mt-4 max-w-2xl text-slate-400">{t.showcase.sub}</p>
+          </Reveal>
+          <div className="grid gap-6 md:grid-cols-3">
+            {SHOWCASE.map((img, i) => (
+              <Reveal key={img} delay={i * 80}>
+                <figure className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/50 shadow-xl ring-1 ring-white/10 transition duration-300 hover:-translate-y-1 hover:border-white/20">
+                  <div className="flex items-center gap-1.5 border-b border-white/10 bg-white/5 px-3 py-2">
+                    <span className="h-2 w-2 rounded-full bg-red-400/70" />
+                    <span className="h-2 w-2 rounded-full bg-amber-400/70" />
+                    <span className="h-2 w-2 rounded-full bg-green-400/70" />
+                  </div>
+                  <img
+                    src={img}
+                    loading="lazy"
+                    decoding="async"
+                    alt={t.showcase.labels[i]}
+                    className="block h-56 w-full object-cover object-top"
+                  />
+                  <figcaption className="px-4 py-3 text-sm font-medium text-slate-200">{t.showcase.labels[i]}</figcaption>
+                </figure>
               </Reveal>
             ))}
           </div>
