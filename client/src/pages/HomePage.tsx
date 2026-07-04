@@ -310,9 +310,9 @@ export default function HomePage() {
         /* --- aurora borealis: soft light curtains that sway (transform-only) --- */
         .pmx-aur { position:absolute; left:-25%; right:-25%; top:-16%; height:80%; border-radius:50%;
           filter:blur(52px); opacity:.55; mix-blend-mode:screen; will-change:transform,opacity; }
-        .pmx-aur1 { background:linear-gradient(180deg, transparent 4%, rgba(45,212,191,.65) 34%, rgba(16,185,129,.3) 60%, transparent 86%);
+        .pmx-aur1 { background:linear-gradient(180deg, transparent 4%, rgba(74,222,128,.68) 32%, rgba(34,197,94,.3) 58%, transparent 84%);
           animation:pmx-aurA 18s ease-in-out infinite; }
-        .pmx-aur2 { background:linear-gradient(180deg, transparent 8%, rgba(139,92,246,.6) 38%, rgba(99,102,241,.28) 64%, transparent 90%);
+        .pmx-aur2 { background:linear-gradient(180deg, transparent 8%, rgba(134,239,172,.55) 36%, rgba(16,185,129,.28) 62%, transparent 90%);
           animation:pmx-aurB 24s ease-in-out infinite; }
         @keyframes pmx-aurA { 0%,100%{transform:translateX(-7%) skewX(-9deg) scaleY(1)}   50%{transform:translateX(7%) skewX(7deg) scaleY(1.18)} }
         @keyframes pmx-aurB { 0%,100%{transform:translateX(6%) skewX(8deg) scaleY(1.12)}  50%{transform:translateX(-6%) skewX(-8deg) scaleY(.92)} }
