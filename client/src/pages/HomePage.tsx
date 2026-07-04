@@ -281,14 +281,27 @@ export default function HomePage() {
         .pmx-orb { will-change: transform; }
 
         /* --- aurora borealis: soft light curtains that sway (transform-only) --- */
-        .pmx-aur { position:absolute; left:-25%; right:-25%; top:-16%; height:80%; border-radius:50%;
+        .pmx-aur { position:absolute; left:-30%; right:-30%; top:-16%; height:80%; border-radius:50%;
           filter:blur(56px); opacity:.42; mix-blend-mode:screen; will-change:transform,opacity; }
         .pmx-aur1 { background:linear-gradient(180deg, transparent 4%, rgba(74,222,128,.5) 32%, rgba(34,197,94,.22) 58%, transparent 84%);
-          animation:pmx-aurA 18s ease-in-out infinite; }
+          animation:pmx-aurA 13s ease-in-out infinite; }
         .pmx-aur2 { background:linear-gradient(180deg, transparent 8%, rgba(134,239,172,.42) 36%, rgba(16,185,129,.2) 62%, transparent 90%);
-          animation:pmx-aurB 24s ease-in-out infinite; }
-        @keyframes pmx-aurA { 0%,100%{transform:translateX(-7%) skewX(-9deg) scaleY(1)}   50%{transform:translateX(7%) skewX(7deg) scaleY(1.18)} }
-        @keyframes pmx-aurB { 0%,100%{transform:translateX(6%) skewX(8deg) scaleY(1.12)}  50%{transform:translateX(-6%) skewX(-8deg) scaleY(.92)} }
+          animation:pmx-aurB 17s ease-in-out infinite; }
+        /* larger, multi-stop sway + an opacity shimmer so the curtains clearly dance */
+        @keyframes pmx-aurA {
+          0%   { transform:translateX(-16%) skewX(-15deg) scaleY(1);    opacity:.32 }
+          25%  { transform:translateX(-4%)  skewX(5deg)   scaleY(1.2);  opacity:.52 }
+          50%  { transform:translateX(16%)  skewX(14deg)  scaleY(1.32); opacity:.4 }
+          75%  { transform:translateX(3%)   skewX(-7deg)  scaleY(1.12); opacity:.54 }
+          100% { transform:translateX(-16%) skewX(-15deg) scaleY(1);    opacity:.32 }
+        }
+        @keyframes pmx-aurB {
+          0%   { transform:translateX(15%)  skewX(14deg)  scaleY(1.18); opacity:.46 }
+          30%  { transform:translateX(2%)   skewX(-4deg)  scaleY(1);    opacity:.28 }
+          55%  { transform:translateX(-15%) skewX(-15deg) scaleY(1.26); opacity:.48 }
+          80%  { transform:translateX(-3%)  skewX(6deg)   scaleY(1.05); opacity:.3 }
+          100% { transform:translateX(15%)  skewX(14deg)  scaleY(1.18); opacity:.46 }
+        }
 
         .pmx-nebula { position:absolute; inset:-20%; filter:blur(22px); opacity:.6; will-change:transform;
           background:linear-gradient(115deg, transparent 36%, rgba(139,92,246,.09) 48%, rgba(96,165,250,.08) 55%, transparent 68%);
