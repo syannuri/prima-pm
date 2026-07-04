@@ -225,12 +225,14 @@ const COPY: Record<Lang, Content> = {
 function Wordmark({ small = false }: { small?: boolean }) {
   return (
     <span
-      className={`relative inline-block border-white/90 font-brand font-bold tracking-wide text-white ${
-        small ? 'border-[2.5px] px-2 py-0.5 text-sm' : 'border-[3px] px-2.5 py-1 text-base'
+      className={`relative inline-block border-white font-brand font-bold tracking-wide text-white ${
+        small ? 'border-[2.5px] px-2 py-0.5 text-sm' : 'border-4 px-4 py-2 text-2xl'
       }`}
     >
       PRISMATIX
-      <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-white" />
+      <span
+        className={`absolute rounded-full bg-white ${small ? 'right-1 top-1 h-1.5 w-1.5' : 'right-1.5 top-1.5 h-2 w-2'}`}
+      />
     </span>
   );
 }
@@ -294,7 +296,7 @@ export default function HomePage() {
     document.getElementById('features')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 
   return (
-    <div ref={setScroller} className="relative isolate h-screen overflow-y-auto overflow-x-clip bg-[#0b1020] text-slate-200 antialiased">
+    <div ref={setScroller} className="relative isolate h-screen overflow-y-auto overflow-x-clip bg-[#05070e] text-slate-200 antialiased">
       <style>{`
         @keyframes pmx-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(26px,-30px)} }
         @keyframes pmx-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,24px)} }
@@ -304,6 +306,16 @@ export default function HomePage() {
         .reveal { opacity:0; transform:translateY(18px); transition:opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
         .reveal.in { opacity:1; transform:none; }
         .pmx-orb { will-change: transform; }
+
+        /* --- aurora borealis: soft light curtains that sway (transform-only) --- */
+        .pmx-aur { position:absolute; left:-25%; right:-25%; top:-16%; height:80%; border-radius:50%;
+          filter:blur(52px); opacity:.55; mix-blend-mode:screen; will-change:transform,opacity; }
+        .pmx-aur1 { background:linear-gradient(180deg, transparent 4%, rgba(45,212,191,.65) 34%, rgba(16,185,129,.3) 60%, transparent 86%);
+          animation:pmx-aurA 18s ease-in-out infinite; }
+        .pmx-aur2 { background:linear-gradient(180deg, transparent 8%, rgba(139,92,246,.6) 38%, rgba(99,102,241,.28) 64%, transparent 90%);
+          animation:pmx-aurB 24s ease-in-out infinite; }
+        @keyframes pmx-aurA { 0%,100%{transform:translateX(-7%) skewX(-9deg) scaleY(1)}   50%{transform:translateX(7%) skewX(7deg) scaleY(1.18)} }
+        @keyframes pmx-aurB { 0%,100%{transform:translateX(6%) skewX(8deg) scaleY(1.12)}  50%{transform:translateX(-6%) skewX(-8deg) scaleY(.92)} }
 
         /* --- starlight (all transform/opacity → compositor; cheap) --- */
         .pmx-stars { position:absolute; inset:-15%; background-repeat:repeat; will-change:transform; }
@@ -327,7 +339,7 @@ export default function HomePage() {
 
         html { scroll-behavior: smooth; }
         @media (prefers-reduced-motion: reduce){
-          .pmx-orb, .pmx-float, .pmx-stars, .pmx-star, .pmx-nebula { animation:none !important; }
+          .pmx-orb, .pmx-float, .pmx-stars, .pmx-star, .pmx-nebula, .pmx-aur { animation:none !important; }
           .pmx-shoot { display:none !important; }
           .reveal { opacity:1 !important; transform:none !important; transition:none !important; }
           html { scroll-behavior:auto; }
@@ -341,12 +353,13 @@ export default function HomePage() {
         <div className="pmx-stars pmx-stars-near" style={{ backgroundImage: STARS_NEAR }} />
         {/* faint diagonal nebula band for drama */}
         <div className="pmx-nebula" />
-        <div className="pmx-orb absolute -left-40 -top-40 h-[38rem] w-[38rem] rounded-full bg-brand-600/25 blur-[110px]" style={{ animation: 'pmx-drift1 17s ease-in-out infinite' }} />
-        <div className="pmx-orb absolute -right-32 top-1/4 h-[34rem] w-[34rem] rounded-full bg-violet-700/30 blur-[120px]" style={{ animation: 'pmx-drift3 23s ease-in-out infinite' }} />
-        <div className="pmx-orb absolute bottom-0 left-1/4 h-[36rem] w-[36rem] rounded-full bg-indigo-700/30 blur-[120px]" style={{ animation: 'pmx-drift2 20s ease-in-out infinite' }} />
-        <div className="pmx-orb absolute left-1/2 top-1/2 h-80 w-80 rounded-full bg-sky-600/15 blur-[120px]" style={{ animation: 'pmx-drift4 26s ease-in-out infinite' }} />
-        {/* top sheen + bottom vignette for depth */}
-        <div className="absolute inset-0 bg-[radial-gradient(75%_55%_at_50%_-8%,rgba(139,92,246,0.16),transparent_60%),radial-gradient(120%_90%_at_50%_120%,rgba(0,0,0,0.75),transparent_55%)]" />
+        {/* aurora borealis — two waving light curtains near the top (teal + violet) */}
+        <div className="pmx-aur pmx-aur1" />
+        <div className="pmx-aur pmx-aur2" />
+        {/* one faint deep glow low-down for depth */}
+        <div className="pmx-orb absolute -bottom-48 left-1/3 h-[34rem] w-[34rem] rounded-full bg-indigo-800/20 blur-[130px]" style={{ animation: 'pmx-drift2 26s ease-in-out infinite' }} />
+        {/* subtle top sheen + deeper midnight vignette */}
+        <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_-8%,rgba(139,92,246,0.10),transparent_60%),radial-gradient(130%_100%_at_50%_115%,rgba(0,0,0,0.88),transparent_55%)]" />
         {/* dramatic glow-stars, crisp on top of the vignette, spread across the hero */}
         {BRIGHT.map(([t, l, s, d], i) => (
           <div key={i} className="pmx-star" style={{ top: `${t}%`, left: `${l}%`, width: `${s}px`, height: `${s}px`, animationDelay: `${d}s` }} />
@@ -357,9 +370,9 @@ export default function HomePage() {
       </div>
 
       {/* ---------- top nav ---------- */}
-      <header className={`fixed inset-x-0 top-0 z-30 transition-colors duration-300 ${scrolled ? 'border-b border-white/10 bg-[#0b1020]/70 backdrop-blur-xl' : ''}`}>
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
-          <Wordmark small />
+      <header className={`fixed inset-x-0 top-0 z-30 transition-colors duration-300 ${scrolled ? 'border-b border-white/10 bg-[#05070e]/80 backdrop-blur-xl' : ''}`}>
+        <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5 sm:px-8">
+          <Wordmark />
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="inline-flex rounded-lg bg-white/5 p-0.5 ring-1 ring-white/10">
               {(['en', 'id'] as Lang[]).map((l) => (
