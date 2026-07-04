@@ -4,14 +4,34 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/v1';
 const TOKEN_KEY = 'prima_token';
 const REFRESH_KEY = 'prima_refresh';
 
-export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  getRefresh: () => localStorage.getItem(REFRESH_KEY),
-  setRefresh: (t: string) => localStorage.setItem(REFRESH_KEY, t),
-  clear: () => {
+// Auth tokens live in sessionStorage, so each browser TAB gets its own independent
+// session — you can be signed in as different users in different tabs. (Theme and
+// other preferences stay in localStorage.) Trade-off: closing a tab ends its
+// session, and a new tab starts signed out.
+const store = window.sessionStorage;
+
+// One-time migration: carry an existing localStorage session into this tab so the
+// switch to sessionStorage doesn't sign current users out. After moving it we clear
+// the shared localStorage copy so tabs stop sharing a single session going forward.
+if (!store.getItem(TOKEN_KEY)) {
+  const legacyToken = localStorage.getItem(TOKEN_KEY);
+  if (legacyToken) {
+    store.setItem(TOKEN_KEY, legacyToken);
+    const legacyRefresh = localStorage.getItem(REFRESH_KEY);
+    if (legacyRefresh) store.setItem(REFRESH_KEY, legacyRefresh);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
+  }
+}
+
+export const tokenStore = {
+  get: () => store.getItem(TOKEN_KEY),
+  set: (t: string) => store.setItem(TOKEN_KEY, t),
+  getRefresh: () => store.getItem(REFRESH_KEY),
+  setRefresh: (t: string) => store.setItem(REFRESH_KEY, t),
+  clear: () => {
+    store.removeItem(TOKEN_KEY);
+    store.removeItem(REFRESH_KEY);
   },
 };
 

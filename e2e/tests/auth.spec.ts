@@ -4,7 +4,7 @@ import { login, ACCOUNTS } from './helpers';
 test.describe('Authentication & RBAC', () => {
   test('rejects invalid credentials', async ({ page }) => {
     await page.goto('/');
-    await page.evaluate(() => localStorage.removeItem('prima_token'));
+    await page.evaluate(() => { sessionStorage.removeItem('prima_token'); localStorage.removeItem('prima_token'); });
     await page.reload();
 
     await page.getByLabel('Email').fill(ACCOUNTS['Project Manager'].email);

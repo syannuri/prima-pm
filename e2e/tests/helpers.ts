@@ -22,7 +22,8 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   const acct = ACCOUNTS[role];
   await page.goto('/');
   // If a stale token persists, the app skips the login screen — clear first.
-  await page.evaluate(() => localStorage.removeItem('prima_token'));
+  // Tokens live in sessionStorage now; clear localStorage too for the migration path.
+  await page.evaluate(() => { sessionStorage.removeItem('prima_token'); localStorage.removeItem('prima_token'); });
   await page.reload();
 
   // Login form is ready (the brand wordmark is no longer a heading, so wait on the field).
