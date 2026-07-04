@@ -118,6 +118,7 @@ export interface Project {
   closedAt?: string | null;
   closureNote?: string | null;
   onHoldReason?: string | null;
+  baselineLockedAt?: string | null;
   pm?: { id: string; name: string; email: string } | null;
   charter?: { id: string; locked: boolean; version: number; category: ProjectCategory } | null;
   costBaseline?: { budgetAtCompletion: string } | null;

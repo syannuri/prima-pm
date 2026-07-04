@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
 import { Button, Card, Input, MoneyInput, SectionTitle, Select, Spinner } from '../../components/ui';
+import BaselineLock from '../../components/BaselineLock';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
@@ -45,6 +46,10 @@ export default function CostPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-5">
+      {/* Baseline lock control — freezes cost lines / WBS / schedule baseline (PMB/BAC). */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <BaselineLock projectId={projectId} />
+      </div>
       {/* Baseline summary */}
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Direct" value={formatIdr(b?.directTotal)} />

@@ -5,6 +5,7 @@ import { BadRequest, NotFound } from '../../lib/errors.js';
 import { materialAmount, manpowerCost } from '../../calc/cost.js';
 import type { RiskForReserve } from '../../calc/risk.js';
 import { computeBaseline } from './cost.rollup.js';
+import { assertBaselineUnlocked } from '../projects/baseline.service.js';
 import type { ActualCostInput, DirectLineInput, IndirectLineInput } from './cost.schemas.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
@@ -114,6 +115,7 @@ async function resolveManpower(input: DirectLineInput) {
 
 export async function addDirectLine(projectId: string, input: DirectLineInput, actorId: string) {
   await ensureChartered(projectId);
+  await assertBaselineUnlocked(projectId);
 
   const data: Prisma.CostItemDirectUncheckedCreateInput = {
     projectId,
@@ -155,6 +157,7 @@ export async function updateDirectLine(
 ) {
   const existing = await prisma.costItemDirect.findFirst({ where: { id: itemId, projectId } });
   if (!existing) throw NotFound('Direct cost line not found');
+  await assertBaselineUnlocked(projectId);
 
   const data: Prisma.CostItemDirectUncheckedUpdateInput = { type: input.type, label: input.label ?? '' };
   if (input.type === 'MANPOWER') {
@@ -202,6 +205,7 @@ export async function updateDirectLine(
 export async function deleteDirectLine(projectId: string, itemId: string, actorId: string) {
   const existing = await prisma.costItemDirect.findFirst({ where: { id: itemId, projectId } });
   if (!existing) throw NotFound('Direct cost line not found');
+  await assertBaselineUnlocked(projectId);
   await prisma.$transaction(async (tx) => {
     await tx.costItemDirect.delete({ where: { id: itemId } });
     await recomputeBaseline(projectId, tx);
@@ -213,6 +217,7 @@ export async function deleteDirectLine(projectId: string, itemId: string, actorI
 
 export async function addIndirectLine(projectId: string, input: IndirectLineInput, actorId: string) {
   await ensureChartered(projectId);
+  await assertBaselineUnlocked(projectId);
   const line = await prisma.$transaction(async (tx) => {
     const created = await tx.costItemIndirect.create({
       data: { projectId, type: input.type, description: input.description, amount: input.amount },
@@ -232,6 +237,7 @@ export async function updateIndirectLine(
 ) {
   const existing = await prisma.costItemIndirect.findFirst({ where: { id: itemId, projectId } });
   if (!existing) throw NotFound('Indirect cost line not found');
+  await assertBaselineUnlocked(projectId);
   const line = await prisma.$transaction(async (tx) => {
     const updated = await tx.costItemIndirect.update({
       where: { id: itemId },
@@ -247,6 +253,7 @@ export async function updateIndirectLine(
 export async function deleteIndirectLine(projectId: string, itemId: string, actorId: string) {
   const existing = await prisma.costItemIndirect.findFirst({ where: { id: itemId, projectId } });
   if (!existing) throw NotFound('Indirect cost line not found');
+  await assertBaselineUnlocked(projectId);
   await prisma.$transaction(async (tx) => {
     await tx.costItemIndirect.delete({ where: { id: itemId } });
     await recomputeBaseline(projectId, tx);
@@ -258,6 +265,7 @@ export async function deleteIndirectLine(projectId: string, itemId: string, acto
 
 export async function setManagementReserve(projectId: string, amount: number, actorId: string) {
   await ensureChartered(projectId);
+  await assertBaselineUnlocked(projectId);
   const baseline = await prisma.$transaction(async (tx) => {
     await tx.costBaseline.upsert({
       where: { projectId },

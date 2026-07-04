@@ -4,6 +4,7 @@ import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
 import { computeEvm, type EvmTask } from '../../calc/evm.js';
 import { actualCostAsOf } from '../cost/cost.service.js';
+import { assertBaselineUnlocked } from '../projects/baseline.service.js';
 import {
   durationDays,
   generateTaskCode,
@@ -99,6 +100,7 @@ export async function getGantt(projectId: string) {
 
 export async function createTask(projectId: string, input: UpsertTaskInput, actorId: string) {
   await ensureChartered(projectId);
+  await assertBaselineUnlocked(projectId);
 
   if (input.parentTaskId) {
     const parent = await prisma.task.findFirst({
@@ -145,6 +147,7 @@ export async function updateTask(
 ) {
   const existing = await prisma.task.findFirst({ where: { id: taskId, projectId } });
   if (!existing) throw NotFound('Task not found');
+  await assertBaselineUnlocked(projectId);
 
   if (input.parentTaskId) {
     if (input.parentTaskId === taskId) throw BadRequest('A task cannot be its own parent');
@@ -212,6 +215,7 @@ export async function setTaskProgress(projectId: string, taskId: string, progres
 // current planEnd − baselineFinish.
 export async function setScheduleBaseline(projectId: string, actorId: string) {
   await ensureChartered(projectId);
+  await assertBaselineUnlocked(projectId);
   const now = new Date();
   await prisma.$transaction([
     prisma.$executeRaw`UPDATE "Task" SET "baselineStart" = "planStart", "baselineFinish" = "planEnd" WHERE "projectId" = ${projectId}`,
@@ -226,6 +230,7 @@ export async function deleteTask(projectId: string, taskId: string, actorId: str
   const all = await prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true } });
   const existing = all.find((t) => t.id === taskId);
   if (!existing) throw NotFound('Task not found');
+  await assertBaselineUnlocked(projectId);
 
   // Collect the subtree (the task + all descendants).
   const childrenOf = new Map<string, string[]>();
@@ -264,6 +269,7 @@ export async function addDependency(
   actorId: string,
 ) {
   if (successorId === input.predecessorId) throw BadRequest('A task cannot depend on itself');
+  await assertBaselineUnlocked(projectId);
 
   const tasks = await prisma.task.findMany({ where: { projectId }, select: { id: true } });
   const ids = new Set(tasks.map((t) => t.id));
@@ -299,6 +305,7 @@ export async function deleteDependency(projectId: string, depId: string, actorId
     where: { id: depId, predecessor: { projectId } },
   });
   if (!dep) throw NotFound('Dependency not found');
+  await assertBaselineUnlocked(projectId);
   await prisma.taskDependency.delete({ where: { id: depId } });
   await writeAudit({ projectId, userId: actorId, entity: 'TaskDependency', entityId: depId, action: 'DELETE', before: dep });
 }

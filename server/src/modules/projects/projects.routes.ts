@@ -3,7 +3,9 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
 import { createProjectSchema, updateProjectSchema, reassignPmSchema } from './projects.schemas.js';
+import { z } from 'zod';
 import * as svc from './projects.service.js';
+import { setBaselineLock } from './baseline.service.js';
 import { getClosureReadiness } from './closure.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
@@ -70,6 +72,20 @@ router.patch(
   validateBody(updateProjectSchema),
   asyncHandler(async (req, res) => {
     const project = await svc.updateProject(req.params.id, req.body, req.user!.id);
+    res.json({ project });
+  }),
+);
+
+// Lock / unlock the cost & schedule baseline (PMB/BAC freeze) — ADMIN/PMO only.
+// Unlocking requires a reason (audited). requireRole only, so it works while the
+// baseline is locked (unlike the project-access write guard).
+const baselineLockSchema = z.object({ locked: z.boolean(), reason: z.string().trim().max(500).optional() });
+router.patch(
+  '/:id/baseline-lock',
+  requireRole('ADMIN', 'PMO'),
+  validateBody(baselineLockSchema),
+  asyncHandler(async (req, res) => {
+    const project = await setBaselineLock(req.params.id, req.body.locked, req.body.reason, req.user!.id);
     res.json({ project });
   }),
 );

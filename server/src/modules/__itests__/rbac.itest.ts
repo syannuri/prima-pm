@@ -180,3 +180,37 @@ describe('CLOSED projects are read-only, reopen is governed', () => {
     expect((await addCost()).status).not.toBe(403);
   });
 });
+
+describe('baseline lock freezes cost/schedule (PMB/BAC)', () => {
+  let pid = '';
+  const addCost = () =>
+    request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN)).send({ type: 'HARDWARE_LICENSE', label: 'Server', qty: 1, unitCost: 1000 });
+  const setLock = (body: Record<string, unknown>) =>
+    request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.ADMIN)).send(body);
+
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Lockable', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+  });
+
+  it('cost writes succeed while the baseline is unlocked (201)', async () => {
+    expect((await addCost()).status).toBe(201);
+  });
+
+  it('locking the baseline blocks cost writes (400)', async () => {
+    expect((await setLock({ locked: true })).status).toBe(200);
+    const res = await addCost();
+    expect(res.status).toBe(400);
+    expect(String(res.body?.error?.message ?? '')).toMatch(/baseline is locked/i);
+  });
+
+  it('unlocking requires a reason (400 without one)', async () => {
+    expect((await setLock({ locked: false })).status).toBe(400);
+  });
+
+  it('unlock with a reason re-enables cost writes', async () => {
+    expect((await setLock({ locked: false, reason: 'CR-014 approved: added scope.' })).status).toBe(200);
+    expect((await addCost()).status).toBe(201);
+  });
+});
