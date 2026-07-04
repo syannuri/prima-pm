@@ -2,6 +2,37 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang, type Lang } from '../context/LanguageContext';
 
+// Deterministic starfield tiles, built once — a tiny SVG data-URI that tiles across the
+// backdrop and is drifted with transform (compositor-only) for dramatic-but-cheap
+// starlight. No canvas, no JS animation loop.
+const mkStars = (size: number, dots: [number, number, number, number][]) =>
+  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'%3E` +
+  dots.map(([x, y, r, o]) => `%3Ccircle cx='${x}' cy='${y}' r='${r}' fill='white' opacity='${o}'/%3E`).join('') +
+  `%3C/svg%3E")`;
+// A dense, naturally-scattered star tile (built once at load). Non-deterministic scatter is
+// fine — this is a client-only page (no SSR/hydration), and a slightly different sky each
+// visit is a feature.
+const field = (size: number, count: number, rMax: number, oBase: number) =>
+  mkStars(
+    size,
+    Array.from({ length: count }, () => [
+      Math.round(Math.random() * size),
+      Math.round(Math.random() * size),
+      +(Math.random() * rMax + 0.35).toFixed(2),
+      +(Math.random() * 0.4 + oBase).toFixed(2),
+    ] as [number, number, number, number]),
+  );
+const STARS_FAR = field(360, 46, 0.5, 0.35); // fine distant dust
+const STARS_NEAR = field(300, 34, 0.9, 0.55); // brighter, nearer stars
+// Bright, individually-twinkling glow-stars spread across the hero — [top%, left%, sizePx, delayS].
+// These carry the drama; ~20 opacity-animated dots stay compositor-cheap.
+const BRIGHT: [number, number, number, number][] = [
+  [15,13,4,0],[23,83,3,1.2],[39,33,5,2.1],[11,61,3,.6],[30,48,4,1.7],[52,74,4,2.6],
+  [19,46,3,.3],[9,28,3,3.1],[34,90,3,1],[46,20,4,2.4],[17,72,5,.9],[44,57,3,1.9],
+  [62,40,3,1.4],[70,16,3,.5],[58,86,4,2.8],[27,7,3,1.1],[6,52,3,3.4],[49,66,4,.2],
+  [66,61,3,2.2],[13,92,3,1.6],[36,4,3,.8],[54,29,5,3.3],[26,54,4,1.5],[42,78,3,.4],
+];
+
 /**
  * Public landing page — the front door shown to guests at `/` before the login screen.
  * Aurora-dark, bilingual (EN/ID via the shared LanguageContext), and deliberately light:
@@ -263,7 +294,7 @@ export default function HomePage() {
     document.getElementById('features')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 
   return (
-    <div ref={setScroller} className="relative h-screen overflow-y-auto overflow-x-clip bg-[#0b1020] text-slate-200 antialiased">
+    <div ref={setScroller} className="relative isolate h-screen overflow-y-auto overflow-x-clip bg-[#0b1020] text-slate-200 antialiased">
       <style>{`
         @keyframes pmx-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(26px,-30px)} }
         @keyframes pmx-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,24px)} }
@@ -273,22 +304,56 @@ export default function HomePage() {
         .reveal { opacity:0; transform:translateY(18px); transition:opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
         .reveal.in { opacity:1; transform:none; }
         .pmx-orb { will-change: transform; }
+
+        /* --- starlight (all transform/opacity → compositor; cheap) --- */
+        .pmx-stars { position:absolute; inset:-15%; background-repeat:repeat; will-change:transform; }
+        .pmx-stars-far  { background-size:360px 360px; opacity:.6;  animation:pmx-stardrift 220s linear infinite; }
+        .pmx-stars-near { background-size:300px 300px; opacity:.95; filter:drop-shadow(0 0 1.5px rgba(255,255,255,.6)); animation:pmx-stardrift 150s linear infinite reverse; }
+        @keyframes pmx-stardrift { from{transform:translate3d(0,0,0)} to{transform:translate3d(-52px,-38px,0)} }
+        .pmx-star { position:absolute; width:2px; height:2px; border-radius:9999px; background:#fff;
+          box-shadow:0 0 9px 2px rgba(255,255,255,1), 0 0 22px 6px rgba(165,190,255,.55); will-change:opacity,transform;
+          animation:pmx-twinkle 3.6s ease-in-out infinite; }
+        @keyframes pmx-twinkle { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.78)} }
+        .pmx-nebula { position:absolute; inset:-20%; filter:blur(22px); opacity:.7; will-change:transform;
+          background:linear-gradient(115deg, transparent 36%, rgba(139,92,246,.10) 48%, rgba(96,165,250,.09) 55%, transparent 68%);
+          animation:pmx-neb 42s ease-in-out infinite; }
+        @keyframes pmx-neb { 0%,100%{transform:translateX(0) rotate(0)} 50%{transform:translateX(34px) rotate(2deg)} }
+        .pmx-shoot { position:absolute; top:14%; left:-10%; width:150px; height:2px; border-radius:2px; opacity:0;
+          background:linear-gradient(90deg, transparent, #fff); transform:rotate(16deg); will-change:transform,opacity;
+          filter:drop-shadow(0 0 6px rgba(255,255,255,.8)); animation:pmx-shoot 9s ease-in infinite; }
+        .pmx-shoot2 { top:30%; left:22%; width:112px; animation-duration:14s; animation-delay:5.5s; }
+        @keyframes pmx-shoot { 0%{opacity:0;transform:translate3d(0,0,0) rotate(16deg)} 3%{opacity:1} 9%{opacity:1}
+          14%{opacity:0} 100%{opacity:0;transform:translate3d(62vw,27vh,0) rotate(16deg)} }
+
         html { scroll-behavior: smooth; }
         @media (prefers-reduced-motion: reduce){
-          .pmx-orb, .pmx-float { animation:none !important; }
+          .pmx-orb, .pmx-float, .pmx-stars, .pmx-star, .pmx-nebula { animation:none !important; }
+          .pmx-shoot { display:none !important; }
           .reveal { opacity:1 !important; transform:none !important; transition:none !important; }
           html { scroll-behavior:auto; }
         }
       `}</style>
 
-      {/* ---------- aurora backdrop (fixed, pure CSS) ---------- */}
+      {/* ---------- aurora + starlight backdrop (fixed, pure CSS) ---------- */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        {/* starfield — two parallax layers drifting behind the aurora */}
+        <div className="pmx-stars pmx-stars-far" style={{ backgroundImage: STARS_FAR }} />
+        <div className="pmx-stars pmx-stars-near" style={{ backgroundImage: STARS_NEAR }} />
+        {/* faint diagonal nebula band for drama */}
+        <div className="pmx-nebula" />
         <div className="pmx-orb absolute -left-40 -top-40 h-[38rem] w-[38rem] rounded-full bg-brand-600/25 blur-[110px]" style={{ animation: 'pmx-drift1 17s ease-in-out infinite' }} />
         <div className="pmx-orb absolute -right-32 top-1/4 h-[34rem] w-[34rem] rounded-full bg-violet-700/30 blur-[120px]" style={{ animation: 'pmx-drift3 23s ease-in-out infinite' }} />
         <div className="pmx-orb absolute bottom-0 left-1/4 h-[36rem] w-[36rem] rounded-full bg-indigo-700/30 blur-[120px]" style={{ animation: 'pmx-drift2 20s ease-in-out infinite' }} />
         <div className="pmx-orb absolute left-1/2 top-1/2 h-80 w-80 rounded-full bg-sky-600/15 blur-[120px]" style={{ animation: 'pmx-drift4 26s ease-in-out infinite' }} />
         {/* top sheen + bottom vignette for depth */}
         <div className="absolute inset-0 bg-[radial-gradient(75%_55%_at_50%_-8%,rgba(139,92,246,0.16),transparent_60%),radial-gradient(120%_90%_at_50%_120%,rgba(0,0,0,0.75),transparent_55%)]" />
+        {/* dramatic glow-stars, crisp on top of the vignette, spread across the hero */}
+        {BRIGHT.map(([t, l, s, d], i) => (
+          <div key={i} className="pmx-star" style={{ top: `${t}%`, left: `${l}%`, width: `${s}px`, height: `${s}px`, animationDelay: `${d}s` }} />
+        ))}
+        {/* shooting stars — rare, dramatic streaks */}
+        <div className="pmx-shoot" />
+        <div className="pmx-shoot pmx-shoot2" />
       </div>
 
       {/* ---------- top nav ---------- */}
