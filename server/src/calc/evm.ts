@@ -118,7 +118,11 @@ export function deriveEvm(bac: number, ev: number, pv: number, ac: number, weigh
   else eac = bac;
   const etc = round2(eac - ac);
   const vac = round2(bac - eac);
-  const tcpi = bac - ac !== 0 ? round4((bac - ev) / (bac - ac)) : 0;
+  // TCPI(BAC) = (BAC - EV) / (BAC - AC): the cost efficiency needed on remaining work to
+  // still land on BAC. Once AC >= BAC the budget is unrecoverable (remaining budget <= 0)
+  // and TCPI(BAC) turns negative/meaningless — PMBOK switches to TCPI(EAC) there. We emit 0
+  // in that case so the UI shows it as "not applicable" rather than a misleading number.
+  const tcpi = bac - ac > 0 ? round4((bac - ev) / (bac - ac)) : 0;
   const percentComplete = bac > 0 ? round4(ev / bac) : 0;
 
   return {

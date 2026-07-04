@@ -135,78 +135,9 @@ export function reconcileManpower(rows: ManpowerSyncInput[]): ManpowerSyncRow[] 
   });
 }
 
-// --- Progress roll-up ---
-
-export interface LeafProgress {
-  budgetCost: number;
-  progressPct: number; // 0..100
-}
-
-/** Budget-weighted overall progress (0..100). Falls back to simple average. */
-export function weightedProgress(leaves: LeafProgress[]): number {
-  if (leaves.length === 0) return 0;
-  const totalBudget = leaves.reduce((s, l) => s + (l.budgetCost || 0), 0);
-  if (totalBudget <= 0) {
-    const avg = leaves.reduce((s, l) => s + clampPct(l.progressPct), 0) / leaves.length;
-    return Math.round(avg * 100) / 100;
-  }
-  const earned = leaves.reduce((s, l) => s + (l.budgetCost || 0) * (clampPct(l.progressPct) / 100), 0);
-  return Math.round((earned / totalBudget) * 100 * 100) / 100;
-}
-
-function clampPct(p: number): number {
-  if (!Number.isFinite(p)) return 0;
-  return p < 0 ? 0 : p > 100 ? 100 : p;
-}
-
-// --- WBS duration-weighted progress (matches the Schedule view's roll-up) ---
-
-export interface WbsProgressNode {
-  id: string;
-  parentTaskId: string | null;
-  planStart: Date;
-  planEnd: Date;
-  progressPct: number; // leaf value, 0..100
-}
-
-interface WbsRoll { start: number; end: number; dur: number; pct: number }
-
-/**
- * Project % complete via the WBS 100%-rule roll-up, identical to the Schedule
- * tab: a summary task's % is the duration-weighted average of its children
- * (leaves use their own duration & stored %), recursively up to a virtual root.
- * Returns { progress: 0..100, weight } where weight is the project span in days
- * (for rolling several projects up into one portfolio figure).
- */
-export function wbsProgress(tasks: WbsProgressNode[]): { progress: number; weight: number } {
-  if (tasks.length === 0) return { progress: 0, weight: 0 };
-
-  const childrenOf = new Map<string, WbsProgressNode[]>();
-  for (const t of tasks) {
-    if (!t.parentTaskId) continue;
-    const list = childrenOf.get(t.parentTaskId) ?? [];
-    list.push(t);
-    childrenOf.set(t.parentTaskId, list);
-  }
-
-  const roll = (n: WbsProgressNode): WbsRoll => {
-    const kids = childrenOf.get(n.id);
-    if (!kids?.length) {
-      return { start: +n.planStart, end: +n.planEnd, dur: durationDays(n.planStart, n.planEnd), pct: clampPct(n.progressPct) };
-    }
-    const rs = kids.map(roll);
-    const start = Math.min(...rs.map((r) => r.start));
-    const end = Math.max(...rs.map((r) => r.end));
-    const totalDur = rs.reduce((s, r) => s + r.dur, 0) || 1;
-    const pct = Math.round(rs.reduce((s, r) => s + r.pct * r.dur, 0) / totalDur);
-    return { start, end, dur: Math.round((end - start) / MS_PER_DAY) + 1, pct };
-  };
-
-  // Roots = tasks whose parent is absent from the set (mirrors buildGanttTree).
-  const ids = new Set(tasks.map((t) => t.id));
-  const roots = tasks.filter((t) => !t.parentTaskId || !ids.has(t.parentTaskId));
-  const rs = roots.map(roll);
-  const weight = rs.reduce((s, r) => s + r.dur, 0) || 1;
-  const progress = Math.round(rs.reduce((s, r) => s + r.pct * r.dur, 0) / weight);
-  return { progress, weight };
-}
+// NOTE: the authoritative project progress is the flat leaf-weighted `weightedProgress`
+// computed inside the EVM engine (server/src/calc/evm.ts) and consumed by
+// schedule.service (`evm.weightedProgress`). A previous hierarchical, duration-weighted
+// roll-up (`weightedProgress`/`wbsProgress`) lived here but was only ever referenced by
+// its own tests — it was removed to avoid two divergent, dead "progress" helpers. The
+// Gantt view computes its own per-node display roll-up in the client.
