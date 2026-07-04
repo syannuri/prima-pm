@@ -36,7 +36,7 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
       resourceRef: { select: { name: true, capacityPerDay: true } },
       projectId: true,
       project: { select: { code: true, name: true } },
-      task: { select: { planStart: true, planEnd: true } },
+      task: { select: { planStart: true, planEnd: true, progressPct: true } },
     },
   });
 
@@ -57,6 +57,7 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
     planMandays: dec(i.planMandays),
     taskStart: i.task?.planStart ?? null,
     taskEnd: i.task?.planEnd ?? null,
+    progressPct: i.task?.progressPct ?? 0,
   }));
 
   return buildCapacityReport(inputs, granularity, q.from, q.to);

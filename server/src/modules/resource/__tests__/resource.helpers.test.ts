@@ -67,6 +67,27 @@ describe('resource — period keys', () => {
   });
 });
 
+describe('resource — earned man-days', () => {
+  it('earned = plan × task progress, summed per resource', () => {
+    const r = buildCapacityReport(
+      [
+        item({ planMandays: 20, progressPct: 20 }), // earned 4
+        item({ planMandays: 10, progressPct: 50 }), // same resource (U:1) → earned 5
+      ],
+      'month',
+    );
+    const res = r.resources[0];
+    expect(res.totalPlanMandays).toBe(30);
+    expect(res.earnedMandays).toBe(9);
+    expect(r.summary.totalEarnedMandays).toBe(9);
+  });
+
+  it('defaults to 0 when progress is absent and clamps out-of-range', () => {
+    expect(buildCapacityReport([item({ planMandays: 10 })], 'month').resources[0].earnedMandays).toBe(0);
+    expect(buildCapacityReport([item({ planMandays: 10, progressPct: 150 })], 'month').resources[0].earnedMandays).toBe(10);
+  });
+});
+
 describe('resource — capacity report', () => {
   it('spreads man-days evenly and never over-allocates a perfectly-sized task', () => {
     // 10 mandays across exactly 10 business days = 1.0/day → full but not over.
@@ -146,6 +167,6 @@ describe('resource — capacity report', () => {
     const r = buildCapacityReport([], 'month');
     expect(r.periods).toEqual([]);
     expect(r.resources).toEqual([]);
-    expect(r.summary).toEqual({ resourceCount: 0, overAllocatedCount: 0, totalPlanMandays: 0 });
+    expect(r.summary).toEqual({ resourceCount: 0, overAllocatedCount: 0, totalPlanMandays: 0, totalEarnedMandays: 0 });
   });
 });

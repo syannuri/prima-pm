@@ -18,6 +18,7 @@ interface ResourceRow {
   name: string;
   personnelRole: string | null;
   totalPlanMandays: number;
+  earnedMandays: number;
   scheduledMandays: number;
   unscheduledMandays: number;
   projects: { code: string; name: string; mandays: number }[];
@@ -29,7 +30,12 @@ interface CapacityReport {
   granularity: Granularity;
   periods: string[];
   resources: ResourceRow[];
-  summary: { resourceCount: number; overAllocatedCount: number; totalPlanMandays: number };
+  summary: { resourceCount: number; overAllocatedCount: number; totalPlanMandays: number; totalEarnedMandays: number };
+}
+
+// earned ÷ planned as a whole-number %, guarding divide-by-zero.
+function earnedPct(earned: number, planned: number): number {
+  return planned > 0 ? Math.round((earned / planned) * 100) : 0;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -81,10 +87,11 @@ export default function ResourceCapacity() {
     <div className="space-y-4">
       <SectionTitle sub="Cross-project resource allocation & over-allocation over time (from manpower linked to tasks)">Resource Utilization</SectionTitle>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid flex-1 grid-cols-3 gap-3">
+        <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi label="Resources" value={String(summary.resourceCount)} />
           <Kpi label="Over-allocated" value={String(summary.overAllocatedCount)} warn={summary.overAllocatedCount > 0} />
           <Kpi label="Planned man-days" value={formatNum(summary.totalPlanMandays, 0)} />
+          <Kpi label="Earned man-days" value={`${formatNum(summary.totalEarnedMandays, 0)} · ${earnedPct(summary.totalEarnedMandays, summary.totalPlanMandays)}%`} />
         </div>
         <div className="flex rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5 text-sm">
           {(['month', 'week'] as Granularity[]).map((g) => (
@@ -127,6 +134,10 @@ export default function ResourceCapacity() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-slate-700 dark:text-slate-200">{r.name}</span>
                         {r.overAllocated && <Badge color="red">over</Badge>}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        Earned <span className="font-semibold text-slate-700 dark:text-slate-200">{formatNum(r.earnedMandays, 1)}</span> / {formatNum(r.totalPlanMandays, 0)} md
+                        <span className="text-brand-600 dark:text-brand-400"> ({earnedPct(r.earnedMandays, r.totalPlanMandays)}%)</span>
                       </div>
                       <div className="mt-0.5 flex flex-wrap gap-1">
                         {r.projects.map((p) => (
