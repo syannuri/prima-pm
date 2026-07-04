@@ -46,21 +46,27 @@ test.describe('Authentication & RBAC', () => {
     await login(page, 'Project Manager');
     // Change-password now lives on the Settings page (moved out of the header).
     await page.goto('/settings');
-    await expect(page.getByLabel('Current password')).toBeVisible();
+    // Target the three fields by their autocomplete tokens: the live password checklist
+    // renders inside the <label>, so getByLabel('New password') is no longer an exact
+    // accessible-name match once a value is typed.
+    const currentPw = page.locator('input[autocomplete="current-password"]');
+    const newPw = page.locator('input[autocomplete="new-password"]').first();
+    const confirmPw = page.locator('input[autocomplete="new-password"]').nth(1);
+    await expect(currentPw).toBeVisible();
 
     // Client-side: a mismatched confirmation is flagged inline and the submit button
     // stays disabled — no request is ever made.
-    await page.getByLabel('Current password').fill('Whatever-Current-1');
-    await page.getByLabel('New password', { exact: true }).fill('Brand-New-Pass-1');
-    await page.getByLabel('Confirm new password').fill('different-2');
+    await currentPw.fill('Whatever-Current-1');
+    await newPw.fill('Brand-New-Pass-1');
+    await confirmPw.fill('different-2');
     await expect(page.getByText(/does not match the new password/i)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Update password' })).toBeDisabled();
     await page.screenshot({ path: 'test-results/change-password-form.png' });
 
     // Server-side: a wrong current password is rejected → NO mutation, so the account
     // keeps working (verified by every other test logging in).
-    await page.getByLabel('New password', { exact: true }).fill('Some-Strong-Pass-9');
-    await page.getByLabel('Confirm new password').fill('Some-Strong-Pass-9');
+    await confirmPw.fill('Some-Strong-Pass-9');
+    await newPw.fill('Some-Strong-Pass-9');
     await page.getByRole('button', { name: 'Update password' }).click();
     await expect(page.getByText(/incorrect|invalid|differ|common|breach/i)).toBeVisible();
   });
