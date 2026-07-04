@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { BadRequest, NotFound } from '../../lib/errors.js';
+import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
 import type { MandayEntryInput } from './timesheet.schemas.js';
 
@@ -101,4 +101,89 @@ export async function deleteMandayEntry(projectId: string, entryId: string, acto
   if (!entry) throw NotFound('Timesheet entry not found');
   await prisma.mandayEntry.delete({ where: { id: entryId } });
   await writeAudit({ projectId, userId: actorId, entity: 'MandayEntry', entityId: entryId, action: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// "My Timesheet" — self-service, scoped to manpower lines assigned to the caller
+// (line.resourceUserId == me, or the line's resource-master resolves to me). No
+// project access is needed and NO financials are exposed. Members can only delete
+// entries they recorded themselves.
+// ---------------------------------------------------------------------------
+
+// A manpower line "belongs to" a user when it's directly linked (resourceUserId)
+// or via the resource master (resource.userId). Excludes soft-deleted projects.
+const mineWhere = (userId: string): Prisma.CostItemDirectWhereInput => ({
+  type: 'MANPOWER',
+  project: { deletedAt: null },
+  OR: [{ resourceUserId: userId }, { resourceRef: { userId } }],
+});
+
+export async function getMyTimesheet(userId: string) {
+  const lines = await prisma.costItemDirect.findMany({
+    where: mineWhere(userId),
+    select: {
+      id: true,
+      label: true,
+      planMandays: true,
+      project: { select: { code: true, name: true } },
+      task: { select: { name: true, progressPct: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  const lineIds = lines.map((l) => l.id);
+
+  const consumedGroups = lineIds.length
+    ? await prisma.mandayEntry.groupBy({ by: ['costItemId'], where: { costItemId: { in: lineIds } }, _sum: { mandays: true } })
+    : [];
+  const consumedByLine = new Map(consumedGroups.map((g) => [g.costItemId, dec(g._sum.mandays)]));
+
+  const lineViews = lines.map((l) => {
+    const plan = dec(l.planMandays);
+    const progressPct = l.task?.progressPct ?? 0;
+    return {
+      id: l.id,
+      projectCode: l.project.code,
+      projectName: l.project.name,
+      taskName: l.task?.name ?? null,
+      planMandays: plan,
+      progressPct,
+      earnedMandays: round2((plan * clampPct(progressPct)) / 100),
+      consumedMandays: round2(consumedByLine.get(l.id) ?? 0),
+    };
+  });
+
+  // Only the caller's own entries are listed (and thus deletable).
+  const myEntries = lineIds.length
+    ? await prisma.mandayEntry.findMany({ where: { recordedBy: userId, costItemId: { in: lineIds } }, orderBy: { date: 'desc' }, take: 100 })
+    : [];
+  const labelById = new Map(lines.map((l) => [l.id, `${l.project.code} · ${l.task?.name ?? l.label}`]));
+  const entryViews = myEntries.map((e) => ({
+    id: e.id,
+    costItemId: e.costItemId,
+    lineLabel: labelById.get(e.costItemId) ?? '—',
+    date: e.date,
+    mandays: dec(e.mandays),
+    note: e.note,
+  }));
+
+  return { lines: lineViews, entries: entryViews };
+}
+
+export async function addMyMandayEntry(userId: string, input: MandayEntryInput) {
+  const line = await prisma.costItemDirect.findFirst({ where: { id: input.costItemId, ...mineWhere(userId) }, select: { id: true, projectId: true } });
+  if (!line) throw Forbidden('That manpower line is not assigned to you');
+
+  const entry = await prisma.mandayEntry.create({
+    data: { projectId: line.projectId, costItemId: line.id, date: input.date, mandays: input.mandays, note: input.note ?? null, recordedBy: userId },
+  });
+  await writeAudit({ projectId: line.projectId, userId, entity: 'MandayEntry', entityId: entry.id, action: 'CREATE', after: { costItemId: line.id, mandays: input.mandays, self: true } });
+  return entry;
+}
+
+export async function deleteMyMandayEntry(userId: string, entryId: string) {
+  // Members can only delete entries they themselves recorded.
+  const entry = await prisma.mandayEntry.findFirst({ where: { id: entryId, recordedBy: userId }, select: { id: true, projectId: true } });
+  if (!entry) throw NotFound('Timesheet entry not found');
+  await prisma.mandayEntry.delete({ where: { id: entryId } });
+  await writeAudit({ projectId: entry.projectId, userId, entity: 'MandayEntry', entityId: entryId, action: 'DELETE' });
 }
