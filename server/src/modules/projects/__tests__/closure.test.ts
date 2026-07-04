@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assessClosureReadiness, type ClosureInputs } from '../closure.js';
+import { assessClosureReadiness, type ClosureInputs } from '../closure.helpers.js';
 
 const base: ClosureInputs = {
   leafTaskCount: 5,
