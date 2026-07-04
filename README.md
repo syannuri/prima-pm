@@ -1,7 +1,7 @@
 # Prismatix — Project Management Web App
 
 > Multi-project, multi-user project-management platform covering the full delivery lifecycle:
-> **Charter → WBS/Schedule → Cost → Risk → Change Control → EVM**, aligned to PMBOK.
+> **Charter → WBS/Schedule → Cost → Risk → Change Control → EVM/Forecast → Closure**, aligned to PMBOK.
 
 Prismatix gives PMs, PMO and finance one clear, role-aware view of project **health, cost, schedule and risk** —
 turning scattered updates into Earned Value insight (CPI/SPI), resource utilization and an auditable trail.
@@ -23,15 +23,18 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **Agile & Hybrid delivery** — product **backlog**, **sprints**, and a **Kanban board with smooth drag-and-drop**; **velocity** & **burndown** reports; **Agile-EVM** (story-point based) and **Hybrid-EVM** blended into the same portfolio.
 - **WBS & Schedule** (predictive) — work-breakdown tree, interactive Gantt (drag to reschedule / link dependencies), schedule **baseline & variance** (tracking Gantt), per-task progress, PIC and WBS dictionary.
 - **Cost** — direct (material + manpower) & indirect costs with **inline edit** + live amount preview, management reserve, manual **Actual Cost**, and live **EVM** (EV/PV/AC, CV, **CPI**). `BAC = PMB` = cost baseline excluding management reserve.
+- **Forecast** — **EAC scenarios** (optimistic / likely / pessimistic), forecast finish date & schedule variance from SPI, **projected margin**, and an **S-curve** (planned PV vs actual AC vs forecast-to-EAC). Methodology-aware, so Agile/Hybrid projects forecast on the same EVM the dashboard shows.
+- **Timesheet** — a per-project **Timesheet** tab logs actual man-days against manpower lines and shows **Planned vs Earned vs Consumed** man-days and **labour efficiency** (earned ÷ consumed). Team members get a self-service **"My Timesheet"** page to log time only against the lines assigned to them.
 - **Risk** — qualitative (P×I, **5×5 heatmap**) and quantitative (**EMV**, with a live preview) analysis; EMV drives the contingency reserve.
-- **Change Requests & per-project Change Log** — raise → review → PMO/Admin approve/reject, with a full **lifecycle log** (requested / reviewed / decided) and charter versioning. A **chargeable** change carries an agreed amount that can be **added to project revenue on approval** (with confirmation).
+- **Change Requests & per-project Change Log** — raise → review → PMO/Admin approve/reject, with a full **lifecycle log** (requested / reviewed / decided) and charter versioning. A **chargeable** change carries an agreed amount that can be **added to project revenue on approval** (with confirmation); an approved change that impacts **cost or schedule automatically unlocks the frozen baseline** so the sanctioned edit can be applied.
+- **Project lifecycle & closure governance** — governed status transitions (**Charter → Active ⇄ On-hold → Closed**, ADMIN/PMO only; on-hold requires a reason). A **closure readiness gate** hard-blocks closing until the schedule is 100% (else an ADMIN/PMO **force-close** with a mandatory reason), with advisory warnings for open CRs/risks/issues/backlog. A **CLOSED project is read-only** (its frozen BAC and data can't be mutated) with a governed **reopen** (ADMIN/PMO + reason). A **baseline lock** freezes the PMB/BAC — cost lines, WBS tasks and the schedule baseline can't change while locked (progress, actuals and risks still can); unlock is a deliberate, audited ADMIN/PMO action (or an approved change request).
 - **Issue Log** — track problems that have occurred (category, impact, owner, resolution, status) per project; included in exports.
 - **Audit log** — immutable, role-scoped trail of who changed what and when.
 - **Notifications** — a personal **inbox** (assigned as PM, change-request submitted / decided) plus on-demand alerts (overdue tasks, high risks, budget overrun) in a portfolio bell.
 - **Attachments** — upload/download files against charter, risks or the project. Uploads are restricted to a **safe type whitelist** (PDF, XLSX, DOCX, PNG, JPG), stored under server-generated filenames with a 10 MB cap.
 - **Exports** — per-project **PDF** (PDFKit) and **Excel** (ExcelJS) reports incl. cost, risk, schedule, EVM and the Issue Log — pure JS, no headless browser.
-- **Resource master pool** — named/generic resources with rate cards; cross-project capacity & over-allocation.
-- **Admin** — user management (create / role / reset password / activate), project (PM) reassignment, rate cards. All accounts are **admin-provisioned** — there is no open self-registration.
+- **Resource master pool** — named/generic resources with rate cards (linkable to login accounts); cross-project **capacity & over-allocation**, and **earned vs consumed man-days + efficiency** fed from timesheets.
+- **Admin** — user management (create / role / reset password / activate — with **live green/red field validation**), project (PM) reassignment, rate cards. All accounts are **admin-provisioned** — there is no open self-registration.
 - **UX** — **dark mode by default** (light optional), **IDR thousand-separator inputs**, **live inline form validation** (green/red field state with strong-password checklists on auth/admin forms), native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
 
 ## 📸 Screenshots
@@ -43,6 +46,8 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 | ![Risk heatmap and EMV reserve](docs/screenshots/risk.png) | ![Command palette quick jump](docs/screenshots/command-palette.png) |
 | **Inline form validation — live green/red feedback** | **Strong-password checklist on change password** |
 | ![Create-user form with green-validated fields and a live password checklist](docs/screenshots/validation-user.png) | ![Change-password form with live requirement checklist and matching-confirmation check](docs/screenshots/validation-password.png) |
+| **Forecast — EAC scenarios, schedule/margin forecast & S-curve** | **Timesheet — plan vs earned vs consumed man-days & efficiency** |
+| ![Forecast at completion with best/likely/worst EAC, completion metrics and a cost S-curve](docs/screenshots/forecast.png) | ![Timesheet effort table with plan, earned, consumed man-days and labour efficiency](docs/screenshots/timesheet.png) |
 
 ## 🧱 Tech stack
 
@@ -51,7 +56,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 | Frontend | React 18 · Vite · TypeScript · Tailwind CSS v3 · TanStack Query · React Router |
 | Backend | Node.js · Express · TypeScript · Prisma v6 |
 | Database | PostgreSQL (16+) |
-| Auth | JWT (access/refresh) + **RBAC** |
+| Auth | JWT (access/refresh, **server-side revocation**) + **RBAC** · bcrypt · rate-limited login |
 | Reports | PDFKit (PDF) · ExcelJS (Excel) |
 | Tests | Vitest (unit) · Supertest (HTTP integration) · Playwright (E2E) |
 
@@ -70,6 +75,18 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **Actual Cost is entered manually**; **progress drives Earned Value**, not AC. With AC = 0, CPI shows "—".
 - Contingency reserve = Σ EMV of open risks flagged "include in reserve".
 - **Agile-EVM** derives % complete from **story points** (done ÷ total); **Hybrid** splits BAC between the WBS-linked (predictive) and backlog (agile) streams so nothing is double-counted.
+
+---
+
+## 🔒 Security
+
+- **Accounts are admin-provisioned** — no open self-registration. Passwords are **bcrypt** (cost 12) with a strong-password policy (≥10 chars, letter + number, common-breach denylist).
+- **JWT with real revocation** — short-lived access + refresh tokens carry a per-user token version; **logout, password change/reset and deactivation invalidate all outstanding tokens immediately**. `requireAuth` re-validates the account (active + version + role) on every request. Algorithm is pinned (HS256).
+- **Brute-force protection** — rate-limited `/auth/login` & `/auth/refresh`. Sessions are **per browser tab** (sessionStorage), so different tabs can hold different users.
+- **RBAC everywhere** — every route is role-guarded; project-scoped routes enforce ownership/soft-delete and re-scope every nested query by `projectId` (no IDOR). CLOSED projects are read-only across all modules.
+- **Input & content** — **zod** validation on all mutations, **100% Prisma** (no raw SQL), a **Helmet CSP** (hashed inline script, no `unsafe-inline` scripts), and a file-upload **type/extension whitelist** with server-generated names, a 10 MB cap and a non-web-served upload dir.
+- **Auditable** — an immutable audit trail records logins, auth changes and project mutations; production hides internal error details.
+- **Production transport hardening** — behind a TLS reverse proxy (nginx) the app binds to loopback (`HOST=127.0.0.1`), enables **HSTS + `upgrade-insecure-requests`** (`SECURE=true`) and trusts the proxy for the real client IP (`TRUST_PROXY=1`); http→https is redirected. See `server/.env.production.example`.
 
 ---
 
@@ -140,6 +157,16 @@ journalctl -u prima-pm -f
 ```
 Update flow: `./scripts/build-prod.sh && sudo systemctl restart prima-pm`.
 A **client-only** change goes live with just `npm --prefix client run build` (the server serves `client/dist` directly).
+
+### HTTPS / hardening (public or shared network)
+Put a TLS reverse proxy (nginx/caddy) in front and lock the app down via env (see `server/.env.production.example`):
+```bash
+HOST=127.0.0.1                 # bind loopback — only the proxy reaches the app port
+SECURE=true                    # HSTS + upgrade-insecure-requests (serve over HTTPS only)
+TRUST_PROXY=1                  # trust the proxy so req.ip (rate-limiter key) is the real client
+CORS_ORIGIN=https://your-host  # comma-separated allowlist; same-origin needs none
+```
+Proxy `:443 → 127.0.0.1:PORT` and redirect `:80 → :443`. The client uses a relative `/api/v1`, so no mixed content.
 
 ### Backups
 ```bash
