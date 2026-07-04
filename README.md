@@ -35,9 +35,14 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **Exports** — per-project **PDF** (PDFKit) and **Excel** (ExcelJS) reports incl. cost, risk, schedule, EVM and the Issue Log — pure JS, no headless browser.
 - **Resource master pool** — named/generic resources with rate cards (linkable to login accounts); cross-project **capacity & over-allocation**, and **earned vs consumed man-days + efficiency** fed from timesheets.
 - **Admin** — user management (create / role / reset password / activate — with **live green/red field validation**), project (PM) reassignment, rate cards. All accounts are **admin-provisioned** — there is no open self-registration.
+- **Public landing page** — a bilingual (EN/ID), **aurora-dark** homepage greets guests at `/` and introduces Prismatix before sign-in — offered as a contribution to the global project-management community. Every call-to-action leads to the login.
 - **UX** — **dark mode by default** (light optional), **IDR thousand-separator inputs**, **live inline form validation** (green/red field state with strong-password checklists on auth/admin forms), native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
 
 ## 📸 Screenshots
+
+**Public landing page** — the bilingual, aurora-dark front door shown to guests before sign-in.
+
+![Prismatix public landing page — aurora-dark hero introducing the app](docs/screenshots/homepage.png)
 
 | Project Manager dashboard — CPI/SPI donuts & progress | Agile board — drag & drop Kanban |
 |:---:|:---:|
