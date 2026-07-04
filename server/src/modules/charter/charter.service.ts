@@ -194,7 +194,13 @@ export async function decideChangeRequest(
   const chargeAmount = cr.amountIdr == null ? 0 : Number(cr.amountIdr);
   const willApplyRevenue = decision === 'APPROVED' && applyToRevenue && cr.chargeable && chargeAmount > 0;
 
-  const { result, revenueChange } = await prisma.$transaction(async (tx) => {
+  // An approved change that touches cost or schedule is the sanctioned way to alter the
+  // baseline: if the baseline is currently locked, approval opens it so the PM can apply
+  // the change (they re-lock afterwards). This ties every baseline edit to an approved CR.
+  const touchesBaseline =
+    decision === 'APPROVED' && cr.impactAreas.some((a) => a === 'COST' || a === 'SCHEDULE');
+
+  const { result, revenueChange, baselineUnlocked } = await prisma.$transaction(async (tx) => {
     const updatedCr = await tx.changeRequest.update({
       where: { id: crId },
       data: { status: decision, decidedBy: actorId, decidedAt: new Date() },
@@ -208,6 +214,15 @@ export async function decideChangeRequest(
       });
     }
 
+    let baselineUnlocked = false;
+    if (touchesBaseline) {
+      const p = await tx.project.findUnique({ where: { id: projectId }, select: { baselineLockedAt: true } });
+      if (p?.baselineLockedAt) {
+        await tx.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null } });
+        baselineUnlocked = true;
+      }
+    }
+
     // Approved chargeable change order → raise the project's Total Revenue by the
     // agreed amount (the client-funded contract increase). Read-then-set so a null
     // starting revenue is treated as 0 (SQL NULL + x would stay NULL).
@@ -219,7 +234,7 @@ export async function decideChangeRequest(
       await tx.project.update({ where: { id: projectId }, data: { totalRevenueIdr: after } });
       revenueChange = { before, after };
     }
-    return { result: updatedCr, revenueChange };
+    return { result: updatedCr, revenueChange, baselineUnlocked };
   });
 
   await writeAudit({ projectId,
@@ -242,6 +257,18 @@ export async function decideChangeRequest(
     });
   }
 
+  if (baselineUnlocked) {
+    await writeAudit({
+      projectId,
+      userId: actorId,
+      entity: 'Project',
+      entityId: projectId,
+      action: 'UPDATE',
+      before: { baselineLocked: true },
+      after: { baselineLocked: false, reason: `Approved change "${cr.title}" (CR ${crId}) — baseline opened to apply the change` },
+    });
+  }
+
   // Notify the requester (the PM who raised it) of the decision — mirrors the
   // CR_SUBMITTED notification that approvers receive. Skip self-decisions.
   if (cr.requestedBy && cr.requestedBy !== actorId) {
@@ -255,7 +282,7 @@ export async function decideChangeRequest(
       projectId,
     });
   }
-  return result;
+  return { changeRequest: result, baselineUnlocked };
 }
 
 export async function listCharterVersions(projectId: string) {

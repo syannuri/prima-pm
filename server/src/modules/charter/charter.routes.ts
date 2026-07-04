@@ -92,14 +92,14 @@ router.patch(
   requireRole('ADMIN', 'PMO'),
   validateBody(crDecisionSchema),
   asyncHandler(async (req, res) => {
-    const cr = await svc.decideChangeRequest(
+    const out = await svc.decideChangeRequest(
       req.params.projectId,
       req.params.crId,
       req.body.decision,
       req.user!.id,
       req.body.applyToRevenue,
     );
-    res.json({ changeRequest: cr });
+    res.json(out);
   }),
 );
 

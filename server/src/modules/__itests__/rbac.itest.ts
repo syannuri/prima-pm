@@ -214,3 +214,32 @@ describe('baseline lock freezes cost/schedule (PMB/BAC)', () => {
     expect((await addCost()).status).toBe(201);
   });
 });
+
+describe('approving a cost/schedule change request unlocks the baseline', () => {
+  let pid = '';
+  let crId = '';
+
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'CR-Baseline', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    // Freeze the baseline, then seed a submitted CR that impacts COST.
+    await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.ADMIN)).send({ locked: true });
+    const cr = await prisma.changeRequest.create({
+      data: { projectId: pid, type: 'COST_BASELINE', title: 'Add reporting scope', description: 'New module', impactAreas: ['COST'], status: 'SUBMITTED', requestedBy: ownerId },
+    });
+    crId = cr.id;
+  });
+
+  it('approval opens the baseline and reports it', async () => {
+    const res = await request(app)
+      .patch(api(`/projects/${pid}/charter/change-requests/${crId}`))
+      .set(auth(tokens.ADMIN))
+      .send({ decision: 'APPROVED' });
+    expect(res.status).toBe(200);
+    expect(res.body.baselineUnlocked).toBe(true);
+    // Baseline is now editable again — a cost write succeeds.
+    const write = await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN)).send({ type: 'HARDWARE_LICENSE', label: 'Reporting srv', qty: 1, unitCost: 5000 });
+    expect(write.status).toBe(201);
+  });
+});

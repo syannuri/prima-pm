@@ -36,12 +36,13 @@ export default function PendingApprovals() {
 
   const decide = useMutation({
     mutationFn: ({ cr, decision, applyToRevenue }: { cr: PendingApproval; decision: 'APPROVED' | 'REJECTED'; applyToRevenue?: boolean }) =>
-      api.patch(`/projects/${cr.project.id}/charter/change-requests/${cr.id}`, { decision, applyToRevenue }),
-    onSuccess: (_d, v) => {
-      ['pending-approvals', 'charter-crs', 'notifications', 'inbox', 'projects', 'portfolio', 'charter'].forEach((k) =>
+      api.patch<{ baselineUnlocked?: boolean }>(`/projects/${cr.project.id}/charter/change-requests/${cr.id}`, { decision, applyToRevenue }),
+    onSuccess: (d, v) => {
+      ['pending-approvals', 'charter-crs', 'notifications', 'inbox', 'projects', 'portfolio', 'charter', 'project'].forEach((k) =>
         qc.invalidateQueries({ queryKey: [k] }),
       );
-      toast.success(`Change request ${v.decision === 'APPROVED' ? 'approved' : 'rejected'}${v.applyToRevenue ? ' · revenue updated' : ''}`);
+      const note = `${v.applyToRevenue ? ' · revenue updated' : ''}${d?.baselineUnlocked ? ' · baseline unlocked — apply changes, then re-lock' : ''}`;
+      toast.success(`Change request ${v.decision === 'APPROVED' ? 'approved' : 'rejected'}${note}`);
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to decide'),
   });
