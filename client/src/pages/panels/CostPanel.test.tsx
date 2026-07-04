@@ -52,6 +52,12 @@ vi.mock('../../api/client', () => {
 
 import { api } from '../../api/client';
 
+// CostPanel now renders <BaselineLock>, which calls useAuth(); provide a stub so the
+// panel doesn't need a full AuthProvider (this test focuses on cost-cache invalidation).
+vi.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'u1', name: 'Tester', email: 't@x', role: 'ADMIN' }, loading: false, login: vi.fn(), logout: vi.fn() }),
+}));
+
 function renderPanel() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

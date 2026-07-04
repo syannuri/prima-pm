@@ -20,7 +20,7 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
     queryKey: ['project', projectId],
     queryFn: () => api.get<{ project: Project }>(`/projects/${projectId}`),
   });
-  const locked = !!data?.project.baselineLockedAt;
+  const locked = !!data?.project?.baselineLockedAt;
   const canManage = !!user && ['ADMIN', 'PMO'].includes(user.role);
 
   const toggle = useMutation({
