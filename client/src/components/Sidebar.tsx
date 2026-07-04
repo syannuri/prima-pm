@@ -64,9 +64,12 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
             <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{unread}</span>
           ))}
         </NavLink>
-        <NavLink to="/my-timesheet" onClick={onNavigate} title="My Timesheet" className={({ isActive }) => cx(isActive)}>
-          <Icon path={ICONS.clock} /> {!collapsed && 'My Timesheet'}
-        </NavLink>
+        {/* Timesheet is for people who do task work — hide it for ADMIN/PMO (portfolio roles). */}
+        {!!user && !['ADMIN', 'PMO'].includes(user.role) && (
+          <NavLink to="/my-timesheet" onClick={onNavigate} title="My Timesheet" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.clock} /> {!collapsed && 'My Timesheet'}
+          </NavLink>
+        )}
         {user?.role === 'ADMIN' && (
           <NavLink to="/admin/users" onClick={onNavigate} title="Users" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.users} /> {!collapsed && 'Users'}
