@@ -226,6 +226,7 @@ model Project {
   actualCosts      ActualCostEntry[]
   sprints          Sprint[]
   backlogItems     BacklogItem[]
+  mandayEntries    MandayEntry[]
 
   @@index([status])
   @@index([pmUserId])
@@ -307,6 +308,9 @@ model CostItemDirect {
   // resourceUserId; supplies the day-rate and personnel role.
   resourceRef Resource? @relation("LineResource", fields: [resourceId], references: [id])
   resourceId  String?
+
+  // Timesheet: actual man-days logged against this manpower line.
+  mandayEntries MandayEntry[] @relation("LineTimesheet")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -412,6 +416,25 @@ model ActualCostEntry {
   createdAt   DateTime @default(now())
 
   @@index([projectId, date])
+}
+
+// Timesheet: actual man-days consumed, logged against a MANPOWER cost line
+// (which carries the resource + task + project). Time-phased like ActualCostEntry.
+// Consumed effort per resource = Σ mandays over that resource's lines.
+model MandayEntry {
+  id         String         @id @default(uuid())
+  projectId  String
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costItemId String
+  costItem   CostItemDirect @relation("LineTimesheet", fields: [costItemId], references: [id], onDelete: Cascade)
+  date       DateTime
+  mandays    Decimal        @db.Decimal(10, 2)
+  note       String?
+  recordedBy String?
+  createdAt  DateTime       @default(now())
+
+  @@index([projectId, date])
+  @@index([costItemId])
 }
 
 // =====================================================================

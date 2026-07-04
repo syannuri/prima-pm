@@ -86,6 +86,20 @@ describe('resource — earned man-days', () => {
     expect(buildCapacityReport([item({ planMandays: 10 })], 'month').resources[0].earnedMandays).toBe(0);
     expect(buildCapacityReport([item({ planMandays: 10, progressPct: 150 })], 'month').resources[0].earnedMandays).toBe(10);
   });
+
+  it('sums consumed man-days (timesheet) per resource', () => {
+    const r = buildCapacityReport(
+      [
+        item({ planMandays: 20, progressPct: 50, consumedMandays: 8 }), // earned 10, consumed 8
+        item({ planMandays: 10, progressPct: 100, consumedMandays: 4 }), // earned 10, consumed 4
+      ],
+      'month',
+    );
+    const res = r.resources[0];
+    expect(res.earnedMandays).toBe(20);
+    expect(res.consumedMandays).toBe(12);
+    expect(r.summary.totalConsumedMandays).toBe(12);
+  });
 });
 
 describe('resource — capacity report', () => {
@@ -167,6 +181,6 @@ describe('resource — capacity report', () => {
     const r = buildCapacityReport([], 'month');
     expect(r.periods).toEqual([]);
     expect(r.resources).toEqual([]);
-    expect(r.summary).toEqual({ resourceCount: 0, overAllocatedCount: 0, totalPlanMandays: 0, totalEarnedMandays: 0 });
+    expect(r.summary).toEqual({ resourceCount: 0, overAllocatedCount: 0, totalPlanMandays: 0, totalEarnedMandays: 0, totalConsumedMandays: 0 });
   });
 });

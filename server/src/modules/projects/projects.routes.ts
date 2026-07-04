@@ -16,6 +16,7 @@ import attachmentRoutes from '../attachment/attachment.routes.js';
 import auditRoutes from '../audit/audit.routes.js';
 import projectNotificationRoutes from '../notification/notification.project.routes.js';
 import agileRoutes from '../agile/agile.routes.js';
+import timesheetRoutes from '../timesheet/timesheet.routes.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -106,5 +107,6 @@ router.use('/:projectId/attachments', attachmentRoutes);
 router.use('/:projectId/audit', auditRoutes);
 router.use('/:projectId/notifications', projectNotificationRoutes);
 router.use('/:projectId/agile', agileRoutes);
+router.use('/:projectId/timesheet', timesheetRoutes);
 
 export default router;

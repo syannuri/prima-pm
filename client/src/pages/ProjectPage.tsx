@@ -10,6 +10,7 @@ import { formatIdr } from '../lib/format';
 import { categoryLabel, PROJECT_STATUS_BADGE } from '../lib/labels';
 import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
+import TimesheetPanel from './panels/TimesheetPanel';
 import ForecastPanel from './panels/ForecastPanel';
 import RiskPanel from './panels/RiskPanel';
 import IssuePanel from './panels/IssuePanel';
@@ -24,7 +25,7 @@ import LifecycleActions from '../components/LifecycleActions';
 import AgilePanel from './panels/AgilePanel';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Agile' | 'Cost' | 'Forecast' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Audit';
+type Tab = 'Charter' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -75,7 +76,7 @@ export default function ProjectPage() {
   const tabs: Tab[] = [
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
-    'Cost', 'Forecast', 'Risk', 'Issues', 'Change Req',
+    'Cost', 'Timesheet', 'Forecast', 'Risk', 'Issues', 'Change Req',
     'Charter', 'Audit',
   ];
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
@@ -171,6 +172,7 @@ export default function ProjectPage() {
       {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} />}
       {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
       {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
+      {activeTab === 'Timesheet' && chartered && <TimesheetPanel projectId={projectId} />}
       {activeTab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
       {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
       {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}

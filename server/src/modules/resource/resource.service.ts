@@ -27,6 +27,7 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
   const items = await prisma.costItemDirect.findMany({
     where: { type: 'MANPOWER', projectId: { in: projectIds } },
     select: {
+      id: true,
       label: true,
       personnelRole: true,
       planMandays: true,
@@ -39,6 +40,14 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
       task: { select: { planStart: true, planEnd: true, progressPct: true } },
     },
   });
+
+  // Actual man-days logged per manpower line (timesheet) → consumed effort.
+  const consumedGroups = await prisma.mandayEntry.groupBy({
+    by: ['costItemId'],
+    where: { costItemId: { in: items.map((i) => i.id) } },
+    _sum: { mandays: true },
+  });
+  const consumedByLine = new Map(consumedGroups.map((g) => [g.costItemId, dec(g._sum.mandays)]));
 
   const inputs: AllocationInput[] = items.map((i) => ({
     // Prefer the master resource as the cross-project key; else a linked user;
@@ -58,6 +67,7 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
     taskStart: i.task?.planStart ?? null,
     taskEnd: i.task?.planEnd ?? null,
     progressPct: i.task?.progressPct ?? 0,
+    consumedMandays: consumedByLine.get(i.id) ?? 0,
   }));
 
   return buildCapacityReport(inputs, granularity, q.from, q.to);

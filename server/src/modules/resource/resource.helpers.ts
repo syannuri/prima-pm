@@ -19,6 +19,7 @@ export interface AllocationInput {
   taskStart: Date | null;
   taskEnd: Date | null;
   progressPct?: number; // 0..100 of the linked task; drives earned man-days (default 0)
+  consumedMandays?: number; // actual man-days logged (timesheet) against this line (default 0)
 }
 
 export interface PeriodCell {
@@ -35,6 +36,7 @@ export interface ResourceRow {
   personnelRole: string | null;
   totalPlanMandays: number;
   earnedMandays: number; // Σ(planMandays × task %progress) — effort delivered so far
+  consumedMandays: number; // Σ actual man-days logged via timesheet
   scheduledMandays: number; // man-days that fell inside the reporting window
   unscheduledMandays: number; // items with no task dates → cannot be time-phased
   projects: { code: string; name: string; mandays: number }[];
@@ -49,7 +51,7 @@ export interface CapacityReport {
   granularity: Granularity;
   periods: string[];
   resources: ResourceRow[];
-  summary: { resourceCount: number; overAllocatedCount: number; totalPlanMandays: number; totalEarnedMandays: number };
+  summary: { resourceCount: number; overAllocatedCount: number; totalPlanMandays: number; totalEarnedMandays: number; totalConsumedMandays: number };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -164,6 +166,7 @@ export function buildCapacityReport(
     capacityPerDay: number;
     total: number;
     earned: number;
+    consumed: number;
     scheduled: number;
     unscheduled: number;
     projects: Map<string, { code: string; name: string; mandays: number }>;
@@ -173,7 +176,7 @@ export function buildCapacityReport(
   const ensure = (i: AllocationInput): Acc => {
     let a = byResource.get(i.resourceKey);
     if (!a) {
-      a = { name: i.resourceName, personnelRole: i.personnelRole, capacityPerDay: i.capacityPerDay && i.capacityPerDay > 0 ? i.capacityPerDay : 1, total: 0, earned: 0, scheduled: 0, unscheduled: 0, projects: new Map(), alloc: new Map() };
+      a = { name: i.resourceName, personnelRole: i.personnelRole, capacityPerDay: i.capacityPerDay && i.capacityPerDay > 0 ? i.capacityPerDay : 1, total: 0, earned: 0, consumed: 0, scheduled: 0, unscheduled: 0, projects: new Map(), alloc: new Map() };
       byResource.set(i.resourceKey, a);
     }
     return a;
@@ -190,6 +193,7 @@ export function buildCapacityReport(
     // Earned man-days = plan × task progress (clamped 0..100), independent of dates.
     const pct = Math.min(100, Math.max(0, i.progressPct ?? 0));
     a.earned = round2(a.earned + (i.planMandays * pct) / 100);
+    a.consumed = round2(a.consumed + (i.consumedMandays ?? 0));
     addProject(a, i, i.planMandays);
 
     if (!(i.taskStart && i.taskEnd && i.planMandays > 0)) {
@@ -225,6 +229,7 @@ export function buildCapacityReport(
       personnelRole: a.personnelRole,
       totalPlanMandays: round2(a.total),
       earnedMandays: round2(a.earned),
+      consumedMandays: round2(a.consumed),
       scheduledMandays: round2(a.scheduled),
       unscheduledMandays: round2(a.unscheduled),
       projects: [...a.projects.values()].sort((x, y) => y.mandays - x.mandays),
@@ -247,6 +252,7 @@ export function buildCapacityReport(
       overAllocatedCount: resources.filter((r) => r.overAllocated).length,
       totalPlanMandays: round2(resources.reduce((s, r) => s + r.totalPlanMandays, 0)),
       totalEarnedMandays: round2(resources.reduce((s, r) => s + r.earnedMandays, 0)),
+      totalConsumedMandays: round2(resources.reduce((s, r) => s + r.consumedMandays, 0)),
     },
   };
 }
