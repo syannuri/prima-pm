@@ -8,6 +8,7 @@ import * as svc from './projects.service.js';
 import { setBaselineLock } from './baseline.service.js';
 import { getClosureReadiness } from './closure.js';
 import { getActivationReadiness } from './activation.js';
+import { getNextSteps } from './nextsteps.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
 import riskRoutes from '../risk/risk.routes.js';
@@ -73,6 +74,17 @@ router.get(
   asyncHandler(async (req, res) => {
     const readiness = await getActivationReadiness(req.params.id);
     res.json({ readiness });
+  }),
+);
+
+// Guided next-step cues — an ordered list of recommended actions for the project's
+// current lifecycle stage (charter → baseline → activate → track → close).
+router.get(
+  '/:id/next-steps',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    const nextSteps = await getNextSteps(req.params.id);
+    res.json({ nextSteps });
   }),
 );
 

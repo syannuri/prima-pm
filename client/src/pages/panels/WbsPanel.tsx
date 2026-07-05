@@ -124,6 +124,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['gantt', projectId] });
     qc.invalidateQueries({ queryKey: ['mp-sync', projectId] });
+    // Baseline capture + progress edits change the guided next-step cues.
+    qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
   };
 
   const rows = useMemo(() => (ganttQ.data ? flatten(ganttQ.data.tree) : []), [ganttQ.data]);

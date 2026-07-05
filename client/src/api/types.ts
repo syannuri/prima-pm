@@ -150,6 +150,20 @@ export interface ActivationReadiness {
   canActivate: boolean;
 }
 
+// Guided next-step cues for a project's current lifecycle stage.
+export interface NextStep {
+  key: string;
+  title: string;
+  detail: string;
+  tab?: string; // a ProjectPage tab to jump to
+  action?: 'activate' | 'resume' | 'close'; // a header lifecycle control
+}
+
+export interface NextStepsResult {
+  stage: string;
+  steps: NextStep[];
+}
+
 // Closing artifacts (Closeout tab): lessons-learned register + acceptance sign-offs.
 export type LessonCategory = 'WENT_WELL' | 'WENT_WRONG' | 'RECOMMENDATION';
 export type AcceptanceDecision = 'ACCEPTED' | 'ACCEPTED_WITH_CONDITIONS' | 'REJECTED';

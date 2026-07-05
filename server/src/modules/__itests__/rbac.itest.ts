@@ -394,6 +394,44 @@ describe('closing artifacts (lessons learned + acceptance sign-off)', () => {
   });
 });
 
+describe('guided next-step cues', () => {
+  const nextSteps = (id: string) => request(app).get(api(`/projects/${id}/next-steps`)).set(auth(tokens.ADMIN));
+
+  it('DRAFT project → the cue is to commit the charter', async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Cue-Draft', pmUserId: ownerId });
+    const res = await nextSteps(created.body.project.id);
+    expect(res.status).toBe(200);
+    expect(res.body.nextSteps.steps.map((s: { key: string }) => s.key)).toEqual(['commitCharter']);
+  });
+
+  it('advances CHARTERED → lock baseline → activate as the state changes', async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Cue-Flow', pmUserId: ownerId });
+    const id = created.body.project.id;
+    await request(app).patch(api(`/projects/${id}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+
+    // No WBS + unlocked baseline → lock the baseline first.
+    const chartered = await nextSteps(id);
+    expect(chartered.body.nextSteps.steps.map((s: { key: string }) => s.key)).toEqual(['lockBaseline']);
+
+    // Lock it → activation-ready (no WBS → schedule baseline is only a warning) → activate.
+    await request(app).patch(api(`/projects/${id}/baseline-lock`)).set(auth(tokens.ADMIN)).send({ locked: true });
+    const ready = await nextSteps(id);
+    expect(ready.body.nextSteps.steps.map((s: { key: string }) => s.key)).toEqual(['activate']);
+  });
+
+  it('IN_PROGRESS with no plan → closeout cues (record acceptance, capture lessons, close)', async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Cue-InProgress', pmUserId: ownerId });
+    const id = created.body.project.id;
+    await request(app).patch(api(`/projects/${id}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    await request(app).patch(api(`/projects/${id}/baseline-lock`)).set(auth(tokens.ADMIN)).send({ locked: true });
+    await request(app).patch(api(`/projects/${id}`)).set(auth(tokens.ADMIN)).send({ status: 'IN_PROGRESS' });
+
+    // No WBS/backlog → closure has no schedule blocker → the guide moves to closeout.
+    const res = await nextSteps(id);
+    expect(res.body.nextSteps.steps.map((s: { key: string }) => s.key)).toEqual(['recordAcceptance', 'captureLessons', 'closeProject']);
+  });
+});
+
 describe('baseline lock freezes cost/schedule (PMB/BAC)', () => {
   let pid = '';
   const addCost = () =>

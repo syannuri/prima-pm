@@ -19,6 +19,7 @@ import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
 import CloseoutPanel from './panels/CloseoutPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
+import NextStepsGuide from './panels/NextStepsGuide';
 import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
@@ -140,6 +141,8 @@ export default function ProjectPage() {
       </div>
 
       <ProjectAlerts projectId={projectId} onJump={(t) => setTab(t as Tab)} />
+
+      <NextStepsGuide projectId={projectId} onJump={(t) => setTab(t as Tab)} />
 
       <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
         {tabs.map((t) => (

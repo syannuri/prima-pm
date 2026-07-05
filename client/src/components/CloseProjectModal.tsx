@@ -63,6 +63,7 @@ export default function CloseProjectModal({ project }: { project: Project }) {
       qc.invalidateQueries({ queryKey: ['project', project.id] });
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: ['portfolio'] });
+      qc.invalidateQueries({ queryKey: ['next-steps', project.id] });
       toast.success('Project closed');
       setOpen(false);
     },

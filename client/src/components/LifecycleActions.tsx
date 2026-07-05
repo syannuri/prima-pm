@@ -29,6 +29,7 @@ export default function LifecycleActions({ project }: { project: Project }) {
       qc.invalidateQueries({ queryKey: ['project', project.id] });
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: ['portfolio'] });
+      qc.invalidateQueries({ queryKey: ['next-steps', project.id] });
       toast.success(
         body.status === 'ON_HOLD' ? 'Project put on hold'
           : body.reopenReason ? 'Project reopened'

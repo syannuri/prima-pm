@@ -89,6 +89,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
       setMsg('Charter committed — modules unlocked.');
       qc.invalidateQueries({ queryKey: ['charter', projectId] });
       qc.invalidateQueries({ queryKey: ['project', projectId] });
+      qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
     },
     onError: (e) => setMsg(e instanceof ApiError ? e.message : 'Commit failed'),
   });

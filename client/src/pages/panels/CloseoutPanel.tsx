@@ -47,6 +47,7 @@ function LessonsSection({ projectId, canWrite }: { projectId: string; canWrite: 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['lessons', projectId] });
     qc.invalidateQueries({ queryKey: ['closure-readiness', projectId] });
+    qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
   };
 
   if (q.isLoading) return <Card><Spinner /></Card>;
@@ -147,6 +148,7 @@ function AcceptanceSection({ projectId, canWrite }: { projectId: string; canWrit
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['acceptances', projectId] });
     qc.invalidateQueries({ queryKey: ['closure-readiness', projectId] });
+    qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
   };
 
   if (q.isLoading) return <Card><Spinner /></Card>;

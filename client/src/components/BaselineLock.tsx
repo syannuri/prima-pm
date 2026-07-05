@@ -27,6 +27,7 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
     mutationFn: (body: { locked: boolean; reason?: string }) => api.patch(`/projects/${projectId}/baseline-lock`, body),
     onSuccess: (_d, body) => {
       qc.invalidateQueries({ queryKey: ['project', projectId] });
+      qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
       toast.success(body.locked ? 'Baseline locked' : 'Baseline unlocked');
       setUnlockOpen(false);
       setReason('');
