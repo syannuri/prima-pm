@@ -27,6 +27,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>(detectLang);
   useEffect(() => {
     localStorage.setItem(KEY, lang);
+    // Keep the document language in sync so screen readers / crawlers see the
+    // right locale (the static index.html only ever declares `lang="en"`).
+    document.documentElement.lang = lang;
   }, [lang]);
   return <LanguageContext.Provider value={{ lang, setLang }}>{children}</LanguageContext.Provider>;
 }

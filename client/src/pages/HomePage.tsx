@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { useLang, type Lang } from '../context/LanguageContext';
 
 // Real product screenshots for the "A look inside" showcase (served from client/public).
-const SHOWCASE = ['/shot-gantt.png', '/shot-evm.png', '/shot-agile.png'];
+// These are tight, pre-cropped close-ups of one feature each (WBS+Gantt / EVM KPIs /
+// Kanban board) so they read clearly when shown full-width — see the showcase section.
+const SHOWCASE = ['/shot-gantt-zoom.png', '/shot-evm-zoom.png', '/shot-agile-zoom.png'];
 
 /**
  * Public landing page — the front door shown to guests at `/` before the login screen.
@@ -290,63 +292,47 @@ export default function HomePage() {
   return (
     <div ref={setScroller} className="relative isolate h-screen overflow-y-auto overflow-x-clip bg-[#05070e] text-slate-200 antialiased">
       <style>{`
-        @keyframes pmx-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(26px,-30px)} }
-        @keyframes pmx-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,24px)} }
-        @keyframes pmx-drift3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(22px,28px)} }
-        @keyframes pmx-drift4 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-20px,-22px)} }
         @keyframes pmx-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
         .reveal { opacity:0; transform:translateY(18px); transition:opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
         .reveal.in { opacity:1; transform:none; }
-        .pmx-orb { will-change: transform; }
 
-        /* --- aurora borealis: soft light curtains that sway (transform-only) --- */
-        .pmx-aur { position:absolute; left:-30%; right:-30%; top:-16%; height:82%; border-radius:50%;
-          filter:blur(52px); opacity:.55; mix-blend-mode:screen; will-change:transform,opacity; }
-        /* blue gradation echoing the login page (sky → blue → indigo → violet) */
-        .pmx-aur1 { background:linear-gradient(180deg, transparent 3%, rgba(56,189,248,.6) 28%, rgba(59,130,246,.42) 52%, rgba(99,102,241,.24) 72%, transparent 88%);
-          animation:pmx-aurA 13s ease-in-out infinite; }
-        .pmx-aur2 { background:linear-gradient(180deg, transparent 8%, rgba(129,140,248,.55) 34%, rgba(139,92,246,.32) 60%, transparent 90%);
-          animation:pmx-aurB 17s ease-in-out infinite; }
-        /* larger, multi-stop sway + a brighter opacity shimmer so the curtains clearly dance */
-        @keyframes pmx-aurA {
-          0%   { transform:translateX(-16%) skewX(-15deg) scaleY(1);    opacity:.48 }
-          25%  { transform:translateX(-4%)  skewX(5deg)   scaleY(1.2);  opacity:.72 }
-          50%  { transform:translateX(16%)  skewX(14deg)  scaleY(1.32); opacity:.56 }
-          75%  { transform:translateX(3%)   skewX(-7deg)  scaleY(1.12); opacity:.74 }
-          100% { transform:translateX(-16%) skewX(-15deg) scaleY(1);    opacity:.48 }
-        }
-        @keyframes pmx-aurB {
-          0%   { transform:translateX(15%)  skewX(14deg)  scaleY(1.18); opacity:.64 }
-          30%  { transform:translateX(2%)   skewX(-4deg)  scaleY(1);    opacity:.42 }
-          55%  { transform:translateX(-15%) skewX(-15deg) scaleY(1.26); opacity:.66 }
-          80%  { transform:translateX(-3%)  skewX(6deg)   scaleY(1.05); opacity:.44 }
-          100% { transform:translateX(15%)  skewX(14deg)  scaleY(1.18); opacity:.64 }
-        }
-
-        .pmx-nebula { position:absolute; inset:-20%; filter:blur(22px); opacity:.6; will-change:transform;
-          background:linear-gradient(115deg, transparent 36%, rgba(139,92,246,.09) 48%, rgba(96,165,250,.08) 55%, transparent 68%);
-          animation:pmx-neb 42s ease-in-out infinite; }
-        @keyframes pmx-neb { 0%,100%{transform:translateX(0) rotate(0)} 50%{transform:translateX(34px) rotate(2deg)} }
+        /* --- a few twinkling stars over the aurora photo (kept sparse on purpose) --- */
+        .pmx-stars { position:absolute; inset:0; opacity:.85;
+          background-repeat:no-repeat;
+          background-image:
+            radial-gradient(1.6px 1.6px at 8% 16%,  rgba(255,255,255,.95), transparent),
+            radial-gradient(1.2px 1.2px at 17% 30%, rgba(255,255,255,.75), transparent),
+            radial-gradient(1.4px 1.4px at 27% 12%, rgba(255,255,255,.85), transparent),
+            radial-gradient(1px   1px   at 34% 24%, rgba(255,255,255,.65), transparent),
+            radial-gradient(1.5px 1.5px at 63% 14%, rgba(255,255,255,.9),  transparent),
+            radial-gradient(1.1px 1.1px at 72% 27%, rgba(255,255,255,.7),  transparent),
+            radial-gradient(1.3px 1.3px at 83% 18%, rgba(255,255,255,.85), transparent),
+            radial-gradient(1px   1px   at 91% 33%, rgba(255,255,255,.6),  transparent),
+            radial-gradient(1.2px 1.2px at 47% 9%,  rgba(255,255,255,.8),  transparent),
+            radial-gradient(1px   1px   at 55% 22%, rgba(255,255,255,.6),  transparent);
+          animation:pmx-twinkle 6s ease-in-out infinite; }
+        @keyframes pmx-twinkle { 0%,100%{opacity:.55} 50%{opacity:.95} }
 
         html { scroll-behavior: smooth; }
         @media (prefers-reduced-motion: reduce){
-          .pmx-orb, .pmx-float, .pmx-nebula, .pmx-aur { animation:none !important; }
+          .pmx-float, .pmx-stars { animation:none !important; }
           .reveal { opacity:1 !important; transform:none !important; transition:none !important; }
           html { scroll-behavior:auto; }
         }
       `}</style>
 
-      {/* ---------- aurora borealis backdrop (fixed, pure CSS) ---------- */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        {/* faint diagonal nebula band for depth */}
-        <div className="pmx-nebula" />
-        {/* aurora borealis — two waving green light curtains near the top */}
-        <div className="pmx-aur pmx-aur1" />
-        <div className="pmx-aur pmx-aur2" />
-        {/* one faint deep glow low-down for depth */}
-        <div className="pmx-orb absolute -bottom-48 left-1/3 h-[34rem] w-[34rem] rounded-full bg-indigo-800/20 blur-[130px]" style={{ animation: 'pmx-drift2 26s ease-in-out infinite' }} />
-        {/* subtle top sheen + deeper midnight vignette */}
-        <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_-8%,rgba(139,92,246,0.10),transparent_60%),radial-gradient(130%_100%_at_50%_115%,rgba(0,0,0,0.88),transparent_55%)]" />
+      {/* ---------- aurora borealis backdrop ---------- */}
+      {/* Fixed midnight base so overscroll + every section below the hero stays dark. */}
+      <div className="pointer-events-none fixed inset-0 -z-20 bg-[#05070e]" />
+      {/* A real aurora photo anchored to the top of the page — it scrolls away with the
+          hero and fades into the midnight base, so the rest of the page stays calm/dark. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[118vh] overflow-hidden">
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/aurora-bg.jpg)' }} />
+        {/* a few twinkling stars layered over the sky */}
+        <div className="pmx-stars" />
+        {/* readability scrim: darken the nav band + hero copy, hard-fade into the base */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#05070e]/80 via-[#05070e]/35 to-[#05070e]" />
+        <div className="absolute inset-0 bg-[radial-gradient(85%_55%_at_50%_40%,rgba(5,7,14,0.55),transparent_72%)]" />
       </div>
 
       {/* ---------- top nav ---------- */}
@@ -482,23 +468,25 @@ export default function HomePage() {
             <SectionTitle>{t.showcase.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-400">{t.showcase.sub}</p>
           </Reveal>
-          <div className="grid gap-6 md:grid-cols-3">
+          {/* One feature per row, shown full-width so each close-up reads clearly. */}
+          <div className="mx-auto max-w-5xl space-y-10">
             {SHOWCASE.map((img, i) => (
-              <Reveal key={img} delay={i * 80}>
-                <figure className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/50 shadow-xl ring-1 ring-white/10 transition duration-300 hover:-translate-y-1 hover:border-white/20">
-                  <div className="flex items-center gap-1.5 border-b border-white/10 bg-white/5 px-3 py-2">
-                    <span className="h-2 w-2 rounded-full bg-red-400/70" />
-                    <span className="h-2 w-2 rounded-full bg-amber-400/70" />
-                    <span className="h-2 w-2 rounded-full bg-green-400/70" />
-                  </div>
+              <Reveal key={img} delay={(i % 2) * 60}>
+                <figure className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 shadow-2xl ring-1 ring-white/10 transition duration-300 hover:border-white/20">
+                  <div className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-600/20 via-violet-600/15 to-indigo-600/20 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
+                  <figcaption className="flex items-center gap-1.5 border-b border-white/10 bg-white/5 px-4 py-2.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
+                    <span className="ml-3 text-sm font-medium text-slate-200">{t.showcase.labels[i]}</span>
+                  </figcaption>
                   <img
                     src={img}
                     loading="lazy"
                     decoding="async"
                     alt={t.showcase.labels[i]}
-                    className="block h-56 w-full object-cover object-top"
+                    className="block w-full"
                   />
-                  <figcaption className="px-4 py-3 text-sm font-medium text-slate-200">{t.showcase.labels[i]}</figcaption>
                 </figure>
               </Reveal>
             ))}
