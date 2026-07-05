@@ -187,8 +187,24 @@ model User {
   resourceProfiles  Resource[]      @relation("ResourceUser")
   assignedBacklog   BacklogItem[]   @relation("BacklogAssignee")
   notifications     Notification[]  @relation("UserNotifications")
+  refreshTokens     RefreshToken[]  @relation("UserRefreshTokens")
 
   @@index([role])
+}
+
+// One row per issued refresh token (id = the token's jti). Refresh tokens ROTATE:
+// each /auth/refresh revokes the presented token and mints a new one. Replaying an
+// already-revoked token signals theft, so the whole session family is revoked.
+model RefreshToken {
+  id           String    @id @default(uuid()) // jti embedded in the signed refresh token
+  userId       String
+  user         User      @relation("UserRefreshTokens", fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime  // mirrors the JWT exp; expired rows are prunable
+  revokedAt    DateTime? // set when rotated away or explicitly revoked (logout/pw-change)
+  replacedById String?   // the jti this token was rotated into (audit chain)
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // =====================================================================

@@ -86,6 +86,48 @@ describe('session revocation (tokenVersion)', () => {
   });
 });
 
+describe('refresh-token rotation (happy path)', () => {
+  const email = 'rotate-ok@test.local';
+  let r0 = '';
+
+  beforeAll(async () => {
+    await prisma.user.create({ data: { name: 'Rotate OK', email, role: 'VIEWER', passwordHash: await hashPassword(PW), isActive: true } });
+    r0 = (await request(app).post(api('/auth/login')).send({ email, password: PW })).body.refreshToken;
+  });
+
+  it('each refresh mints a NEW refresh token plus a usable access token', async () => {
+    const first = await request(app).post(api('/auth/refresh')).send({ refreshToken: r0 });
+    expect(first.status).toBe(200);
+    expect(first.body.refreshToken).toBeTruthy();
+    expect(first.body.refreshToken).not.toBe(r0);
+    // The freshly rotated access token verifies.
+    expect((await request(app).get(api('/auth/me')).set(auth(first.body.accessToken))).status).toBe(200);
+    // The rotated-in token keeps working for the next refresh.
+    const second = await request(app).post(api('/auth/refresh')).send({ refreshToken: first.body.refreshToken });
+    expect(second.status).toBe(200);
+    expect(second.body.refreshToken).not.toBe(first.body.refreshToken);
+  });
+});
+
+describe('refresh-token reuse detection (theft response)', () => {
+  const email = 'rotate-reuse@test.local';
+  let r0 = '';
+  let r1 = '';
+
+  beforeAll(async () => {
+    await prisma.user.create({ data: { name: 'Rotate Reuse', email, role: 'VIEWER', passwordHash: await hashPassword(PW), isActive: true } });
+    r0 = (await request(app).post(api('/auth/login')).send({ email, password: PW })).body.refreshToken;
+    r1 = (await request(app).post(api('/auth/refresh')).send({ refreshToken: r0 })).body.refreshToken;
+  });
+
+  it('replaying a rotated-away token is rejected AND revokes the whole family', async () => {
+    // r0 was already rotated into r1 — replaying it signals a leaked/stolen token.
+    expect((await request(app).post(api('/auth/refresh')).send({ refreshToken: r0 })).status).toBe(401);
+    // The family is now revoked, so even the previously-valid r1 no longer works.
+    expect((await request(app).post(api('/auth/refresh')).send({ refreshToken: r1 })).status).toBe(401);
+  });
+});
+
 describe('RBAC enforcement (server-side, end-to-end)', () => {
   let projectId = '';
 

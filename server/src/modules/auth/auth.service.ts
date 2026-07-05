@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Role, User } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
@@ -12,12 +13,35 @@ interface AuthResult {
   refreshToken: string;
 }
 
-function toAuthResult(user: User): AuthResult {
+// Issue a fresh access token + a NEW tracked refresh token (a RefreshToken row keyed by
+// the token's jti). Optionally records that it replaces a rotated-away token.
+async function issueTokenPair(user: User, replacesJti?: string): Promise<AuthResult> {
+  const jti = randomUUID();
+  const { token: refreshToken, expiresAt } = signRefreshToken(user.id, user.tokenVersion, jti);
+  await prisma.$transaction(async (tx) => {
+    if (replacesJti) {
+      await tx.refreshToken.update({
+        where: { id: replacesJti },
+        data: { revokedAt: new Date(), replacedById: jti },
+      });
+    }
+    await tx.refreshToken.create({ data: { id: jti, userId: user.id, expiresAt } });
+  });
   return {
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
     accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email, tv: user.tokenVersion }),
-    refreshToken: signRefreshToken(user.id, user.tokenVersion),
+    refreshToken,
   };
+}
+
+// Revoke EVERY session for a user: bump tokenVersion (kills all access + refresh tokens on
+// next use) and mark all outstanding refresh-token rows revoked. Used on logout, password
+// change/reset, and as the theft response when a rotated refresh token is replayed.
+export async function revokeAllSessions(userId: string): Promise<void> {
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } }),
+    prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
+  ]);
 }
 
 export async function login(input: LoginInput): Promise<AuthResult> {
@@ -29,10 +53,15 @@ export async function login(input: LoginInput): Promise<AuthResult> {
   if (!ok) throw Unauthorized('Invalid credentials');
 
   await writeAudit({ userId: user.id, entity: 'User', entityId: user.id, action: 'LOGIN' });
-  return toAuthResult(user);
+  return issueTokenPair(user);
 }
 
-export async function refresh(refreshToken: string): Promise<{ accessToken: string }> {
+// Rotating refresh: verify the presented token, then swap it for a brand-new pair. The old
+// token is revoked, so a client must always use the newest one. Replaying an already-revoked
+// token means it leaked (a legit client never reuses a rotated token) → revoke the whole
+// session family. Tokens minted before rotation shipped have no jti — those are accepted once
+// and upgraded to a tracked, rotating token (no forced logout on deploy).
+export async function refresh(refreshToken: string): Promise<AuthResult> {
   let payload;
   try {
     payload = verifyRefreshToken(refreshToken);
@@ -44,13 +73,25 @@ export async function refresh(refreshToken: string): Promise<{ accessToken: stri
   // Reject refresh tokens minted before the user's sessions were revoked.
   if ((payload.tv ?? 0) !== user.tokenVersion) throw Unauthorized('Session has been revoked');
 
-  return {
-    accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email, tv: user.tokenVersion }),
-  };
+  if (payload.jti) {
+    const stored = await prisma.refreshToken.findUnique({ where: { id: payload.jti } });
+    if (!stored || stored.userId !== user.id || stored.expiresAt.getTime() < Date.now()) {
+      throw Unauthorized('Invalid or expired refresh token');
+    }
+    if (stored.revokedAt) {
+      // Reuse of a rotated/revoked token → treat as theft and kill every session.
+      await revokeAllSessions(user.id);
+      throw Unauthorized('Session has been revoked');
+    }
+    return issueTokenPair(user, payload.jti);
+  }
+
+  // Legacy (pre-rotation) token: nothing to rotate away, just mint a tracked pair.
+  return issueTokenPair(user);
 }
 
-// Changing the password revokes every other outstanding session (tokenVersion bump) and
-// returns a fresh token pair so the CALLER's current session continues seamlessly.
+// Changing the password revokes every other outstanding session (tokenVersion bump + refresh
+// rows revoked) and returns a fresh token pair so the CALLER's current session continues.
 export async function changePassword(userId: string, input: ChangePasswordInput): Promise<AuthResult> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Unauthorized();
@@ -62,14 +103,16 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
     where: { id: userId },
     data: { passwordHash: await hashPassword(input.newPassword), tokenVersion: { increment: 1 } },
   });
+  // Revoke all previously-issued refresh tokens (other sessions), then mint a fresh one below.
+  await prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
   await writeAudit({ userId, entity: 'User', entityId: userId, action: 'PASSWORD_CHANGE' });
-  return toAuthResult(updated);
+  return issueTokenPair(updated);
 }
 
-// Log out everywhere: bump tokenVersion so all currently-issued tokens for this user
-// stop verifying on the next request.
+// Log out everywhere: bump tokenVersion and revoke every outstanding refresh token so all
+// currently-issued tokens for this user stop working on the next request.
 export async function logoutAll(userId: string): Promise<void> {
-  await prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } });
+  await revokeAllSessions(userId);
   await writeAudit({ userId, entity: 'User', entityId: userId, action: 'LOGOUT' });
 }
 

@@ -58,6 +58,9 @@ function tryRefresh(): Promise<boolean> {
         const data = await res.json().catch(() => null);
         if (data?.accessToken) {
           tokenStore.set(data.accessToken);
+          // Refresh tokens rotate: persist the new one, or the next refresh replays a
+          // now-revoked token and the server logs us out (theft response).
+          if (data.refreshToken) tokenStore.setRefresh(data.refreshToken);
           return true;
         }
         return false;
