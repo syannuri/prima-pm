@@ -43,24 +43,24 @@ const COPY: Record<Lang, Content> = {
   en: {
     signin: 'Sign in',
     hero: {
-      badge: 'A gift to the project-management community',
+      badge: 'Contribute to the Project Management Community',
       titlePre: 'Clarity in every ',
       titleAccent: 'project',
-      sub: 'Prismatix turns scattered updates into Earned-Value truth — cost, schedule, risk and forecast in one calm, role-aware view. Built by practitioners, offered to the craft.',
+      sub: 'Prismatix brings cost, schedule, risk, and forecast into one clear view — so you always know where a project really stands. Built by practitioners, shared with the community.',
       enter: 'Enter Prismatix',
-      explore: 'Explore the craft',
+      explore: 'See how it works',
     },
     why: {
       eyebrow: 'Why it exists',
-      body: 'Most projects don’t fail loudly. They drift — a slipped week here, an overrun there, a risk nobody named — until the gap between the plan and the truth is too wide to close. Prismatix exists to surface that gap early, while it’s still small enough to fix.',
+      body: 'Projects rarely fail all at once. They drift: a week slips, a cost creeps, a risk goes unflagged — and by the time it reaches the status report, the gap is expensive to close. Prismatix surfaces that drift early, while it’s still small.',
     },
     what: {
-      title: 'One cockpit — from charter to closure',
-      body: 'A full, PMBOK-aligned delivery platform with Earned Value at its heart. Plan the work, watch it earn value in real time, steer with forecasts and change control, and close with confidence — for predictive, agile and hybrid projects alike.',
+      title: 'Everything from charter to closure, in one place',
+      body: 'A complete, PMBOK-aligned delivery platform with Earned Value at its core. Plan the work, watch it earn value in real time, steer with forecasts and change control, and close with confidence — across predictive, agile, and hybrid projects.',
     },
     features: {
-      title: 'Everything a delivery needs, in one calm place',
-      sub: 'Four movements of the same rhythm — plan it, track it, steer it, see it.',
+      title: 'Everything a delivery team needs, in one place',
+      sub: 'Four steps, one rhythm: plan it, track it, steer it, see it.',
       groups: [
         { icon: ICON.plan, name: 'Plan', items: [
           ['Project Charter', 'Goals, scope, sponsor and the delivery approach — committed to a baseline.'],
@@ -90,7 +90,7 @@ const COPY: Record<Lang, Content> = {
       labels: ['Interactive WBS & Gantt', 'Earned-Value (EVM) health', 'Agile board — drag & drop'],
     },
     evm: {
-      title: 'The quiet language of Earned Value',
+      title: 'Earned Value, in four numbers',
       sub: 'Four numbers that turn a status update into a decision.',
       items: [
         ['CPI', 'Cost efficiency — how much value you earn per unit spent.'],
@@ -105,15 +105,15 @@ const COPY: Record<Lang, Content> = {
     },
     community: {
       eyebrow: 'For the community',
-      title: 'Built by practitioners. Offered to the craft.',
-      body: 'We built Prismatix for the people who carry a plan in their head and a dozen unknowns in their inbox. It began as our own tool — and grew into something we wanted to share with the community that taught us this craft. Wherever in the world you manage projects, we hope it helps you see clearly and sleep a little better.',
+      title: 'Built by practitioners. Shared with the community.',
+      body: 'We built Prismatix for people who keep a plan in their head and a dozen open questions in their inbox. It started as our own tool, then grew into something worth sharing with the community that taught us the craft. Wherever you manage projects, we hope it helps you see more clearly and worry a little less.',
     },
     audience: {
       title: 'Made for the whole delivery team',
       chips: ['PMO', 'Project Managers', 'Finance', 'Risk Officers', 'Delivery teams'],
     },
     cta: {
-      title: 'Ready to see where your projects really stand?',
+      title: 'See exactly where your projects stand.',
       enter: 'Enter Prismatix',
       note: 'Accounts are provisioned by your administrator.',
     },
@@ -125,24 +125,24 @@ const COPY: Record<Lang, Content> = {
   id: {
     signin: 'Masuk',
     hero: {
-      badge: 'Persembahan untuk komunitas manajemen proyek',
+      badge: 'Kontribusi untuk komunitas manajemen proyek',
       titlePre: 'Kejelasan di setiap ',
       titleAccent: 'proyek',
-      sub: 'Prismatix menyatukan kabar yang berserakan menjadi fakta berbasis Earned Value — biaya, jadwal, risiko, dan proyeksi dalam satu tampilan yang ringkas dan menyesuaikan peran Anda. Dibuat oleh praktisi, untuk sesama praktisi.',
+      sub: 'Prismatix menyatukan biaya, jadwal, risiko, dan proyeksi dalam satu tampilan yang jernih — jadi Anda selalu tahu posisi proyek yang sebenarnya. Dibuat oleh praktisi, dibagikan untuk komunitas.',
       enter: 'Masuk Prismatix',
-      explore: 'Jelajahi',
+      explore: 'Lihat cara kerjanya',
     },
     why: {
       eyebrow: 'Alasan kami hadir',
-      body: 'Sebagian besar proyek tidak gagal secara tiba-tiba. Mereka melenceng perlahan — telat seminggu di sini, bengkak biaya di sana, risiko yang tak sempat dicatat — sampai jarak antara rencana dan kenyataan terlalu lebar untuk ditutup. Prismatix hadir untuk menyingkap jarak itu sejak dini, selagi masih cukup kecil untuk diperbaiki.',
+      body: 'Proyek jarang gagal sekaligus. Ia melenceng perlahan: telat seminggu, biaya merayap naik, risiko luput dicatat — dan saat akhirnya muncul di laporan status, jaraknya sudah mahal untuk ditutup. Prismatix menyingkap penyimpangan itu sejak dini, selagi masih kecil.',
     },
     what: {
-      title: 'Satu pusat kendali — dari charter hingga penutupan',
+      title: 'Semua dari charter hingga penutupan, dalam satu tempat',
       body: 'Platform pelaksanaan proyek yang selaras dengan PMBOK, dengan Earned Value sebagai intinya. Susun rencana, pantau nilai yang dihasilkan secara real-time, kendalikan lewat proyeksi dan kontrol perubahan, lalu tutup dengan percaya diri — untuk proyek predictive, agile, maupun hybrid.',
     },
     features: {
-      title: 'Semua kebutuhan proyek dalam satu tempat yang rapi',
-      sub: 'Empat langkah dalam satu irama — rencanakan, pantau, kendalikan, amati.',
+      title: 'Semua yang dibutuhkan tim proyek, dalam satu tempat',
+      sub: 'Empat langkah, satu irama: rencanakan, pantau, kendalikan, amati.',
       groups: [
         { icon: ICON.plan, name: 'Rencanakan', items: [
           ['Project Charter', 'Tujuan, ruang lingkup, sponsor, dan pendekatan pelaksanaan — dikunci sebagai baseline.'],
@@ -172,7 +172,7 @@ const COPY: Record<Lang, Content> = {
       labels: ['WBS & Gantt interaktif', 'Kesehatan Earned Value (EVM)', 'Papan Agile — seret & lepas'],
     },
     evm: {
-      title: 'Bahasa ringkas Earned Value',
+      title: 'Earned Value dalam empat angka',
       sub: 'Empat angka yang mengubah laporan status menjadi keputusan.',
       items: [
         ['CPI', 'Efisiensi biaya — seberapa besar nilai yang diperoleh per rupiah yang dikeluarkan.'],
@@ -187,15 +187,15 @@ const COPY: Record<Lang, Content> = {
     },
     community: {
       eyebrow: 'Untuk komunitas',
-      title: 'Dibuat oleh praktisi. Dipersembahkan untuk profesinya.',
-      body: 'Kami membuat Prismatix untuk mereka yang menyimpan rencana di kepala dan selusin ketidakpastian di kotak masuk. Awalnya ini alat kami sendiri — lalu tumbuh menjadi sesuatu yang ingin kami bagikan kepada komunitas yang mengajarkan kami profesi ini. Di mana pun Anda mengelola proyek, semoga ia membantu Anda melihat lebih jernih dan tidur sedikit lebih nyenyak.',
+      title: 'Dibuat oleh praktisi. Dibagikan untuk komunitas.',
+      body: 'Kami membuat Prismatix untuk mereka yang menyimpan rencana di kepala dan selusin pertanyaan terbuka di kotak masuk. Awalnya alat kami sendiri, lalu tumbuh menjadi sesuatu yang layak dibagikan kepada komunitas yang mengajarkan kami profesi ini. Di mana pun Anda mengelola proyek, semoga ia membantu Anda melihat lebih jernih dan sedikit lebih tenang.',
     },
     audience: {
       title: 'Untuk seluruh tim proyek',
       chips: ['PMO', 'Project Manager', 'Finance', 'Risk Officer', 'Tim pelaksana'],
     },
     cta: {
-      title: 'Siap melihat posisi proyek Anda yang sebenarnya?',
+      title: 'Lihat dengan pasti posisi proyek Anda.',
       enter: 'Masuk Prismatix',
       note: 'Akun disediakan oleh administrator Anda.',
     },
