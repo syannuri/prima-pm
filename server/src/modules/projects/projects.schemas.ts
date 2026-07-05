@@ -35,6 +35,10 @@ export const updateProjectSchema = z.object({
   holdReason: z.string().trim().max(500).optional(),
   // Reason for reopening a CLOSED project (mandatory when status CLOSED → IN_PROGRESS).
   reopenReason: z.string().trim().max(500).optional(),
+  // Activation controls (only meaningful when status CHARTERED → IN_PROGRESS). forceActivate
+  // lets an ADMIN/PMO override the baseline-readiness gate; activateReason is then mandatory.
+  forceActivate: z.boolean().optional(),
+  activateReason: z.string().trim().max(500).optional(),
 });
 
 export const reassignPmSchema = z.object({

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import * as svc from './projects.service.js';
 import { setBaselineLock } from './baseline.service.js';
 import { getClosureReadiness } from './closure.js';
+import { getActivationReadiness } from './activation.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
 import riskRoutes from '../risk/risk.routes.js';
@@ -59,6 +60,17 @@ router.get(
   requireProjectAccess(),
   asyncHandler(async (req, res) => {
     const readiness = await getClosureReadiness(req.params.id);
+    res.json({ readiness });
+  }),
+);
+
+// Activation readiness checklist (baseline blockers + advisory warnings) — shown before
+// starting execution (CHARTERED → IN_PROGRESS).
+router.get(
+  '/:id/activation-readiness',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    const readiness = await getActivationReadiness(req.params.id);
     res.json({ readiness });
   }),
 );

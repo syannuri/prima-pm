@@ -140,6 +140,16 @@ export interface ClosureReadiness {
   canClose: boolean;
 }
 
+// Activation readiness reuses the same item shape as closure (block/warn checklist).
+export type ActivationItem = ClosureItem;
+
+export interface ActivationReadiness {
+  items: ActivationItem[];
+  blockers: ActivationItem[];
+  warnings: ActivationItem[];
+  canActivate: boolean;
+}
+
 export interface Charter {
   id: string;
   projectId: string;

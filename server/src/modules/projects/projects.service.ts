@@ -6,6 +6,7 @@ import { generateProjectCode } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
 import { getClosureReadiness } from './closure.js';
+import { getActivationReadiness } from './activation.js';
 
 // Notify a user they've been assigned as a project's PM (skip self-assignment).
 export async function notifyPmAssigned(pmUserId: string | null | undefined, actorId: string, project: { id: string; name: string; code: string }) {
@@ -167,6 +168,27 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
     statusData.closureNote = note || null;
   }
 
+  // Activation gate (planning-baseline checkpoint): starting execution (CHARTERED ->
+  // IN_PROGRESS) requires the performance baseline to be set — cost baseline locked and, when
+  // there's a WBS, a schedule baseline captured — so SV/SPI aren't measured against a moving
+  // target. ADMIN/PMO can force-activate past the gate with a mandatory reason (route is
+  // ADMIN/PMO-only). Resume (ON_HOLD -> IN_PROGRESS) is NOT gated — it's already baselined.
+  const isActivating = before.status === 'CHARTERED' && input.status === 'IN_PROGRESS';
+  let activateReason: string | undefined;
+  if (isActivating) {
+    const readiness = await getActivationReadiness(id);
+    if (!readiness.canActivate && !input.forceActivate) {
+      throw BadRequest(
+        `Project isn't ready to start: ${readiness.blockers.map((b) => `${b.label} (${b.detail})`).join('; ')}. Set the baseline or force-activate with a reason.`,
+        { blockers: readiness.blockers, warnings: readiness.warnings },
+      );
+    }
+    if (input.forceActivate && !readiness.canActivate) {
+      activateReason = input.activateReason?.trim();
+      if (!activateReason) throw BadRequest('Force-activating requires a reason (activateReason).');
+    }
+  }
+
   // On-hold requires a reason; leaving ON_HOLD (resume/activate) clears it.
   if (input.status === 'ON_HOLD' && before.status !== 'ON_HOLD') {
     const reason = input.holdReason?.trim();
@@ -193,14 +215,23 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
     },
   });
 
+  const action = isReopening
+    ? 'REOPEN'
+    : isClosing && input.forceClose
+      ? 'FORCE_CLOSE'
+      : isActivating
+        ? activateReason
+          ? 'FORCE_ACTIVATE'
+          : 'ACTIVATE'
+        : 'UPDATE';
   await writeAudit({
     projectId: id,
     userId: actorId,
     entity: 'Project',
     entityId: id,
-    action: isReopening ? 'REOPEN' : isClosing && input.forceClose ? 'FORCE_CLOSE' : 'UPDATE',
+    action,
     before,
-    after: isReopening ? { ...project, reopenReason } : project,
+    after: isReopening ? { ...project, reopenReason } : activateReason ? { ...project, activateReason } : project,
   });
   return project;
 }

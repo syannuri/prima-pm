@@ -290,6 +290,49 @@ describe('CLOSED projects are read-only, reopen is governed', () => {
   });
 });
 
+describe('activation gate (planning-baseline checkpoint)', () => {
+  const mkChartered = async (name: string) => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name, pmUserId: ownerId });
+    const id = created.body.project.id;
+    await request(app).patch(api(`/projects/${id}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    return id;
+  };
+  const activate = (id: string, body: Record<string, unknown> = {}) =>
+    request(app).patch(api(`/projects/${id}`)).set(auth(tokens.ADMIN)).send({ status: 'IN_PROGRESS', ...body });
+
+  it('blocks CHARTERED → IN_PROGRESS while the cost baseline is unlocked (400)', async () => {
+    const id = await mkChartered('Activate-Blocked');
+    const res = await activate(id);
+    expect(res.status).toBe(400);
+    expect(String(res.body?.error?.message ?? '')).toMatch(/ready to start|baseline/i);
+  });
+
+  it('activates once the baseline is locked (200)', async () => {
+    const id = await mkChartered('Activate-Ready');
+    await request(app).patch(api(`/projects/${id}/baseline-lock`)).set(auth(tokens.ADMIN)).send({ locked: true });
+    const res = await activate(id); // no WBS → schedule baseline is only a warning
+    expect(res.status).toBe(200);
+    expect(res.body.project.status).toBe('IN_PROGRESS');
+  });
+
+  it('force-activate needs a reason (400 without, 200 with)', async () => {
+    const id = await mkChartered('Activate-Forced');
+    expect((await activate(id, { forceActivate: true })).status).toBe(400);
+    const ok = await activate(id, { forceActivate: true, activateReason: 'Sponsor approved starting ahead of baseline lock.' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.project.status).toBe('IN_PROGRESS');
+  });
+
+  // Exposes the readiness checklist for the UI.
+  it('GET /activation-readiness returns blockers for an unbaselined project', async () => {
+    const id = await mkChartered('Activate-Readiness');
+    const res = await request(app).get(api(`/projects/${id}/activation-readiness`)).set(auth(tokens.ADMIN));
+    expect(res.status).toBe(200);
+    expect(res.body.readiness.canActivate).toBe(false);
+    expect(res.body.readiness.blockers.map((b: { key: string }) => b.key)).toContain('baselineLock');
+  });
+});
+
 describe('baseline lock freezes cost/schedule (PMB/BAC)', () => {
   let pid = '';
   const addCost = () =>

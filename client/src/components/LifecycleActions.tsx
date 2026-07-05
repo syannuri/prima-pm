@@ -5,6 +5,7 @@ import type { Project } from '../api/types';
 import { Button, Modal, Textarea } from './ui';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
+import ActivateModal from './ActivateModal';
 
 // Manual lifecycle transitions (ADMIN/PMO): Activate (→IN_PROGRESS), Put on hold
 // (→ON_HOLD, reason required), Resume (→IN_PROGRESS). DRAFT→CHARTERED happens via
@@ -17,6 +18,8 @@ export default function LifecycleActions({ project }: { project: Project }) {
   // Reason-required modal, shared by "hold" and "reopen".
   const [modal, setModal] = useState<null | 'hold' | 'reopen'>(null);
   const [reason, setReason] = useState('');
+  // Activation goes through a guided modal (baseline-readiness checklist).
+  const [activating, setActivating] = useState(false);
 
   const canManage = !!user && ['ADMIN', 'PMO'].includes(user.role);
 
@@ -54,10 +57,11 @@ export default function LifecycleActions({ project }: { project: Project }) {
   return (
     <>
       {canActivate && (
-        <Button variant="secondary" disabled={change.isPending} onClick={() => change.mutate({ status: 'IN_PROGRESS' })}>
+        <Button variant="secondary" onClick={() => setActivating(true)}>
           ▶ Activate
         </Button>
       )}
+      {activating && <ActivateModal project={project} onClose={() => setActivating(false)} />}
       {canResume && (
         <Button variant="secondary" disabled={change.isPending} onClick={() => change.mutate({ status: 'IN_PROGRESS' })}>
           ▶ Resume
