@@ -29,6 +29,8 @@ export interface ClosureInputs {
   actualCost: number; // recorded AC total
   deliveryApproach: string; // PREDICTIVE | AGILE | HYBRID
   openBacklogItems: number; // backlog items not DONE (agile/hybrid only)
+  lessonsCount: number; // lessons-learned register entries
+  hasAcceptance: boolean; // at least one formal acceptance sign-off recorded
 }
 
 export function assessClosureReadiness(i: ClosureInputs): ClosureReadiness {
@@ -94,6 +96,23 @@ export function assessClosureReadiness(i: ClosureInputs): ClosureReadiness {
       detail: i.openBacklogItems ? `${i.openBacklogItems} not done` : undefined,
     });
   }
+
+  // Closing artifacts (PMBOK Close-Project): a lessons-learned register and formal
+  // deliverable acceptance. Advisory — captured at closeout, they don't block closure.
+  items.push({
+    key: 'lessons',
+    label: 'Lessons learned captured',
+    severity: 'warn',
+    ok: i.lessonsCount > 0,
+    detail: i.lessonsCount > 0 ? undefined : 'No lessons recorded (Closeout tab)',
+  });
+  items.push({
+    key: 'acceptance',
+    label: 'Formal acceptance recorded',
+    severity: 'warn',
+    ok: i.hasAcceptance,
+    detail: i.hasAcceptance ? undefined : 'No deliverable acceptance sign-off (Closeout tab)',
+  });
 
   const blockers = items.filter((x) => x.severity === 'block' && !x.ok);
   const warnings = items.filter((x) => x.severity === 'warn' && !x.ok);

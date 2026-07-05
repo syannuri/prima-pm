@@ -10,6 +10,8 @@ const base: ClosureInputs = {
   actualCost: 1000,
   deliveryApproach: 'PREDICTIVE',
   openBacklogItems: 0,
+  lessonsCount: 1,
+  hasAcceptance: true,
 };
 
 describe('assessClosureReadiness', () => {
@@ -44,6 +46,13 @@ describe('assessClosureReadiness', () => {
     expect(r.canClose).toBe(true); // schedule still 100% → closeable
     const warnKeys = r.warnings.map((w) => w.key).sort();
     expect(warnKeys).toEqual(['actualCost', 'changeRequests', 'issues', 'risks']);
+  });
+
+  it('warns (does not block) when closing artifacts are missing', () => {
+    const r = assessClosureReadiness({ ...base, lessonsCount: 0, hasAcceptance: false });
+    expect(r.canClose).toBe(true); // artifacts are advisory
+    const warnKeys = r.warnings.map((w) => w.key).sort();
+    expect(warnKeys).toEqual(['acceptance', 'lessons']);
   });
 
   it('adds a backlog check only for AGILE/HYBRID', () => {

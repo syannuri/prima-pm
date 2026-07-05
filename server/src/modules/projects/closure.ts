@@ -21,16 +21,20 @@ export async function getClosureReadiness(projectId: string): Promise<ClosureRea
   if (!project) throw NotFound('Project not found');
 
   const now = new Date();
-  const [evm, openChangeRequests, openHighRisks, openIssues, actualCost, openBacklogItems] = await Promise.all([
-    getProjectEvm(projectId, undefined, now),
-    prisma.changeRequest.count({ where: { projectId, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } } }),
-    prisma.risk.count({
-      where: { projectId, severity: { in: ['HIGH', 'CRITICAL'] }, status: { in: ['IDENTIFIED', 'ANALYZING', 'PLANNED', 'OPEN'] } },
-    }),
-    prisma.issue.count({ where: { projectId, status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
-    actualCostAsOf(projectId, now),
-    prisma.backlogItem.count({ where: { projectId, status: { not: 'DONE' } } }),
-  ]);
+  const [evm, openChangeRequests, openHighRisks, openIssues, actualCost, openBacklogItems, lessonsCount, acceptedCount] =
+    await Promise.all([
+      getProjectEvm(projectId, undefined, now),
+      prisma.changeRequest.count({ where: { projectId, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } } }),
+      prisma.risk.count({
+        where: { projectId, severity: { in: ['HIGH', 'CRITICAL'] }, status: { in: ['IDENTIFIED', 'ANALYZING', 'PLANNED', 'OPEN'] } },
+      }),
+      prisma.issue.count({ where: { projectId, status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+      actualCostAsOf(projectId, now),
+      prisma.backlogItem.count({ where: { projectId, status: { not: 'DONE' } } }),
+      prisma.lessonLearned.count({ where: { projectId } }),
+      // A rejection isn't an acceptance — only ACCEPTED / ACCEPTED_WITH_CONDITIONS counts.
+      prisma.acceptanceSignoff.count({ where: { projectId, decision: { in: ['ACCEPTED', 'ACCEPTED_WITH_CONDITIONS'] } } }),
+    ]);
 
   return assessClosureReadiness({
     leafTaskCount: evm.leafTaskCount,
@@ -41,5 +45,7 @@ export async function getClosureReadiness(projectId: string): Promise<ClosureRea
     actualCost,
     deliveryApproach: project.deliveryApproach,
     openBacklogItems,
+    lessonsCount,
+    hasAcceptance: acceptedCount > 0,
   });
 }

@@ -252,6 +252,8 @@ model Project {
   sprints          Sprint[]
   backlogItems     BacklogItem[]
   mandayEntries    MandayEntry[]
+  lessons          LessonLearned[]
+  acceptances      AcceptanceSignoff[]
 
   @@index([status])
   @@index([pmUserId])
@@ -757,4 +759,56 @@ model BacklogItem {
 
   @@index([projectId])
   @@index([sprintId])
+}
+
+// --- Closing artifacts (PMBOK Close-Project process) -------------------------
+// Captured during/at project closeout: a lessons-learned register + formal
+// deliverable acceptance sign-offs. Both surface as advisory items on the
+// closure-readiness checklist (they never hard-block closure — only schedule
+// completeness does, per the PMO policy).
+
+enum LessonCategory {
+  WENT_WELL      // what worked and should be repeated
+  WENT_WRONG     // what to avoid next time
+  RECOMMENDATION // an action/improvement for future projects
+}
+
+enum AcceptanceDecision {
+  ACCEPTED
+  ACCEPTED_WITH_CONDITIONS
+  REJECTED
+}
+
+// A single entry in the project's lessons-learned register.
+model LessonLearned {
+  id          String         @id @default(uuid())
+  projectId   String
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category    LessonCategory @default(RECOMMENDATION)
+  title       String
+  description String?        @db.Text
+  createdById String?        // actor who logged it (plain id, no FK — name resolved in the service)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([projectId])
+}
+
+// A formal acceptance sign-off from an accepting party (sponsor, customer, …).
+// The signer may be external, so the name is free text; recordedById is the
+// system user who logged the sign-off.
+model AcceptanceSignoff {
+  id           String             @id @default(uuid())
+  projectId    String
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  party        String             // who accepts: e.g. "Sponsor", "Customer — Bank X"
+  decision     AcceptanceDecision @default(ACCEPTED)
+  signedByName String?            // named signer (may be external, not a system user)
+  comments     String?            @db.Text
+  recordedById String?            // system user who logged it (plain id, name resolved in the service)
+  signedAt     DateTime           @default(now())
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([projectId])
 }

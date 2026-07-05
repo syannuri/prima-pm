@@ -333,6 +333,67 @@ describe('activation gate (planning-baseline checkpoint)', () => {
   });
 });
 
+describe('closing artifacts (lessons learned + acceptance sign-off)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Closeout-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+  });
+
+  it('the owning PM can log a lesson and a sign-off; both list back', async () => {
+    const lesson = await request(app).post(api(`/projects/${pid}/closeout/lessons`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ category: 'WENT_WELL', title: 'Daily standups kept scope tight', description: 'Repeat next time.' });
+    expect(lesson.status).toBe(201);
+
+    const signoff = await request(app).post(api(`/projects/${pid}/closeout/acceptances`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ party: 'Sponsor', decision: 'ACCEPTED', signedByName: 'Dewi Sponsor' });
+    expect(signoff.status).toBe(201);
+
+    const lessons = await request(app).get(api(`/projects/${pid}/closeout/lessons`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(lessons.body.lessons).toHaveLength(1);
+    expect(lessons.body.lessons[0].createdByName).toBe('Owner PM'); // FK-less id resolved to a name
+
+    const accs = await request(app).get(api(`/projects/${pid}/closeout/acceptances`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(accs.body.acceptances).toHaveLength(1);
+    expect(accs.body.acceptances[0].decision).toBe('ACCEPTED');
+  });
+
+  it('VIEWER cannot write closing artifacts (403) but a non-owner PM is denied too (403)', async () => {
+    const viewer = await request(app).post(api(`/projects/${pid}/closeout/lessons`)).set(auth(tokens.VIEWER))
+      .send({ category: 'WENT_WRONG', title: 'nope' });
+    expect(viewer.status).toBe(403);
+    const otherPm = await request(app).post(api(`/projects/${pid}/closeout/lessons`)).set(auth(tokens.PM2))
+      .send({ category: 'WENT_WRONG', title: 'nope' });
+    expect(otherPm.status).toBe(403);
+  });
+
+  it('closure readiness flips the lessons/acceptance warnings once artifacts exist', async () => {
+    // Fresh project → both artifacts missing → both warnings present.
+    const fresh = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Closeout-Fresh', pmUserId: ownerId });
+    const fid = fresh.body.project.id;
+    const before = await request(app).get(api(`/projects/${fid}/closure-readiness`)).set(auth(tokens.ADMIN));
+    const warnKeys = (before.body.readiness.warnings as { key: string }[]).map((w) => w.key);
+    expect(warnKeys).toContain('lessons');
+    expect(warnKeys).toContain('acceptance');
+
+    // The one on `pid` already has both → those two warnings are gone.
+    const after = await request(app).get(api(`/projects/${pid}/closure-readiness`)).set(auth(tokens.ADMIN));
+    const items = after.body.readiness.items as { key: string; ok: boolean }[];
+    expect(items.find((i) => i.key === 'lessons')?.ok).toBe(true);
+    expect(items.find((i) => i.key === 'acceptance')?.ok).toBe(true);
+  });
+
+  it('a REJECTED sign-off does not satisfy the acceptance check', async () => {
+    const rej = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Closeout-Rejected', pmUserId: ownerId });
+    const rid = rej.body.project.id;
+    await request(app).post(api(`/projects/${rid}/closeout/acceptances`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ party: 'Customer', decision: 'REJECTED', comments: 'Deliverable returned' });
+    const readiness = await request(app).get(api(`/projects/${rid}/closure-readiness`)).set(auth(tokens.ADMIN));
+    const items = readiness.body.readiness.items as { key: string; ok: boolean }[];
+    expect(items.find((i) => i.key === 'acceptance')?.ok).toBe(false);
+  });
+});
+
 describe('baseline lock freezes cost/schedule (PMB/BAC)', () => {
   let pid = '';
   const addCost = () =>

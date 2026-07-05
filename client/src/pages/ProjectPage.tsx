@@ -17,6 +17,7 @@ import IssuePanel from './panels/IssuePanel';
 import SchedulePanel from './panels/SchedulePanel';
 import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
+import CloseoutPanel from './panels/CloseoutPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
@@ -25,7 +26,7 @@ import LifecycleActions from '../components/LifecycleActions';
 import AgilePanel from './panels/AgilePanel';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Audit';
+type Tab = 'Charter' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -77,7 +78,7 @@ export default function ProjectPage() {
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
     'Cost', 'Timesheet', 'Forecast', 'Risk', 'Issues', 'Change Req',
-    'Charter', 'Audit',
+    'Charter', 'Closeout', 'Audit',
   ];
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
   // chartered, land on the first working tab (Schedule/Agile); Charter stays
@@ -161,7 +162,7 @@ export default function ProjectPage() {
         ))}
       </div>
 
-      {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && (
+      {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && (
         <Card>
           <p className="text-center text-amber-600">
             Commit the Project Charter first to unlock {activeTab} Management.
@@ -178,6 +179,7 @@ export default function ProjectPage() {
       {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}
       {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
       {activeTab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
+      {activeTab === 'Closeout' && <CloseoutPanel projectId={projectId} />}
       {activeTab === 'Audit' && <AuditPanel projectId={projectId} />}
     </div>
   );

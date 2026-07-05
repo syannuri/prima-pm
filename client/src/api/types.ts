@@ -150,6 +150,36 @@ export interface ActivationReadiness {
   canActivate: boolean;
 }
 
+// Closing artifacts (Closeout tab): lessons-learned register + acceptance sign-offs.
+export type LessonCategory = 'WENT_WELL' | 'WENT_WRONG' | 'RECOMMENDATION';
+export type AcceptanceDecision = 'ACCEPTED' | 'ACCEPTED_WITH_CONDITIONS' | 'REJECTED';
+
+export interface LessonLearned {
+  id: string;
+  projectId: string;
+  category: LessonCategory;
+  title: string;
+  description?: string | null;
+  createdById?: string | null;
+  createdByName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AcceptanceSignoff {
+  id: string;
+  projectId: string;
+  party: string;
+  decision: AcceptanceDecision;
+  signedByName?: string | null;
+  comments?: string | null;
+  recordedById?: string | null;
+  recordedByName?: string | null;
+  signedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Charter {
   id: string;
   projectId: string;
