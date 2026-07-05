@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang, type Lang } from '../context/LanguageContext';
 
@@ -256,6 +256,10 @@ export default function HomePage() {
   const t = COPY[lang];
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  // Parallax targets: the aurora backdrop drifts slower than the page (depth), and the hero
+  // copy gently fades + lifts as it scrolls away. Both are transform/opacity only.
+  const auroraRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
   const reduced = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
     [],
@@ -268,11 +272,21 @@ export default function HomePage() {
   useEffect(() => {
     if (!scroller) return;
     const onScroll = () => {
-      setScrolled(scroller.scrollTop > 48);
+      const y = scroller.scrollTop;
+      setScrolled(y > 48);
       const trigger = scroller.getBoundingClientRect().top + scroller.clientHeight * 0.9;
       scroller.querySelectorAll('.reveal:not(.in)').forEach((el) => {
         if (el.getBoundingClientRect().top < trigger) el.classList.add('in');
       });
+      // Parallax + hero fade (skipped entirely for reduced-motion users).
+      if (!reduced) {
+        if (auroraRef.current) auroraRef.current.style.transform = `translate3d(0, ${y * 0.3}px, 0)`;
+        if (heroRef.current) {
+          const p = Math.min(1, y / 520);
+          heroRef.current.style.opacity = String(1 - p * 0.85);
+          heroRef.current.style.transform = `translate3d(0, ${y * 0.18}px, 0)`;
+        }
+      }
     };
     onScroll(); // reveal whatever is above the fold on load
     scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -284,7 +298,7 @@ export default function HomePage() {
       window.removeEventListener('resize', onScroll);
       window.clearTimeout(t);
     };
-  }, [scroller]);
+  }, [scroller, reduced]);
 
   const explore = () =>
     document.getElementById('features')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
@@ -293,8 +307,23 @@ export default function HomePage() {
     <div ref={setScroller} className="relative isolate h-screen overflow-y-auto overflow-x-clip bg-[#05070e] text-slate-200 antialiased">
       <style>{`
         @keyframes pmx-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
-        .reveal { opacity:0; transform:translateY(18px); transition:opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
-        .reveal.in { opacity:1; transform:none; }
+
+        /* Scroll reveal: fade + rise, now easing out of a soft blur (C). Directional and
+           zoom variants (A) just change the starting transform; .reveal.in wins on entry. */
+        .reveal { opacity:0; transform:translateY(18px); filter:blur(6px);
+          transition:opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1), filter .7s cubic-bezier(.2,.7,.2,1); }
+        .reveal.in { opacity:1; transform:none; filter:none; }
+        .reveal-left  { transform:translateX(-26px); }
+        .reveal-right { transform:translateX(26px); }
+        .reveal-zoom  { transform:scale(.955); }
+
+        /* Accent underline draws in under the gradient word once the hero mounts (F). */
+        .pmx-accent { position:relative; }
+        .pmx-accent::after { content:''; position:absolute; left:0; right:0; bottom:-.08em; height:2px; border-radius:2px;
+          background:linear-gradient(to right,#38bdf8,#818cf8,#a78bfa);
+          transform:scaleX(0); transform-origin:left;
+          animation:pmx-underline .8s cubic-bezier(.2,.7,.2,1) .45s forwards; }
+        @keyframes pmx-underline { to { transform:scaleX(1); } }
 
         /* --- a few twinkling stars over the aurora photo (kept sparse on purpose) --- */
         .pmx-stars { position:absolute; inset:0; opacity:.85;
@@ -316,7 +345,8 @@ export default function HomePage() {
         html { scroll-behavior: smooth; }
         @media (prefers-reduced-motion: reduce){
           .pmx-float, .pmx-stars { animation:none !important; }
-          .reveal { opacity:1 !important; transform:none !important; transition:none !important; }
+          .reveal { opacity:1 !important; transform:none !important; filter:none !important; transition:none !important; }
+          .pmx-accent::after { animation:none !important; transform:scaleX(1); }
           html { scroll-behavior:auto; }
         }
       `}</style>
@@ -326,7 +356,7 @@ export default function HomePage() {
       <div className="pointer-events-none fixed inset-0 -z-20 bg-[#05070e]" />
       {/* A real aurora photo anchored to the top of the page — it scrolls away with the
           hero and fades into the midnight base, so the rest of the page stays calm/dark. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[118vh] overflow-hidden">
+      <div ref={auroraRef} className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[118vh] overflow-hidden will-change-transform">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/aurora-bg.jpg)' }} />
         {/* a few twinkling stars layered over the sky */}
         <div className="pmx-stars" />
@@ -368,12 +398,13 @@ export default function HomePage() {
       <main className="relative z-10">
         {/* ---------- hero ---------- */}
         <section className="mx-auto flex max-w-6xl flex-col items-center px-5 pb-16 pt-32 text-center sm:px-8 sm:pt-40">
+          <div ref={heroRef} className="flex flex-col items-center will-change-transform">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium text-slate-300 backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-400" /> {t.hero.badge}
           </div>
           <h1 className="max-w-3xl text-5xl font-bold leading-[1.08] tracking-tight text-white sm:text-6xl">
             {t.hero.titlePre}
-            <span className="bg-gradient-to-r from-sky-400 via-indigo-400 to-violet-400 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
+            <span className="pmx-accent bg-gradient-to-r from-sky-400 via-indigo-400 to-violet-400 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-300">{t.hero.sub}</p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
@@ -389,6 +420,7 @@ export default function HomePage() {
             >
               {t.hero.explore} ↓
             </button>
+          </div>
           </div>
 
           {/* the one real screenshot — proof, framed with an aurora glow */}
@@ -437,7 +469,7 @@ export default function HomePage() {
           </Reveal>
           <div className="grid gap-6 md:grid-cols-2">
             {t.features.groups.map((g, gi) => (
-              <Reveal key={g.name} delay={(gi % 2) * 90}>
+              <Reveal key={g.name} className="reveal-zoom" delay={gi * 90}>
                 <div className="group h-full rounded-2xl border border-white/10 bg-white/[0.04] p-7 backdrop-blur-sm transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06]">
                   <div className="mb-5 flex items-center gap-3">
                     <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-500/25 to-indigo-500/25 ring-1 ring-white/10">
@@ -471,7 +503,7 @@ export default function HomePage() {
           {/* One feature per row, shown full-width so each close-up reads clearly. */}
           <div className="mx-auto max-w-5xl space-y-10">
             {SHOWCASE.map((img, i) => (
-              <Reveal key={img} delay={(i % 2) * 60}>
+              <Reveal key={img} className={i % 2 ? 'reveal-right' : 'reveal-left'} delay={i * 120}>
                 <figure className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 shadow-2xl ring-1 ring-white/10 transition duration-300 hover:border-white/20">
                   <div className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-600/20 via-violet-600/15 to-indigo-600/20 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
                   <figcaption className="flex items-center gap-1.5 border-b border-white/10 bg-white/5 px-4 py-2.5">
@@ -501,7 +533,7 @@ export default function HomePage() {
           </Reveal>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {t.evm.items.map(([k, desc], i) => (
-              <Reveal key={k} delay={i * 70}>
+              <Reveal key={k} className="reveal-zoom" delay={i * 70}>
                 <div className="relative h-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-6">
                   <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-brand-500/20 blur-2xl" />
                   <div className="font-brand text-4xl font-bold text-white">{k}</div>
@@ -514,15 +546,15 @@ export default function HomePage() {
 
         {/* ---------- principles strip ---------- */}
         <section className="mx-auto max-w-5xl px-5 py-10 sm:px-8">
-          <Reveal>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              {t.principles.chips.map((c) => (
-                <span key={c} className="rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm font-medium text-slate-200 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {t.principles.chips.map((c, i) => (
+              <Reveal key={c} className="reveal-zoom" delay={i * 70}>
+                <span className="rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm font-medium text-slate-200 backdrop-blur">
                   {c}
                 </span>
-              ))}
-            </div>
-          </Reveal>
+              </Reveal>
+            ))}
+          </div>
         </section>
 
         {/* ---------- community (heart) ---------- */}
@@ -544,7 +576,7 @@ export default function HomePage() {
 
         {/* ---------- final CTA (bookend) ---------- */}
         <section className="mx-auto max-w-4xl px-5 py-16 text-center sm:px-8">
-          <Reveal>
+          <Reveal className="reveal-zoom">
             <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] px-6 py-16 backdrop-blur-sm">
               <div className="pointer-events-none absolute -inset-10 -z-10 bg-gradient-to-tr from-brand-600/25 via-violet-600/20 to-indigo-600/25 blur-3xl" />
               <h2 className="mx-auto max-w-2xl text-3xl font-bold leading-tight text-white sm:text-4xl">{t.cta.title}</h2>
