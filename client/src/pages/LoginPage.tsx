@@ -68,13 +68,10 @@ export default function LoginPage() {
 
           <div className="max-w-2xl">
             <h2 className="text-4xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-5xl">
-              Clarity in every{' '}
-              <span className="bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent">project</span>.
+              Empowering the project-management{' '}
+              <span className="bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent">community</span>{' '}
+              with clarity in every project.
             </h2>
-            <p className="mt-5 max-w-lg text-base leading-relaxed text-slate-600 dark:text-slate-300">
-              Know exactly where your projects stand. From budget to schedule to risk, Prismatix
-              refracts scattered updates into one clear view your team can actually act on.
-            </p>
             <ul className="mt-9 space-y-3.5 text-sm text-slate-600 dark:text-slate-300">
               {HIGHLIGHTS.map((t) => (
                 <li key={t} className="flex items-center gap-3">
