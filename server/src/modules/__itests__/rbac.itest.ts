@@ -5,6 +5,7 @@ import { createApp } from '../../app.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
+import { pruneExpiredRefreshTokens } from '../auth/auth.service.js';
 
 const app = createApp();
 const api = (path: string) => `/api/v1${path}`;
@@ -125,6 +126,36 @@ describe('refresh-token reuse detection (theft response)', () => {
     expect((await request(app).post(api('/auth/refresh')).send({ refreshToken: r0 })).status).toBe(401);
     // The family is now revoked, so even the previously-valid r1 no longer works.
     expect((await request(app).post(api('/auth/refresh')).send({ refreshToken: r1 })).status).toBe(401);
+  });
+});
+
+describe('expired refresh-token pruning', () => {
+  const email = 'prune@test.local';
+  let userId = '';
+
+  beforeAll(async () => {
+    const u = await prisma.user.create({ data: { name: 'Prune Me', email, role: 'VIEWER', passwordHash: await hashPassword(PW), isActive: true } });
+    userId = u.id;
+  });
+
+  it('removes expired rows but keeps still-valid ones (incl. revoked-but-unexpired)', async () => {
+    const past = new Date(Date.now() - 60_000);
+    const future = new Date(Date.now() + 60_000);
+    // Expired (active) and expired (revoked) — both prunable.
+    await prisma.refreshToken.create({ data: { userId, expiresAt: past } });
+    await prisma.refreshToken.create({ data: { userId, expiresAt: past, revokedAt: past } });
+    // Still valid — must survive.
+    const keepValid = await prisma.refreshToken.create({ data: { userId, expiresAt: future } });
+    // Revoked but NOT yet expired — kept, still needed for reuse detection.
+    const keepRevokedValid = await prisma.refreshToken.create({ data: { userId, expiresAt: future, revokedAt: new Date() } });
+
+    await pruneExpiredRefreshTokens();
+
+    const remaining = await prisma.refreshToken.findMany({ where: { userId }, select: { id: true } });
+    const ids = remaining.map((r) => r.id);
+    expect(ids).toContain(keepValid.id);
+    expect(ids).toContain(keepRevokedValid.id);
+    expect(remaining).toHaveLength(2);
   });
 });
 

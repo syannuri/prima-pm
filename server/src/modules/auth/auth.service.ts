@@ -34,6 +34,15 @@ async function issueTokenPair(user: User, replacesJti?: string): Promise<AuthRes
   };
 }
 
+// Delete refresh-token rows whose JWT has already expired. Safe because an expired token is
+// rejected on verify anyway, so its row can no longer take part in reuse detection. Rows that
+// are REVOKED but not yet expired are KEPT — they're still needed to catch replay of a leaked
+// token inside its validity window. Returns the number of rows removed.
+export async function pruneExpiredRefreshTokens(): Promise<number> {
+  const { count } = await prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  return count;
+}
+
 // Revoke EVERY session for a user: bump tokenVersion (kills all access + refresh tokens on
 // next use) and mark all outstanding refresh-token rows revoked. Used on logout, password
 // change/reset, and as the theft response when a rotated refresh token is replayed.
