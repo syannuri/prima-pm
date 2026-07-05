@@ -40,8 +40,12 @@ export function errorHandler(
 
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === 'P2002') {
+      // Don't leak internal column names (err.meta.target) to the client — log for
+      // debugging, return a generic conflict. App code pre-checks uniqueness with a
+      // friendly Conflict() message; this is just the race-condition backstop.
+      console.warn('[error] P2002 unique violation', err.meta);
       res.status(409).json({
-        error: { code: 'CONFLICT', message: 'Unique constraint violated', details: err.meta },
+        error: { code: 'CONFLICT', message: 'That value is already in use' },
       });
       return;
     }

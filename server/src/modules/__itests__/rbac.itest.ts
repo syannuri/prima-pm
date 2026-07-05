@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
-import type { Role } from '@prisma/client';
+import type { Request, Response, NextFunction } from 'express';
+import { Prisma, type Role } from '@prisma/client';
 import { createApp } from '../../app.js';
+import { errorHandler } from '../../middleware/error.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
@@ -156,6 +158,30 @@ describe('expired refresh-token pruning', () => {
     expect(ids).toContain(keepValid.id);
     expect(ids).toContain(keepRevokedValid.id);
     expect(remaining).toHaveLength(2);
+  });
+});
+
+describe('error handler sanitises Prisma P2002', () => {
+  it('returns a generic 409 CONFLICT without leaking the offending column name', () => {
+    const err = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: 'test',
+      meta: { target: ['email'] },
+    });
+    let status = 0;
+    let body: { error?: { code?: string; details?: unknown } } = {};
+    const res = {
+      status(code: number) { status = code; return this; },
+      json(payload: typeof body) { body = payload; return this; },
+    } as unknown as Response;
+
+    errorHandler(err, {} as Request, res, (() => {}) as NextFunction);
+
+    expect(status).toBe(409);
+    expect(body.error?.code).toBe('CONFLICT');
+    expect(body.error?.details).toBeUndefined();
+    // The internal column name must not appear anywhere in the client payload.
+    expect(JSON.stringify(body)).not.toContain('email');
   });
 });
 
