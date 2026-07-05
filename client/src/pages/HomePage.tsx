@@ -373,7 +373,7 @@ export default function HomePage() {
           </div>
           <h1 className="max-w-3xl text-5xl font-bold leading-[1.08] tracking-tight text-white sm:text-6xl">
             {t.hero.titlePre}
-            <span className="bg-gradient-to-r from-brand-400 via-amber-400 to-indigo-400 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
+            <span className="bg-gradient-to-r from-sky-400 via-indigo-400 to-violet-400 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-300">{t.hero.sub}</p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
