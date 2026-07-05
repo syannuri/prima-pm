@@ -125,83 +125,83 @@ const COPY: Record<Lang, Content> = {
   id: {
     signin: 'Masuk',
     hero: {
-      badge: 'Sebuah hadiah untuk komunitas manajemen proyek',
-      titlePre: 'Kejernihan di setiap ',
+      badge: 'Persembahan untuk komunitas manajemen proyek',
+      titlePre: 'Kejelasan di setiap ',
       titleAccent: 'proyek',
-      sub: 'Prismatix mengubah kabar yang tercerai-berai menjadi kebenaran Earned Value — biaya, jadwal, risiko, dan proyeksi dalam satu tampilan yang tenang dan sadar-peran. Dibuat oleh praktisi, dipersembahkan untuk keahliannya.',
+      sub: 'Prismatix menyatukan kabar yang berserakan menjadi fakta berbasis Earned Value — biaya, jadwal, risiko, dan proyeksi dalam satu tampilan yang ringkas dan menyesuaikan peran Anda. Dibuat oleh praktisi, untuk sesama praktisi.',
       enter: 'Masuk Prismatix',
-      explore: 'Telusuri',
+      explore: 'Jelajahi',
     },
     why: {
-      eyebrow: 'Kenapa ini ada',
-      body: 'Kebanyakan proyek tidak gagal dengan keras. Mereka melenceng pelan — mundur seminggu di sini, boros sedikit di sana, risiko yang tak sempat disebut — sampai jarak antara rencana dan kenyataan terlalu lebar untuk ditutup. Prismatix hadir untuk memunculkan jarak itu lebih dini, selagi masih cukup kecil untuk diperbaiki.',
+      eyebrow: 'Alasan kami hadir',
+      body: 'Sebagian besar proyek tidak gagal secara tiba-tiba. Mereka melenceng perlahan — telat seminggu di sini, bengkak biaya di sana, risiko yang tak sempat dicatat — sampai jarak antara rencana dan kenyataan terlalu lebar untuk ditutup. Prismatix hadir untuk menyingkap jarak itu sejak dini, selagi masih cukup kecil untuk diperbaiki.',
     },
     what: {
-      title: 'Satu kokpit — dari charter hingga penutupan',
-      body: 'Platform pengiriman proyek yang selaras PMBOK dengan Earned Value sebagai jantungnya. Rencanakan pekerjaan, lihat ia menghasilkan nilai secara real-time, kemudikan dengan proyeksi dan kontrol perubahan, lalu tutup dengan yakin — untuk proyek predictive, agile, maupun hybrid.',
+      title: 'Satu pusat kendali — dari charter hingga penutupan',
+      body: 'Platform pelaksanaan proyek yang selaras dengan PMBOK, dengan Earned Value sebagai intinya. Susun rencana, pantau nilai yang dihasilkan secara real-time, kendalikan lewat proyeksi dan kontrol perubahan, lalu tutup dengan percaya diri — untuk proyek predictive, agile, maupun hybrid.',
     },
     features: {
-      title: 'Semua kebutuhan pengiriman, dalam satu tempat yang tenang',
-      sub: 'Empat gerakan dalam satu irama — rencanakan, lacak, kemudikan, lihat.',
+      title: 'Semua kebutuhan proyek dalam satu tempat yang rapi',
+      sub: 'Empat langkah dalam satu irama — rencanakan, pantau, kendalikan, amati.',
       groups: [
         { icon: ICON.plan, name: 'Rencanakan', items: [
-          ['Project Charter', 'Tujuan, ruang lingkup, sponsor dan pendekatan pengiriman — dikunci ke baseline.'],
-          ['WBS & Gantt', 'Pohon rincian kerja dengan jadwal interaktif dan dependensi.'],
-          ['Cost baseline', 'Direct + indirect + contingency menyusun BAC / PMB yang kokoh.'],
+          ['Project Charter', 'Tujuan, ruang lingkup, sponsor, dan pendekatan pelaksanaan — dikunci sebagai baseline.'],
+          ['WBS & Gantt', 'Struktur rincian kerja (WBS) dengan jadwal interaktif dan dependensi antar-tugas.'],
+          ['Cost baseline', 'Biaya langsung + tidak langsung + cadangan menyatu menjadi BAC / PMB yang kuat.'],
         ]},
-        { icon: ICON.track, name: 'Lacak', items: [
-          ['Earned Value', 'CPI / SPI, varians, dan % selesai — kebenaran di balik status.'],
-          ['Risiko', 'Heatmap 5×5 kualitatif dan EMV kuantitatif yang mengisi cadangan.'],
-          ['Timesheet', 'Man-days rencana vs earned vs terpakai, lengkap dengan efisiensi.'],
+        { icon: ICON.track, name: 'Pantau', items: [
+          ['Earned Value', 'CPI / SPI, varians, dan persentase penyelesaian — fakta di balik status.'],
+          ['Risiko', 'Heatmap 5×5 kualitatif dan EMV kuantitatif yang mengisi cadangan kontingensi.'],
+          ['Timesheet', 'Man-day rencana vs yang dihasilkan vs yang terpakai, lengkap dengan efisiensinya.'],
         ]},
-        { icon: ICON.steer, name: 'Kemudikan', items: [
-          ['Kontrol perubahan', 'Ajukan, tinjau, setujui — perubahan yang disetujui membuka baseline.'],
+        { icon: ICON.steer, name: 'Kendalikan', items: [
+          ['Kontrol perubahan', 'Ajukan, tinjau, setujui — perubahan yang disetujui membuka kembali baseline.'],
           ['Forecast', 'Skenario EAC, perkiraan tanggal selesai, dan kurva-S biaya.'],
-          ['Tata kelola', 'Kunci baseline dan gerbang penutupan menjaga scope tetap jujur.'],
+          ['Tata kelola', 'Penguncian baseline dan gerbang penutupan menjaga cakupan tetap terkendali.'],
         ]},
-        { icon: ICON.see, name: 'Lihat', items: [
-          ['Dashboard portfolio', 'Kesehatan, biaya, dan jadwal tiap proyek dalam sekejap.'],
+        { icon: ICON.see, name: 'Amati', items: [
+          ['Dashboard portofolio', 'Kesehatan, biaya, dan jadwal setiap proyek dalam sekejap.'],
           ['Laporan', 'PDF & Excel sekali klik untuk biaya, risiko, jadwal, dan EVM.'],
-          ['Akses sadar-peran', 'PMO, PM, Finance, Risk, dan tim melihat tepat porsinya.'],
+          ['Akses sesuai peran', 'PMO, PM, Finance, Risk, dan tim melihat tepat sesuai porsinya.'],
         ]},
       ],
     },
     showcase: {
-      title: 'Intip ke dalam',
-      sub: 'Beberapa layar yang Anda pakai setiap hari.',
+      title: 'Lihat lebih dekat',
+      sub: 'Beberapa tampilan yang Anda gunakan setiap hari.',
       labels: ['WBS & Gantt interaktif', 'Kesehatan Earned Value (EVM)', 'Papan Agile — seret & lepas'],
     },
     evm: {
-      title: 'Bahasa senyap Earned Value',
+      title: 'Bahasa ringkas Earned Value',
       sub: 'Empat angka yang mengubah laporan status menjadi keputusan.',
       items: [
-        ['CPI', 'Efisiensi biaya — berapa nilai yang didapat per unit yang dibelanjakan.'],
+        ['CPI', 'Efisiensi biaya — seberapa besar nilai yang diperoleh per rupiah yang dikeluarkan.'],
         ['SPI', 'Efisiensi jadwal — seberapa cepat nilai benar-benar dihasilkan.'],
-        ['EAC', 'Perkiraan saat selesai — ke mana laju hari ini membawa anggaran.'],
-        ['EMV', 'Nilai moneter harapan — risiko yang dihargai, mengisi cadangan.'],
+        ['EAC', 'Estimasi biaya akhir — ke mana laju hari ini akan membawa anggaran.'],
+        ['EMV', 'Nilai moneter harapan — risiko yang dikuantifikasi untuk mengisi cadangan.'],
       ],
     },
     principles: {
-      title: 'Dibangun atas prinsip, bukan sekadar fitur',
-      chips: ['Selaras PMBOK', 'Earned Value di mana-mana', 'Aman by-design', 'Dark-first, UX manusiawi'],
+      title: 'Dibangun di atas prinsip, bukan sekadar fitur',
+      chips: ['Selaras PMBOK', 'Earned Value di mana-mana', 'Aman sejak dirancang', 'Desain gelap yang manusiawi'],
     },
     community: {
       eyebrow: 'Untuk komunitas',
-      title: 'Dibuat oleh praktisi. Dipersembahkan untuk keahliannya.',
-      body: 'Kami membuat Prismatix untuk mereka yang menyimpan rencana di kepala dan selusin ketidakpastian di kotak masuk. Ia bermula sebagai alat kami sendiri — lalu tumbuh menjadi sesuatu yang ingin kami bagikan kepada komunitas yang mengajarkan keahlian ini. Di mana pun Anda mengelola proyek di dunia, semoga ia membantu Anda melihat lebih jernih dan tidur sedikit lebih nyenyak.',
+      title: 'Dibuat oleh praktisi. Dipersembahkan untuk profesinya.',
+      body: 'Kami membuat Prismatix untuk mereka yang menyimpan rencana di kepala dan selusin ketidakpastian di kotak masuk. Awalnya ini alat kami sendiri — lalu tumbuh menjadi sesuatu yang ingin kami bagikan kepada komunitas yang mengajarkan kami profesi ini. Di mana pun Anda mengelola proyek, semoga ia membantu Anda melihat lebih jernih dan tidur sedikit lebih nyenyak.',
     },
     audience: {
-      title: 'Untuk seluruh tim pengiriman',
+      title: 'Untuk seluruh tim proyek',
       chips: ['PMO', 'Project Manager', 'Finance', 'Risk Officer', 'Tim pelaksana'],
     },
     cta: {
-      title: 'Siap melihat di mana proyek Anda sebenarnya berada?',
+      title: 'Siap melihat posisi proyek Anda yang sebenarnya?',
       enter: 'Masuk Prismatix',
       note: 'Akun disediakan oleh administrator Anda.',
     },
     footer: {
-      tagline: 'Sebuah kontribusi untuk komunitas manajemen proyek dunia.',
-      rights: '© 2026 PRISMATIX. Semua hak dilindungi.',
+      tagline: 'Kontribusi untuk komunitas manajemen proyek dunia.',
+      rights: '© 2026 PRISMATIX. Seluruh hak cipta dilindungi.',
     },
   },
 };
@@ -414,7 +414,7 @@ export default function HomePage() {
         </section>
 
         {/* ---------- why ---------- */}
-        <section className="mx-auto max-w-3xl px-5 py-24 text-center sm:px-8">
+        <section className="mx-auto max-w-3xl px-5 py-16 text-center sm:px-8">
           <Reveal>
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{t.why.eyebrow}</div>
             <p className="text-2xl font-medium leading-relaxed text-slate-200 sm:text-[1.7rem]">{t.why.body}</p>
@@ -430,7 +430,7 @@ export default function HomePage() {
         </section>
 
         {/* ---------- feature constellation ---------- */}
-        <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-24 sm:px-8">
+        <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-8">
           <Reveal className="mb-14 text-center">
             <SectionTitle>{t.features.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-400">{t.features.sub}</p>
@@ -463,7 +463,7 @@ export default function HomePage() {
         </section>
 
         {/* ---------- showcase: real product screenshots ---------- */}
-        <section className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
+        <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
           <Reveal className="mb-12 text-center">
             <SectionTitle>{t.showcase.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-400">{t.showcase.sub}</p>
@@ -494,7 +494,7 @@ export default function HomePage() {
         </section>
 
         {/* ---------- the language of EVM (abstract, glowing chips) ---------- */}
-        <section className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
+        <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
           <Reveal className="mb-12 text-center">
             <SectionTitle>{t.evm.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-400">{t.evm.sub}</p>
@@ -526,7 +526,7 @@ export default function HomePage() {
         </section>
 
         {/* ---------- community (heart) ---------- */}
-        <section className="mx-auto max-w-3xl px-5 py-24 text-center sm:px-8">
+        <section className="mx-auto max-w-3xl px-5 py-16 text-center sm:px-8">
           <Reveal>
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{t.community.eyebrow}</div>
             <h2 className="text-3xl font-bold leading-tight text-white sm:text-4xl">{t.community.title}</h2>
@@ -543,7 +543,7 @@ export default function HomePage() {
         </section>
 
         {/* ---------- final CTA (bookend) ---------- */}
-        <section className="mx-auto max-w-4xl px-5 py-24 text-center sm:px-8">
+        <section className="mx-auto max-w-4xl px-5 py-16 text-center sm:px-8">
           <Reveal>
             <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] px-6 py-16 backdrop-blur-sm">
               <div className="pointer-events-none absolute -inset-10 -z-10 bg-gradient-to-tr from-brand-600/25 via-violet-600/20 to-indigo-600/25 blur-3xl" />
