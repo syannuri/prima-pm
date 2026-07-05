@@ -67,10 +67,9 @@ export default function LoginPage() {
           </span>
 
           <div className="max-w-2xl">
-            <h2 className="text-4xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-5xl">
+            <h2 className="text-3xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-4xl">
               Empowering the project-management{' '}
-              <span className="bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent">community</span>{' '}
-              with clarity in every project.
+              <span className="bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent">community</span>.
             </h2>
             <ul className="mt-9 space-y-3.5 text-sm text-slate-600 dark:text-slate-300">
               {HIGHLIGHTS.map((t) => (
