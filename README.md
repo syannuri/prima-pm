@@ -54,6 +54,10 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 | **Forecast — EAC scenarios, schedule/margin forecast & S-curve** | **Timesheet — plan vs earned vs consumed man-days & efficiency** |
 | ![Forecast at completion with best/likely/worst EAC, completion metrics and a cost S-curve](docs/screenshots/forecast.png) | ![Timesheet effort table with plan, earned, consumed man-days and labour efficiency](docs/screenshots/timesheet.png) |
 
+**Guided next steps** — a contextual card on every project that tells the PM what to do next for the current lifecycle stage (charter → baseline → activate → track → close), jumping straight to the right tab.
+
+![Guided next-steps card showing record-acceptance, capture-lessons and close-project cues for a project in execution](docs/screenshots/next-steps.png)
+
 ## 🧱 Tech stack
 
 | Layer | Tech |
