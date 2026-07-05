@@ -187,6 +187,16 @@ describe('RBAC enforcement (server-side, end-to-end)', () => {
     expect(res.status).toBe(200);
   });
 
+  it('rejects a forecast request with an invalid statusDate (400)', async () => {
+    const res = await request(app).get(api(`/projects/${projectId}/forecast?statusDate=not-a-date`)).set(auth(tokens.ADMIN));
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts a forecast request with a valid statusDate (200)', async () => {
+    const res = await request(app).get(api(`/projects/${projectId}/forecast?statusDate=2026-10-01`)).set(auth(tokens.ADMIN));
+    expect(res.status).toBe(200);
+  });
+
   it('a VIEWER cannot write project cost (403)', async () => {
     const res = await request(app)
       .post(api(`/projects/${projectId}/cost/direct`))
