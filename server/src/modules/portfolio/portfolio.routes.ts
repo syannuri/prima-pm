@@ -5,6 +5,9 @@ import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
 import { getPortfolioSummary } from './portfolio.service.js';
 import { getPortfolioEvmTrend, captureAllSnapshots } from '../evm/evm.portfolio.js';
+import { gatherPortfolioExport } from '../export/export.portfolio.data.js';
+import { buildPortfolioPdf } from '../export/build.portfolio.pdf.js';
+import { buildPortfolioWorkbook } from '../export/build.portfolio.excel.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -39,6 +42,31 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = await captureAllSnapshots(req.user!.id, req.user!.role, req.body.statusDate);
     res.status(201).json(result);
+  }),
+);
+
+// Portfolio-wide report exports (summary + rolled-up EVM trend), role-scoped.
+router.get(
+  '/export/excel',
+  asyncHandler(async (req, res) => {
+    const { statusDate } = querySchema.parse(req.query);
+    const data = await gatherPortfolioExport(req.user!.id, req.user!.role, statusDate ?? new Date());
+    const buffer = await buildPortfolioWorkbook(data);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="portfolio_report.xlsx"');
+    res.send(buffer);
+  }),
+);
+
+router.get(
+  '/export/pdf',
+  asyncHandler(async (req, res) => {
+    const { statusDate } = querySchema.parse(req.query);
+    const data = await gatherPortfolioExport(req.user!.id, req.user!.role, statusDate ?? new Date());
+    const buffer = await buildPortfolioPdf(data);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="portfolio_report.pdf"');
+    res.send(buffer);
   }),
 );
 
