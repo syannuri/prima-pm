@@ -110,6 +110,17 @@ function OwnerCell({ name }: { name: string | null | undefined }) {
   );
 }
 
+// The date a new task should default to starting: the latest planEnd among its would-be
+// siblings (same parent), else the latest planEnd across the whole WBS, else null (today).
+// Keeps newly added tasks running sequentially instead of all starting on the same day.
+function nextTaskStart(rows: Row[], parentId: string | null): Date | null {
+  const siblings = rows.filter((r) => r.node.parentTaskId === parentId);
+  const pool = siblings.length ? siblings : rows;
+  if (!pool.length) return null;
+  const maxEnd = Math.max(...pool.map((r) => +new Date(r.node.planEnd)));
+  return Number.isFinite(maxEnd) ? new Date(maxEnd) : null;
+}
+
 export default function WbsPanel({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -389,6 +400,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           parentId={form.parentId}
           edit={form.edit}
           siblingCount={rows.filter((r) => r.node.parentTaskId === form.parentId).length}
+          defaultStart={nextTaskStart(rows, form.parentId)}
           onClose={() => setForm(null)}
           onSaved={() => { setForm(null); invalidate(); }}
         />
@@ -416,12 +428,20 @@ function DictionaryView({ node }: { node: GanttNode }) {
   );
 }
 
-function TaskForm({ base, parentId, edit, siblingCount, onClose, onSaved }: {
-  base: string; parentId: string | null; edit?: GanttNode; siblingCount: number; onClose: () => void; onSaved: () => void;
+// Default duration (days) for a brand-new task when we auto-continue the schedule.
+const DEFAULT_TASK_DAYS = 7;
+
+function TaskForm({ base, parentId, edit, siblingCount, defaultStart, onClose, onSaved }: {
+  base: string; parentId: string | null; edit?: GanttNode; siblingCount: number; defaultStart?: Date | null; onClose: () => void; onSaved: () => void;
 }) {
+  // New tasks default to continue from where the schedule currently ends (defaultStart =
+  // the latest existing task's planEnd) so dates run sequentially instead of all starting
+  // today; end = start + a default duration. Editing keeps the task's own dates.
+  const newStart = defaultStart ?? new Date();
+  const newEnd = new Date(newStart.getTime() + DEFAULT_TASK_DAYS * 86_400_000);
   const [name, setName] = useState(edit?.name ?? '');
-  const [planStart, setStart] = useState(formatDateInput(edit?.planStart ?? new Date()));
-  const [planEnd, setEnd] = useState(formatDateInput(edit?.planEnd ?? new Date()));
+  const [planStart, setStart] = useState(formatDateInput(edit?.planStart ?? newStart));
+  const [planEnd, setEnd] = useState(formatDateInput(edit?.planEnd ?? newEnd));
   const [progressPct, setProgress] = useState(edit?.progressPct ?? 0);
   const [isMilestone, setMilestone] = useState(edit?.isMilestone ?? false);
   const [description, setDescription] = useState(edit?.description ?? '');
