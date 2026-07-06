@@ -79,8 +79,8 @@ export default function PortfolioEvmTrend() {
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-4">
-            <Kpi label="Portfolio CPI" value={latest && latest.cpi ? formatNum(latest.cpi, 2) : '—'} sub={prev ? `${arrow(prev.cpi, latest!.cpi)} vs prev` : 'first point'} tone={latest && latest.cpi > 0 && latest.cpi < 1 ? 'red' : latest && latest.cpi >= 1 ? 'green' : undefined} />
-            <Kpi label="Portfolio SPI" value={latest && latest.spi ? formatNum(latest.spi, 2) : '—'} sub={prev ? `${arrow(prev.spi, latest!.spi)} vs prev` : 'first point'} tone={latest && latest.spi > 0 && latest.spi < 1 ? 'red' : latest && latest.spi >= 1 ? 'green' : undefined} />
+            <Kpi label="Latest CPI" value={latest && latest.cpi ? formatNum(latest.cpi, 2) : '—'} sub={prev ? `${arrow(prev.cpi, latest!.cpi)} vs prev` : 'first point'} tone={latest && latest.cpi > 0 && latest.cpi < 1 ? 'red' : latest && latest.cpi >= 1 ? 'green' : undefined} />
+            <Kpi label="Latest SPI" value={latest && latest.spi ? formatNum(latest.spi, 2) : '—'} sub={prev ? `${arrow(prev.spi, latest!.spi)} vs prev` : 'first point'} tone={latest && latest.spi > 0 && latest.spi < 1 ? 'red' : latest && latest.spi >= 1 ? 'green' : undefined} />
             <Kpi label="Earned value" value={latest ? formatIdr(latest.ev) : '—'} sub={`of ${formatIdr(data?.bac ?? 0)} BAC`} />
             <Kpi label="Projects tracked" value={String(data?.projectCount ?? 0)} sub={`${series.length} status point${series.length === 1 ? '' : 's'}`} />
           </div>
