@@ -102,13 +102,17 @@ router.patch(
   }),
 );
 
-// Lock / unlock the cost & schedule baseline (PMB/BAC freeze) — ADMIN/PMO only.
-// Unlocking requires a reason (audited). requireRole only, so it works while the
-// baseline is locked (unlike the project-access write guard).
+// Lock / unlock the cost & schedule baseline (PMB/BAC freeze). The owning PM builds
+// the cost breakdown, so the PM (plus ADMIN/PMO) may lock AND unlock it; unlocking
+// requires a reason (audited). requireProjectAccess enforces ownership for a PM
+// (ADMIN/PMO bypass as global roles) and blocks VIEWER / CLOSED projects. It does NOT
+// check the lock state itself — that is enforced service-side on cost/schedule
+// mutations (assertBaselineUnlocked) — so unlocking is not deadlocked here.
 const baselineLockSchema = z.object({ locked: z.boolean(), reason: z.string().trim().max(500).optional() });
 router.patch(
   '/:id/baseline-lock',
-  requireRole('ADMIN', 'PMO'),
+  requireProjectAccess({ write: true }),
+  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER'),
   validateBody(baselineLockSchema),
   asyncHandler(async (req, res) => {
     const project = await setBaselineLock(req.params.id, req.body.locked, req.body.reason, req.user!.id);

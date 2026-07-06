@@ -464,6 +464,21 @@ describe('baseline lock freezes cost/schedule (PMB/BAC)', () => {
     expect((await setLock({ locked: false, reason: 'CR-014 approved: added scope.' })).status).toBe(200);
     expect((await addCost()).status).toBe(201);
   });
+
+  it('the owning PM (who builds the cost breakdown) can lock AND unlock their own baseline', async () => {
+    const lock = await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.PROJECT_MANAGER)).send({ locked: true });
+    expect(lock.status).toBe(200);
+    const unlock = await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.PROJECT_MANAGER)).send({ locked: false, reason: 'PM re-opening to revise the estimate' });
+    expect(unlock.status).toBe(200);
+  });
+
+  it('a non-owner PM and FINANCE cannot lock the baseline (403)', async () => {
+    const otherPm = await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.PM2)).send({ locked: true });
+    expect(otherPm.status).toBe(403);
+    // FINANCE may write cost lines but the baseline freeze is a PM/PMO governance act.
+    const finance = await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.FINANCE)).send({ locked: true });
+    expect(finance.status).toBe(403);
+  });
 });
 
 describe('approving a cost/schedule change request unlocks the baseline', () => {

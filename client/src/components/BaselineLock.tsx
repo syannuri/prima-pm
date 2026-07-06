@@ -8,7 +8,9 @@ import { useAuth } from '../context/AuthContext';
 
 // Cost/schedule baseline (PMB/BAC) freeze control. When locked, cost lines, management
 // reserve, WBS tasks and the schedule baseline can't change — progress/actuals and risks
-// still can. ADMIN/PMO lock/unlock; unlocking requires a reason (audited).
+// still can. The owning PM (who builds the cost breakdown) + ADMIN/PMO lock/unlock;
+// unlocking requires a reason (audited). A PM only ever sees projects they own, so the
+// control is safe to show them; the server also enforces ownership.
 export default function BaselineLock({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -21,7 +23,7 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
     queryFn: () => api.get<{ project: Project }>(`/projects/${projectId}`),
   });
   const locked = !!data?.project?.baselineLockedAt;
-  const canManage = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  const canManage = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
 
   const toggle = useMutation({
     mutationFn: (body: { locked: boolean; reason?: string }) => api.patch(`/projects/${projectId}/baseline-lock`, body),
