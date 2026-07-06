@@ -3,6 +3,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
 import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
+import { notifyActivationReady } from '../projects/activation.js';
 
 const router = Router({ mergeParams: true });
 
@@ -48,7 +49,10 @@ router.put('/tasks/:taskId', ...canWrite, validateBody(upsertTaskSchema), asyncH
 
 // Capture the schedule baseline (snapshot planned dates).
 router.post('/baseline', ...canWrite, asyncHandler(async (req, res) => {
-  res.json(await svc.setScheduleBaseline(req.params.projectId, req.user!.id));
+  const result = await svc.setScheduleBaseline(req.params.projectId, req.user!.id);
+  // Capturing the schedule baseline may complete the set → notify ADMIN/PMO (once).
+  await notifyActivationReady(req.params.projectId, req.user!.id);
+  res.json(result);
 }));
 
 // Progress-only update (WBS % complete / status).

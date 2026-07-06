@@ -237,6 +237,9 @@ model Project {
   // the risk register stay editable. ADMIN/PMO unlock (with a reason) to make baseline changes.
   baselineLockedAt   DateTime?
   baselineLockedById String?
+  // Stamped once when the project first becomes activation-ready (all baselines set) and
+  // ADMIN/PMO have been notified — so the "ready to activate" alert fires only once.
+  activationReadyNotifiedAt DateTime?
 
   charter          ProjectCharter?
   charterVersions  CharterVersion[]

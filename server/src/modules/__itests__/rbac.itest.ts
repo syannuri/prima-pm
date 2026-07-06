@@ -630,3 +630,30 @@ describe('project code auto-numbering is collision-safe (max + 1, not count)', (
     expect(after.body.project.code).toBe(`PRJ-${year}-9002`);
   });
 });
+
+describe('activation-ready notification (baselines complete → tell ADMIN/PMO)', () => {
+  let pid = '';
+  const readyInbox = async () => {
+    const inbox = await request(app).get(api('/notifications/inbox')).set(auth(tokens.ADMIN));
+    return (inbox.body.items as { type: string; projectId: string }[]).filter((n) => n.type === 'ACTIVATION_READY' && n.projectId === pid);
+  };
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Notify-Ready', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+  });
+
+  it('notifies ADMIN when the owning PM locks the baseline and the project becomes activation-ready', async () => {
+    expect(await readyInbox()).toHaveLength(0); // nothing yet
+    // No WBS → the schedule baseline is only a warning, so locking the cost baseline completes the set.
+    const lock = await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.PROJECT_MANAGER)).send({ locked: true });
+    expect(lock.status).toBe(200);
+    expect(await readyInbox()).toHaveLength(1); // ADMIN got the "ready to activate" alert (actor was the PM)
+  });
+
+  it('fires only once — unlocking then re-locking does not re-notify', async () => {
+    await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.PROJECT_MANAGER)).send({ locked: false, reason: 'revise estimate' });
+    await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.PROJECT_MANAGER)).send({ locked: true });
+    expect(await readyInbox()).toHaveLength(1); // still one (guarded by activationReadyNotifiedAt)
+  });
+});

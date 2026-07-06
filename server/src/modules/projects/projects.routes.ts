@@ -7,7 +7,7 @@ import { z } from 'zod';
 import * as svc from './projects.service.js';
 import { setBaselineLock } from './baseline.service.js';
 import { getClosureReadiness } from './closure.js';
-import { getActivationReadiness } from './activation.js';
+import { getActivationReadiness, notifyActivationReady } from './activation.js';
 import { getNextSteps } from './nextsteps.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
@@ -116,6 +116,8 @@ router.patch(
   validateBody(baselineLockSchema),
   asyncHandler(async (req, res) => {
     const project = await setBaselineLock(req.params.id, req.body.locked, req.body.reason, req.user!.id);
+    // Locking a baseline may complete the set → tell ADMIN/PMO it's ready to activate (once).
+    if (req.body.locked) await notifyActivationReady(req.params.id, req.user!.id);
     res.json({ project });
   }),
 );
