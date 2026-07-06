@@ -494,3 +494,60 @@ describe('approving a cost/schedule change request unlocks the baseline', () => 
     expect(write.status).toBe(201);
   });
 });
+
+describe('EVM trend snapshots (capture / list / trend / delete + RBAC)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'EVM-Trend-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+  });
+
+  it('the owning PM captures a snapshot; it lists back with the capturer name and derived EVM fields', async () => {
+    const cap = await request(app).post(api(`/projects/${pid}/evm/snapshots`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ statusDate: '2026-03-31', note: 'End of Q1 status' });
+    expect(cap.status).toBe(201);
+    expect(cap.body.snapshot).toMatchObject({ note: 'End of Q1 status' });
+
+    const list = await request(app).get(api(`/projects/${pid}/evm/snapshots`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(list.body.snapshots).toHaveLength(1);
+    expect(list.body.snapshots[0].createdByName).toBe('Owner PM'); // FK-less id resolved to a name
+    expect(list.body.snapshots[0]).toHaveProperty('cpi');
+    expect(list.body.snapshots[0]).toHaveProperty('spi');
+  });
+
+  it('re-capturing the same status date upserts (not a duplicate row)', async () => {
+    const again = await request(app).post(api(`/projects/${pid}/evm/snapshots`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ statusDate: '2026-03-31', note: 'Corrected Q1 status' });
+    expect(again.status).toBe(201);
+    const list = await request(app).get(api(`/projects/${pid}/evm/snapshots`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(list.body.snapshots).toHaveLength(1); // still one — same (project, statusDate)
+    expect(list.body.snapshots[0].note).toBe('Corrected Q1 status');
+  });
+
+  it('the trend endpoint returns the captured series + a planned-curve backdrop + BAC', async () => {
+    const trend = await request(app).get(api(`/projects/${pid}/evm/trend?statusDate=2026-06-30`)).set(auth(tokens.FINANCE));
+    expect(trend.status).toBe(200); // FINANCE reads alongside the owner
+    expect(trend.body.snapshots).toHaveLength(1);
+    expect(trend.body).toHaveProperty('bac');
+    expect(Array.isArray(trend.body.plannedCurve)).toBe(true);
+  });
+
+  it('a bad ?statusDate= is rejected 400 (coerced, not NaN)', async () => {
+    const bad = await request(app).get(api(`/projects/${pid}/evm/trend?statusDate=not-a-date`)).set(auth(tokens.ADMIN));
+    expect(bad.status).toBe(400);
+  });
+
+  it('VIEWER and a non-owner PM cannot capture (403); the owner can delete', async () => {
+    const viewer = await request(app).post(api(`/projects/${pid}/evm/snapshots`)).set(auth(tokens.VIEWER)).send({});
+    expect(viewer.status).toBe(403);
+    const otherPm = await request(app).post(api(`/projects/${pid}/evm/snapshots`)).set(auth(tokens.PM2)).send({});
+    expect(otherPm.status).toBe(403);
+
+    const list = await request(app).get(api(`/projects/${pid}/evm/snapshots`)).set(auth(tokens.PROJECT_MANAGER));
+    const id = list.body.snapshots[0].id;
+    const del = await request(app).delete(api(`/projects/${pid}/evm/snapshots/${id}`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(del.status).toBe(204);
+    const after = await request(app).get(api(`/projects/${pid}/evm/snapshots`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(after.body.snapshots).toHaveLength(0);
+  });
+});

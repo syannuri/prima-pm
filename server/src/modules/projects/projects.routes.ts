@@ -22,6 +22,7 @@ import projectNotificationRoutes from '../notification/notification.project.rout
 import agileRoutes from '../agile/agile.routes.js';
 import timesheetRoutes from '../timesheet/timesheet.routes.js';
 import closeoutRoutes from '../closeout/closeout.routes.js';
+import evmRoutes from '../evm/evm.routes.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -150,5 +151,6 @@ router.use('/:projectId/notifications', projectNotificationRoutes);
 router.use('/:projectId/agile', agileRoutes);
 router.use('/:projectId/timesheet', timesheetRoutes);
 router.use('/:projectId/closeout', closeoutRoutes);
+router.use('/:projectId/evm', evmRoutes);
 
 export default router;

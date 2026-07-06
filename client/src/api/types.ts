@@ -463,3 +463,29 @@ export interface Forecast {
   hasData: boolean;
   sCurve: { t: string; pv: number; ac: number | null; forecast: number | null }[];
 }
+
+// A frozen point-in-time EVM capture — the app's point-in-time EVM turned into a trend.
+export interface EvmSnapshot {
+  id: string;
+  statusDate: string;
+  bac: number;
+  pv: number;
+  ev: number;
+  ac: number;
+  cpi: number;
+  spi: number;
+  weightedProgress: number; // physical % complete (0..1)
+  note: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+export interface EvmTrend {
+  projectId: string;
+  statusDate: string;
+  bac: number;
+  plannedStart: string | null;
+  plannedFinish: string | null;
+  snapshots: EvmSnapshot[];
+  plannedCurve: { t: string; pv: number }[]; // smooth planned-value backdrop
+}

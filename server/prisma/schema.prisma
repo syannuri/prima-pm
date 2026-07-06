@@ -254,6 +254,7 @@ model Project {
   mandayEntries    MandayEntry[]
   lessons          LessonLearned[]
   acceptances      AcceptanceSignoff[]
+  evmSnapshots     EvmSnapshot[]
 
   @@index([status])
   @@index([pmUserId])
@@ -718,6 +719,31 @@ model SprintSnapshot {
 
   @@unique([sprintId, date])
   @@index([sprintId])
+}
+
+// A point-in-time capture of a project's EVM metrics. Progress (progressPct) is only
+// a "now" value, so Earned Value cannot be reconstructed for past dates — capturing a
+// snapshot freezes PV/EV/AC/CPI/SPI as-of a status date, turning the app's point-in-time
+// EVM into a trend (the CPR/IPMR-style S-curve of EV & the CPI/SPI history over time).
+// One snapshot per (project, statusDate); re-capturing the same date upserts.
+model EvmSnapshot {
+  id               String   @id @default(uuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  statusDate       DateTime @db.Date
+  bac              Decimal  @db.Decimal(18, 2)
+  pv               Decimal  @db.Decimal(18, 2)
+  ev               Decimal  @db.Decimal(18, 2)
+  ac               Decimal  @db.Decimal(18, 2)
+  cpi              Float    @default(0)
+  spi              Float    @default(0)
+  weightedProgress Float    @default(0) // physical % complete (0..1) at the status date
+  note             String?
+  createdById      String?  // actor who captured it (plain id, no FK — kept light)
+  createdAt        DateTime @default(now())
+
+  @@unique([projectId, statusDate])
+  @@index([projectId, statusDate])
 }
 
 // Persistent per-user in-app notification (inbox) — for discrete events like being

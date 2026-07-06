@@ -13,6 +13,7 @@ import * as charter from '../src/modules/charter/charter.service.js';
 import * as cost from '../src/modules/cost/cost.service.js';
 import * as risk from '../src/modules/risk/risk.service.js';
 import * as schedule from '../src/modules/schedule/schedule.service.js';
+import { getProjectEvm } from '../src/modules/agile/agile.service.js';
 
 import { upsertCharterSchema } from '../src/modules/charter/charter.schemas.js';
 import { directLineSchema, indirectLineSchema, actualCostSchema } from '../src/modules/cost/cost.schemas.js';
@@ -240,6 +241,49 @@ async function seedDemoProject(users: Record<string, { id: string }>) {
   return project;
 }
 
+// EVM-trend snapshots so the "EVM Trend" tab is populated in a fresh demo. PV is the
+// REAL methodology PV curve (getProjectEvm per date); EV/AC are synthesized to drift
+// toward a mild per-project CPI/SPI so the S-curve + index trend tell a story. Idempotent.
+async function seedEvmSnapshots(users: Record<string, { id: string }>) {
+  const day = (ms: number) => { const d = new Date(ms); d.setUTCHours(0, 0, 0, 0); return d; };
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  // name → target indices (default = mild). "Cloud Migration Wave 1" runs a cost overrun.
+  const TARGET: Record<string, { cpi: number; spi: number; note: string }> = {
+    'Cloud Migration Wave 1': { cpi: 0.89, spi: 0.93, note: 'Cost overrun' },
+  };
+  const projs = await prisma.project.findMany({ where: { deletedAt: null }, select: { id: true, name: true } });
+  let total = 0;
+  for (const proj of projs) {
+    const tasks = await prisma.task.findMany({ where: { projectId: proj.id }, select: { planStart: true, planEnd: true } });
+    if (!tasks.length) continue;
+    const start = Math.min(...tasks.map((t) => +t.planStart));
+    const end = Math.max(...tasks.map((t) => +t.planEnd));
+    const last = Math.min(end, start + (end - start) * 0.55); // ~mid-window, like the tuned demo
+    const cfg = TARGET[proj.name] ?? { cpi: 1.02, spi: 1.01, note: 'On track' };
+    const N = 5;
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      const dateMs = Math.round(lerp(start, last, t));
+      const statusDate = day(dateMs);
+      const evm = await getProjectEvm(proj.id, 0, new Date(dateMs));
+      const spi = r2(lerp(1.0, cfg.spi, t));
+      const cpi = r2(lerp(1.0, cfg.cpi, t));
+      const ev = r2(evm.pv * spi);
+      const ac = cpi > 0 ? r2(ev / cpi) : ev;
+      const weightedProgress = evm.bac > 0 ? Math.min(1, r2(ev / evm.bac)) : 0;
+      const data = { bac: evm.bac, pv: r2(evm.pv), ev, ac, cpi, spi, weightedProgress, note: cfg.note, createdById: users.PMO?.id ?? null };
+      await prisma.evmSnapshot.upsert({
+        where: { projectId_statusDate: { projectId: proj.id, statusDate } },
+        create: { projectId: proj.id, statusDate, ...data },
+        update: data,
+      });
+      total++;
+    }
+  }
+  console.log(`  ✓ ${total} EVM-trend snapshots`);
+}
+
 async function main() {
   console.log('🌱 Seeding PRIMA-PM...');
   const users = await seedUsers();
@@ -248,6 +292,7 @@ async function main() {
   await resetDemoProject();
   await seedDemoProject(users);
   await seedSecondProject(users);
+  await seedEvmSnapshots(users);
   console.log('✅ Seed complete.');
 }
 

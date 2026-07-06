@@ -18,6 +18,7 @@ import SchedulePanel from './panels/SchedulePanel';
 import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
 import CloseoutPanel from './panels/CloseoutPanel';
+import EvmTrendPanel from './panels/EvmTrendPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import NextStepsGuide from './panels/NextStepsGuide';
 import ReassignPm from '../components/ReassignPm';
@@ -27,7 +28,7 @@ import LifecycleActions from '../components/LifecycleActions';
 import AgilePanel from './panels/AgilePanel';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
+type Tab = 'Charter' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -78,7 +79,7 @@ export default function ProjectPage() {
   const tabs: Tab[] = [
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
-    'Cost', 'Timesheet', 'Forecast', 'Risk', 'Issues', 'Change Req',
+    'Cost', 'Timesheet', 'Forecast', 'EVM Trend', 'Risk', 'Issues', 'Change Req',
     'Charter', 'Closeout', 'Audit',
   ];
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
@@ -178,6 +179,7 @@ export default function ProjectPage() {
       {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
       {activeTab === 'Timesheet' && chartered && <TimesheetPanel projectId={projectId} />}
       {activeTab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
+      {activeTab === 'EVM Trend' && chartered && <EvmTrendPanel projectId={projectId} />}
       {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
       {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}
       {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
