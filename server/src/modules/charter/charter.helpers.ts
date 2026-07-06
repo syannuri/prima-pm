@@ -79,6 +79,23 @@ export function generateProjectCode(year: number, seq: number): string {
   return `PRJ-${year}-${String(seq).padStart(4, '0')}`;
 }
 
+/**
+ * Next 1-based sequence number for the year, from the HIGHEST existing code — not a
+ * row count. Count-based numbering collided after deletions/gaps: a soft-deleted or
+ * manually-coded project leaves the count below the real max, so `count + 1` lands on a
+ * code that is already taken (Prisma P2002 → "That value is already in use"). Pass ALL
+ * codes for the year (active AND soft-deleted), since `Project.code` is globally unique.
+ */
+export function nextProjectSeq(existingCodes: string[], year: number): number {
+  const prefix = `PRJ-${year}-`;
+  const maxSeq = existingCodes.reduce((max, code) => {
+    if (!code.startsWith(prefix)) return max;
+    const n = Number.parseInt(code.slice(prefix.length), 10);
+    return Number.isFinite(n) && n > max ? n : max;
+  }, 0);
+  return maxSeq + 1;
+}
+
 /** Validate that the planned schedule window is coherent (end after start). */
 export function isScheduleValid(start: Date, end: Date): boolean {
   return end.getTime() > start.getTime();

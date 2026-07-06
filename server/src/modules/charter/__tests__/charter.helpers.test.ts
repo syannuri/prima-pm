@@ -4,6 +4,7 @@ import {
   canEditCharter,
   buildCharterSnapshot,
   generateProjectCode,
+  nextProjectSeq,
   isScheduleValid,
 } from '../charter.helpers.js';
 
@@ -70,6 +71,31 @@ describe('charter — misc', () => {
     expect(generateProjectCode(2026, 1)).toBe('PRJ-2026-0001');
     expect(generateProjectCode(2026, 42)).toBe('PRJ-2026-0042');
     expect(generateProjectCode(2026, 12345)).toBe('PRJ-2026-12345');
+  });
+
+  describe('nextProjectSeq — from the max code, not a count', () => {
+    it('starts at 1 when there are no codes for the year', () => {
+      expect(nextProjectSeq([], 2026)).toBe(1);
+    });
+
+    it('is max + 1 for a contiguous run', () => {
+      expect(nextProjectSeq(['PRJ-2026-0001', 'PRJ-2026-0002', 'PRJ-2026-0003'], 2026)).toBe(4);
+    });
+
+    it('skips past gaps + soft-deleted codes instead of reusing them (the reported bug)', () => {
+      // Active 0001-0003 + 0007; soft-deleted 0005/0006; 0004 gone. Count=6 would regenerate
+      // 0007 (collision). Max is 7, so the next code must be 8.
+      const codes = ['PRJ-2026-0001', 'PRJ-2026-0002', 'PRJ-2026-0003', 'PRJ-2026-0005', 'PRJ-2026-0006', 'PRJ-2026-0007'];
+      expect(nextProjectSeq(codes, 2026)).toBe(8);
+    });
+
+    it('ignores codes from other years', () => {
+      expect(nextProjectSeq(['PRJ-2025-0099', 'PRJ-2026-0002'], 2026)).toBe(3);
+    });
+
+    it('ignores malformed codes', () => {
+      expect(nextProjectSeq(['PRJ-2026-abc', 'PRJ-2026-0004', 'garbage'], 2026)).toBe(5);
+    });
   });
 
   it('validates schedule window order', () => {

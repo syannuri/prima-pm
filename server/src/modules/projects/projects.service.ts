@@ -2,7 +2,7 @@ import type { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
-import { generateProjectCode } from '../charter/charter.helpers.js';
+import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
 import { getClosureReadiness } from './closure.js';
@@ -77,37 +77,54 @@ export async function getProject(id: string) {
 }
 
 // Create a project with an auto-generated PRJ-YYYY-#### code (race-safe via transaction).
+// Create the project row, generating a collision-free auto code when none is supplied.
+// The auto path derives the next sequence from the highest existing code (max + 1).
+// Under concurrent creates two callers can still compute the same max + 1, so we retry
+// the auto-numbered path on the unique-code race (P2002). An explicit user-supplied code
+// that clashes is a real Conflict and is NOT retried.
+async function createProjectRow(input: CreateProjectInput, year: number) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        let code = input.code?.trim();
+        if (code) {
+          const clash = await tx.project.findUnique({ where: { code }, select: { id: true } });
+          if (clash) throw Conflict(`Project code "${code}" is already in use`);
+        } else {
+          // Scan ALL codes for the year (incl. soft-deleted — `code` is globally unique).
+          const existing = await tx.project.findMany({
+            where: { code: { startsWith: `PRJ-${year}-` } },
+            select: { code: true },
+          });
+          code = generateProjectCode(year, nextProjectSeq(existing.map((p) => p.code), year));
+        }
+
+        return tx.project.create({
+          data: {
+            code,
+            name: input.name,
+            clientName: input.clientName ?? null,
+            sponsor: input.sponsor ?? null,
+            pmUserId: input.pmUserId ?? null,
+            category: input.category ?? null,
+            deliveryApproach: input.deliveryApproach ?? 'PREDICTIVE',
+            costBaselineIdr: input.costBaselineIdr ?? null,
+            totalRevenueIdr: input.totalRevenueIdr ?? null,
+            status: 'DRAFT',
+          },
+        });
+      });
+    } catch (err) {
+      if (!input.code && (err as { code?: string }).code === 'P2002' && attempt < 4) continue;
+      throw err;
+    }
+  }
+}
+
 export async function createProject(input: CreateProjectInput, actorId: string) {
   // Year is derived from the actor's request time; passed explicitly to keep code testable.
   const year = new Date().getFullYear();
-
-  const project = await prisma.$transaction(async (tx) => {
-    let code = input.code?.trim();
-    if (code) {
-      const clash = await tx.project.findUnique({ where: { code }, select: { id: true } });
-      if (clash) throw Conflict(`Project code "${code}" is already in use`);
-    } else {
-      const countThisYear = await tx.project.count({
-        where: { code: { startsWith: `PRJ-${year}-` } },
-      });
-      code = generateProjectCode(year, countThisYear + 1);
-    }
-
-    return tx.project.create({
-      data: {
-        code,
-        name: input.name,
-        clientName: input.clientName ?? null,
-        sponsor: input.sponsor ?? null,
-        pmUserId: input.pmUserId ?? null,
-        category: input.category ?? null,
-        deliveryApproach: input.deliveryApproach ?? 'PREDICTIVE',
-        costBaselineIdr: input.costBaselineIdr ?? null,
-        totalRevenueIdr: input.totalRevenueIdr ?? null,
-        status: 'DRAFT',
-      },
-    });
-  });
+  const project = await createProjectRow(input, year);
 
   await writeAudit({ projectId: project.id, userId: actorId, entity: 'Project', entityId: project.id, action: 'CREATE', after: project });
   await notifyPmAssigned(project.pmUserId, actorId, project);

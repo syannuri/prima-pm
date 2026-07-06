@@ -606,3 +606,27 @@ describe('portfolio EVM trend (capture-all + rolled-up series + RBAC)', () => {
     expect(pm2Trend.body.projectCount).toBe(0);
   });
 });
+
+describe('project code auto-numbering is collision-safe (max + 1, not count)', () => {
+  it('generates the next code from the highest existing sequence, skipping gaps/soft-deletes', async () => {
+    const year = new Date().getFullYear();
+    // Seed an explicit high code, leaving a large gap below it (count-based numbering
+    // would generate a low code that ignores this max).
+    const explicit = await request(app).post(api('/projects')).set(auth(tokens.ADMIN))
+      .send({ name: 'High Code', code: `PRJ-${year}-9000`, pmUserId: ownerId });
+    expect(explicit.status).toBe(201);
+
+    // Auto-numbered create must land ABOVE the max (9001) — not reuse a lower code.
+    const auto = await request(app).post(api('/projects')).set(auth(tokens.ADMIN))
+      .send({ name: 'Auto Code', pmUserId: ownerId });
+    expect(auto.status).toBe(201);
+    expect(auto.body.project.code).toBe(`PRJ-${year}-9001`);
+
+    // Soft-deleting the top code must NOT let the next create reuse it (code stays globally unique).
+    await request(app).delete(api(`/projects/${auto.body.project.id}`)).set(auth(tokens.ADMIN));
+    const after = await request(app).post(api('/projects')).set(auth(tokens.ADMIN))
+      .send({ name: 'After Delete', pmUserId: ownerId });
+    expect(after.status).toBe(201);
+    expect(after.body.project.code).toBe(`PRJ-${year}-9002`);
+  });
+});
