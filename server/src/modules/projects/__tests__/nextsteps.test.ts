@@ -20,9 +20,16 @@ describe('computeNextSteps', () => {
     expect(keys({ ...base, status: 'DRAFT' })).toEqual(['commitCharter']);
   });
 
-  it('CHARTERED with an unlocked baseline → lock baseline + baseline schedule (no activate yet)', () => {
+  it('CHARTERED with an unlocked baseline → schedule baseline FIRST, then lock (lock is last)', () => {
+    // Locking the cost baseline freezes the WBS, so the schedule baseline must be
+    // captured before locking — the guide orders them that way.
     const r = keys({ ...base, status: 'CHARTERED', baselineLocked: false, scheduleBaselined: false, activationReady: false });
-    expect(r).toEqual(['lockBaseline', 'baselineSchedule']);
+    expect(r).toEqual(['baselineSchedule', 'lockBaseline']);
+  });
+
+  it('CHARTERED locked before the schedule was baselined → cue an unlock (the stuck state)', () => {
+    const r = keys({ ...base, status: 'CHARTERED', baselineLocked: true, scheduleBaselined: false, hasWbs: true, activationReady: false });
+    expect(r).toEqual(['unlockToBaselineSchedule']);
   });
 
   it('CHARTERED with no WBS → does not ask to baseline the schedule', () => {

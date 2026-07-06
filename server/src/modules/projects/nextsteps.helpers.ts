@@ -57,25 +57,38 @@ export function computeNextSteps(i: NextStepsInput): NextStepsResult {
       });
       break;
 
-    case 'CHARTERED':
+    case 'CHARTERED': {
       // Planning-baseline checkpoint: the activation gate needs the cost baseline
-      // locked and (with a WBS) a schedule baseline captured. Show whichever is
-      // outstanding; once both are satisfied, activation is the primary cue.
-      if (!i.baselineLocked) {
+      // locked and (with a WBS) a schedule baseline captured. Locking the cost baseline
+      // ALSO freezes the WBS + schedule-baseline capture, so it must be the LAST planning
+      // step — capture the schedule baseline first, then lock.
+      const scheduleNeeded = i.hasWbs && !i.scheduleBaselined;
+      if (i.baselineLocked && scheduleNeeded) {
+        // Stuck state: the baseline was locked before the schedule was baselined, so the
+        // WBS is frozen and the schedule baseline can't be captured. Cue an unlock.
         steps.push({
-          key: 'lockBaseline',
-          title: 'Lock the cost baseline',
-          detail: 'Freeze the PMB/BAC so cost variance measures against a fixed budget.',
+          key: 'unlockToBaselineSchedule',
+          title: 'Unlock the baseline to finish the schedule',
+          detail: 'Locking the cost baseline froze the WBS. Unlock it on the Cost tab, capture the schedule baseline, then re-lock.',
           tab: 'Cost',
         });
-      }
-      if (i.hasWbs && !i.scheduleBaselined) {
-        steps.push({
-          key: 'baselineSchedule',
-          title: 'Capture the schedule baseline',
-          detail: 'Snapshot the planned dates so schedule variance (SV/SPI) stays trustworthy.',
-          tab: 'Schedule',
-        });
+      } else {
+        if (scheduleNeeded) {
+          steps.push({
+            key: 'baselineSchedule',
+            title: 'Capture the schedule baseline',
+            detail: 'Snapshot the planned dates so schedule variance (SV/SPI) stays trustworthy. Do this before locking the cost baseline.',
+            tab: 'Schedule',
+          });
+        }
+        if (!i.baselineLocked) {
+          steps.push({
+            key: 'lockBaseline',
+            title: 'Lock the cost baseline',
+            detail: 'The final planning step — it freezes the PMB/BAC, the WBS and the schedule baseline, so finish the schedule first.',
+            tab: 'Cost',
+          });
+        }
       }
       if (i.activationReady) {
         steps.push({
@@ -86,6 +99,7 @@ export function computeNextSteps(i: NextStepsInput): NextStepsResult {
         });
       }
       break;
+    }
 
     case 'IN_PROGRESS':
       if (!i.closureReady) {
