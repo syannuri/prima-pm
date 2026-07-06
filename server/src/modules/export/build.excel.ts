@@ -156,6 +156,28 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
     if (typeof val === 'number' && label.match(/PV|EV|AC|EAC/)) row.getCell(2).numFmt = IDR;
   });
 
+  // --- EVM Trend (captured status history) ---
+  const tr = wb.addWorksheet('EVM Trend');
+  tr.columns = [
+    { width: 14 }, { width: 12 }, { width: 20 }, { width: 20 }, { width: 20 },
+    { width: 8 }, { width: 8 }, { width: 40 },
+  ];
+  styleHeader(tr.addRow(['Status Date', '% Complete', 'PV (IDR)', 'EV (IDR)', 'AC (IDR)', 'CPI', 'SPI', 'Note']));
+  for (const s of data.evmSnapshots) {
+    const row = tr.addRow([
+      new Date(s.statusDate).toISOString().slice(0, 10),
+      s.weightedProgress, num(s.pv), num(s.ev), num(s.ac), s.cpi, s.spi, s.note ?? '—',
+    ]);
+    row.getCell(2).numFmt = '0%';
+    row.getCell(3).numFmt = IDR;
+    row.getCell(4).numFmt = IDR;
+    row.getCell(5).numFmt = IDR;
+    row.getCell(6).numFmt = '0.00';
+    row.getCell(7).numFmt = '0.00';
+    row.getCell(8).alignment = { wrapText: true };
+  }
+  if (!data.evmSnapshots.length) tr.addRow(['—', 'No status snapshots captured yet']);
+
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }

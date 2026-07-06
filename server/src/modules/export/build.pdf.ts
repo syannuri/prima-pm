@@ -172,6 +172,27 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
     ],
   );
 
+  // ---------- EVM Trend ----------
+  if (data.evmSnapshots.length) {
+    heading('6. EVM Trend (status history)');
+    table(
+      [
+        { title: 'Status Date', w: 62 }, { title: '% Compl', w: 38, align: 'right' },
+        { title: 'PV', w: 88, align: 'right' }, { title: 'EV', w: 88, align: 'right' },
+        { title: 'AC', w: 88, align: 'right' }, { title: 'CPI', w: 35, align: 'right' },
+        { title: 'SPI', w: 35, align: 'right' }, { title: 'Note', w: 81 },
+      ],
+      data.evmSnapshots.map((s) => [
+        iso(s.statusDate),
+        `${Math.round(s.weightedProgress * 100)}%`,
+        formatIdr(s.pv), formatIdr(s.ev), formatIdr(s.ac),
+        s.cpi ? s.cpi.toFixed(2) : '—',
+        s.spi ? s.spi.toFixed(2) : '—',
+        s.note ?? '',
+      ]),
+    );
+  }
+
   doc.end();
   return done;
 }

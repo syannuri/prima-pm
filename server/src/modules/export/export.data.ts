@@ -4,6 +4,7 @@ import { NotFound } from '../../lib/errors.js';
 import { getCostSummary } from '../cost/cost.service.js';
 import { getRiskAnalysis } from '../risk/risk.service.js';
 import { getGantt, getEvm } from '../schedule/schedule.service.js';
+import { listSnapshots } from '../evm/evm.service.js';
 
 export interface ExportOptions {
   actualCost?: number;
@@ -17,7 +18,7 @@ export async function gatherProjectExport(projectId: string, opts: ExportOptions
   });
   if (!project) throw NotFound('Project not found');
 
-  const [charter, risks, issues, cost, riskAnalysis, gantt, evm] = await Promise.all([
+  const [charter, risks, issues, cost, riskAnalysis, gantt, evm, evmSnapshots] = await Promise.all([
     prisma.projectCharter.findUnique({ where: { projectId } }),
     prisma.risk.findMany({ where: { projectId }, orderBy: { code: 'asc' } }),
     prisma.issue.findMany({
@@ -32,9 +33,11 @@ export async function gatherProjectExport(projectId: string, opts: ExportOptions
     // time-phased AC (same as the live /evm endpoint). Forcing 0 here made every
     // exported PDF/Excel show CPI=0 / EAC=BAC even when actuals existed.
     getEvm(projectId, opts.actualCost, opts.statusDate ?? new Date()),
+    // Captured EVM status history (oldest → newest) for the trend section.
+    listSnapshots(projectId),
   ]);
 
-  return { project, charter, risks, issues, cost, riskAnalysis, gantt, evm, generatedAt: new Date() };
+  return { project, charter, risks, issues, cost, riskAnalysis, gantt, evm, evmSnapshots, generatedAt: new Date() };
 }
 
 export type ProjectExport = Awaited<ReturnType<typeof gatherProjectExport>>;
