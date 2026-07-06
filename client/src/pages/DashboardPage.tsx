@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import PortfolioForecast from '../components/PortfolioForecast';
+import PortfolioEvmTrend from '../components/PortfolioEvmTrend';
 import PendingApprovals from '../components/PendingApprovals';
 import ResourceCapacity from '../components/ResourceCapacity';
 
@@ -132,6 +133,7 @@ export default function DashboardPage() {
 
       {view === 'portfolio' && <PendingApprovals />}
       {view === 'portfolio' && <PortfolioSummary />}
+      {view === 'portfolio' && <PortfolioEvmTrend />}
       {view === 'forecast' && <PortfolioForecast />}
       {view === 'resources' && <ResourceCapacity />}
 

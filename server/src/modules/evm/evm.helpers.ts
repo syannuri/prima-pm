@@ -36,6 +36,57 @@ export function sampleDates(start: number, end: number, n: number, extra: number
   return [...set].sort((a, b) => a - b);
 }
 
+export interface RollupInput {
+  projectId: string;
+  statusDate: string; // ISO, day-normalized (lexically comparable)
+  pv: number;
+  ev: number;
+  ac: number;
+}
+
+/**
+ * Roll up per-project snapshots into a portfolio trend. Projects capture on
+ * different dates, so at each date in the union we take each project's LATEST
+ * snapshot as-of that date (a step/cumulative view) and sum PV/EV/AC, then derive
+ * the portfolio CPI (ΣEV/ΣAC) and SPI (ΣEV/ΣPV). A project contributes only once
+ * it has a snapshot on/before the date.
+ */
+export function rollupPortfolioTrend(snaps: RollupInput[]) {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const round4 = (n: number) => Math.round(n * 10000) / 10000;
+  if (!snaps.length) return [] as { statusDate: string; pv: number; ev: number; ac: number; cpi: number; spi: number; projectCount: number }[];
+
+  const dates = [...new Set(snaps.map((s) => s.statusDate))].sort();
+  const byProject = new Map<string, RollupInput[]>();
+  for (const s of snaps) {
+    const arr = byProject.get(s.projectId) ?? [];
+    arr.push(s);
+    byProject.set(s.projectId, arr);
+  }
+  for (const arr of byProject.values()) arr.sort((a, b) => (a.statusDate < b.statusDate ? -1 : a.statusDate > b.statusDate ? 1 : 0));
+
+  return dates.map((d) => {
+    let pv = 0, ev = 0, ac = 0, projectCount = 0;
+    for (const arr of byProject.values()) {
+      let latest: RollupInput | null = null;
+      for (const s of arr) {
+        if (s.statusDate <= d) latest = s;
+        else break;
+      }
+      if (latest) { pv += latest.pv; ev += latest.ev; ac += latest.ac; projectCount++; }
+    }
+    return {
+      statusDate: d,
+      pv: round2(pv),
+      ev: round2(ev),
+      ac: round2(ac),
+      cpi: ac > 0 ? round4(ev / ac) : 0,
+      spi: pv > 0 ? round4(ev / pv) : 0,
+      projectCount,
+    };
+  });
+}
+
 /**
  * Compact summary of a captured snapshot series for the KPI strip: latest values,
  * whether CPI/SPI are improving vs the previous capture, and the worst (lowest)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { direction, sampleDates, summarizeTrend, type TrendPoint } from '../evm.helpers.js';
+import { direction, sampleDates, summarizeTrend, rollupPortfolioTrend, type TrendPoint, type RollupInput } from '../evm.helpers.js';
 
 const pt = (statusDate: string, cpi: number, spi: number, over: Partial<TrendPoint> = {}): TrendPoint => ({
   statusDate,
@@ -83,5 +83,46 @@ describe('summarizeTrend', () => {
     expect(s.worstCpi).toBe(1.05);
     expect(s.worstSpi).toBe(0.97);
     expect(s.cpiDirection).toBe('up'); // 0 → 1.05
+  });
+});
+
+describe('rollupPortfolioTrend', () => {
+  const r = (projectId: string, statusDate: string, pv: number, ev: number, ac: number): RollupInput => ({ projectId, statusDate, pv, ev, ac });
+
+  it('returns an empty series when there are no snapshots', () => {
+    expect(rollupPortfolioTrend([])).toEqual([]);
+  });
+
+  it('sums PV/EV/AC across projects at a shared date and derives portfolio CPI/SPI', () => {
+    const out = rollupPortfolioTrend([
+      r('A', '2026-03-31T00:00:00Z', 100, 90, 100),
+      r('B', '2026-03-31T00:00:00Z', 200, 220, 200),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ pv: 300, ev: 310, ac: 300, projectCount: 2 });
+    expect(out[0].cpi).toBeCloseTo(310 / 300, 4); // ΣEV/ΣAC
+    expect(out[0].spi).toBeCloseTo(310 / 300, 4); // ΣEV/ΣPV
+  });
+
+  it('carries each project forward using its latest snapshot as-of each union date', () => {
+    // A captured on Jan & Mar; B only on Feb. At Feb, A still contributes its Jan values.
+    const out = rollupPortfolioTrend([
+      r('A', '2026-01-31T00:00:00Z', 100, 100, 100),
+      r('A', '2026-03-31T00:00:00Z', 300, 280, 300),
+      r('B', '2026-02-28T00:00:00Z', 50, 45, 50),
+    ]);
+    expect(out.map((o) => o.statusDate)).toEqual(['2026-01-31T00:00:00Z', '2026-02-28T00:00:00Z', '2026-03-31T00:00:00Z']);
+    // Jan: only A has started.
+    expect(out[0]).toMatchObject({ pv: 100, ev: 100, ac: 100, projectCount: 1 });
+    // Feb: A (carried from Jan) + B.
+    expect(out[1]).toMatchObject({ pv: 150, ev: 145, ac: 150, projectCount: 2 });
+    // Mar: A (updated) + B (carried from Feb).
+    expect(out[2]).toMatchObject({ pv: 350, ev: 325, ac: 350, projectCount: 2 });
+  });
+
+  it('leaves CPI/SPI at 0 when AC/PV are zero (guards div-by-zero)', () => {
+    const out = rollupPortfolioTrend([r('A', '2026-01-01T00:00:00Z', 0, 0, 0)]);
+    expect(out[0].cpi).toBe(0);
+    expect(out[0].spi).toBe(0);
   });
 });

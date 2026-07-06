@@ -551,3 +551,43 @@ describe('EVM trend snapshots (capture / list / trend / delete + RBAC)', () => {
     expect(after.body.snapshots).toHaveLength(0);
   });
 });
+
+describe('portfolio EVM trend (capture-all + rolled-up series + RBAC)', () => {
+  let a = '';
+  let b = '';
+  beforeAll(async () => {
+    // Two chartered projects owned by the PM so capture-all (non-DRAFT filter) picks them up.
+    for (const name of ['Portfolio-Trend-A', 'Portfolio-Trend-B']) {
+      const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name, pmUserId: ownerId });
+      await request(app).patch(api(`/projects/${created.body.project.id}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+      if (name.endsWith('A')) a = created.body.project.id; else b = created.body.project.id;
+    }
+  });
+
+  it('ADMIN capture-all snapshots every visible non-DRAFT project; the trend rolls them up', async () => {
+    const cap = await request(app).post(api('/portfolio/evm/capture-all')).set(auth(tokens.ADMIN)).send({ statusDate: '2026-04-30' });
+    expect(cap.status).toBe(201);
+    expect(cap.body.captured).toBeGreaterThanOrEqual(2); // at least A and B
+
+    const trend = await request(app).get(api('/portfolio/evm/trend')).set(auth(tokens.ADMIN));
+    expect(trend.status).toBe(200);
+    expect(Array.isArray(trend.body.series)).toBe(true);
+    expect(trend.body.series.length).toBeGreaterThanOrEqual(1);
+    expect(trend.body.projectCount).toBeGreaterThanOrEqual(2);
+    // Both A and B now carry a snapshot at the shared date.
+    expect(await request(app).get(api(`/projects/${a}/evm/snapshots`)).set(auth(tokens.ADMIN)).then((r) => r.body.snapshots.length)).toBeGreaterThanOrEqual(1);
+    expect(await request(app).get(api(`/projects/${b}/evm/snapshots`)).set(auth(tokens.ADMIN)).then((r) => r.body.snapshots.length)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('VIEWER cannot capture-all (403); a PM can but is scoped to owned projects', async () => {
+    const viewer = await request(app).post(api('/portfolio/evm/capture-all')).set(auth(tokens.VIEWER)).send({});
+    expect(viewer.status).toBe(403);
+
+    // PM2 owns nothing → capture-all touches 0 projects (allowed, but empty).
+    const pm2 = await request(app).post(api('/portfolio/evm/capture-all')).set(auth(tokens.PM2)).send({ statusDate: '2026-05-31' });
+    expect(pm2.status).toBe(201);
+    expect(pm2.body.total).toBe(0);
+    const pm2Trend = await request(app).get(api('/portfolio/evm/trend')).set(auth(tokens.PM2));
+    expect(pm2Trend.body.projectCount).toBe(0);
+  });
+});

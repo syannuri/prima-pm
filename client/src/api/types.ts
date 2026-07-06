@@ -489,3 +489,10 @@ export interface EvmTrend {
   snapshots: EvmSnapshot[];
   plannedCurve: { t: string; pv: number }[]; // smooth planned-value backdrop
 }
+
+// Portfolio-wide EVM trend: per-project snapshots rolled up (latest-as-of each date).
+export interface PortfolioEvmTrend {
+  bac: number;
+  projectCount: number;
+  series: { statusDate: string; pv: number; ev: number; ac: number; cpi: number; spi: number; projectCount: number }[];
+}
