@@ -14,9 +14,19 @@ interface Row {
   wbs: string; // outline number, e.g. 1.2.1
 }
 
+// Earliest planned start anywhere in a node's subtree (a parent sorts by its first task).
+function subtreeStart(node: GanttNode): number {
+  let min = +new Date(node.planStart);
+  (node.children ?? []).forEach((c) => { min = Math.min(min, subtreeStart(c)); });
+  return min;
+}
+
 // Flatten the tree into ordered rows and assign hierarchical WBS outline numbers.
+// Siblings are ordered chronologically (earliest start first, tie-break on end) so the
+// WBS reads top-to-bottom by date — the kick-off / earliest task is #1.
 function flatten(nodes: GanttNode[], depth = 0, prefix = '', acc: Row[] = []): Row[] {
-  nodes.forEach((node, i) => {
+  const ordered = [...nodes].sort((a, b) => subtreeStart(a) - subtreeStart(b) || +new Date(a.planEnd) - +new Date(b.planEnd));
+  ordered.forEach((node, i) => {
     const wbs = prefix ? `${prefix}.${i + 1}` : `${i + 1}`;
     acc.push({ node, depth, wbs });
     if (node.children?.length) flatten(node.children, depth + 1, wbs, acc);
