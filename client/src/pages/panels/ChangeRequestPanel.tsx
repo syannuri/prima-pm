@@ -47,13 +47,13 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
 
   return (
     <Card>
-      <SectionTitle sub="Controlled changes to a committed charter — the full log with status, lifecycle and details. Approval bumps the version and unlocks editing.">
+      <SectionTitle sub="Controlled changes to the baselined project — its charter, cost baseline or schedule/WBS. Approval opens the affected area for editing (charter re-commit, or baseline unlock); apply the change, then re-lock.">
         Change Requests &amp; Log
       </SectionTitle>
 
       {!locked ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-          Commit the Project Charter first. Change requests apply to a committed (baselined) charter.
+          Commit the Project Charter first — change requests become available once the project is baselined.
         </p>
       ) : (
         <div className="mb-5 grid gap-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800 md:grid-cols-2">
@@ -75,7 +75,7 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
             </Field>
           </div>
           <Field label="Reason / description">
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Why the charter must change" />
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Why this change is needed and what it changes" />
           </Field>
           {/* Amount only shown for a chargeable (paid) change */}
           {chargeable && (
