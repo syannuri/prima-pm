@@ -6,6 +6,7 @@ import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, Sp
 import { formatDate, formatIdr } from '../../lib/format';
 import { CHANGE_IMPACTS } from '../../lib/labels';
 import CrDetailModal from '../../components/CrDetailModal';
+import { useToast } from '../../components/Toast';
 
 const CR_COLOR: Record<string, string> = { SUBMITTED: 'amber', UNDER_REVIEW: 'sky', APPROVED: 'green', REJECTED: 'red' };
 const FILTERS = ['ALL', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'] as const;
@@ -13,6 +14,7 @@ const label = (s: string) => s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpp
 
 export default function ChangeRequestPanel({ projectId, projectCode, projectName }: { projectId: string; projectCode: string; projectName: string }) {
   const qc = useQueryClient();
+  const toast = useToast();
   const base = `/projects/${projectId}/charter`;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -34,7 +36,10 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
 
   const raise = useMutation({
     mutationFn: () => api.post(`${base}/change-requests`, { title, description, chargeable, amountIdr: chargeable ? Number(amount) : undefined, magnitude, impactAreas }),
-    onSuccess: () => { setTitle(''); setDescription(''); setChargeable(false); setAmount(''); setMagnitude('MINOR'); setImpactAreas([]); setErr(''); refresh(); },
+    onSuccess: () => {
+      setTitle(''); setDescription(''); setChargeable(false); setAmount(''); setMagnitude('MINOR'); setImpactAreas([]); setErr(''); refresh();
+      toast.success('Change request submitted — sent to the PMO for review and approval.');
+    },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
 
