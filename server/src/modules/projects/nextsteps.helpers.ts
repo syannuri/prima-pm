@@ -48,11 +48,14 @@ const STAGE_LABEL: Record<ProjectStage, string> = {
   CLOSED: 'Closed',
 };
 
-// The CHARTERED stage spans "baselines not set" through "baselined, awaiting activation",
-// so its label must reflect progress — otherwise it keeps reading "set the …baseline" even
-// after both baselines are done (the real step has already advanced to Activate).
+// Some stages span more than one sub-phase, so the header label must track progress
+// within the stage instead of reading a fixed string:
+//  - CHARTERED: "set the …baseline" until both baselines are set, then "ready to activate".
+//  - IN_PROGRESS: "In execution" while work runs, then "ready to close" once deliverables
+//    are complete (closure-ready) and the steps have flipped to acceptance/lessons/close.
 function stageLabel(i: NextStepsInput): string {
   if (i.status === 'CHARTERED' && i.activationReady) return 'Planning — baseline set, ready to activate';
+  if (i.status === 'IN_PROGRESS' && i.closureReady) return 'In execution — ready to close';
   return STAGE_LABEL[i.status];
 }
 

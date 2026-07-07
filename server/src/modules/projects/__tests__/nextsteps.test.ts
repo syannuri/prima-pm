@@ -51,6 +51,12 @@ describe('computeNextSteps', () => {
     expect(computeNextSteps({ ...base, status: 'CHARTERED', baselineLocked: false, scheduleBaselined: false, activationReady: false }).stage).toBe('Planning — set the cost & schedule baseline');
   });
 
+  it('IN_PROGRESS stage label flips to "ready to close" once deliverables are complete', () => {
+    // Mid-execution keeps the plain descriptor; closure-ready hints at the closing phase.
+    expect(computeNextSteps({ ...base, status: 'IN_PROGRESS', closureReady: false }).stage).toBe('In execution');
+    expect(computeNextSteps({ ...base, status: 'IN_PROGRESS', closureReady: true }).stage).toBe('In execution — ready to close');
+  });
+
   it('CHARTERED activation-ready but viewer is a PM → informational "awaiting PMO" (no action)', () => {
     const steps = computeNextSteps({ ...base, status: 'CHARTERED', activationReady: true, canGovern: false }).steps;
     expect(steps.map((s) => s.key)).toEqual(['awaitActivation']);
