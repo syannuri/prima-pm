@@ -498,6 +498,19 @@ export interface AwaitingActivationItem {
   pm: string;
 }
 
+// Dashboard "Set Baseline" reminder: a still-in-planning project with the completion
+// state of each planning artifact (charter / cost baseline / schedule baseline).
+export interface PlanningReminderItem {
+  id: string;
+  code: string;
+  name: string;
+  pm: string;
+  charter: boolean;
+  cost: boolean;
+  schedule: boolean;
+  scheduleNa: boolean; // no WBS → schedule baseline not applicable
+}
+
 // Portfolio-wide EVM trend: per-project snapshots rolled up (latest-as-of each date).
 export interface PortfolioEvmTrend {
   bac: number;

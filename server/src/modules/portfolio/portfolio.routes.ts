@@ -5,7 +5,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
 import { getPortfolioSummary } from './portfolio.service.js';
 import { getPortfolioEvmTrend, captureAllSnapshots } from '../evm/evm.portfolio.js';
-import { getAwaitingActivation } from '../projects/activation.js';
+import { getAwaitingActivation, getPlanningReminders } from '../projects/activation.js';
 import { gatherPortfolioExport } from '../export/export.portfolio.data.js';
 import { buildPortfolioPdf } from '../export/build.portfolio.pdf.js';
 import { buildPortfolioWorkbook } from '../export/build.portfolio.excel.js';
@@ -31,6 +31,15 @@ router.get(
   '/awaiting-activation',
   asyncHandler(async (req, res) => {
     res.json(await getAwaitingActivation(req.user!.role));
+  }),
+);
+
+// "Set Baseline" reminder: still-in-planning projects with an outstanding planning
+// artifact (charter / cost baseline / schedule baseline). Role-scoped inside the service.
+router.get(
+  '/planning-reminders',
+  asyncHandler(async (req, res) => {
+    res.json(await getPlanningReminders(req.user!.id, req.user!.role));
   }),
 );
 

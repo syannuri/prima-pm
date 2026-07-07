@@ -65,3 +65,37 @@ export function assessActivationReadiness(i: ActivationInputs): ActivationReadin
   const warnings = items.filter((x) => x.severity === 'warn' && !x.ok);
   return { items, blockers, warnings, canActivate: blockers.length === 0 };
 }
+
+// ---------------------------------------------------------------------------
+// Planning-stage completeness (the "Set Baseline" flow reminder on the dashboard)
+// ---------------------------------------------------------------------------
+// A project moves through planning by completing three artifacts before it can start
+// execution: the Charter is committed (DRAFT -> CHARTERED), the Cost baseline (PMB/BAC)
+// is locked, and — when it has a WBS — the Schedule baseline is captured. This surfaces,
+// per still-in-planning project, which of the three are still outstanding so the PM/PMO
+// gets a nudge instead of a project silently stalling half-planned.
+
+export interface PlanningInputs {
+  status: string; // DRAFT | CHARTERED | IN_PROGRESS | ON_HOLD | CLOSED
+  baselineLocked: boolean; // Project.baselineLockedAt is set (cost baseline frozen)
+  scheduleBaselined: boolean; // Project.scheduleBaselinedAt is set
+  hasWbs: boolean; // has WBS tasks (a schedule baseline is only applicable when it does)
+}
+
+export interface PlanningStatus {
+  charter: boolean; // charter committed (project has left DRAFT)
+  cost: boolean; // cost baseline locked
+  schedule: boolean; // schedule baseline captured (true when N/A — nothing to do)
+  scheduleNa: boolean; // no WBS → a schedule baseline does not apply (agile plans by sprint)
+  inPlanning: boolean; // still pre-execution (DRAFT or CHARTERED)
+  complete: boolean; // all applicable planning artifacts done
+}
+
+export function assessPlanningStatus(i: PlanningInputs): PlanningStatus {
+  const charter = i.status !== 'DRAFT';
+  const cost = i.baselineLocked;
+  const scheduleNa = !i.hasWbs;
+  const schedule = scheduleNa ? true : i.scheduleBaselined;
+  const inPlanning = i.status === 'DRAFT' || i.status === 'CHARTERED';
+  return { charter, cost, schedule, scheduleNa, inPlanning, complete: charter && cost && schedule };
+}

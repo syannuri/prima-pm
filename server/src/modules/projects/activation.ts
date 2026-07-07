@@ -1,10 +1,14 @@
 import { prisma } from '../../lib/prisma.js';
+import type { Prisma, Role } from '@prisma/client';
 import { NotFound } from '../../lib/errors.js';
-import { assessActivationReadiness, type ActivationReadiness } from './activation.helpers.js';
+import { assessActivationReadiness, assessPlanningStatus, type ActivationReadiness } from './activation.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 
 export type { ActivationItem, ActivationReadiness, ActivationInputs } from './activation.helpers.js';
 export { assessActivationReadiness } from './activation.helpers.js';
+
+// Roles that see the whole portfolio; everyone else is scoped to the projects they PM.
+const GLOBAL_ROLES: Role[] = ['ADMIN', 'PMO'];
 
 // Gather the live state for a project and assess it against the activation policy
 // (pure logic lives in activation.helpers.ts so it can be unit-tested without a DB).
@@ -53,6 +57,54 @@ export async function getAwaitingActivation(role: string) {
       deliveryApproach: p.deliveryApproach,
     }).canActivate)
     .map((p) => ({ id: p.id, code: p.code, name: p.name, pm: p.pm?.name ?? '—' }));
+
+  return { items, count: items.length };
+}
+
+/**
+ * Dashboard "Set Baseline" reminder: still-in-planning projects (DRAFT or CHARTERED)
+ * with at least one of Charter / Cost baseline / Schedule baseline still outstanding.
+ * Complements getAwaitingActivation (which lists projects where all three ARE done and
+ * are only waiting on the activation gate). Role-scoped: ADMIN/PMO see the whole
+ * portfolio; a PM sees only the projects they own. Fully-planned or executing/closed
+ * projects are excluded.
+ */
+export async function getPlanningReminders(userId: string, role: string) {
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { in: ['DRAFT', 'CHARTERED'] } };
+  if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+
+  const projects = await prisma.project.findMany({
+    where,
+    select: { id: true, code: true, name: true, status: true, baselineLockedAt: true, scheduleBaselinedAt: true, pm: { select: { name: true } } },
+    orderBy: { code: 'asc' },
+  });
+  if (!projects.length) return { items: [], count: 0 };
+
+  // hasWbs per project in one grouped query (no N+1).
+  const counts = await prisma.task.groupBy({ by: ['projectId'], where: { projectId: { in: projects.map((p) => p.id) } }, _count: { _all: true } });
+  const hasWbs = new Map(counts.map((c) => [c.projectId, c._count._all > 0]));
+
+  const items = projects
+    .map((p) => ({
+      p,
+      s: assessPlanningStatus({
+        status: p.status,
+        baselineLocked: p.baselineLockedAt != null,
+        scheduleBaselined: p.scheduleBaselinedAt != null,
+        hasWbs: hasWbs.get(p.id) ?? false,
+      }),
+    }))
+    .filter(({ s }) => s.inPlanning && !s.complete)
+    .map(({ p, s }) => ({
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      pm: p.pm?.name ?? '—',
+      charter: s.charter,
+      cost: s.cost,
+      schedule: s.schedule,
+      scheduleNa: s.scheduleNa,
+    }));
 
   return { items, count: items.length };
 }
