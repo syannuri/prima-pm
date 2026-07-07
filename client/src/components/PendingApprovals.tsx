@@ -62,10 +62,11 @@ export default function PendingApprovals() {
 
   return (
     <Card>
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Change requests awaiting approval</span>
-        <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-amber-500 px-1 text-xs font-bold text-white">{data.count}</span>
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-base">🗳️</span>
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Change requests awaiting approval ({data.count})</h3>
       </div>
+      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">These change requests need your decision — approving one unlocks the affected baseline for editing.</p>
       <ul className="space-y-2">
         {data.items.map((cr) => (
           <li key={cr.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-100 p-2.5 dark:border-slate-800">
