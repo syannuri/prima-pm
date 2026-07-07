@@ -96,6 +96,41 @@ const CheckIcon = () => (
     <path d="M5 10.5l3.2 3.5L15 6.5" />
   </svg>
 );
+
+// Overall project % complete as a circular gauge for the WBS/Gantt header — the accumulated,
+// weighted roll-up straight from the EVM engine (identical to the dashboard's per-project
+// %complete). Ring is green (a positive, progress signal — not decorative coral); full at 100%.
+function ProgressRing({ pct, loading }: { pct: number; loading?: boolean }) {
+  const R = 15.5;
+  const C = 2 * Math.PI * R;
+  const clamped = Math.max(0, Math.min(100, pct));
+  const dash = (clamped / 100) * C;
+  return (
+    <div
+      className="flex shrink-0 items-center gap-2"
+      title={`Overall project progress: ${clamped.toFixed(1)}% complete — the accumulated, weighted roll-up (same figure as the dashboard).`}
+    >
+      <div className="relative h-11 w-11">
+        <svg viewBox="0 0 40 40" className="h-11 w-11 -rotate-90">
+          <circle cx="20" cy="20" r={R} fill="none" strokeWidth="4" className="stroke-slate-200 dark:stroke-slate-700" />
+          {!loading && (
+            <circle
+              cx="20" cy="20" r={R} fill="none" strokeWidth="4" strokeLinecap="round"
+              className="stroke-green-500 transition-[stroke-dasharray] duration-500"
+              strokeDasharray={`${dash} ${C}`}
+            />
+          )}
+        </svg>
+        <span className="absolute inset-0 grid place-items-center text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-100">
+          {loading ? '…' : `${Math.round(clamped)}%`}
+        </span>
+      </div>
+      <span className="hidden text-[10px] font-semibold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400 sm:block">
+        Overall<br />progress
+      </span>
+    </div>
+  );
+}
 const ExpandIcon = () => (
   <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M7 3H3v4M13 3h4v4M7 17H3v-4M13 17h4v-4" />
@@ -142,9 +177,22 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     queryFn: () => api.get<{ tree: GanttNode[]; dependencies: TaskDependency[]; baselinedAt: string | null }>(`${base}/gantt`),
   });
   const baselinedAt = ganttQ.data?.baselinedAt ?? null;
+
+  // Overall project % complete — read from the EVM engine (the SAME weighted roll-up the
+  // dashboard shows) so the Gantt's headline figure always matches it exactly. statusDate
+  // doesn't affect physical %complete, so today's is fine. Shares the 'evm' key prefix so
+  // it refreshes together with the Project Health panel on any progress edit.
+  const evmQ = useQuery({
+    queryKey: ['evm', base, 'overall'],
+    queryFn: () => api.get<{ scheduleProgress: number }>(`${base}/evm?statusDate=${formatDateInput(new Date())}`),
+  });
+  const overallPct = (evmQ.data?.scheduleProgress ?? 0) * 100;
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['gantt', projectId] });
     qc.invalidateQueries({ queryKey: ['mp-sync', projectId] });
+    // Refresh the overall-progress ring + the Project Health (EVM) panel after a progress edit.
+    qc.invalidateQueries({ queryKey: ['evm', base] });
     // Baseline capture + progress edits change the guided next-step cues.
     qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
   };
@@ -232,6 +280,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete">
           Work Breakdown Structure
         </SectionTitle>
+        <div className="flex items-center gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {rows.length > 0 && (
             <button onClick={() => setFullscreen((f) => !f)} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'}
@@ -261,6 +310,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </Button>
           )}
           {canEdit && <Button onClick={() => setForm({ parentId: null })}>+ Add Task</Button>}
+        </div>
+        {rows.length > 0 && <ProgressRing pct={overallPct} loading={evmQ.isLoading} />}
         </div>
       </div>
 
