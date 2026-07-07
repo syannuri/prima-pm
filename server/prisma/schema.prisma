@@ -49,6 +49,7 @@ enum ChangeMagnitude {
 }
 
 enum ChangeImpact {
+  CHARTER
   COST
   SCHEDULE
   RESOURCE

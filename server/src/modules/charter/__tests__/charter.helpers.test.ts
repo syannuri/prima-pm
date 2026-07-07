@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { changeRequestSchema } from '../charter.schemas.js';
 import {
   checkCharterCompleteness,
   canEditCharter,
@@ -101,5 +102,22 @@ describe('charter — misc', () => {
   it('validates schedule window order', () => {
     expect(isScheduleValid(new Date('2026-01-01'), new Date('2026-02-01'))).toBe(true);
     expect(isScheduleValid(new Date('2026-02-01'), new Date('2026-01-01'))).toBe(false);
+  });
+
+  describe('changeRequestSchema — a CR must declare at least one affected area', () => {
+    const base = { title: 'Rename a task', description: 'WBS edit needed' };
+
+    it('rejects an empty impactAreas (the old silent no-op)', () => {
+      expect(changeRequestSchema.safeParse({ ...base, impactAreas: [] }).success).toBe(false);
+    });
+
+    it('rejects a missing impactAreas', () => {
+      expect(changeRequestSchema.safeParse(base).success).toBe(false);
+    });
+
+    it('accepts a declared area (CHARTER / COST / SCHEDULE)', () => {
+      expect(changeRequestSchema.safeParse({ ...base, impactAreas: ['SCHEDULE'] }).success).toBe(true);
+      expect(changeRequestSchema.safeParse({ ...base, impactAreas: ['CHARTER', 'COST'] }).success).toBe(true);
+    });
   });
 });

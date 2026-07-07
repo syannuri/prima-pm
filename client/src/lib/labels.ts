@@ -32,12 +32,13 @@ export const PROJECT_CATEGORIES: { value: ProjectCategory; label: string }[] = [
 export const categoryLabel = (c?: ProjectCategory | null) =>
   PROJECT_CATEGORIES.find((x) => x.value === c)?.label ?? null;
 
+// What a change request affects — the governed, baseline-frozen artifacts. Approving a
+// CR opens the selected area(s) for editing: Charter → unlock charter for re-commit;
+// Cost or Schedule/WBS → unlock the cost & schedule baseline. Pick at least one.
 export const CHANGE_IMPACTS: { value: ChangeImpact; label: string }[] = [
-  { value: 'COST', label: 'Cost' },
-  { value: 'SCHEDULE', label: 'Schedule' },
-  { value: 'RESOURCE', label: 'Resource' },
-  { value: 'QUALITY', label: 'Quality' },
-  { value: 'RISK', label: 'Risk' },
+  { value: 'CHARTER', label: 'Charter (scope, goals, high-level plan)' },
+  { value: 'COST', label: 'Cost baseline (budget, cost lines)' },
+  { value: 'SCHEDULE', label: 'Schedule / WBS (tasks, dates)' },
 ];
 
 // Lifecycle status colours — calm & semantic, NOT alarming. Red is reserved for

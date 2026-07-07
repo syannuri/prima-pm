@@ -510,6 +510,31 @@ describe('approving a cost/schedule change request unlocks the baseline', () => 
   });
 });
 
+describe('CR rework: the declared affected area drives the unlock', () => {
+  it('approving a SCHEDULE change request opens the baseline so the WBS becomes editable', async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'CR-Schedule', pmUserId: ownerId });
+    const pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.ADMIN)).send({ locked: true });
+
+    // While locked, a WBS write is frozen.
+    const blocked = await request(app).post(api(`/projects/${pid}/schedule/tasks`)).set(auth(tokens.ADMIN)).send({ name: 'T', planStart: '2026-08-01', planEnd: '2026-08-08' });
+    expect(blocked.status).toBe(400);
+
+    // A change request declaring SCHEDULE, once approved, opens the baseline (not just COST).
+    const cr = await prisma.changeRequest.create({
+      data: { projectId: pid, type: 'SCHEDULE', title: 'Rename a WBS task', description: 'WBS edit', impactAreas: ['SCHEDULE'], status: 'SUBMITTED', requestedBy: ownerId },
+    });
+    const res = await request(app).patch(api(`/projects/${pid}/charter/change-requests/${cr.id}`)).set(auth(tokens.ADMIN)).send({ decision: 'APPROVED' });
+    expect(res.status).toBe(200);
+    expect(res.body.baselineUnlocked).toBe(true);
+
+    // Now the WBS write succeeds — the exact flow that was broken.
+    const task = await request(app).post(api(`/projects/${pid}/schedule/tasks`)).set(auth(tokens.ADMIN)).send({ name: 'New WBS task', planStart: '2026-08-01', planEnd: '2026-08-08' });
+    expect(task.status).toBe(201);
+  });
+});
+
 describe('EVM trend snapshots (capture / list / trend / delete + RBAC)', () => {
   let pid = '';
   beforeAll(async () => {

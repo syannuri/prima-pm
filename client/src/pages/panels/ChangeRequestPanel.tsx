@@ -83,21 +83,23 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
               <MoneyInput value={amount} onValueChange={setAmount} placeholder="e.g. 50.000.000" />
             </Field>
           )}
-          <div>
-            <span className="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-300">Impact areas</span>
-            <div className="flex flex-wrap gap-3">
+          <div className="md:col-span-2">
+            <span className="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-300">What does this change affect? <span className="text-red-500">*</span></span>
+            <div className="flex flex-col gap-1.5">
               {CHANGE_IMPACTS.map((a) => (
-                <label key={a.value} className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+                <label key={a.value} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <input type="checkbox" checked={impactAreas.includes(a.value)} onChange={() => toggleImpact(a.value)} className="accent-brand-600" />
                   {a.label}
                 </label>
               ))}
             </div>
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Approving this change unlocks the selected area(s) so you can edit them — apply the change, then re-lock the baseline.</p>
           </div>
           <div className="md:col-span-2 flex items-center gap-2">
-            <Button onClick={() => raise.mutate()} disabled={!title || !description || (chargeable && !amount) || raise.isPending}>
+            <Button onClick={() => raise.mutate()} disabled={!title || !description || impactAreas.length === 0 || (chargeable && !amount) || raise.isPending}>
               {raise.isPending ? 'Submitting…' : 'Submit Change Request'}
             </Button>
+            {impactAreas.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">Select at least one affected area.</span>}
             {err && <span className="text-sm text-red-600">{err}</span>}
           </div>
         </div>

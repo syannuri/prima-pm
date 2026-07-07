@@ -143,10 +143,22 @@ export async function createChangeRequest(
   if (!charter) throw NotFound('Charter has not been created yet');
   if (!charter.locked) throw BadRequest('Charter is not committed; edit it directly instead');
 
+  // Display type derived from the declared areas (behaviour keys on impactAreas now, not
+  // this label). Previously hard-coded to 'CHARTER', which made every approved CR wrongly
+  // bump the charter version even for a cost/schedule-only change.
+  const areas = input.impactAreas;
+  const type = areas.includes('CHARTER')
+    ? 'CHARTER'
+    : areas.includes('COST')
+      ? 'COST_BASELINE'
+      : areas.includes('SCHEDULE')
+        ? 'SCHEDULE'
+        : 'SCOPE';
+
   const cr = await prisma.changeRequest.create({
     data: {
       projectId,
-      type: 'CHARTER',
+      type,
       title: input.title,
       description: input.description,
       chargeable: input.chargeable,
@@ -206,8 +218,10 @@ export async function decideChangeRequest(
       data: { status: decision, decidedBy: actorId, decidedAt: new Date() },
     });
 
-    if (decision === 'APPROVED' && cr.type === 'CHARTER') {
-      // Unlock for editing and bump version so the next commit snapshots a new version.
+    if (decision === 'APPROVED' && cr.impactAreas.includes('CHARTER')) {
+      // The change affects the charter → unlock it for editing and bump the version so the
+      // next commit snapshots a new version. (Keys on the declared CHARTER area now, so a
+      // cost/schedule-only change no longer needlessly re-versions the charter.)
       await tx.projectCharter.update({
         where: { projectId },
         data: { locked: false, version: { increment: 1 } },

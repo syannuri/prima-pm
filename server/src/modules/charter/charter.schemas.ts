@@ -21,7 +21,10 @@ export const upsertCharterSchema = z
     path: ['hiScheduleEnd'],
   });
 
-export const CHANGE_IMPACTS = ['COST', 'SCHEDULE', 'RESOURCE', 'QUALITY', 'RISK'] as const;
+// The areas a change request may affect. CHARTER / COST / SCHEDULE are the governed,
+// baseline-frozen artifacts — declaring them is what opens the right thing for editing
+// when the CR is approved. (RESOURCE/QUALITY/RISK remain valid as informational tags.)
+export const CHANGE_IMPACTS = ['CHARTER', 'COST', 'SCHEDULE', 'RESOURCE', 'QUALITY', 'RISK'] as const;
 
 export const changeRequestSchema = z
   .object({
@@ -30,7 +33,7 @@ export const changeRequestSchema = z
     chargeable: z.boolean().default(false),
     amountIdr: z.coerce.number().nonnegative().optional(),
     magnitude: z.enum(['MINOR', 'MAJOR']).default('MINOR'),
-    impactAreas: z.array(z.enum(CHANGE_IMPACTS)).default([]),
+    impactAreas: z.array(z.enum(CHANGE_IMPACTS)).min(1, 'Select at least one area this change affects'),
   })
   .refine((d) => !d.chargeable || (d.amountIdr != null && d.amountIdr > 0), {
     message: 'A chargeable change request needs an amount greater than zero',

@@ -263,7 +263,7 @@ export interface CostSummary {
 
 export type CRStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
 
-export type ChangeImpact = 'COST' | 'SCHEDULE' | 'RESOURCE' | 'QUALITY' | 'RISK';
+export type ChangeImpact = 'CHARTER' | 'COST' | 'SCHEDULE' | 'RESOURCE' | 'QUALITY' | 'RISK';
 
 export interface ChangeRequest {
   id: string;
