@@ -162,7 +162,7 @@ export function computeNextSteps(i: NextStepsInput): NextStepsResult {
         steps.push({
           ...(i.canGovern
             ? { key: 'closeProject', title: 'Close the project', detail: 'Deliverables are complete — run the closure checklist and close the project.', action: 'close' as const }
-            : { key: 'awaitClose', title: 'Ready to close', detail: 'Deliverables are complete. Closing is a PMO decision — the PMO will run the closure checklist and close the project.' }),
+            : { key: 'awaitClose', title: 'Waiting for PMO to close', detail: 'Deliverables are complete. Closing is a PMO decision — the PMO will run the closure checklist and close the project.' }),
         });
       }
       break;
@@ -178,7 +178,7 @@ export function computeNextSteps(i: NextStepsInput): NextStepsResult {
             }
           : {
               key: 'awaitResume',
-              title: 'On hold — awaiting resume',
+              title: 'Waiting for PMO to resume',
               detail: 'The project is paused. Resuming is a PMO decision — the PMO will resume it when work restarts.',
             },
       );
