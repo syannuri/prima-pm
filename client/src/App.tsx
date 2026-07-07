@@ -11,6 +11,7 @@ import AdminResourcesPage from './pages/AdminResourcesPage';
 import SettingsPage from './pages/SettingsPage';
 import ManualPage from './pages/ManualPage';
 import MyTimesheetPage from './pages/MyTimesheetPage';
+import ReportsPage from './pages/ReportsPage';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/projects/:projectId/*" element={<ProjectPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/resources" element={<AdminResourcesPage />} />

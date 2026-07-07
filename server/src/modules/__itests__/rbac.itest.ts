@@ -787,6 +787,48 @@ describe('activation-ready notification (baselines complete → tell ADMIN/PMO)'
   });
 });
 
+describe('project status report (weekly/monthly, PM + ADMIN/PMO)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Report-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+  });
+
+  it('returns the curated report (meta, evm, task breakdown, forecast) for the owning PM', async () => {
+    const res = await request(app).get(api(`/projects/${pid}/report?period=weekly`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(res.status).toBe(200);
+    expect(res.body.project.code).toBeTruthy();
+    expect(res.body.period).toBe('weekly');
+    expect(res.body.periodLabel).toMatch(/Week ending/);
+    expect(res.body).toHaveProperty('health');
+    expect(res.body.tasks).toHaveProperty('weightedPct');
+    expect(res.body.tasks).toHaveProperty('completed');
+    expect(res.body.forecast).toHaveProperty('eac');
+    expect(Array.isArray(res.body.forecast.sCurve)).toBe(true);
+  });
+
+  it('monthly period yields a month label', async () => {
+    const res = await request(app).get(api(`/projects/${pid}/report?period=monthly`)).set(auth(tokens.ADMIN));
+    expect(res.status).toBe(200);
+    expect(res.body.period).toBe('monthly');
+    expect(res.body.periodLabel).not.toMatch(/Week ending/);
+  });
+
+  it('rejects a bad period (400) and denies FINANCE / a non-owner PM (403)', async () => {
+    expect((await request(app).get(api(`/projects/${pid}/report?period=daily`)).set(auth(tokens.ADMIN))).status).toBe(400);
+    expect((await request(app).get(api(`/projects/${pid}/report`)).set(auth(tokens.FINANCE))).status).toBe(403);
+    expect((await request(app).get(api(`/projects/${pid}/report`)).set(auth(tokens.PM2))).status).toBe(403);
+  });
+
+  it('serves a PDF for the report', async () => {
+    const res = await request(app).get(api(`/projects/${pid}/report/pdf?period=weekly`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/pdf/);
+    expect(res.headers['content-disposition']).toMatch(/status_report\.pdf/);
+  });
+});
+
 describe('awaiting-closure queue (delivery complete → tell ADMIN/PMO to close)', () => {
   let pid = '';
   const inQueue = async (token: string) => {

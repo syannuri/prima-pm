@@ -464,6 +464,25 @@ export interface Forecast {
   sCurve: { t: string; pv: number; ac: number | null; forecast: number | null }[];
 }
 
+// Curated single-project status report (Reports page, PM + ADMIN/PMO). Period drives the
+// S-curve granularity + the period label. Reuses the Forecast payload for the chart + EAC.
+export interface ProjectReportData {
+  project: { code: string; name: string; pmName: string; status: string; deliveryApproach: string };
+  period: 'weekly' | 'monthly';
+  asOf: string;
+  periodLabel: string;
+  health: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
+  evm: {
+    bac: number; pv: number; ev: number; ac: number; cpi: number; spi: number;
+    percentComplete: number; weightedProgress: number; scheduleProgress: number; leafTaskCount: number;
+  };
+  tasks: {
+    total: number; completed: number; inProgress: number; notStarted: number; weightedPct: number;
+    remaining: { name: string; pct: number; planEnd: string; overdue: boolean; isMilestone: boolean; owner: string | null }[];
+  };
+  forecast: Forecast;
+}
+
 // A frozen point-in-time EVM capture — the app's point-in-time EVM turned into a trend.
 export interface EvmSnapshot {
   id: string;

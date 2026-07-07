@@ -20,6 +20,7 @@ const ICONS = {
   manual: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z',
   changeLog: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 12l2 2 4-4',
   clock: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
+  reports: 'M3 3v18h18M7 15v3M12 11v7M17 7v11',
 };
 
 const STATUS_DOT = PROJECT_STATUS_DOT;
@@ -64,6 +65,12 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
             <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{unread}</span>
           ))}
         </NavLink>
+        {/* Reports — PM status report (weekly/monthly); PMs run them, ADMIN/PMO oversee. */}
+        {!!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role) && (
+          <NavLink to="/reports" onClick={onNavigate} title="Reports" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.reports} /> {!collapsed && 'Reports'}
+          </NavLink>
+        )}
         {/* Timesheet is for people who do task work — hide it for ADMIN/PMO (portfolio roles). */}
         {!!user && !['ADMIN', 'PMO'].includes(user.role) && (
           <NavLink to="/my-timesheet" onClick={onNavigate} title="My Timesheet" className={({ isActive }) => cx(isActive)}>
