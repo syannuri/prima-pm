@@ -27,7 +27,9 @@ function donutPath(a0: number, a1: number): string {
   return `M${ox0} ${oy0} A${R} ${R} 0 ${large} 1 ${ox1} ${oy1} L${ix1} ${iy1} A${IR} ${IR} 0 ${large} 0 ${ix0} ${iy0} Z`;
 }
 
-export default function DonutChart({ title, slices }: { title: string; slices: DonutSlice[] }) {
+// `unit` labels what each slice counts (default "projects" for the dashboard status donut;
+// e.g. "tasks" for the report's task-completion donut) — used in the corner hint + tooltips.
+export default function DonutChart({ title, slices, unit = 'projects' }: { title: string; slices: DonutSlice[]; unit?: string }) {
   const uid = useId().replace(/:/g, '');
   const total = slices.reduce((s, d) => s + d.value, 0);
   const [hover, setHover] = useState<number | null>(null);
@@ -47,7 +49,7 @@ export default function DonutChart({ title, slices }: { title: string; slices: D
     <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</span>
-        <span className="text-xs text-slate-400 dark:text-slate-500" title="Each % = share of your projects in this status — not the CPI/SPI value.">= % of projects</span>
+        <span className="text-xs text-slate-400 dark:text-slate-500" title={`Each % = share of ${unit} in this slice.`}>= % of {unit}</span>
       </div>
       {total === 0 ? (
         <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No data</p>
@@ -115,8 +117,8 @@ export default function DonutChart({ title, slices }: { title: string; slices: D
               >
                 <span className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: d.color }} />
                 <span className="flex-1 text-slate-600 dark:text-slate-300">{d.label}</span>
-                <span className="tabular-nums font-medium text-slate-700 dark:text-slate-200" title="Number of projects">{d.value}</span>
-                <span className="w-10 text-right tabular-nums text-xs text-slate-500 dark:text-slate-400" title="= % of projects (not the CPI/SPI value)">{total ? Math.round((d.value / total) * 100) : 0}%</span>
+                <span className="tabular-nums font-medium text-slate-700 dark:text-slate-200" title={`Number of ${unit}`}>{d.value}</span>
+                <span className="w-10 text-right tabular-nums text-xs text-slate-500 dark:text-slate-400" title={`= % of ${unit}`}>{total ? Math.round((d.value / total) * 100) : 0}%</span>
               </li>
             ))}
           </ul>

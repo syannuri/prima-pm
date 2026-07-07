@@ -125,7 +125,7 @@ function ReportBody({ r }: { r: ProjectReportData }) {
         <Card>
           <SectionHead title="Task completion" sub="Completed vs uncompleted work packages" />
           <div className="flex flex-wrap items-center gap-4">
-            {slices.length > 0 ? <DonutChart title="" slices={slices} /> : <p className="text-sm text-slate-500">No work packages.</p>}
+            {slices.length > 0 ? <DonutChart title="" slices={slices} unit="tasks" /> : <p className="text-sm text-slate-500">No work packages.</p>}
             <div className="space-y-1.5 text-sm">
               <Legend color="#16a34a" label="Completed" value={r.tasks.completed} />
               <Legend color="#f59e0b" label="In progress" value={r.tasks.inProgress} />
