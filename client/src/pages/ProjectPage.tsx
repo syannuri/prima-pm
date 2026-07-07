@@ -21,6 +21,7 @@ import CloseoutPanel from './panels/CloseoutPanel';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import NextStepsGuide from './panels/NextStepsGuide';
+import CrDecisionBanner from '../components/CrDecisionBanner';
 import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
@@ -140,6 +141,8 @@ export default function ProjectPage() {
           </div>
         )}
       </div>
+
+      <CrDecisionBanner projectId={projectId} onJump={(t) => setTab(t as Tab)} />
 
       <ProjectAlerts projectId={projectId} onJump={(t) => setTab(t as Tab)} />
 
