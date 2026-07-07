@@ -116,7 +116,7 @@ export function computeNextSteps(i: NextStepsInput): NextStepsResult {
               }
             : {
                 key: 'awaitActivation',
-                title: 'Baseline set — ready to activate',
+                title: 'Waiting for PMO to activate',
                 detail: 'The plan is baselined. Activation is a PMO decision — the PMO has been notified and will start execution.',
               },
         );
