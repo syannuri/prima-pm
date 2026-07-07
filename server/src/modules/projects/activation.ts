@@ -26,6 +26,38 @@ export async function getActivationReadiness(projectId: string): Promise<Activat
 }
 
 /**
+ * PMO governance queue for the dashboard: chartered projects whose baselines are set
+ * (activation-ready), so ADMIN/PMO can see what's waiting for them to activate. Unlike
+ * the one-time bell notification, this is derived from live state — it stays listed until
+ * the project is actually activated. ADMIN/PMO only (they hold the activation gate).
+ */
+export async function getAwaitingActivation(role: string) {
+  if (role !== 'ADMIN' && role !== 'PMO') return { items: [], count: 0 };
+
+  const projects = await prisma.project.findMany({
+    where: { status: 'CHARTERED', deletedAt: null },
+    select: { id: true, code: true, name: true, deliveryApproach: true, baselineLockedAt: true, scheduleBaselinedAt: true, pm: { select: { name: true } } },
+    orderBy: { code: 'asc' },
+  });
+  if (!projects.length) return { items: [], count: 0 };
+
+  // hasWbs per project in one grouped query (no N+1).
+  const counts = await prisma.task.groupBy({ by: ['projectId'], where: { projectId: { in: projects.map((p) => p.id) } }, _count: { _all: true } });
+  const hasWbs = new Map(counts.map((c) => [c.projectId, c._count._all > 0]));
+
+  const items = projects
+    .filter((p) => assessActivationReadiness({
+      baselineLocked: p.baselineLockedAt != null,
+      scheduleBaselined: p.scheduleBaselinedAt != null,
+      hasWbs: hasWbs.get(p.id) ?? false,
+      deliveryApproach: p.deliveryApproach,
+    }).canActivate)
+    .map((p) => ({ id: p.id, code: p.code, name: p.name, pm: p.pm?.name ?? '—' }));
+
+  return { items, count: items.length };
+}
+
+/**
  * When a chartered project's baselines are all set (it just became activation-ready),
  * notify ADMIN/PMO that it's ready to start execution — activation is their gate, so
  * this is a push instead of them polling the dashboard. Fires ONCE per project

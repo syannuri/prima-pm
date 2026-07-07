@@ -490,6 +490,14 @@ export interface EvmTrend {
   plannedCurve: { t: string; pv: number }[]; // smooth planned-value backdrop
 }
 
+// A chartered project whose baselines are set and is ready for ADMIN/PMO to activate.
+export interface AwaitingActivationItem {
+  id: string;
+  code: string;
+  name: string;
+  pm: string;
+}
+
 // Portfolio-wide EVM trend: per-project snapshots rolled up (latest-as-of each date).
 export interface PortfolioEvmTrend {
   bac: number;

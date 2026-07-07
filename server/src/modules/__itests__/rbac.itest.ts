@@ -656,4 +656,15 @@ describe('activation-ready notification (baselines complete → tell ADMIN/PMO)'
     await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.PROJECT_MANAGER)).send({ locked: true });
     expect(await readyInbox()).toHaveLength(1); // still one (guarded by activationReadyNotifiedAt)
   });
+
+  it('the project surfaces in the ADMIN/PMO "awaiting activation" dashboard queue, not for a PM', async () => {
+    // pid (from the block above) is chartered + baseline locked + no WBS → activation-ready.
+    const admin = await request(app).get(api('/portfolio/awaiting-activation')).set(auth(tokens.ADMIN));
+    expect(admin.status).toBe(200);
+    expect((admin.body.items as { id: string }[]).some((x) => x.id === pid)).toBe(true);
+
+    // A PM does not hold the activation gate → the queue is empty for them.
+    const pm = await request(app).get(api('/portfolio/awaiting-activation')).set(auth(tokens.PROJECT_MANAGER));
+    expect(pm.body.count).toBe(0);
+  });
 });

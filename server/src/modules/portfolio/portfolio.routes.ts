@@ -5,6 +5,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
 import { getPortfolioSummary } from './portfolio.service.js';
 import { getPortfolioEvmTrend, captureAllSnapshots } from '../evm/evm.portfolio.js';
+import { getAwaitingActivation } from '../projects/activation.js';
 import { gatherPortfolioExport } from '../export/export.portfolio.data.js';
 import { buildPortfolioPdf } from '../export/build.portfolio.pdf.js';
 import { buildPortfolioWorkbook } from '../export/build.portfolio.excel.js';
@@ -22,6 +23,14 @@ router.get(
     const { statusDate } = querySchema.parse(req.query);
     const summary = await getPortfolioSummary(req.user!.id, req.user!.role, statusDate ?? new Date());
     res.json(summary);
+  }),
+);
+
+// PMO governance queue: chartered projects that are baseline-ready to activate.
+router.get(
+  '/awaiting-activation',
+  asyncHandler(async (req, res) => {
+    res.json(await getAwaitingActivation(req.user!.role));
   }),
 );
 
