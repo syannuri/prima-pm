@@ -1,6 +1,6 @@
 # 🔄 Project Lifecycle & Flow — Prismatix
 
-**Version:** 1.0 · **Date:** 2026-07-06 · **Audience:** PM · PMO · onboarding
+**Version:** 1.1 · **Date:** 2026-07-07 · **Audience:** PM · PMO · onboarding
 
 > End-to-end flow of a project in Prismatix, from creation to close, mapped to the
 > five PMBOK process groups. The app enforces this flow through a status **state
@@ -169,7 +169,50 @@ This keeps every baseline change **requested, approved, and audited** — not ac
 
 ---
 
-## 6. Glossary (key terms)
+## 6. Guidance & reminders (how the app nudges you through the flow)
+
+The flow isn't only *enforced* by gates — the app actively **guides** each role to the
+next action, so a project never quietly stalls half-planned.
+
+### 6.1 Per-project "🧭 Next steps" guide
+
+A contextual card at the top of every project page lists the ordered next actions for the
+project's current stage: a **tab cue** jumps straight to the relevant tab, a **lifecycle
+cue** points at the header control (Activate / Resume / Close). It renders nothing when
+nothing is pending (e.g. a `CLOSED` project). Its **stage label tracks progress *within* a
+stage**, not just the raw status:
+
+| Stage | Label while work remains | Label once the sub-phase is done |
+|-------|--------------------------|----------------------------------|
+| `DRAFT` | Draft — define the charter | *(commit charter → `CHARTERED`)* |
+| `CHARTERED` | Planning — set the cost & schedule baseline | **Planning — baseline set, ready to activate** |
+| `IN_PROGRESS` | In execution | **In execution — ready to close** |
+| `ON_HOLD` | On hold | *(resume → `IN_PROGRESS`)* |
+
+> The order matters: the guide asks you to **capture the schedule baseline first, then lock
+> the cost baseline** — because locking the cost baseline also freezes the WBS/schedule. If
+> the cost baseline was locked too early, the guide surfaces an **"unlock to finish the
+> schedule"** cue.
+
+**Role-aware cues:** the governance actions (activate / close / resume) are ADMIN/PMO
+gates, so for the owning **PM** they render as *informational* ("… is a PMO decision — the
+PMO has been notified") instead of a button the PM can't use.
+
+### 6.2 Dashboard reminders (portfolio view)
+
+Two complementary panels keep planning moving across the portfolio:
+
+- **📝 Finish planning · Set Baseline** — still-in-planning projects (`DRAFT` / `CHARTERED`)
+  with an outstanding **Charter · Schedule · Cost** step, each shown as a ✓ / ○ chip (a
+  schedule with no WBS is marked *n/a*). Role-scoped: ADMIN/PMO see the whole portfolio; a
+  PM sees only their own projects.
+- **▶ Ready to activate** — chartered projects whose baselines are all set, waiting on the
+  ADMIN/PMO activation gate. A project **graduates** from the *Set Baseline* panel to this
+  one the moment its planning is complete.
+
+---
+
+## 7. Glossary (key terms)
 
 | Term | Meaning |
 |------|---------|
@@ -183,4 +226,4 @@ This keeps every baseline change **requested, approved, and audited** — not ac
 
 ---
 
-*Related: [`ERD.md`](./ERD.md) (data model). This document reflects the app behaviour as of 2026-07-06.*
+*Related: [`ERD.md`](./ERD.md) (data model). This document reflects the app behaviour as of 2026-07-07.*
