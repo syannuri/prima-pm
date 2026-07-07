@@ -6,6 +6,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { env, isProd } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
+import { cookieParser } from './lib/cookies.js';
+import { csrfGuard } from './middleware/csrf.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
@@ -76,12 +78,18 @@ export function createApp() {
   );
   app.use(cors({ origin: env.corsOrigin, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
+  // Populate req.cookies so cookie-based auth (prima_at) and the CSRF double-submit check
+  // can read them.
+  app.use(cookieParser);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'prima-pm', ts: new Date().toISOString() });
   });
 
   const api = express.Router();
+  // CSRF double-submit guard on all mutating API requests (skips Bearer-authed calls and
+  // login — see middleware/csrf.ts).
+  api.use(csrfGuard);
   api.use('/auth', authRoutes);
   api.use('/users', usersRoutes);
   api.use('/projects', projectsRoutes); // includes nested /:projectId/charter and /cost

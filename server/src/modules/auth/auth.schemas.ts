@@ -30,8 +30,10 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+// refreshToken is optional in the body: the browser sends it as an httpOnly cookie instead
+// (the controller reads cookie-or-body). Legacy/automation clients may still post it here.
 export const refreshSchema = z.object({
-  refreshToken: z.string().min(10),
+  refreshToken: z.string().min(10).optional(),
 });
 
 export const changePasswordSchema = z

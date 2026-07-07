@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api, tokenStore } from '../api/client';
+import { api, tokenStore, migrateLegacyTokens } from '../api/client';
 import type { User } from '../api/types';
 
 interface AuthState {
@@ -16,22 +16,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = tokenStore.get();
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-    api
-      .get<{ user: User }>('/auth/me')
-      .then((r) => setUser(r.user))
-      .catch(() => tokenStore.clear())
-      .finally(() => setLoading(false));
+    // Move any pre-cookie session into httpOnly cookies, then ask who we are. We always
+    // hit /auth/me: the session is now carried by a cookie we can't read, so we can't
+    // short-circuit on "no local token" anymore (an anonymous visitor just gets a 401).
+    (async () => {
+      await migrateLegacyTokens();
+      try {
+        const r = await api.get<{ user: User }>('/auth/me');
+        setUser(r.user);
+      } catch {
+        tokenStore.clear();
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await api.post<{ user: User; accessToken: string; refreshToken: string }>('/auth/login', { email, password });
-    tokenStore.set(res.accessToken);
-    tokenStore.setRefresh(res.refreshToken);
+    // The server sets httpOnly auth cookies; nothing to store client-side. Clear any stale
+    // legacy tokens so we don't keep sending a Bearer header.
+    const res = await api.post<{ user: User }>('/auth/login', { email, password });
+    tokenStore.clear();
     setUser(res.user);
   };
 

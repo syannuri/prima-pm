@@ -185,6 +185,99 @@ describe('error handler sanitises Prisma P2002', () => {
   });
 });
 
+// Parse a supertest response's Set-Cookie array into { name: { value, attrs } }.
+function parseSetCookie(res: request.Response): Record<string, { value: string; attrs: string }> {
+  const out: Record<string, { value: string; attrs: string }> = {};
+  const raw = res.headers['set-cookie'] as unknown as string[] | undefined;
+  for (const c of raw ?? []) {
+    const [pair, ...rest] = c.split('; ');
+    const eq = pair.indexOf('=');
+    out[pair.slice(0, eq)] = { value: pair.slice(eq + 1), attrs: rest.join('; ') };
+  }
+  return out;
+}
+
+describe('cookie auth + CSRF (double-submit)', () => {
+  const email = 'cookie@test.local';
+  let jar: Record<string, { value: string; attrs: string }> = {};
+
+  beforeAll(async () => {
+    await prisma.user.create({ data: { name: 'Cookie Admin', email, role: 'ADMIN', passwordHash: await hashPassword(PW), isActive: true } });
+    const res = await request(app).post(api('/auth/login')).send({ email, password: PW });
+    jar = parseSetCookie(res);
+  });
+
+  it('login sets httpOnly access + refresh cookies and a JS-readable CSRF cookie', () => {
+    expect(jar.prima_at?.value).toBeTruthy();
+    expect(jar.prima_at.attrs).toMatch(/HttpOnly/i);
+    expect(jar.prima_at.attrs).toMatch(/SameSite=Strict/i);
+    expect(jar.prima_rt?.value).toBeTruthy();
+    expect(jar.prima_rt.attrs).toMatch(/HttpOnly/i);
+    // The CSRF token must be readable by JS (no HttpOnly) so the SPA can echo it in a header.
+    expect(jar.prima_csrf?.value).toBeTruthy();
+    expect(jar.prima_csrf.attrs).not.toMatch(/HttpOnly/i);
+  });
+
+  it('authenticates a GET with only the access cookie (no Bearer header)', async () => {
+    const res = await request(app).get(api('/auth/me')).set('Cookie', `prima_at=${jar.prima_at.value}`);
+    expect(res.status).toBe(200);
+    expect(res.body.user.email).toBe(email);
+  });
+
+  it('rejects a cookie-authed mutation with NO X-CSRF-Token (403)', async () => {
+    const res = await request(app)
+      .post(api('/projects'))
+      .set('Cookie', `prima_at=${jar.prima_at.value}; prima_csrf=${jar.prima_csrf.value}`)
+      .send({ name: 'CSRF-less', pmUserId: ownerId });
+    expect(res.status).toBe(403);
+    expect(String(res.body?.error?.message ?? '')).toMatch(/csrf/i);
+  });
+
+  it('rejects a cookie-authed mutation whose X-CSRF-Token does not match the cookie (403)', async () => {
+    const res = await request(app)
+      .post(api('/projects'))
+      .set('Cookie', `prima_at=${jar.prima_at.value}; prima_csrf=${jar.prima_csrf.value}`)
+      .set('X-CSRF-Token', 'not-the-cookie-value')
+      .send({ name: 'CSRF-mismatch', pmUserId: ownerId });
+    expect(res.status).toBe(403);
+  });
+
+  it('accepts a cookie-authed mutation when the X-CSRF-Token matches the cookie (201)', async () => {
+    const res = await request(app)
+      .post(api('/projects'))
+      .set('Cookie', `prima_at=${jar.prima_at.value}; prima_csrf=${jar.prima_csrf.value}`)
+      .set('X-CSRF-Token', jar.prima_csrf.value)
+      .send({ name: 'CSRF-ok', pmUserId: ownerId });
+    expect(res.status).toBe(201);
+  });
+
+  it('a Bearer-authed mutation is exempt from CSRF (no header needed)', async () => {
+    const res = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Bearer-no-csrf', pmUserId: ownerId });
+    expect(res.status).toBe(201);
+  });
+
+  it('refresh via the cookie rotates the session and re-sets the cookies', async () => {
+    const res = await request(app)
+      .post(api('/auth/refresh'))
+      .set('Cookie', `prima_rt=${jar.prima_rt.value}; prima_csrf=${jar.prima_csrf.value}`)
+      .set('X-CSRF-Token', jar.prima_csrf.value);
+    expect(res.status).toBe(200);
+    const rotated = parseSetCookie(res);
+    expect(rotated.prima_at?.value).toBeTruthy();
+    expect(rotated.prima_rt?.value).toBeTruthy();
+    expect(rotated.prima_rt.value).not.toBe(jar.prima_rt.value); // rotated to a new refresh token
+  });
+
+  it('logout clears the auth cookies (Max-Age=0 / Expires in the past)', async () => {
+    const res = await request(app).post(api('/auth/logout')).set('Cookie', `prima_at=${jar.prima_at.value}; prima_csrf=${jar.prima_csrf.value}`).set('X-CSRF-Token', jar.prima_csrf.value);
+    expect(res.status).toBe(200);
+    const cleared = parseSetCookie(res);
+    // clearCookie emits an expiry in the past for each cookie.
+    expect(cleared.prima_at.attrs).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/i);
+    expect(cleared.prima_rt.attrs).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/i);
+  });
+});
+
 describe('RBAC enforcement (server-side, end-to-end)', () => {
   let projectId = '';
 

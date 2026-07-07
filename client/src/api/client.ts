@@ -24,16 +24,41 @@ if (!store.getItem(TOKEN_KEY)) {
   }
 }
 
+// Auth now lives in httpOnly cookies set by the server (unreadable by JS → XSS can't steal
+// them). tokenStore is retained only to READ legacy sessionStorage tokens (so already-signed-in
+// users and the JWT-mint test workflow keep working) and to CLEAR them once migrated. New
+// logins write nothing here — the cookies are the session.
 export const tokenStore = {
   get: () => store.getItem(TOKEN_KEY),
-  set: (t: string) => store.setItem(TOKEN_KEY, t),
   getRefresh: () => store.getItem(REFRESH_KEY),
-  setRefresh: (t: string) => store.setItem(REFRESH_KEY, t),
   clear: () => {
     store.removeItem(TOKEN_KEY);
     store.removeItem(REFRESH_KEY);
   },
 };
+
+// --- CSRF (double-submit) ---------------------------------------------------------------
+// The server sets a JS-readable prima_csrf cookie alongside the httpOnly auth cookies. We
+// echo it in an X-CSRF-Token header on state-changing requests; the server rejects a
+// cookie-authenticated mutation whose header doesn't match (an attacker on another origin
+// can't read the cookie). Bearer-authed (legacy) requests are exempt server-side.
+const CSRF_COOKIE = 'prima_csrf';
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function readCookie(name: string): string | null {
+  const parts = document.cookie ? document.cookie.split('; ') : [];
+  for (const part of parts) {
+    const eq = part.indexOf('=');
+    if (eq !== -1 && part.slice(0, eq) === name) return decodeURIComponent(part.slice(eq + 1));
+  }
+  return null;
+}
+
+function csrfHeader(method: string): Record<string, string> {
+  if (!MUTATING.has(method.toUpperCase())) return {};
+  const token = readCookie(CSRF_COOKIE);
+  return token ? { 'X-CSRF-Token': token } : {};
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string, public details?: unknown) {
@@ -41,29 +66,47 @@ export class ApiError extends Error {
   }
 }
 
+// One-time migration for users signed in before the cookie switch: exchange the legacy
+// sessionStorage refresh token for a fresh, cookie-based session, then drop the JS-readable
+// tokens. No CSRF header needed — there's no prima_csrf cookie yet, so the server treats this
+// refresh as an un-CSRF-able bootstrap. Best-effort: on failure the legacy tokens stay and
+// still work via the Bearer fallback until they expire.
+export async function migrateLegacyTokens(): Promise<void> {
+  const legacy = tokenStore.getRefresh();
+  if (!legacy) return;
+  try {
+    const res = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: legacy }),
+    });
+    if (res.ok) tokenStore.clear();
+  } catch {
+    /* keep legacy tokens; they still authenticate via the Bearer fallback */
+  }
+}
+
 // Exchange the refresh token for a fresh access token. Deduped so a burst of 401s
 // (e.g. several parallel queries when the access token expires) triggers ONE refresh.
 let refreshInFlight: Promise<boolean> | null = null;
 function tryRefresh(): Promise<boolean> {
-  const rt = tokenStore.getRefresh();
-  if (!rt) return Promise.resolve(false);
   if (!refreshInFlight) {
+    // The refresh token rides in the httpOnly prima_rt cookie; a legacy sessionStorage token
+    // (if any) is sent in the body as a fallback. The server rotates and sets fresh cookies.
+    const legacy = tokenStore.getRefresh();
     refreshInFlight = fetch(`${API_URL}/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: rt }),
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...csrfHeader('POST') },
+      body: JSON.stringify(legacy ? { refreshToken: legacy } : {}),
     })
-      .then(async (res) => {
+      .then((res) => {
         if (!res.ok) return false;
-        const data = await res.json().catch(() => null);
-        if (data?.accessToken) {
-          tokenStore.set(data.accessToken);
-          // Refresh tokens rotate: persist the new one, or the next refresh replays a
-          // now-revoked token and the server logs us out (theft response).
-          if (data.refreshToken) tokenStore.setRefresh(data.refreshToken);
-          return true;
-        }
-        return false;
+        // Session is now carried by the rotated cookies — drop any legacy JS-readable tokens
+        // so subsequent requests use the cookies (and can't be XSS-stolen).
+        tokenStore.clear();
+        return true;
       })
       .catch(() => false)
       .finally(() => {
@@ -73,6 +116,8 @@ function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+// Legacy Bearer header from sessionStorage, only present for pre-cookie sessions / the
+// JWT-mint test workflow. New sessions authenticate via the httpOnly cookie instead.
 function authHeader(base: Record<string, string> = {}): Record<string, string> {
   const token = tokenStore.get();
   return token ? { ...base, Authorization: `Bearer ${token}` } : base;
@@ -81,7 +126,8 @@ function authHeader(base: Record<string, string> = {}): Record<string, string> {
 async function request<T>(method: string, path: string, body?: unknown, retried = false): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method,
-    headers: authHeader({ 'Content-Type': 'application/json' }),
+    credentials: 'include',
+    headers: { ...authHeader({ 'Content-Type': 'application/json' }), ...csrfHeader(method) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
@@ -104,7 +150,7 @@ async function request<T>(method: string, path: string, body?: unknown, retried 
 
 // Authenticated file download: fetch as blob (Bearer header) then trigger save.
 async function download(path: string, fallbackName: string, retried = false): Promise<void> {
-  const res = await fetch(`${API_URL}${path}`, { headers: authHeader() });
+  const res = await fetch(`${API_URL}${path}`, { credentials: 'include', headers: authHeader() });
   if (res.status === 401 && !retried) {
     if (await tryRefresh()) return download(path, fallbackName, true);
     tokenStore.clear();
@@ -129,7 +175,12 @@ async function download(path: string, fallbackName: string, retried = false): Pr
 
 // Multipart upload (FormData): do NOT set Content-Type (browser sets the boundary).
 async function upload<T>(path: string, formData: FormData, retried = false): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers: authHeader(), body: formData });
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { ...authHeader(), ...csrfHeader('POST') },
+    body: formData,
+  });
   if (res.status === 401 && !retried) {
     if (await tryRefresh()) return upload<T>(path, formData, true);
     tokenStore.clear();

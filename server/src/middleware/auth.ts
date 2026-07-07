@@ -3,6 +3,7 @@ import type { Role } from '@prisma/client';
 import { verifyAccessToken } from '../lib/jwt.js';
 import { Unauthorized } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
+import { AT_COOKIE } from '../lib/cookies.js';
 
 // Authenticated user attached to the request by requireAuth.
 export interface AuthUser {
@@ -26,9 +27,14 @@ declare global {
 // Role is taken from the DB, not the token, so role changes take effect at once.
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
+    // Prefer the Authorization header (used by automation / the JWT-mint test workflow);
+    // fall back to the httpOnly prima_at cookie (the browser SPA's credential — kept out of
+    // JS so an XSS can't read it).
     const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) throw Unauthorized('Missing or malformed Authorization header');
-    const token = header.slice('Bearer '.length).trim();
+    const token = header?.startsWith('Bearer ')
+      ? header.slice('Bearer '.length).trim()
+      : req.cookies?.[AT_COOKIE];
+    if (!token) throw Unauthorized('Missing authentication');
 
     let payload;
     try {
