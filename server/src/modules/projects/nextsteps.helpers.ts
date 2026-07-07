@@ -42,7 +42,7 @@ export interface NextStepsResult {
 
 const STAGE_LABEL: Record<ProjectStage, string> = {
   DRAFT: 'Draft — define the charter',
-  CHARTERED: 'Planning — set the baseline', // charter is committed; now build the cost & schedule baseline
+  CHARTERED: 'Planning — set the cost & schedule baseline', // charter is committed; now build the performance-measurement baseline (PMB)
   IN_PROGRESS: 'In execution',
   ON_HOLD: 'On hold',
   CLOSED: 'Closed',
