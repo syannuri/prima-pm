@@ -48,6 +48,14 @@ const STAGE_LABEL: Record<ProjectStage, string> = {
   CLOSED: 'Closed',
 };
 
+// The CHARTERED stage spans "baselines not set" through "baselined, awaiting activation",
+// so its label must reflect progress — otherwise it keeps reading "set the …baseline" even
+// after both baselines are done (the real step has already advanced to Activate).
+function stageLabel(i: NextStepsInput): string {
+  if (i.status === 'CHARTERED' && i.activationReady) return 'Planning — baseline set, ready to activate';
+  return STAGE_LABEL[i.status];
+}
+
 export function computeNextSteps(i: NextStepsInput): NextStepsResult {
   const steps: NextStep[] = [];
 
@@ -178,5 +186,5 @@ export function computeNextSteps(i: NextStepsInput): NextStepsResult {
       break;
   }
 
-  return { stage: STAGE_LABEL[i.status], steps };
+  return { stage: stageLabel(i), steps };
 }

@@ -43,6 +43,14 @@ describe('computeNextSteps', () => {
     expect(r).toEqual(['activate']);
   });
 
+  it('CHARTERED stage label adapts once the baseline is set (no longer "set the …baseline")', () => {
+    // Both baselines done, awaiting activation: the header should read "ready to activate",
+    // not the stale imperative "set the cost & schedule baseline".
+    expect(computeNextSteps({ ...base, status: 'CHARTERED', activationReady: true }).stage).toBe('Planning — baseline set, ready to activate');
+    // Still incomplete → keeps the "set the …baseline" prompt.
+    expect(computeNextSteps({ ...base, status: 'CHARTERED', baselineLocked: false, scheduleBaselined: false, activationReady: false }).stage).toBe('Planning — set the cost & schedule baseline');
+  });
+
   it('CHARTERED activation-ready but viewer is a PM → informational "awaiting PMO" (no action)', () => {
     const steps = computeNextSteps({ ...base, status: 'CHARTERED', activationReady: true, canGovern: false }).steps;
     expect(steps.map((s) => s.key)).toEqual(['awaitActivation']);
