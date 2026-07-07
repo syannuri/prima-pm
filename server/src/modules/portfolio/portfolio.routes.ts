@@ -6,6 +6,7 @@ import { requireRole } from '../../middleware/rbac.js';
 import { getPortfolioSummary } from './portfolio.service.js';
 import { getPortfolioEvmTrend, captureAllSnapshots } from '../evm/evm.portfolio.js';
 import { getAwaitingActivation, getPlanningReminders } from '../projects/activation.js';
+import { getAwaitingClosure } from '../projects/closure.js';
 import { gatherPortfolioExport } from '../export/export.portfolio.data.js';
 import { buildPortfolioPdf } from '../export/build.portfolio.pdf.js';
 import { buildPortfolioWorkbook } from '../export/build.portfolio.excel.js';
@@ -31,6 +32,15 @@ router.get(
   '/awaiting-activation',
   asyncHandler(async (req, res) => {
     res.json(await getAwaitingActivation(req.user!.role));
+  }),
+);
+
+// PMO governance queue: in-progress projects that have met the closure gate and are
+// ready for ADMIN/PMO to close (the mirror of awaiting-activation, closing the delivery loop).
+router.get(
+  '/awaiting-closure',
+  asyncHandler(async (req, res) => {
+    res.json(await getAwaitingClosure(req.user!.role));
   }),
 );
 

@@ -22,6 +22,7 @@ import PortfolioForecast from '../components/PortfolioForecast';
 import PortfolioEvmTrend from '../components/PortfolioEvmTrend';
 import PortfolioExport from '../components/PortfolioExport';
 import AwaitingActivation from '../components/AwaitingActivation';
+import AwaitingClosure from '../components/AwaitingClosure';
 import PlanningReminders from '../components/PlanningReminders';
 import PendingApprovals from '../components/PendingApprovals';
 import ResourceCapacity from '../components/ResourceCapacity';
@@ -137,6 +138,7 @@ export default function DashboardPage() {
       {view === 'portfolio' && <PortfolioExport />}
       {view === 'portfolio' && <PlanningReminders />}
       {view === 'portfolio' && <AwaitingActivation />}
+      {view === 'portfolio' && <AwaitingClosure />}
       {view === 'portfolio' && <PendingApprovals />}
       {view === 'portfolio' && <PortfolioSummary />}
       {view === 'portfolio' && <PortfolioEvmTrend />}

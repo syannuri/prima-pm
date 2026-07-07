@@ -786,3 +786,39 @@ describe('activation-ready notification (baselines complete → tell ADMIN/PMO)'
     expect(pm.body.count).toBe(0);
   });
 });
+
+describe('awaiting-closure queue (delivery complete → tell ADMIN/PMO to close)', () => {
+  let pid = '';
+  const inQueue = async (token: string) => {
+    const res = await request(app).get(api('/portfolio/awaiting-closure')).set(auth(token));
+    return res.body as { items: { id: string; hasAcceptance: boolean; hasLessons: boolean }[]; count: number };
+  };
+  beforeAll(async () => {
+    // Chartered → baseline locked → activated. No WBS/backlog, so the schedule gate is only
+    // a warning → the project is closure-ready the moment it's in execution.
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Closable-Ready', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.ADMIN)).send({ locked: true });
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'IN_PROGRESS' });
+  });
+
+  it('surfaces a closure-ready project to ADMIN with both closeout artifacts still pending', async () => {
+    const q = await inQueue(tokens.ADMIN);
+    const item = q.items.find((i) => i.id === pid);
+    expect(item).toBeTruthy();
+    expect(item!.hasAcceptance).toBe(false);
+    expect(item!.hasLessons).toBe(false);
+  });
+
+  it('flips the acceptance chip once a sign-off is recorded', async () => {
+    await request(app).post(api(`/projects/${pid}/closeout/acceptances`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ party: 'Sponsor', decision: 'ACCEPTED', signedByName: 'Dewi Sponsor' });
+    const item = (await inQueue(tokens.ADMIN)).items.find((i) => i.id === pid);
+    expect(item!.hasAcceptance).toBe(true); // still listed (canClose), now with acceptance done
+  });
+
+  it('is empty for a PM — closing is an ADMIN/PMO gate', async () => {
+    expect((await inQueue(tokens.PROJECT_MANAGER)).count).toBe(0);
+  });
+});

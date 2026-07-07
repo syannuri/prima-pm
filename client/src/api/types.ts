@@ -498,6 +498,17 @@ export interface AwaitingActivationItem {
   pm: string;
 }
 
+// An in-progress project that has met the closure gate and is ready for ADMIN/PMO to
+// close, with the state of each closeout artifact (acceptance sign-off / lessons learned).
+export interface AwaitingClosureItem {
+  id: string;
+  code: string;
+  name: string;
+  pm: string;
+  hasAcceptance: boolean;
+  hasLessons: boolean;
+}
+
 // Dashboard "Set Baseline" reminder: a still-in-planning project with the completion
 // state of each planning artifact (charter / cost baseline / schedule baseline).
 export interface PlanningReminderItem {
