@@ -84,7 +84,7 @@ router.get(
   '/:id/next-steps',
   requireProjectAccess(),
   asyncHandler(async (req, res) => {
-    const nextSteps = await getNextSteps(req.params.id);
+    const nextSteps = await getNextSteps(req.params.id, req.user!.role);
     res.json({ nextSteps });
   }),
 );

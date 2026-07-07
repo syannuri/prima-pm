@@ -9,7 +9,7 @@ export type { NextStep, NextStepsResult } from './nextsteps.helpers.js';
 // Gather the live state and compute the guided next-step cues. Readiness is only
 // resolved for the stage that needs it (activation for CHARTERED, closure for
 // IN_PROGRESS) to keep the endpoint cheap. Pure logic lives in nextsteps.helpers.ts.
-export async function getNextSteps(projectId: string): Promise<NextStepsResult> {
+export async function getNextSteps(projectId: string, viewerRole: string): Promise<NextStepsResult> {
   const project = await prisma.project.findFirst({
     where: { id: projectId, deletedAt: null },
     select: { status: true, baselineLockedAt: true, scheduleBaselinedAt: true },
@@ -27,6 +27,9 @@ export async function getNextSteps(projectId: string): Promise<NextStepsResult> 
     hasAcceptance: false,
     hasLessons: false,
     closureReady: false,
+    // Lifecycle governance (activate/resume/close) is ADMIN/PMO-only; a PM sees those
+    // cues as informational ("awaiting PMO") rather than actions they can perform.
+    canGovern: viewerRole === 'ADMIN' || viewerRole === 'PMO',
   };
 
   if (status === 'CHARTERED') {

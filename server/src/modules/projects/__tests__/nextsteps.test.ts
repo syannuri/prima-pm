@@ -11,6 +11,7 @@ const base: NextStepsInput = {
   hasAcceptance: true,
   hasLessons: true,
   closureReady: false,
+  canGovern: true, // default: viewer is ADMIN/PMO (can run lifecycle actions)
 };
 
 const keys = (i: NextStepsInput) => computeNextSteps(i).steps.map((s) => s.key);
@@ -37,9 +38,27 @@ describe('computeNextSteps', () => {
     expect(r).toEqual(['lockBaseline']);
   });
 
-  it('CHARTERED and activation-ready → activate is the cue', () => {
+  it('CHARTERED and activation-ready → activate is the cue (ADMIN/PMO)', () => {
     const r = keys({ ...base, status: 'CHARTERED', activationReady: true });
     expect(r).toEqual(['activate']);
+  });
+
+  it('CHARTERED activation-ready but viewer is a PM → informational "awaiting PMO" (no action)', () => {
+    const steps = computeNextSteps({ ...base, status: 'CHARTERED', activationReady: true, canGovern: false }).steps;
+    expect(steps.map((s) => s.key)).toEqual(['awaitActivation']);
+    expect(steps[0].action).toBeUndefined(); // not an action the PM can take
+  });
+
+  it('IN_PROGRESS closeable as a PM → informational await-close instead of the close action', () => {
+    const steps = computeNextSteps({ ...base, status: 'IN_PROGRESS', closureReady: true, canGovern: false }).steps;
+    expect(steps.map((s) => s.key)).toEqual(['awaitClose']);
+    expect(steps[0].action).toBeUndefined();
+  });
+
+  it('ON_HOLD as a PM → informational await-resume instead of the resume action', () => {
+    const steps = computeNextSteps({ ...base, status: 'ON_HOLD', canGovern: false }).steps;
+    expect(steps.map((s) => s.key)).toEqual(['awaitResume']);
+    expect(steps[0].action).toBeUndefined();
   });
 
   it('IN_PROGRESS not yet closeable → track execution (Schedule for a WBS project)', () => {

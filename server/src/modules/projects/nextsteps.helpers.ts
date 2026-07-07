@@ -21,6 +21,10 @@ export interface NextStepsInput {
   hasAcceptance: boolean; // ≥1 non-rejected acceptance sign-off
   hasLessons: boolean; // ≥1 lesson-learned entry
   closureReady: boolean; // closure readiness has no outstanding blockers (schedule complete)
+  // Whether the VIEWER may run lifecycle governance (activate/resume/close) — ADMIN/PMO.
+  // A PM builds the plan but doesn't hold these gates, so for them those cues become
+  // informational ("awaiting PMO") instead of an action they can't perform.
+  canGovern: boolean;
 }
 
 export interface NextStep {
@@ -91,12 +95,20 @@ export function computeNextSteps(i: NextStepsInput): NextStepsResult {
         }
       }
       if (i.activationReady) {
-        steps.push({
-          key: 'activate',
-          title: 'Start execution',
-          detail: 'The baseline is set — activate the project to begin tracking progress.',
-          action: 'activate',
-        });
+        steps.push(
+          i.canGovern
+            ? {
+                key: 'activate',
+                title: 'Start execution',
+                detail: 'The baseline is set — activate the project to begin tracking progress.',
+                action: 'activate',
+              }
+            : {
+                key: 'awaitActivation',
+                title: 'Baseline set — ready to activate',
+                detail: 'The plan is baselined. Activation is a PMO decision — the PMO has been notified and will start execution.',
+              },
+        );
       }
       break;
     }
@@ -137,21 +149,28 @@ export function computeNextSteps(i: NextStepsInput): NextStepsResult {
           });
         }
         steps.push({
-          key: 'closeProject',
-          title: 'Close the project',
-          detail: 'Deliverables are complete — run the closure checklist and close the project.',
-          action: 'close',
+          ...(i.canGovern
+            ? { key: 'closeProject', title: 'Close the project', detail: 'Deliverables are complete — run the closure checklist and close the project.', action: 'close' as const }
+            : { key: 'awaitClose', title: 'Ready to close', detail: 'Deliverables are complete. Closing is a PMO decision — the PMO will run the closure checklist and close the project.' }),
         });
       }
       break;
 
     case 'ON_HOLD':
-      steps.push({
-        key: 'resume',
-        title: 'Resume the project',
-        detail: 'The project is paused. Resume it when work restarts to keep tracking progress.',
-        action: 'resume',
-      });
+      steps.push(
+        i.canGovern
+          ? {
+              key: 'resume',
+              title: 'Resume the project',
+              detail: 'The project is paused. Resume it when work restarts to keep tracking progress.',
+              action: 'resume',
+            }
+          : {
+              key: 'awaitResume',
+              title: 'On hold — awaiting resume',
+              detail: 'The project is paused. Resuming is a PMO decision — the PMO will resume it when work restarts.',
+            },
+      );
       break;
 
     case 'CLOSED':
