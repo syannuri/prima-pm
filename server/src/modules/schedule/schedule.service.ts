@@ -11,6 +11,7 @@ import {
   buildGanttTree,
   hasDependencyCycle,
   reconcileManpower,
+  isCostLoaded,
   type DependencyEdge,
 } from './schedule.helpers.js';
 import type { DependencyInput, UpsertTaskInput } from './schedule.schemas.js';
@@ -351,14 +352,15 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
   const baseFinish = baseFins.length ? Math.max(...baseFins) : null;
   const finishVarianceDays = curFinish != null && baseFinish != null ? Math.round((curFinish - baseFinish) / DAY) : null;
 
-  // Work-package weights for EVM & progress roll-up: use ALL linked direct cost
-  // when the project is cost-loaded (classic cost-weighted EVM — the full BAC is
-  // then distributed pro-rata across these leaves), else fall back to task
-  // DURATION so EV/PV/%complete still reflect the WBS instead of collapsing to 0.
-  const totalLeafCost = leaves.reduce((s, t) => s + (costByTask.get(t.id) ?? 0), 0);
-  const costLoaded = totalLeafCost > 0;
+  // Work-package weights for EVM & progress roll-up: use linked direct cost (classic
+  // cost-weighted EVM — the full BAC is distributed pro-rata across these leaves) ONLY when
+  // the WBS is FULLY cost-loaded; otherwise fall back to task DURATION. A partially costed
+  // WBS must not switch to cost weighting, or its uncosted leaves collapse to weight 0 and
+  // disappear from EV/%complete (overstating progress — see isCostLoaded).
+  const leafDur = new Map(leaves.map((t) => [t.id, durationDays(t.planStart, t.planEnd)]));
+  const costLoaded = isCostLoaded(leaves.map((t) => ({ cost: costByTask.get(t.id) ?? 0, durationDays: leafDur.get(t.id)! })));
   const evmTasks: EvmTask[] = leaves.map((t) => ({
-    budgetCost: costLoaded ? (costByTask.get(t.id) ?? 0) : durationDays(t.planStart, t.planEnd),
+    budgetCost: costLoaded ? (costByTask.get(t.id) ?? 0) : leafDur.get(t.id)!,
     progressPct: t.progressPct,
     planStart: t.planStart,
     planEnd: t.planEnd,

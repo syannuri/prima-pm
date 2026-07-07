@@ -17,6 +17,20 @@ export function generateTaskCode(seq: number): string {
   return `T-${String(seq).padStart(3, '0')}`;
 }
 
+/**
+ * Should EVM weight leaves by their linked direct COST (classic cost-weighted EVM) or fall
+ * back to DURATION? Cost weighting is used ONLY when the WBS is FULLY cost-loaded — every
+ * leaf that has real duration carries a linked cost. A *partially* costed WBS must NOT switch
+ * to cost weighting: the uncosted leaves would collapse to weight 0 and vanish from EV /
+ * %complete, so an incomplete-but-uncosted task reads as 0 work and progress is overstated
+ * (a 1-of-9-costed WBS could show 100% complete). Zero-duration milestones are exempt — they
+ * legitimately carry no cost. With no cost anywhere we return false so duration weighting (or
+ * the all-milestone equal-weight fallback) applies. Units never mix: all-cost or all-duration.
+ */
+export function isCostLoaded(leaves: { cost: number; durationDays: number }[]): boolean {
+  return leaves.some((l) => l.cost > 0) && leaves.every((l) => l.cost > 0 || l.durationDays === 0);
+}
+
 // --- Gantt tree ---
 
 export interface FlatNode {

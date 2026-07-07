@@ -5,9 +5,42 @@ import {
   buildGanttTree,
   hasDependencyCycle,
   reconcileManpower,
+  isCostLoaded,
 } from '../schedule.helpers.js';
 
 const d = (s: string) => new Date(s);
+
+describe('schedule — cost-loaded weighting decision (isCostLoaded)', () => {
+  it('is true only when every real-duration leaf carries a cost (fully costed)', () => {
+    expect(isCostLoaded([{ cost: 100, durationDays: 3 }, { cost: 50, durationDays: 2 }])).toBe(true);
+  });
+
+  it('is FALSE when the WBS is only partially costed — the SAP HANA bug', () => {
+    // 1 of 4 leaves costed, the rest have real duration but no cost → duration weighting,
+    // so the uncosted (incomplete) leaves still count instead of collapsing to weight 0.
+    expect(
+      isCostLoaded([
+        { cost: 30_000_000, durationDays: 4 },
+        { cost: 0, durationDays: 3 },
+        { cost: 0, durationDays: 2 },
+        { cost: 0, durationDays: 2 },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false when no leaf has any cost (pure duration weighting)', () => {
+    expect(isCostLoaded([{ cost: 0, durationDays: 4 }, { cost: 0, durationDays: 2 }])).toBe(false);
+  });
+
+  it('exempts zero-duration milestones from the fully-costed check', () => {
+    // A costed WBS plus a 0-duration, 0-cost milestone is still "cost-loaded".
+    expect(isCostLoaded([{ cost: 100, durationDays: 4 }, { cost: 0, durationDays: 0 }])).toBe(true);
+  });
+
+  it('is false for an all-milestone (all zero-duration, zero-cost) WBS → equal-weight fallback', () => {
+    expect(isCostLoaded([{ cost: 0, durationDays: 0 }, { cost: 0, durationDays: 0 }])).toBe(false);
+  });
+});
 
 describe('schedule — duration & code', () => {
   it('counts whole days, never negative', () => {
