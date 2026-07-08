@@ -63,6 +63,7 @@ export default function ReportsPage() {
       api.download('/portfolio/export/pdf', 'portfolio_report.pdf'); // Executive/Portfolio share the portfolio export.
     }
   };
+  const downloadExcel = () => api.download('/portfolio/export/excel', 'portfolio_report.xlsx'); // Executive portfolio export.
   const canDownload = view === 'project' ? !!selected && !!r : view === 'executive';
 
   return (
@@ -126,7 +127,10 @@ export default function ReportsPage() {
                 </div>
               </div>
             </div>
-            <Button variant="secondary" disabled={!canDownload} onClick={download}>⬇ Download PDF</Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" disabled={!canDownload} onClick={download}>⬇ PDF</Button>
+              {view === 'executive' && <Button variant="secondary" disabled={!canDownload} onClick={downloadExcel}>⬇ Excel</Button>}
+            </div>
           </Card>
 
           {/* Project Report — the built view */}

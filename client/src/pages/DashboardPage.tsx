@@ -20,7 +20,7 @@ import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import PortfolioForecast from '../components/PortfolioForecast';
 import PortfolioEvmTrend from '../components/PortfolioEvmTrend';
-import PortfolioExport from '../components/PortfolioExport';
+import AssignmentBanner from '../components/AssignmentBanner';
 import AwaitingActivation from '../components/AwaitingActivation';
 import AwaitingClosure from '../components/AwaitingClosure';
 import PlanningReminders from '../components/PlanningReminders';
@@ -135,7 +135,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {view === 'portfolio' && <PortfolioExport />}
+      <AssignmentBanner />
       {view === 'portfolio' && <PlanningReminders />}
       {view === 'portfolio' && <AwaitingActivation />}
       {view === 'portfolio' && <AwaitingClosure />}
