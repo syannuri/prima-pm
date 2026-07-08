@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useId, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
@@ -100,24 +100,43 @@ const CheckIcon = () => (
 
 // Overall project % complete as a circular gauge for the WBS/Gantt header — the accumulated,
 // weighted roll-up straight from the EVM engine (identical to the dashboard's per-project
-// %complete). Ring is green (a positive, progress signal — not decorative coral); full at 100%.
-function ProgressRing({ pct, loading }: { pct: number; loading?: boolean }) {
+// %complete). The arc is a soft gradient whose HUE tracks schedule health (SPI): green on
+// track, amber at risk, red behind, neutral before a baseline exists — so the colour is
+// meaningful, not decorative. Thin (3px), rounded, on a faint track; full at 100%.
+const RING_GRADIENT: Record<string, [string, string]> = {
+  GREEN: ['#34d399', '#16a34a'], // emerald → green
+  AMBER: ['#fbbf24', '#d97706'], // amber → amber-600
+  RED: ['#fb7185', '#e11d48'], // rose → rose-600
+  NO_DATA: ['#cbd5e1', '#94a3b8'], // slate (neutral)
+};
+const HEALTH_WORD: Record<string, string> = { GREEN: 'on track', AMBER: 'at risk', RED: 'behind schedule', NO_DATA: 'no schedule baseline yet' };
+
+function ProgressRing({ pct, health = 'NO_DATA', loading }: { pct: number; health?: string; loading?: boolean }) {
+  const gid = useId();
   const R = 15.5;
   const C = 2 * Math.PI * R;
   const clamped = Math.max(0, Math.min(100, pct));
   const dash = (clamped / 100) * C;
+  const [from, to] = RING_GRADIENT[health] ?? RING_GRADIENT.NO_DATA;
   return (
     <div
       className="flex shrink-0 items-center gap-2"
-      title={`Overall project progress: ${clamped.toFixed(1)}% complete — the accumulated, weighted roll-up (same figure as the dashboard).`}
+      title={`Overall project progress: ${clamped.toFixed(1)}% complete — schedule ${HEALTH_WORD[health] ?? ''}. Weighted roll-up (same figure as the dashboard).`}
     >
       <div className="relative h-11 w-11">
         <svg viewBox="0 0 40 40" className="h-11 w-11 -rotate-90">
-          <circle cx="20" cy="20" r={R} fill="none" strokeWidth="4" className="stroke-slate-200 dark:stroke-slate-700" />
+          <defs>
+            <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={from} />
+              <stop offset="100%" stopColor={to} />
+            </linearGradient>
+          </defs>
+          <circle cx="20" cy="20" r={R} fill="none" strokeWidth="3" className="stroke-slate-100 dark:stroke-slate-800" />
           {!loading && (
             <circle
-              cx="20" cy="20" r={R} fill="none" strokeWidth="4" strokeLinecap="round"
-              className="stroke-green-500 transition-[stroke-dasharray] duration-500"
+              cx="20" cy="20" r={R} fill="none" strokeWidth="3" strokeLinecap="round"
+              stroke={`url(#${gid})`}
+              className="transition-[stroke-dasharray] duration-500"
               strokeDasharray={`${dash} ${C}`}
             />
           )}
@@ -185,7 +204,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // it refreshes together with the Project Health panel on any progress edit.
   const evmQ = useQuery({
     queryKey: ['evm', base, 'overall'],
-    queryFn: () => api.get<{ scheduleProgress: number }>(`${base}/evm?statusDate=${formatDateInput(new Date())}`),
+    queryFn: () => api.get<{ scheduleProgress: number; health: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA' }>(`${base}/evm?statusDate=${formatDateInput(new Date())}`),
   });
   const overallPct = (evmQ.data?.scheduleProgress ?? 0) * 100;
 
@@ -319,7 +338,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           )}
           {canEdit && <Button onClick={() => setForm({ parentId: null })}>+ Add Task</Button>}
         </div>
-        {rows.length > 0 && <ProgressRing pct={overallPct} loading={evmQ.isLoading} />}
+        {rows.length > 0 && <ProgressRing pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
         </div>
       </div>
 
