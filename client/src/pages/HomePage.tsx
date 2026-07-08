@@ -304,7 +304,7 @@ export default function HomePage() {
     document.getElementById('features')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 
   return (
-    <div ref={setScroller} className="relative isolate h-screen overflow-y-auto overflow-x-clip bg-[#05070e] text-slate-200 antialiased">
+    <div ref={setScroller} className="home-scroll relative isolate h-screen overflow-y-auto overflow-x-clip bg-[#05070e] text-slate-200 antialiased">
       <style>{`
         @keyframes pmx-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
 
