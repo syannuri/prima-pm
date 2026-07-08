@@ -72,12 +72,13 @@ const DOC: Record<Lang, Doc> = {
       ] },
       { id: 'alur', nav: 'Alur kerja proyek', heading: '🔄 Alur kerja proyek (end-to-end)', blocks: [
         { type: 'steps', items: [
-          'Charter — isi piagam proyek, lalu Commit untuk mengunci baseline & membuka modul lain.',
-          'Schedule/WBS — susun rincian pekerjaan, atur tanggal & progress, lalu Set Baseline.',
-          'Cost — masukkan biaya langsung/tak langsung & rencana manpower; catat Actual Cost berkala.',
-          'Risk — daftarkan risiko; EMV otomatis mengisi cadangan kontingensi.',
-          'Saat ada perubahan setelah commit → ajukan Change Request untuk disetujui PMO/Admin.',
-          'Pantau kesehatan di Dashboard & ekspor laporan PDF/Excel kapan saja.',
+          'Charter — isi piagam proyek, lalu Commit untuk mengunci baseline & membuka modul lain (status: Draft → Chartered).',
+          'Schedule/WBS — susun rincian pekerjaan & tanggal, lalu Capture Schedule Baseline.',
+          'Cost & Risk — masukkan biaya + rencana manpower & daftarkan risiko, lalu Lock Cost Baseline (urutan benar: capture schedule dulu, baru lock cost).',
+          'Activate — PMO/Admin mengaktifkan proyek (Chartered → In-progress) setelah baseline lengkap.',
+          'Eksekusi — update progress & Actual Cost; kelola Issues, dan ajukan Change Request bila ada perubahan setelah commit.',
+          'Closing — catat Acceptance Sign-off & Lessons Learned (tab Closeout), lalu Close project.',
+          'Panduan "🧭 Next steps" di tiap proyek menuntun langkah berikutnya sesuai tahap; pantau kesehatan lewat Dashboard, Forecast, EVM Trend, & menu Reports (PDF/Excel).',
         ] },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
@@ -95,8 +96,10 @@ const DOC: Record<Lang, Doc> = {
       { id: 'schedule', nav: 'WBS & Schedule', heading: '🗓️ WBS & Schedule', blocks: [
         { type: 'bullets', items: [
           'WBS — struktur rincian kerja (tugas & subtugas), nomor outline, %-progress, PIC, kamus WBS (deliverable, kriteria).',
-          'Gantt interaktif — geser bar untuk menjadwal ulang, tarik untuk membuat dependensi.',
-          'Set Baseline — simpan tanggal rencana sebagai acuan; kolom “Var” menampilkan selisih jadwal.',
+          'Timeline Gantt — bar jadwal per tugas dengan penanda "Today" & bar baseline (bayangan); skala Hari/Minggu/Bulan.',
+          'Kolom Budget — Direct Cost yang tertaut ke tiap tugas (tugas ringkasan = jumlah subtugas); nilai yang sama dipakai sebagai bobot EVM.',
+          'Ring "Overall progress" (kanan atas) — total %-complete proyek, sama dengan angka di Dashboard/Reports.',
+          'Set Baseline — simpan tanggal rencana sebagai acuan; kolom "Var" menampilkan selisih jadwal.',
           'Klik lingkaran centang untuk menandai tugas selesai (otomatis mengisi tanggal aktual).',
         ] },
       ] },
@@ -113,6 +116,30 @@ const DOC: Record<Lang, Doc> = {
       ] },
       { id: 'change', nav: 'Change Request', heading: '🔁 Change Request', blocks: [
         { type: 'p', text: 'Setelah charter di-commit, perubahan diajukan sebagai Change Request: pilih magnitudo (MINOR/MAJOR), area dampak (biaya/jadwal/dll.), & apakah chargeable. PMO/Admin menyetujui atau menolak; persetujuan membuka charter untuk revisi & menaikkan versi.' },
+      ] },
+      { id: 'forecast', nav: 'Forecast & EVM Trend', heading: '🔮 Forecast & EVM Trend', blocks: [
+        { type: 'bullets', items: [
+          'Forecast — proyeksi biaya & tanggal selesai: skenario EAC (optimistis/likely/pesimistis), ETC, VAC, TCPI, kurva-S, dan perkiraan tanggal selesai dari SPI.',
+          'EVM Trend — rekam "status" berkala (Capture status) untuk melihat CPI/SPI & EV dari waktu ke waktu (grafik tren + tabel snapshot).',
+        ] },
+      ] },
+      { id: 'closeout', nav: 'Closeout', heading: '🏁 Closeout (Acceptance & Lessons)', blocks: [
+        { type: 'bullets', items: [
+          'Acceptance Sign-off — persetujuan formal deliverable dari sponsor/customer (pihak, keputusan Accepted / Accepted-with-conditions / Rejected, nama penandatangan, tanggal).',
+          'Lessons Learned — catatan Went-well / Went-wrong / Rekomendasi untuk proyek berikutnya.',
+          'Keduanya muncul sebagai checklist (advisory) saat menutup proyek, dan masuk ke laporan.',
+        ] },
+      ] },
+      { id: 'reports', nav: 'Reports', heading: '📈 Reports', blocks: [
+        { type: 'p', text: 'Menu Reports (PM & PMO) menghasilkan Status Report satu proyek — Mingguan atau Bulanan — berisi RAG health, %-complete (per jumlah task DAN per bobot nilai), SPI/CPI, task selesai vs sisa, kurva-S EVM, dan forecast. Bisa diunduh sebagai PDF profesional.' },
+      ] },
+      { id: 'more2', nav: 'Issues · Agile · Timesheet', heading: '🧩 Issues, Agile & Timesheet', blocks: [
+        { type: 'bullets', items: [
+          'Issues — log masalah aktif (kategori, dampak, owner, status, resolusi).',
+          'Agile/Sprint — untuk proyek Agile/Hybrid: backlog & sprint; EVM berbasis story point.',
+          'Timesheet — catat man-day aktual per baris manpower (efisiensi = earned ÷ consumed); "My Timesheet" (semua peran) untuk mencatat effort sendiri lintas proyek.',
+          'Lifecycle & Baseline Lock (PMO/Admin) — Activate / Put on hold / Resume / Close; kunci-buka baseline mengatur kapan cost/WBS boleh diubah (perubahan resmi lewat Change Request).',
+        ] },
       ] },
       { id: 'audit', nav: 'Audit', heading: '🧾 Audit', blocks: [
         { type: 'p', text: 'Jejak tak-terubah (immutable) atas semua perubahan: siapa, apa, kapan. Bisa difilter per entitas/aksi. Cakupannya menyesuaikan peran (mis. Finance hanya melihat domain biaya).' },
@@ -178,12 +205,13 @@ const DOC: Record<Lang, Doc> = {
       ] },
       { id: 'alur', nav: 'Project workflow', heading: '🔄 Project workflow (end-to-end)', blocks: [
         { type: 'steps', items: [
-          'Charter — fill in the project charter, then Commit to lock the baseline & unlock the other modules.',
-          'Schedule/WBS — build the work breakdown, set dates & progress, then Set Baseline.',
-          'Cost — enter direct/indirect costs & planned manpower; record Actual Cost over time.',
-          'Risk — register risks; EMV auto-fills the contingency reserve.',
-          'For changes after commit → raise a Change Request for PMO/Admin approval.',
-          'Monitor health on the Dashboard & export PDF/Excel reports anytime.',
+          'Charter — fill in the project charter, then Commit to lock the baseline & unlock the other modules (status: Draft → Chartered).',
+          'Schedule/WBS — build the work breakdown & dates, then Capture the Schedule Baseline.',
+          'Cost & Risk — enter costs + planned manpower & register risks, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost).',
+          'Activate — PMO/Admin activates the project (Chartered → In-progress) once the baseline is complete.',
+          'Execute — update progress & Actual Cost; manage Issues, and raise a Change Request for any change after commit.',
+          'Closing — record the Acceptance Sign-off & Lessons Learned (Closeout tab), then Close the project.',
+          'The "🧭 Next steps" guide on each project points to the next action for its stage; monitor health via the Dashboard, Forecast, EVM Trend & the Reports menu (PDF/Excel).',
         ] },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
@@ -201,8 +229,10 @@ const DOC: Record<Lang, Doc> = {
       { id: 'schedule', nav: 'WBS & Schedule', heading: '🗓️ WBS & Schedule', blocks: [
         { type: 'bullets', items: [
           'WBS — the work breakdown (tasks & subtasks), outline numbering, % progress, PIC, WBS dictionary (deliverable, criteria).',
-          'Interactive Gantt — drag a bar to reschedule, drag to create dependencies.',
-          'Set Baseline — capture the plan dates as a reference; the “Var” column shows schedule variance.',
+          'Gantt timeline — a schedule bar per task with a "Today" marker & a baseline (ghost) bar; Day/Week/Month scale.',
+          'Budget column — the Direct Cost linked to each task (summary tasks = Σ subtasks); the same weight EVM uses.',
+          '"Overall progress" ring (top-right) — the project total % complete, matching the Dashboard/Reports figure.',
+          'Set Baseline — capture the plan dates as a reference; the "Var" column shows schedule variance.',
           'Click the check circle to mark a task complete (auto-stamps actual dates).',
         ] },
       ] },
@@ -219,6 +249,30 @@ const DOC: Record<Lang, Doc> = {
       ] },
       { id: 'change', nav: 'Change Request', heading: '🔁 Change Request', blocks: [
         { type: 'p', text: 'After the charter is committed, changes are raised as a Change Request: pick magnitude (MINOR/MAJOR), impact areas (cost/schedule/etc.), and whether it is chargeable. PMO/Admin approve or reject; approval unlocks the charter for revision & bumps the version.' },
+      ] },
+      { id: 'forecast', nav: 'Forecast & EVM Trend', heading: '🔮 Forecast & EVM Trend', blocks: [
+        { type: 'bullets', items: [
+          'Forecast — cost & date projection: EAC scenarios (optimistic/likely/pessimistic), ETC, VAC, TCPI, an S-curve, and a forecast finish date from SPI.',
+          'EVM Trend — capture periodic "status" snapshots to see CPI/SPI & EV over time (trend chart + snapshot table).',
+        ] },
+      ] },
+      { id: 'closeout', nav: 'Closeout', heading: '🏁 Closeout (Acceptance & Lessons)', blocks: [
+        { type: 'bullets', items: [
+          'Acceptance Sign-off — formal deliverable acceptance from the sponsor/customer (party, decision Accepted / Accepted-with-conditions / Rejected, signer name, date).',
+          'Lessons Learned — Went-well / Went-wrong / Recommendation notes for future projects.',
+          'Both appear as an (advisory) checklist when closing the project, and flow into the reports.',
+        ] },
+      ] },
+      { id: 'reports', nav: 'Reports', heading: '📈 Reports', blocks: [
+        { type: 'p', text: 'The Reports menu (PM & PMO) produces a single-project Status Report — Weekly or Monthly — with RAG health, % complete (by task count AND by weighted value), SPI/CPI, tasks done vs remaining, the EVM S-curve, and the forecast. Downloadable as a professional PDF.' },
+      ] },
+      { id: 'more2', nav: 'Issues · Agile · Timesheet', heading: '🧩 Issues, Agile & Timesheet', blocks: [
+        { type: 'bullets', items: [
+          'Issues — log active problems (category, impact, owner, status, resolution).',
+          'Agile/Sprint — for Agile/Hybrid projects: backlog & sprints; story-point-based EVM.',
+          'Timesheet — record actual man-days per manpower line (efficiency = earned ÷ consumed); "My Timesheet" (all roles) to log your own effort across projects.',
+          'Lifecycle & Baseline Lock (PMO/Admin) — Activate / Put on hold / Resume / Close; locking-unlocking the baseline governs when cost/WBS can change (formal changes via a Change Request).',
+        ] },
       ] },
       { id: 'audit', nav: 'Audit', heading: '🧾 Audit', blocks: [
         { type: 'p', text: 'An immutable trail of every change: who, what, when. Filterable by entity/action. Scope adapts to your role (e.g. Finance only sees the cost domain).' },
