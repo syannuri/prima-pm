@@ -1,5 +1,13 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { login, openFirstProject } from './helpers';
+
+// The tab bar groups tabs under lifecycle-phase dropdowns (Charter/Plan/Execute/Track); open
+// the phase (its stable aria-label) then click the tab. Single-tab phases (Closeout/Audit)
+// are plain buttons and don't need this.
+async function openTab(page: Page, phase: string, tab: string) {
+  await page.getByRole('button', { name: phase, exact: true }).click();
+  await page.getByRole('button', { name: tab, exact: true }).click();
+}
 
 test.describe('Project workspace', () => {
   test.beforeEach(async ({ page }) => {
@@ -9,18 +17,18 @@ test.describe('Project workspace', () => {
 
   test('switches between module tabs on a chartered project', async ({ page }) => {
     // Seed project is chartered → Cost/Risk/Schedule panels unlock.
-    await page.getByRole('button', { name: 'Cost', exact: true }).click();
+    await openTab(page, 'Plan', 'Cost');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Risk', exact: true }).click();
+    await openTab(page, 'Plan', 'Risk');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Schedule', exact: true }).click();
+    await openTab(page, 'Plan', 'Schedule');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
   });
 
   test('manpower cost line offers a named-resource picker', async ({ page }) => {
-    await page.getByRole('button', { name: 'Cost', exact: true }).click();
+    await openTab(page, 'Plan', 'Cost');
     // The Direct Cost form's type selector switches the row to manpower fields.
     const typeSelect = page.locator('select').filter({ hasText: 'Manpower' }).first();
     await typeSelect.selectOption('MANPOWER');
@@ -33,7 +41,7 @@ test.describe('Project workspace', () => {
   });
 
   test('reassigns a resource inline on an existing manpower row', async ({ page }) => {
-    await page.getByRole('button', { name: 'Cost', exact: true }).click();
+    await openTab(page, 'Plan', 'Cost');
     // The per-row inline dropdown carries the "👤 Unassigned" placeholder option.
     const rowSelect = page.locator('select').filter({ hasText: '👤 Unassigned' }).first();
     await expect(rowSelect).toBeVisible();

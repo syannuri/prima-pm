@@ -228,7 +228,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
         const isOpen = open === g.label;
         return (
           <div key={g.label} className="relative shrink-0">
-            <button onClick={() => setOpen(isOpen ? null : g.label)} className={tabBtn(!!activeChild)} aria-expanded={isOpen}>
+            <button onClick={() => setOpen(isOpen ? null : g.label)} className={tabBtn(!!activeChild)} aria-expanded={isOpen} aria-label={g.label} title={g.label}>
               {activeChild ?? g.label}
               <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
