@@ -5,7 +5,7 @@ import type { GanttNode, ResourceItem, TaskDependency } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { formatDate, formatDateInput } from '../../lib/format';
+import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
 import { useAuth } from '../../context/AuthContext';
 
 interface Row {
@@ -47,11 +47,11 @@ const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
 // Summary-task roll-up (MS-Project / WBS 100% rule): a parent's dates span its
 // descendants and its % is the duration-weighted average of theirs. Leaves keep
 // their own stored values. Returns a map of taskId → rolled metrics.
-interface Roll { start: number; end: number; dur: number; pct: number; isParent: boolean; baseStart: number | null; baseEnd: number | null }
+interface Roll { start: number; end: number; dur: number; pct: number; budget: number; isParent: boolean; baseStart: number | null; baseEnd: number | null }
 const ts = (s: string | null) => (s ? +new Date(s) : null);
 function rollup(node: GanttNode, out: Map<string, Roll>): Roll {
   if (!node.children?.length) {
-    const r: Roll = { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, isParent: false, baseStart: ts(node.baselineStart), baseEnd: ts(node.baselineFinish) };
+    const r: Roll = { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: ts(node.baselineStart), baseEnd: ts(node.baselineFinish) };
     out.set(node.id, r);
     return r;
   }
@@ -60,9 +60,10 @@ function rollup(node: GanttNode, out: Map<string, Roll>): Roll {
   const end = Math.max(...kids.map((k) => k.end));
   const totalDur = kids.reduce((s, k) => s + k.dur, 0) || 1;
   const pct = Math.round(kids.reduce((s, k) => s + k.pct * k.dur, 0) / totalDur);
+  const budget = kids.reduce((s, k) => s + k.budget, 0); // summary budget = Σ children
   const bs = kids.map((k) => k.baseStart).filter((x): x is number => x != null);
   const be = kids.map((k) => k.baseEnd).filter((x): x is number => x != null);
-  const r: Roll = { start, end, dur: Math.round((end - start) / day) + 1, pct, isParent: true, baseStart: bs.length ? Math.min(...bs) : null, baseEnd: be.length ? Math.max(...be) : null };
+  const r: Roll = { start, end, dur: Math.round((end - start) / day) + 1, pct, budget, isParent: true, baseStart: bs.length ? Math.min(...bs) : null, baseEnd: be.length ? Math.max(...be) : null };
   out.set(node.id, r);
   return r;
 }
@@ -242,7 +243,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [fullscreen, setFullscreen] = useState(false);
-  const colCount = 11 + (canEdit ? 1 : 0);
+  const colCount = 12 + (canEdit ? 1 : 0);
 
   // Esc exits full screen.
   useEffect(() => {
@@ -331,6 +332,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 <th className="text-right">Start</th>
                 <th className="text-right">Finish</th>
                 <th className="text-right">Dur</th>
+                <th className="text-right" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
                 <th className="text-right">% </th>
                 <th>Status</th>
                 <th className="text-right" title="Finish variance vs baseline (days)">Var</th>
@@ -350,7 +352,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </thead>
             <tbody>
               {rows.map(({ node, depth, wbs }) => {
-                const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, isParent: false, baseStart: null, baseEnd: null };
+                const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null };
                 const st = statusOf(r.pct);
                 const leftPct = axis ? ((r.start - axis.min) / axis.span) * 100 : 0;
                 const widthPct = axis ? Math.max(axis.minBarPct, ((r.end - r.start) / axis.span) * 100) : 0;
@@ -382,6 +384,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.start))}</td>
                     <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.end))}</td>
                     <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
+                    <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
+                      {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                    </td>
                     <td className="text-right">
                       {canEdit && !r.isParent ? (
                         <input

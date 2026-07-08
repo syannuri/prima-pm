@@ -74,9 +74,12 @@ export async function listSchedule(projectId: string) {
   return { tasks, dependencies };
 }
 
-// Gantt payload: nested tree enriched with duration & linked manpower cost.
+// Gantt payload: nested tree enriched with duration, linked manpower mandays and the
+// per-task budget. budgetCost = ALL linked direct cost (manpower + material/license), so
+// the Gantt "Budget" column matches the EVM cost weighting + the PDF/Excel export — NOT
+// manpower-only.
 export async function getGantt(projectId: string) {
-  const [tasks, deps, mp, project] = await Promise.all([
+  const [tasks, deps, mp, dc, project] = await Promise.all([
     prisma.task.findMany({
       where: { projectId },
       include: {
@@ -86,13 +89,14 @@ export async function getGantt(projectId: string) {
     }),
     prisma.taskDependency.findMany({ where: { predecessor: { projectId } } }),
     manpowerByTask(projectId),
+    directCostByTask(projectId),
     prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true } }),
   ]);
 
   const enriched = tasks.map((t) => ({
     ...t,
     durationDays: durationDays(t.planStart, t.planEnd),
-    budgetCost: mp.cost.get(t.id) ?? 0,
+    budgetCost: dc.get(t.id) ?? 0,
     linkedPlanMandays: mp.mandays.get(t.id) ?? 0,
   }));
 
