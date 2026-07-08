@@ -787,6 +787,56 @@ describe('activation-ready notification (baselines complete → tell ADMIN/PMO)'
   });
 });
 
+describe('UAT test cases (create / execute / summary / RBAC)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'UAT-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+  });
+
+  it('the owning PM creates test cases (auto-coded) and they list with a summary', async () => {
+    const a = await request(app).post(api(`/projects/${pid}/uat`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ title: 'Login with valid credentials', scenario: 'Active account', steps: '1. open 2. submit', expected: 'Dashboard shown' });
+    expect(a.status).toBe(201);
+    expect(a.body.testCase.code).toBe('UAT-001');
+    const b = await request(app).post(api(`/projects/${pid}/uat`)).set(auth(tokens.PROJECT_MANAGER)).send({ title: 'Wrong password', expected: 'Error shown' });
+    expect(b.body.testCase.code).toBe('UAT-002');
+
+    const list = await request(app).get(api(`/projects/${pid}/uat`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(list.body.items).toHaveLength(2);
+    expect(list.body.items[0].createdByName).toBe('Owner PM'); // FK-less id resolved
+    expect(list.body.summary).toMatchObject({ total: 2, notRun: 2, pass: 0, executed: 0, passRate: 0 });
+  });
+
+  it('recording a PASS/FAIL updates status, auto-stamps executedAt, and moves the pass rate', async () => {
+    const list = await request(app).get(api(`/projects/${pid}/uat`)).set(auth(tokens.PROJECT_MANAGER));
+    const [a, b] = list.body.items;
+    const passed = await request(app).patch(api(`/projects/${pid}/uat/${a.id}`)).set(auth(tokens.PROJECT_MANAGER)).send({ status: 'PASS', testerName: 'Rina' });
+    expect(passed.status).toBe(200);
+    expect(passed.body.testCase.status).toBe('PASS');
+    expect(passed.body.testCase.executedAt).toBeTruthy(); // auto-stamped
+    await request(app).patch(api(`/projects/${pid}/uat/${b.id}`)).set(auth(tokens.PROJECT_MANAGER)).send({ status: 'FAIL', notes: 'DEF-9' });
+
+    const after = await request(app).get(api(`/projects/${pid}/uat`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(after.body.summary).toMatchObject({ total: 2, executed: 2, pass: 1, fail: 1, passRate: 50 });
+  });
+
+  it('VIEWER and a non-owner PM cannot write (403); the owner can delete', async () => {
+    const viewer = await request(app).post(api(`/projects/${pid}/uat`)).set(auth(tokens.VIEWER)).send({ title: 'x', expected: 'y' });
+    expect(viewer.status).toBe(403);
+    const otherPm = await request(app).post(api(`/projects/${pid}/uat`)).set(auth(tokens.PM2)).send({ title: 'x', expected: 'y' });
+    expect(otherPm.status).toBe(403);
+    const finance = await request(app).get(api(`/projects/${pid}/uat`)).set(auth(tokens.FINANCE));
+    expect(finance.status).toBe(403); // UAT is a delivery artifact — not the finance domain
+
+    const list = await request(app).get(api(`/projects/${pid}/uat`)).set(auth(tokens.ADMIN));
+    const del = await request(app).delete(api(`/projects/${pid}/uat/${list.body.items[0].id}`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(del.status).toBe(204);
+    const remaining = await request(app).get(api(`/projects/${pid}/uat`)).set(auth(tokens.ADMIN));
+    expect(remaining.body.items).toHaveLength(1);
+  });
+});
+
 describe('project status report (weekly/monthly, PM + ADMIN/PMO)', () => {
   let pid = '';
   beforeAll(async () => {

@@ -483,6 +483,33 @@ export interface ProjectReportData {
   forecast: Forecast;
 }
 
+// UAT (User Acceptance Test) — a structured, executable test-case template per project.
+export type UatStatus = 'NOT_RUN' | 'PASS' | 'FAIL' | 'BLOCKED';
+export interface UatTestCase {
+  id: string;
+  code: string;
+  title: string;
+  scenario: string | null;
+  steps: string | null;
+  expected: string;
+  actual: string | null;
+  status: UatStatus;
+  testerName: string | null;
+  executedAt: string | null;
+  notes: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+export interface UatSummary {
+  total: number;
+  executed: number;
+  passRate: number;
+  notRun: number;
+  pass: number;
+  fail: number;
+  blocked: number;
+}
+
 // A frozen point-in-time EVM capture — the app's point-in-time EVM turned into a trend.
 export interface EvmSnapshot {
   id: string;

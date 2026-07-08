@@ -18,6 +18,7 @@ import SchedulePanel from './panels/SchedulePanel';
 import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
 import CloseoutPanel from './panels/CloseoutPanel';
+import UatPanel from './panels/UatPanel';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
 import NextStepsGuide from './panels/NextStepsGuide';
@@ -29,7 +30,7 @@ import LifecycleActions from '../components/LifecycleActions';
 import AgilePanel from './panels/AgilePanel';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'Issues' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
+type Tab = 'Charter' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -81,7 +82,7 @@ export default function ProjectPage() {
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
     'Cost', 'Timesheet', 'Forecast', 'EVM Trend', 'Risk', 'Issues', 'Change Req',
-    'Charter', 'Closeout', 'Audit',
+    'Charter', 'UAT', 'Closeout', 'Audit',
   ];
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
   // chartered, land on the first working tab (Schedule/Agile); Charter stays
@@ -187,6 +188,7 @@ export default function ProjectPage() {
       {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}
       {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
       {activeTab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
+      {activeTab === 'UAT' && chartered && <UatPanel projectId={projectId} />}
       {activeTab === 'Closeout' && <CloseoutPanel projectId={projectId} />}
       {activeTab === 'Audit' && <AuditPanel projectId={projectId} />}
     </div>

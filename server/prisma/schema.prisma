@@ -259,6 +259,7 @@ model Project {
   lessons          LessonLearned[]
   acceptances      AcceptanceSignoff[]
   evmSnapshots     EvmSnapshot[]
+  uatTestCases     UatTestCase[]
 
   @@index([status])
   @@index([pmUserId])
@@ -839,6 +840,36 @@ model AcceptanceSignoff {
   signedAt     DateTime           @default(now())
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
+
+  @@index([projectId])
+}
+
+// User Acceptance Test case — a structured, executable UAT template per project.
+enum UatStatus {
+  NOT_RUN
+  PASS
+  FAIL
+  BLOCKED
+}
+
+model UatTestCase {
+  id          String    @id @default(uuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code        String // per-project code, e.g. UAT-001
+  title       String
+  scenario    String?   @db.Text // context / preconditions (given)
+  steps       String?   @db.Text // steps to execute (when)
+  expected    String    @db.Text // expected result (then)
+  actual      String?   @db.Text // actual result on execution
+  status      UatStatus @default(NOT_RUN)
+  testerName  String? // who ran it (free text; may be an external UAT tester)
+  executedAt  DateTime?
+  notes       String?   @db.Text // defect reference / remarks
+  sortOrder   Int       @default(0)
+  createdById String? // actor who created it (plain id, no FK — name resolved in the service)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([projectId])
 }
