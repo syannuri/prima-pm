@@ -8,6 +8,25 @@ import DonutChart from '../components/DonutChart';
 import ForecastChart from '../components/ForecastChart';
 
 type Period = 'weekly' | 'monthly';
+// The Reporting Hub's two-axis model. Cadence spans the full target set; only weekly/monthly
+// are wired to the report engine today — daily & yearly are surfaced (disabled) so the IA reads
+// complete. View = the centralized sub-nav; only 'project' is built in this POC.
+type Cadence = 'daily' | 'weekly' | 'monthly' | 'yearly';
+type View = 'executive' | 'project' | 'portfolio' | 'analytics';
+
+const CADENCES: { key: Cadence; label: string; ready: boolean }[] = [
+  { key: 'daily', label: 'Daily', ready: false },
+  { key: 'weekly', label: 'Weekly', ready: true },
+  { key: 'monthly', label: 'Monthly', ready: true },
+  { key: 'yearly', label: 'Yearly', ready: false },
+];
+const NAV: { key: View; label: string; scope: string; desc: string; ready: boolean }[] = [
+  { key: 'executive', label: 'Executive', scope: 'Portfolio', desc: 'One-screen portfolio health — RAG heatmap across every active project, delivered value and budget performance.', ready: false },
+  { key: 'project', label: 'Project Report', scope: 'Single project', desc: 'Formal status report for one project — schedule, cost, task completion & forecast.', ready: true },
+  { key: 'portfolio', label: 'Portfolio', scope: 'Portfolio', desc: 'Roll-up across all projects — aggregate SPI/CPI, budget vs actual, and per-project status table.', ready: false },
+  { key: 'analytics', label: 'Analytics', scope: 'Single project', desc: 'Cross-project analytics surfaced centrally — EVM trend, forecast and agile velocity with a project picker.', ready: false },
+];
+
 const HEALTH: Record<string, { color: string; label: string }> = {
   GREEN: { color: 'green', label: 'On track' },
   AMBER: { color: 'amber', label: 'At risk' },
@@ -16,18 +35,21 @@ const HEALTH: Record<string, { color: string; label: string }> = {
 };
 
 export default function ReportsPage() {
+  const [view, setView] = useState<View>('project');
   const [projectId, setProjectId] = useState('');
-  const [period, setPeriod] = useState<Period>('weekly');
+  const [cadence, setCadence] = useState<Cadence>('weekly');
+  const period: Period = cadence === 'monthly' ? 'monthly' : 'weekly'; // engine only knows weekly/monthly today
 
   const projectsQ = useQuery({ queryKey: ['projects'], queryFn: () => api.get<{ projects: Project[] }>('/projects') });
   // Only reportable projects (a report needs a committed charter / real state); exclude drafts.
   const projects = useMemo(() => (projectsQ.data?.projects ?? []).filter((p) => p.status !== 'DRAFT'), [projectsQ.data]);
   const selected = projectId || projects[0]?.id || '';
+  const activeNav = NAV.find((n) => n.key === view)!;
 
   const reportQ = useQuery({
     queryKey: ['report', selected, period],
     queryFn: () => api.get<ProjectReportData>(`/projects/${selected}/report?period=${period}`),
-    enabled: !!selected,
+    enabled: view === 'project' && !!selected,
   });
   const r = reportQ.data;
 
@@ -35,45 +57,99 @@ export default function ReportsPage() {
     api.download(`/projects/${selected}/report/pdf?period=${period}`, `${r?.project.code ?? 'project'}_${period}_report.pdf`);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto max-w-7xl space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Reports</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Professional project status report — schedule, cost, task completion and forecast, as a weekly or monthly view.
+          Central reporting hub — pick a scope and cadence, view on screen, then export. One place for every report.
         </p>
       </div>
 
-      {/* Controls */}
-      <Card className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Project</span>
-            <Select value={selected} onChange={(e) => setProjectId(e.target.value)} className="min-w-[16rem]">
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
-            </Select>
-          </label>
-          <div>
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Period</span>
-            <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-              {(['weekly', 'monthly'] as Period[]).map((pd) => (
-                <button key={pd} onClick={() => setPeriod(pd)}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ${period === pd ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-                  {pd === 'weekly' ? 'Weekly' : 'Monthly'}
-                </button>
-              ))}
+      <div className="grid gap-5 lg:grid-cols-[13rem_1fr]">
+        {/* Hub sub-nav */}
+        <nav aria-label="Report views" className="flex gap-1.5 overflow-x-auto lg:flex-col lg:overflow-visible">
+          {NAV.map((n) => {
+            const active = n.key === view;
+            return (
+              <button key={n.key} onClick={() => setView(n.key)} aria-current={active ? 'page' : undefined}
+                className={`flex shrink-0 items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                  active
+                    ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200 dark:bg-brand-900/30 dark:text-brand-300 dark:ring-brand-800'
+                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                }`}>
+                <span>{n.label}</span>
+                {!n.ready && <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">Soon</span>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="min-w-0 space-y-5">
+          {/* Control bar: Scope × Cadence × Export */}
+          <Card className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Scope</span>
+                {activeNav.scope === 'Single project' && projects.length > 0 ? (
+                  <Select value={selected} onChange={(e) => setProjectId(e.target.value)} className="min-w-[16rem]">
+                    {projects.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
+                  </Select>
+                ) : (
+                  <div className="inline-flex h-[38px] items-center rounded-lg border border-slate-200 px-3 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                    {activeNav.scope === 'Portfolio' ? '🏢 All projects (portfolio)' : '— no project —'}
+                  </div>
+                )}
+              </div>
+              <div>
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cadence</span>
+                <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+                  {CADENCES.map((c) => (
+                    <button key={c.key} onClick={() => c.ready && setCadence(c.key)} disabled={!c.ready}
+                      title={c.ready ? c.label : `${c.label} — coming soon`}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                        cadence === c.key ? 'bg-brand-600 text-white shadow-sm'
+                          : c.ready ? 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                          : 'cursor-not-allowed text-slate-300 dark:text-slate-600'
+                      }`}>
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+            <Button variant="secondary" disabled={view !== 'project' || !selected || !r} onClick={download}>⬇ Download PDF</Button>
+          </Card>
+
+          {/* Project Report — the built view */}
+          {view === 'project' && (
+            <>
+              {!projects.length && !projectsQ.isLoading && (
+                <EmptyState title="No projects to report on" hint="Commit a project charter first — reports need a project past the draft stage." />
+              )}
+              {reportQ.isLoading && <div className="flex justify-center py-16"><Spinner /></div>}
+              {r && <ReportBody r={r} />}
+            </>
+          )}
+
+          {/* Not-yet-built views — describe the target so the IA is legible. */}
+          {view !== 'project' && <ComingSoon nav={activeNav} />}
         </div>
-        <Button variant="secondary" disabled={!selected || !r} onClick={download}>⬇ Download PDF</Button>
-      </Card>
-
-      {!projects.length && !projectsQ.isLoading && (
-        <EmptyState title="No projects to report on" hint="Commit a project charter first — reports need a project past the draft stage." />
-      )}
-      {reportQ.isLoading && <div className="flex justify-center py-16"><Spinner /></div>}
-
-      {r && <ReportBody r={r} />}
+      </div>
     </div>
+  );
+}
+
+function ComingSoon({ nav }: { nav: (typeof NAV)[number] }) {
+  return (
+    <Card className="flex flex-col items-center gap-3 py-14 text-center">
+      <div className="grid h-12 w-12 place-items-center rounded-xl bg-brand-50 text-2xl dark:bg-brand-900/30">📊</div>
+      <div>
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">{nav.label} report</h2>
+        <Badge color="slate">Coming soon</Badge>
+      </div>
+      <p className="max-w-md text-sm text-slate-500 dark:text-slate-400">{nav.desc}</p>
+      <p className="text-xs text-slate-400">Scope: {nav.scope} · part of the centralized Reporting Hub</p>
+    </Card>
   );
 }
 
