@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { Spinner } from './components/ui';
 import Layout from './components/Layout';
+import AppShellSkeleton from './components/AppShellSkeleton';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -17,11 +17,7 @@ export default function App() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Spinner />
-      </div>
-    );
+    return <AppShellSkeleton />;
   }
 
   if (!user) {

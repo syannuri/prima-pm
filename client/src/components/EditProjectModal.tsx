@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { DeliveryApproach, Project, ProjectCategory } from '../api/types';
@@ -11,10 +11,16 @@ import { useAuth } from '../context/AuthContext';
 
 // Edit a project's high-level details. Backend enforces write access (owning PM,
 // or any ADMIN/PMO); we also gate the trigger by role.
-export default function EditProjectModal({ project }: { project: Project }) {
+// Controlled mode: pass `open` + `onOpenChange` (e.g. to drive it from an overflow menu) and the
+// component renders only the modal, no trigger button. Uncontrolled (no props): renders its own
+// "Edit details" button as before.
+export default function EditProjectModal({ project, open: openProp, onOpenChange }: { project: Project; open?: boolean; onOpenChange?: (v: boolean) => void }) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const controlled = onOpenChange !== undefined;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlled ? !!openProp : uncontrolledOpen;
+  const setOpen = controlled ? onOpenChange! : setUncontrolledOpen;
   const [name, setName] = useState(project.name);
   const [code, setCode] = useState(project.code);
   const [clientName, setClientName] = useState(project.clientName ?? '');
@@ -28,7 +34,10 @@ export default function EditProjectModal({ project }: { project: Project }) {
   // Editing top-level project details is a PMO/portfolio governance action.
   const canEdit = !!user && ['ADMIN', 'PMO'].includes(user.role);
 
-  const start = () => {
+  // Reset the form to the project's current values whenever the modal opens (works for both the
+  // uncontrolled button and a controlled open from an overflow menu).
+  useEffect(() => {
+    if (!open) return;
     setName(project.name);
     setCode(project.code);
     setClientName(project.clientName ?? '');
@@ -38,8 +47,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
     setCostBaseline(project.costBaselineIdr ?? '');
     setRevenue(project.totalRevenueIdr ?? '');
     setErr('');
-    setOpen(true);
-  };
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useMutation({
     mutationFn: () => api.patch(`/projects/${project.id}`, {
@@ -65,7 +73,7 @@ export default function EditProjectModal({ project }: { project: Project }) {
 
   return (
     <>
-      <Button variant="secondary" onClick={start}>Edit details</Button>
+      {!controlled && <Button variant="secondary" onClick={() => setOpen(true)}>Edit details</Button>}
 
       {open && (
         <Modal onClose={() => setOpen(false)} title="Edit Project Details" size="lg">

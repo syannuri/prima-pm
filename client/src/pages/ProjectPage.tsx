@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
-import { Badge, Button, Card, Spinner } from '../components/ui';
+import { Badge, Card, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
 import { formatIdr } from '../lib/format';
@@ -28,7 +28,9 @@ import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
 import LifecycleActions from '../components/LifecycleActions';
+import MoreMenu, { MenuItem } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
+import { useAuth } from '../context/AuthContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
 type Tab = 'Charter' | 'Kick-Off' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
@@ -36,8 +38,11 @@ type Tab = 'Charter' | 'Kick-Off' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
   const toast = useToast();
+  const { user } = useAuth();
+  const canEdit = !!user && ['ADMIN', 'PMO'].includes(user.role); // mirrors EditProjectModal's gate
   const [tab, setTab] = useState<Tab | null>(null);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const exportReport = async (kind: 'excel' | 'pdf') => {
     setExporting(kind);
@@ -101,21 +106,18 @@ export default function ProjectPage() {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{project.name}</h1>
           <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'}>{project.status}</Badge>
           <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>
-          <div className="ml-auto flex flex-wrap gap-2">
-            <EditProjectModal project={project} />
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {/* Primary stage action stays prominent; secondary actions tuck into "⋯ More". */}
             <LifecycleActions project={project} />
             <CloseProjectModal project={project} />
-            {chartered && (
-              <>
-                <Button variant="secondary" onClick={() => exportReport('excel')} disabled={exporting !== null}>
-                  {exporting === 'excel' ? 'Exporting…' : '⬇ Excel'}
-                </Button>
-                <Button variant="secondary" onClick={() => exportReport('pdf')} disabled={exporting !== null}>
-                  {exporting === 'pdf' ? 'Exporting…' : '⬇ PDF'}
-                </Button>
-              </>
-            )}
+            <MoreMenu>
+              {canEdit && <MenuItem onClick={() => setEditOpen(true)}>✏️ Edit details</MenuItem>}
+              {chartered && <MenuItem disabled={exporting !== null} onClick={() => exportReport('excel')}>⬇ {exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
+              {chartered && <MenuItem disabled={exporting !== null} onClick={() => exportReport('pdf')}>⬇ {exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
+            </MoreMenu>
           </div>
+          {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
+          <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
         <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
           <span>Client: {project.clientName ?? '—'} · PM: {project.pm?.name ?? '—'} · Sponsor: {project.sponsor ?? '—'}</span>

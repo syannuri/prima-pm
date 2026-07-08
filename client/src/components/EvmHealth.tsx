@@ -23,6 +23,7 @@ export default function EvmHealth({
 }) {
   const [acOverride, setAcOverride] = useState('');
   const [statusDate, setStatusDate] = useState(formatDateInput(new Date()));
+  const [showAll, setShowAll] = useState(false);
   const evmQ = useQuery({
     queryKey: ['evm', base, acOverride, statusDate],
     queryFn: () =>
@@ -49,20 +50,33 @@ export default function EvmHealth({
             <Badge color={hColor}>Health: {hLabel}</Badge>
             <span className="text-sm text-slate-500 dark:text-slate-400" title={progressHint}>{formatNum(e.scheduleProgress * 100, 1)}% complete · {e.leafTaskCount} {countLabel}</span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <Metric label="BAC" value={formatIdr(e.bac)} title="Budget at Completion = Performance Measurement Baseline (direct + indirect + contingency; excludes management reserve)" />
-            <Metric label="PV" value={formatIdr(e.pv)} title="Planned Value (BCWS)" />
-            <Metric label="EV" value={formatIdr(e.ev)} title="Earned Value (BCWP)" />
-            <Metric label="AC" value={formatIdr(e.ac)} title="Actual Cost (ACWP)" />
-            <Metric label="CV" value={formatIdr(e.cv)} warn={e.cv < 0} title="Cost Variance = EV − AC" />
-            <Metric label="SV" value={formatIdr(e.sv)} warn={e.sv < 0} title="Schedule Variance = EV − PV" />
-            <Metric label="CPI" value={e.ac > 0 ? formatNum(e.cpi, 3) : '—'} warn={e.ac > 0 && e.cpi < 1} title="Cost Performance Index = EV / AC" />
-            <Metric label="SPI" value={e.pv > 0 ? formatNum(e.spi, 3) : '—'} warn={e.pv > 0 && e.spi < 1} title="Schedule Performance Index = EV / PV" />
-            <Metric label="EAC" value={formatIdr(e.eac)} title="Estimate at Completion" />
-            <Metric label="ETC" value={formatIdr(e.etc)} title="Estimate to Complete = EAC − AC" />
-            <Metric label="VAC" value={formatIdr(e.vac)} warn={e.vac < 0} title="Variance at Completion = BAC − EAC" />
-            <Metric label="TCPI" value={e.bac > e.ac ? formatNum(e.tcpi, 3) : '—'} warn={e.bac > e.ac && e.tcpi > 1} title="To-Complete Performance Index = (BAC − EV) / (BAC − AC)" />
+          {/* Hero metrics — the four decision-drivers, elevated so the eye lands on them first. */}
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <HeroMetric label="Cost index (CPI)" value={e.ac > 0 ? formatNum(e.cpi, 2) : '—'} warn={e.ac > 0 && e.cpi < 1} good={e.ac > 0 && e.cpi >= 1} title="Cost Performance Index = EV / AC. >1 under budget, <1 over budget." />
+            <HeroMetric label="Schedule index (SPI)" value={e.pv > 0 ? formatNum(e.spi, 2) : '—'} warn={e.pv > 0 && e.spi < 1} good={e.pv > 0 && e.spi >= 1} title="Schedule Performance Index = EV / PV. >1 ahead, <1 behind." />
+            <HeroMetric label="Budget (BAC)" value={formatIdr(e.bac)} title="Budget at Completion = the Performance Measurement Baseline (direct + indirect + contingency; excludes management reserve)." />
+            <HeroMetric label="Forecast (EAC)" value={formatIdr(e.eac)} warn={e.eac > e.bac} title="Estimate at Completion — projected final cost." />
           </div>
+          {/* Detailed figures — collapsed by default to keep the panel scannable. */}
+          <button
+            onClick={() => setShowAll((s) => !s)}
+            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+          >
+            {showAll ? 'Hide' : 'Show'} all EVM figures
+            <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${showAll ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          {showAll && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              <Metric label="PV" value={formatIdr(e.pv)} title="Planned Value (BCWS)" />
+              <Metric label="EV" value={formatIdr(e.ev)} title="Earned Value (BCWP)" />
+              <Metric label="AC" value={formatIdr(e.ac)} title="Actual Cost (ACWP)" />
+              <Metric label="CV" value={formatIdr(e.cv)} warn={e.cv < 0} title="Cost Variance = EV − AC" />
+              <Metric label="SV" value={formatIdr(e.sv)} warn={e.sv < 0} title="Schedule Variance = EV − PV" />
+              <Metric label="ETC" value={formatIdr(e.etc)} title="Estimate to Complete = EAC − AC" />
+              <Metric label="VAC" value={formatIdr(e.vac)} warn={e.vac < 0} title="Variance at Completion = BAC − EAC" />
+              <Metric label="TCPI" value={e.bac > e.ac ? formatNum(e.tcpi, 3) : '—'} warn={e.bac > e.ac && e.tcpi > 1} title="To-Complete Performance Index = (BAC − EV) / (BAC − AC)" />
+            </div>
+          )}
           {/* Schedule baseline variance (finish vs baseline) — shown when a WBS baseline exists. */}
           {e.scheduleBaselinedAt ? (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
@@ -80,6 +94,15 @@ export default function EvmHealth({
         </>
       )}
     </Card>
+  );
+}
+
+function HeroMetric({ label, value, warn, good, title }: { label: string; value: string; warn?: boolean; good?: boolean; title?: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700/70 dark:bg-slate-800/40" title={title}>
+      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
+      <div className={`mt-0.5 text-xl font-bold tabular-nums ${warn ? 'text-red-600 dark:text-red-400' : good ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-100'}`}>{value}</div>
+    </div>
   );
 }
 

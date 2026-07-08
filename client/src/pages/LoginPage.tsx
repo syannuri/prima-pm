@@ -68,9 +68,12 @@ export default function LoginPage() {
 
           <div className="max-w-2xl">
             <h2 className="text-3xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-4xl">
-              Empowering the project management{' '}
-              <span className="bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent">community</span>.
+              <span className="bg-gradient-to-r from-brand-400 to-brand-600 bg-clip-text text-transparent">Clarity</span>{' '}
+              in every project.
             </h2>
+            <p className="mt-3 max-w-md text-base text-slate-500 dark:text-slate-300">
+              Plan, track and report cost, schedule and risk — with earned-value truth, not gut feel.
+            </p>
             <ul className="mt-9 space-y-3.5 text-sm text-slate-600 dark:text-slate-300">
               {HIGHLIGHTS.map((t) => (
                 <li key={t} className="flex items-center gap-3">
@@ -87,7 +90,7 @@ export default function LoginPage() {
         </div>
 
         {/* ---------- RIGHT · sign-in card (right-aligned) ---------- */}
-        <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[40%] lg:justify-end lg:pr-12 xl:pr-16">
+        <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[42%] lg:justify-center lg:pr-12 xl:pr-16">
           <div className="w-full max-w-sm">
             <div className="rounded-3xl border border-white/70 bg-white/75 p-7 shadow-[0_24px_70px_-20px_rgba(244,103,95,0.35)] backdrop-blur-xl sm:p-8 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.65)]">
               {/* logo on small screens (left pane hidden) */}
