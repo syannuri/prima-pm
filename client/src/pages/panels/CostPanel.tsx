@@ -118,7 +118,8 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
           )}
         </div>
       )}
-      <table className="prima-rows w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="prima-rows w-full min-w-[28rem] text-sm">
         <tbody>
           {data.actualCosts.map((a) => (
             <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800">
@@ -133,6 +134,7 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
           {!data.actualCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-500 dark:text-slate-400">No actual cost recorded yet.</td></tr>}
         </tbody>
       </table>
+      </div>
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
         <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
         <MoneyInput aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />

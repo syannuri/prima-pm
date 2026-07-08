@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -43,7 +44,14 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
     enabled: isAdminPmo,
     refetchInterval: 60_000,
   });
-  const projects = data?.projects ?? [];
+  const [showAllProjects, setShowAllProjects] = useState(false);
+  // Active work first so the most relevant projects stay near the top of a long list.
+  const STATUS_RANK: Record<string, number> = { IN_PROGRESS: 0, ON_HOLD: 1, CHARTERED: 2, DRAFT: 3, CLOSED: 4 };
+  const projects = [...(data?.projects ?? [])].sort(
+    (a, b) => (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) || a.name.localeCompare(b.name),
+  );
+  const CAP = 8;
+  const visibleProjects = collapsed || showAllProjects ? projects : projects.slice(0, CAP);
   const unread = isAdminPmo ? changes?.unread ?? 0 : 0;
   const cx = (active: boolean) => `${linkBase} ${collapsed ? 'justify-center px-0' : ''} ${active ? linkActive : linkIdle}`;
 
@@ -90,7 +98,7 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
         {!collapsed && <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Projects</div>}
         {collapsed && <div className="my-2 border-t border-slate-800" />}
         {!collapsed && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-500">No projects yet</div>}
-        {projects.map((p) => (
+        {visibleProjects.map((p) => (
           <NavLink key={p.id} to={`/projects/${p.id}`} onClick={onNavigate} title={p.name} className={({ isActive }) => cx(isActive)}>
             {collapsed ? (
               <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md text-[11px] font-semibold text-white ${STATUS_DOT[p.status] ?? 'bg-slate-500'}`}>
@@ -104,6 +112,14 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
             )}
           </NavLink>
         ))}
+        {!collapsed && projects.length > CAP && (
+          <button
+            onClick={() => setShowAllProjects((s) => !s)}
+            className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+          >
+            {showAllProjects ? '▴ Show less' : `▾ Show all ${projects.length}`}
+          </button>
+        )}
       </nav>
 
       <div className="space-y-1 border-t border-slate-800 px-3 py-2">
