@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -150,26 +150,7 @@ export default function ProjectPage() {
 
       <NextStepsGuide projectId={projectId} onJump={(t) => setTab(t as Tab)} />
 
-      <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm font-medium transition ${
-              activeTab === t
-                ? 'border-b-2 border-brand-600 text-brand-700'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            {t}
-            {t === 'Audit' && changeCount > 0 && (
-              <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-slate-200 px-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                {changeCount}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} onSelect={(t) => setTab(t)} />
 
       {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && (
         <Card>
@@ -193,6 +174,81 @@ export default function ProjectPage() {
       {activeTab === 'UAT' && chartered && <UatPanel projectId={projectId} />}
       {activeTab === 'Closeout' && <CloseoutPanel projectId={projectId} />}
       {activeTab === 'Audit' && <AuditPanel projectId={projectId} />}
+    </div>
+  );
+}
+
+// Lifecycle-phase grouping of the project tabs so the bar isn't a wall of 14 buttons.
+// A single-tab phase renders as a plain tab; a multi-tab phase is a dropdown whose button
+// shows the active sub-tab (or the phase name) and highlights when one of its tabs is active.
+const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
+  { label: 'Charter', tabs: ['Charter', 'Kick-Off'] },
+  { label: 'Plan', tabs: ['Schedule', 'Agile', 'Cost', 'Risk'] },
+  { label: 'Execute', tabs: ['Timesheet', 'Issues', 'UAT', 'Change Req'] },
+  { label: 'Track', tabs: ['Forecast', 'EVM Trend'] },
+  { label: 'Close', tabs: ['Closeout'] },
+  { label: 'Audit', tabs: ['Audit'] },
+];
+
+function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; activeTab: Tab; changeCount: number; onSelect: (t: Tab) => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(null); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const groups = TAB_GROUPS
+    .map((g) => ({ label: g.label, tabs: g.tabs.filter((t) => tabs.includes(t)) }))
+    .filter((g) => g.tabs.length > 0);
+
+  const tabBtn = (active: boolean) =>
+    `flex shrink-0 items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm font-medium transition ${
+      active ? 'border-b-2 border-brand-600 text-brand-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+    }`;
+  const AuditBadge = () => (changeCount > 0 ? (
+    <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-slate-200 px-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">{changeCount}</span>
+  ) : null);
+
+  return (
+    <div ref={ref} className="flex gap-1 overflow-visible border-b border-slate-200 dark:border-slate-800">
+      {groups.map((g) => {
+        // Single-tab phase → a plain tab button.
+        if (g.tabs.length === 1) {
+          const t = g.tabs[0];
+          return (
+            <button key={g.label} onClick={() => { onSelect(t); setOpen(null); }} className={tabBtn(activeTab === t)}>
+              {t}{t === 'Audit' && <AuditBadge />}
+            </button>
+          );
+        }
+        // Multi-tab phase → a dropdown; the button shows the active sub-tab or the phase name.
+        const activeChild = g.tabs.find((t) => t === activeTab) ?? null;
+        const isOpen = open === g.label;
+        return (
+          <div key={g.label} className="relative shrink-0">
+            <button onClick={() => setOpen(isOpen ? null : g.label)} className={tabBtn(!!activeChild)} aria-expanded={isOpen}>
+              {activeChild ?? g.label}
+              <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            {isOpen && (
+              <div className="absolute left-0 z-30 mt-1 min-w-[11rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{g.label}</div>
+                {g.tabs.map((t) => (
+                  <button key={t} onClick={() => { onSelect(t); setOpen(null); }}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition ${
+                      activeTab === t ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-900/20 dark:text-brand-300' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
+                    }`}>
+                    <span className="flex items-center gap-1.5">{t}{t === 'Audit' && <AuditBadge />}</span>
+                    {activeTab === t && <span className="text-brand-500">●</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
