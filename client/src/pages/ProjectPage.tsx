@@ -204,8 +204,10 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
     .filter((g) => g.tabs.length > 0);
 
   const tabBtn = (active: boolean) =>
-    `flex shrink-0 items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm font-medium transition ${
-      active ? 'border-b-2 border-brand-600 text-brand-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition ${
+      active
+        ? 'border-brand-600 bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
+        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
     }`;
   const AuditBadge = () => (changeCount > 0 ? (
     <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-slate-200 px-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">{changeCount}</span>
@@ -229,7 +231,10 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
         return (
           <div key={g.label} className="relative shrink-0">
             <button onClick={() => setOpen(isOpen ? null : g.label)} className={tabBtn(!!activeChild)} aria-expanded={isOpen} aria-label={g.label} title={g.label}>
-              {activeChild ?? g.label}
+              {/* Always show the master group; append the active sub-tab so context is never lost. */}
+              <span className={activeChild ? 'font-normal opacity-70' : ''}>{g.label}</span>
+              {activeChild && <span className="text-brand-400 dark:text-brand-500">›</span>}
+              {activeChild && <span>{activeChild}</span>}
               <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
             {isOpen && (
