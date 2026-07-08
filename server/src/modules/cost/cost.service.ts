@@ -113,6 +113,19 @@ async function resolveManpower(input: DirectLineInput) {
   return { personnelRole, unitCostPerManday: unitCostPerManday ?? 0, resourceUserId, label: label ?? '' };
 }
 
+// Convenience prefill (Manpower → task Owner): when a manpower line is linked to a task
+// (taskId) and carries a resource, and that task has NO owner yet, set the task's Owner (PIC)
+// to the same resource. Never overwrites an existing owner and never touches cost (picResource
+// isn't baseline-gated). Runs inside the caller's transaction; returns the task id if it set an
+// owner, so the caller can audit it. Only the safe Manpower→Owner direction is synced.
+async function prefillTaskOwner(tx: Db, taskId: string | null | undefined, resourceId: string | null | undefined): Promise<string | null> {
+  if (!taskId || !resourceId) return null;
+  const task = await tx.task.findFirst({ where: { id: taskId }, select: { id: true, picResourceId: true, picUserId: true } });
+  if (!task || task.picResourceId || task.picUserId) return null; // don't overwrite an existing owner
+  await tx.task.update({ where: { id: taskId }, data: { picResourceId: resourceId } });
+  return taskId;
+}
+
 export async function addDirectLine(projectId: string, input: DirectLineInput, actorId: string) {
   await ensureChartered(projectId);
   await assertBaselineUnlocked(projectId);
@@ -140,12 +153,16 @@ export async function addDirectLine(projectId: string, input: DirectLineInput, a
     data.amount = materialAmount(input.qty!, input.unitCost!);
   }
 
-  const line = await prisma.$transaction(async (tx) => {
+  const { line, ownerSetTaskId } = await prisma.$transaction(async (tx) => {
     const created = await tx.costItemDirect.create({ data });
     await recomputeBaseline(projectId, tx);
-    return created;
+    const ownerSetTaskId = input.type === 'MANPOWER' ? await prefillTaskOwner(tx, created.taskId, created.resourceId) : null;
+    return { line: created, ownerSetTaskId };
   });
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemDirect', entityId: line.id, action: 'CREATE', after: line });
+  if (ownerSetTaskId) {
+    await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: ownerSetTaskId, action: 'UPDATE', after: { picResourceId: line.resourceId, via: 'manpower-owner-prefill' } });
+  }
   return line;
 }
 
@@ -193,12 +210,16 @@ export async function updateDirectLine(
     data.taskId = null;
   }
 
-  const line = await prisma.$transaction(async (tx) => {
+  const { line, ownerSetTaskId } = await prisma.$transaction(async (tx) => {
     const updated = await tx.costItemDirect.update({ where: { id: itemId }, data });
     await recomputeBaseline(projectId, tx);
-    return updated;
+    const ownerSetTaskId = input.type === 'MANPOWER' ? await prefillTaskOwner(tx, updated.taskId, updated.resourceId) : null;
+    return { line: updated, ownerSetTaskId };
   });
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemDirect', entityId: itemId, action: 'UPDATE', before: existing, after: line });
+  if (ownerSetTaskId) {
+    await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: ownerSetTaskId, action: 'UPDATE', after: { picResourceId: line.resourceId, via: 'manpower-owner-prefill' } });
+  }
   return line;
 }
 

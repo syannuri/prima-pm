@@ -344,6 +344,41 @@ describe('RBAC enforcement (server-side, end-to-end)', () => {
   });
 });
 
+describe('manpower → task Owner prefill (only when the task has no owner)', () => {
+  let pid = '';
+  let resourceId = '';
+  let otherResourceId = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'MP-Owner', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    resourceId = (await prisma.resource.create({ data: { name: 'Backend Eng' } })).id;
+    otherResourceId = (await prisma.resource.create({ data: { name: 'Someone Else' } })).id;
+  });
+
+  const addTask = async (name: string) => {
+    const res = await request(app).post(api(`/projects/${pid}/schedule/tasks`)).set(auth(tokens.ADMIN)).send({ name, planStart: '2026-08-01', planEnd: '2026-08-10' });
+    return res.body.task.id as string;
+  };
+  const addManpower = (taskId: string, rid: string) =>
+    request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN)).send({ type: 'MANPOWER', planMandays: 2, resourceId: rid, taskId });
+
+  it('sets the task Owner from a linked manpower resource when the task has none', async () => {
+    const taskId = await addTask('Build API');
+    expect((await addManpower(taskId, resourceId)).status).toBe(201);
+    const task = await prisma.task.findUnique({ where: { id: taskId }, select: { picResourceId: true } });
+    expect(task?.picResourceId).toBe(resourceId);
+  });
+
+  it('does NOT overwrite an existing task Owner', async () => {
+    const taskId = await addTask('Design DB');
+    await prisma.task.update({ where: { id: taskId }, data: { picResourceId: otherResourceId } });
+    expect((await addManpower(taskId, resourceId)).status).toBe(201);
+    const task = await prisma.task.findUnique({ where: { id: taskId }, select: { picResourceId: true } });
+    expect(task?.picResourceId).toBe(otherResourceId); // unchanged
+  });
+});
+
 describe('CLOSED projects are read-only, reopen is governed', () => {
   let pid = '';
   const addCost = () =>

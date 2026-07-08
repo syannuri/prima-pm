@@ -39,6 +39,7 @@ export default function CostPanel({ projectId }: { projectId: string }) {
     qc.invalidateQueries({ queryKey: ['evm'] }); // Cost-tab EV/AC/CV/CPI strip + Schedule-tab EvmPanel
     qc.invalidateQueries({ queryKey: ['forecast'] }); // Forecast tab (EAC/ETC/VAC)
     qc.invalidateQueries({ queryKey: ['portfolio'] }); // dashboard CPI/AC rollup
+    qc.invalidateQueries({ queryKey: ['gantt', projectId] }); // WBS mandays/budget + Owner prefilled from a manpower resource
   };
 
   if (isLoading) return <Spinner />;
