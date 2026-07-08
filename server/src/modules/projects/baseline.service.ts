@@ -21,12 +21,21 @@ export async function assertBaselineUnlocked(projectId: string, db: Db = prisma)
 export async function setBaselineLock(projectId: string, locked: boolean, reason: string | undefined, actorId: string) {
   const before = await prisma.project.findFirst({
     where: { id: projectId, deletedAt: null },
-    select: { id: true, baselineLockedAt: true },
+    select: { id: true, baselineLockedAt: true, scheduleBaselinedAt: true },
   });
   if (!before) throw NotFound('Project not found');
   const wasLocked = before.baselineLockedAt != null;
   if (!locked && wasLocked && !reason?.trim()) {
     throw BadRequest('Unlocking the baseline requires a reason.');
+  }
+  // Ordering guard: locking freezes the schedule baseline too (assertBaselineUnlocked blocks
+  // setScheduleBaseline). If a WBS project hasn't captured its schedule baseline yet, locking
+  // now would trap it — the baseline could never be set without unlocking. Require it first.
+  if (locked && !wasLocked && !before.scheduleBaselinedAt) {
+    const hasWbs = (await prisma.task.count({ where: { projectId } })) > 0;
+    if (hasWbs) {
+      throw BadRequest('Capture the schedule baseline (Schedule tab) before locking — it can’t be set once the baseline is locked.');
+    }
   }
 
   const project = await prisma.project.update({

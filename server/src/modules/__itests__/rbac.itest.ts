@@ -574,6 +574,29 @@ describe('baseline lock freezes cost/schedule (PMB/BAC)', () => {
   });
 });
 
+describe('baseline lock ordering guard (WBS projects must capture the schedule baseline first)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Order-Guard', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    // Build a WBS but do NOT capture the schedule baseline yet.
+    await request(app).post(api(`/projects/${pid}/schedule/tasks`)).set(auth(tokens.ADMIN)).send({ name: 'Design', planStart: '2026-08-01', planEnd: '2026-08-15' });
+  });
+
+  it('blocks locking while a WBS project has no schedule baseline (400)', async () => {
+    const res = await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.ADMIN)).send({ locked: true });
+    expect(res.status).toBe(400);
+    expect(String(res.body?.error?.message ?? '')).toMatch(/capture the schedule baseline/i);
+  });
+
+  it('allows locking once the schedule baseline is captured (200)', async () => {
+    expect((await request(app).post(api(`/projects/${pid}/schedule/baseline`)).set(auth(tokens.ADMIN))).status).toBe(200);
+    const res = await request(app).patch(api(`/projects/${pid}/baseline-lock`)).set(auth(tokens.ADMIN)).send({ locked: true });
+    expect(res.status).toBe(200);
+  });
+});
+
 describe('approving a cost/schedule change request unlocks the baseline', () => {
   let pid = '';
   let crId = '';

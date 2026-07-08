@@ -22,7 +22,15 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
     queryKey: ['project', projectId],
     queryFn: () => api.get<{ project: Project }>(`/projects/${projectId}`),
   });
+  // Mirror the server ordering guard: a WBS project must capture its schedule baseline before
+  // locking (locking freezes it too, so it could never be set afterwards). Shares the WBS query
+  // cache key so capturing the baseline in the Schedule tab re-enables this button immediately.
+  const scheduleQ = useQuery({
+    queryKey: ['gantt', projectId],
+    queryFn: () => api.get<{ tree: unknown[]; baselinedAt: string | null }>(`/projects/${projectId}/schedule/gantt`),
+  });
   const locked = !!data?.project?.baselineLockedAt;
+  const needScheduleBaseline = (scheduleQ.data?.tree?.length ?? 0) > 0 && !scheduleQ.data?.baselinedAt;
   const canManage = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
 
   const toggle = useMutation({
@@ -50,14 +58,19 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
         {locked ? '🔒 Baseline locked' : '🔓 Baseline editable'}
       </span>
       {canManage && (
-        <Button
-          variant="secondary"
-          className="!py-1 text-xs"
-          disabled={toggle.isPending}
-          onClick={() => (locked ? setUnlockOpen(true) : toggle.mutate({ locked: true }))}
-        >
-          {locked ? 'Unlock' : 'Lock baseline'}
-        </Button>
+        <span title={!locked && needScheduleBaseline ? 'Capture the schedule baseline (Schedule tab) first — it can’t be set once the baseline is locked.' : undefined}>
+          <Button
+            variant="secondary"
+            className="!py-1 text-xs"
+            disabled={toggle.isPending || (!locked && needScheduleBaseline)}
+            onClick={() => (locked ? setUnlockOpen(true) : toggle.mutate({ locked: true }))}
+          >
+            {locked ? 'Unlock' : 'Lock baseline'}
+          </Button>
+        </span>
+      )}
+      {canManage && !locked && needScheduleBaseline && (
+        <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">← capture the schedule baseline first</span>
       )}
 
       {unlockOpen && (
