@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
+    <div className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900 dark:shadow-lg dark:shadow-black/20 ${className}`}>
       {children}
     </div>
   );
@@ -124,17 +124,18 @@ export function Skeleton({ className = '' }: { className?: string }) {
 }
 
 // Friendly empty state: an icon bubble, a title, an optional hint and an optional action.
+// Default glyph (an inbox) so every empty state has a warm visual anchor even when no icon is passed.
+const EMPTY_ICON = 'M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661z';
+
 export function EmptyState({ icon, title, hint, action }: { icon?: string; title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      {icon && (
-        <div className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
-          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d={icon} />
-          </svg>
-        </div>
-      )}
-      <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</p>
+      <div className="mb-3.5 grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-400 ring-1 ring-brand-100 dark:bg-brand-900/25 dark:text-brand-300/80 dark:ring-brand-800/50">
+        <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d={icon ?? EMPTY_ICON} />
+        </svg>
+      </div>
+      <p className="text-base font-semibold text-slate-800 dark:text-slate-100">{title}</p>
       {hint && <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">{hint}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
