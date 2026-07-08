@@ -787,6 +787,56 @@ describe('activation-ready notification (baselines complete → tell ADMIN/PMO)'
   });
 });
 
+describe('Kick-Off meeting (details + attendees + action items + RBAC)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Kickoff-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+  });
+
+  it('GET returns an empty shape before anything is created', async () => {
+    const res = await request(app).get(api(`/projects/${pid}/kickoff`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(res.status).toBe(200);
+    expect(res.body.meeting).toBeNull();
+    expect(res.body.attendees).toEqual([]);
+    expect(res.body.actionItems).toEqual([]);
+  });
+
+  it('the owning PM upserts details, adds an attendee & an action item; all list back', async () => {
+    const put = await request(app).put(api(`/projects/${pid}/kickoff`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ facilitator: 'Rina', location: 'Online (Teams)', agenda: '1. Scope 2. Plan' });
+    expect(put.status).toBe(200);
+    expect(put.body.meeting.facilitator).toBe('Rina');
+
+    const at = await request(app).post(api(`/projects/${pid}/kickoff/attendees`)).set(auth(tokens.PROJECT_MANAGER)).send({ name: 'Budi', role: 'Sponsor' });
+    expect(at.status).toBe(201);
+    const ac = await request(app).post(api(`/projects/${pid}/kickoff/actions`)).set(auth(tokens.PROJECT_MANAGER)).send({ description: 'Share network diagram', ownerName: 'Cahya' });
+    expect(ac.status).toBe(201);
+
+    const get = await request(app).get(api(`/projects/${pid}/kickoff`)).set(auth(tokens.ADMIN));
+    expect(get.body.meeting.createdByName).toBe('Owner PM'); // FK-less id resolved
+    expect(get.body.attendees).toHaveLength(1);
+    expect(get.body.actionItems).toHaveLength(1);
+
+    // toggle attendee present + close the action item
+    await request(app).patch(api(`/projects/${pid}/kickoff/attendees/${at.body.attendee.id}`)).set(auth(tokens.PROJECT_MANAGER)).send({ present: false });
+    const done = await request(app).patch(api(`/projects/${pid}/kickoff/actions/${ac.body.actionItem.id}`)).set(auth(tokens.PROJECT_MANAGER)).send({ status: 'DONE' });
+    expect(done.body.actionItem.status).toBe('DONE');
+  });
+
+  it('VIEWER, FINANCE and a non-owner PM cannot write/read (403); delete cascades', async () => {
+    expect((await request(app).post(api(`/projects/${pid}/kickoff/attendees`)).set(auth(tokens.VIEWER)).send({ name: 'x' })).status).toBe(403);
+    expect((await request(app).put(api(`/projects/${pid}/kickoff`)).set(auth(tokens.PM2)).send({ facilitator: 'x' })).status).toBe(403);
+    expect((await request(app).get(api(`/projects/${pid}/kickoff`)).set(auth(tokens.FINANCE))).status).toBe(403);
+
+    const get = await request(app).get(api(`/projects/${pid}/kickoff`)).set(auth(tokens.ADMIN));
+    const del = await request(app).delete(api(`/projects/${pid}/kickoff/attendees/${get.body.attendees[0].id}`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(del.status).toBe(204);
+    const after = await request(app).get(api(`/projects/${pid}/kickoff`)).set(auth(tokens.ADMIN));
+    expect(after.body.attendees).toHaveLength(0);
+  });
+});
+
 describe('UAT test cases (create / execute / summary / RBAC)', () => {
   let pid = '';
   beforeAll(async () => {

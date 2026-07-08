@@ -260,6 +260,7 @@ model Project {
   acceptances      AcceptanceSignoff[]
   evmSnapshots     EvmSnapshot[]
   uatTestCases     UatTestCase[]
+  kickoffMeeting   KickoffMeeting?
 
   @@index([status])
   @@index([pmUserId])
@@ -872,4 +873,56 @@ model UatTestCase {
   updatedAt   DateTime  @updatedAt
 
   @@index([projectId])
+}
+
+// Kick-Off Meeting minutes — one structured record per project (Initiating artifact).
+model KickoffMeeting {
+  id          String              @id @default(uuid())
+  projectId   String              @unique
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  meetingDate DateTime?
+  location    String? // e.g. "Online (Teams)" / "HQ Room 3A"
+  facilitator String?
+  agenda      String?             @db.Text
+  objectives  String?             @db.Text
+  decisions   String?             @db.Text
+  notes       String?             @db.Text
+  attendees   KickoffAttendee[]
+  actionItems KickoffActionItem[]
+  createdById String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model KickoffAttendee {
+  id        String         @id @default(uuid())
+  meetingId String
+  meeting   KickoffMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  name      String
+  role      String? // role / organization
+  present   Boolean        @default(true)
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  @@index([meetingId])
+}
+
+enum KickoffActionStatus {
+  OPEN
+  DONE
+}
+
+model KickoffActionItem {
+  id          String              @id @default(uuid())
+  meetingId   String
+  meeting     KickoffMeeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  description String              @db.Text
+  ownerName   String?
+  dueDate     DateTime?
+  status      KickoffActionStatus @default(OPEN)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([meetingId])
 }

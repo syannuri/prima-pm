@@ -510,6 +510,25 @@ export interface UatSummary {
   blocked: number;
 }
 
+// Kick-Off Meeting minutes — one structured record per project (Initiating artifact).
+export type KickoffActionStatus = 'OPEN' | 'DONE';
+export interface KickoffMeeting {
+  id: string;
+  meetingDate: string | null;
+  location: string | null;
+  facilitator: string | null;
+  agenda: string | null;
+  objectives: string | null;
+  decisions: string | null;
+  notes: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface KickoffAttendee { id: string; name: string; role: string | null; present: boolean }
+export interface KickoffActionItem { id: string; description: string; ownerName: string | null; dueDate: string | null; status: KickoffActionStatus }
+export interface KickoffData { meeting: KickoffMeeting | null; attendees: KickoffAttendee[]; actionItems: KickoffActionItem[] }
+
 // A frozen point-in-time EVM capture — the app's point-in-time EVM turned into a trend.
 export interface EvmSnapshot {
   id: string;
