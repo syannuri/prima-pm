@@ -15,7 +15,7 @@ const statusLabel = (s: string) => s.replace(/_/g, ' ').toLowerCase().replace(/^
 // A professional single-project status report PDF (period-aware). Mirrors the in-app
 // Reports page: status summary, task completion, EVM, forecast and the EVM S-curve.
 export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
-  const doc = new PDFDocument({ margin: 40, size: 'A4' });
+  const doc = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true });
   const chunks: Buffer[] = [];
   doc.on('data', (c) => chunks.push(c as Buffer));
   const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
@@ -67,14 +67,79 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
 
   const f = r.forecast;
   const e = r.evm;
+  const pageW = doc.page.width;
+  const pageH = doc.page.height;
+  const byCount = r.tasks.total ? Math.round((r.tasks.completed / r.tasks.total) * 100) : 0;
+  // Compact IDR for KPI tiles: Rp NM / Rp Njt / Rp Nrb (base Helvetica has no rupiah glyph beyond "Rp").
+  const moneyShort = (v: number) => {
+    const a = Math.abs(v), s = v < 0 ? '-' : '';
+    if (a >= 1e9) return `${s}Rp ${(a / 1e9).toFixed(a >= 1e10 ? 0 : 1)}M`;
+    if (a >= 1e6) return `${s}Rp ${Math.round(a / 1e6)}jt`;
+    if (a >= 1e3) return `${s}Rp ${Math.round(a / 1e3)}rb`;
+    return `Rp ${Math.round(v)}`;
+  };
+  const ragText = r.health === 'GREEN' ? 'ON TRACK' : r.health === 'AMBER' ? 'AT RISK' : r.health === 'RED' ? 'OFF TRACK' : 'NO DATA';
 
-  // ---------- Header ----------
-  doc.fillColor(ACCENT).fontSize(20).font('Helvetica-Bold').text('Prismatix');
-  doc.fillColor(GRAY).fontSize(9).font('Helvetica').text(`Project Status Report · ${r.period === 'weekly' ? 'Weekly' : 'Monthly'}`);
-  doc.moveDown(0.5);
-  doc.fillColor('#0f172a').fontSize(15).font('Helvetica-Bold').text(`${r.project.code} — ${r.project.name}`);
-  doc.fontSize(9).font('Helvetica').fillColor(GRAY)
-    .text(`PM: ${r.project.pmName}   |   Lifecycle: ${statusLabel(r.project.status)}   |   Reporting period: ${r.periodLabel}   |   Generated: ${iso(r.asOf)}`);
+  // ---------- Cover header band ----------
+  const bandH = 92;
+  doc.save();
+  doc.rect(0, 0, pageW, bandH).fill('#0f172a');
+  doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(19).text('PRISMATIX', left, 22, { lineBreak: false, characterSpacing: 1 });
+  doc.fillColor('#94a3b8').font('Helvetica').fontSize(9).text(`PROJECT STATUS REPORT   ·   ${r.period === 'weekly' ? 'WEEKLY' : 'MONTHLY'}`, left, 50, { lineBreak: false, characterSpacing: 0.5 });
+  doc.fillColor('#64748b').fontSize(8).text(r.periodLabel, left, 64, { lineBreak: false });
+  // RAG status pill, top-right.
+  const pillW = 118, pillH = 28, pillX = right - pillW, pillY = 26;
+  doc.roundedRect(pillX, pillY, pillW, pillH, 14).fill(healthColor(r.health));
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(11).text(ragText, pillX, pillY + 9, { width: pillW, align: 'center', lineBreak: false });
+  doc.restore();
+
+  // ---------- Title + meta ----------
+  doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(16).text(`${r.project.code} — ${r.project.name}`, left, bandH + 16, { width });
+  doc.font('Helvetica').fontSize(9).fillColor(GRAY)
+    .text(`PM ${r.project.pmName}    |    ${statusLabel(r.project.status)}    |    ${r.periodLabel}    |    Generated ${iso(r.asOf)}`, { width });
+
+  // ---------- Executive summary (BLUF) ----------
+  const sentences: string[] = [];
+  sentences.push(`Overall status is ${ragText.toLowerCase()} at ${r.tasks.weightedPct}% complete by weighted value (${byCount}% by task count, ${r.tasks.completed} of ${r.tasks.total} work packages done).`);
+  if (e.pv > 0) {
+    const v = f.schedule.varianceDays;
+    sentences.push(`Schedule performance is ${e.spi.toFixed(2)} SPI — ${e.spi >= 1 ? 'on or ahead of plan' : 'behind plan'}${v != null ? `, forecast finish ${v > 0 ? `${v} day${v === 1 ? '' : 's'} late` : v < 0 ? `${-v} day${v === -1 ? '' : 's'} early` : 'on the baseline date'}` : ''}.`);
+  }
+  if (e.ac > 0) sentences.push(`Cost performance is ${e.cpi.toFixed(2)} CPI — ${e.cpi >= 1 ? 'on or under budget' : 'over budget'}; estimate at completion ${moneyShort(f.eac.likely)} against a ${moneyShort(e.bac)} budget (VAC ${moneyShort(f.vac)}).`);
+  const overdue = r.tasks.remaining.filter((t) => t.overdue).length;
+  if (overdue > 0) sentences.push(`${overdue} work package${overdue === 1 ? '' : 's'} currently overdue and need${overdue === 1 ? 's' : ''} attention.`);
+  const summary = sentences.join(' ');
+
+  doc.moveDown(0.9);
+  const boxPad = 9;
+  doc.font('Helvetica').fontSize(9.5);
+  const sumH = doc.heightOfString(summary, { width: width - 2 * boxPad });
+  const boxY = doc.y;
+  const boxTotalH = sumH + 2 * boxPad + 13;
+  doc.save().roundedRect(left, boxY, width, boxTotalH, 4).fillAndStroke('#f8fafc', '#e2e8f0').restore();
+  doc.save().rect(left, boxY, 3, boxTotalH).fill(ACCENT).restore(); // accent spine
+  doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(8).text('EXECUTIVE SUMMARY', left + boxPad, boxY + boxPad, { width: width - 2 * boxPad, characterSpacing: 0.5 });
+  doc.fillColor('#334155').font('Helvetica').fontSize(9.5).text(summary, left + boxPad, boxY + boxPad + 12, { width: width - 2 * boxPad });
+  doc.y = boxY + boxTotalH;
+
+  // ---------- KPI band ----------
+  doc.moveDown(0.7);
+  const kpis: { label: string; value: string; color?: string }[] = [
+    { label: '% Complete', value: `${r.tasks.weightedPct}%` },
+    { label: 'SPI', value: e.pv > 0 ? e.spi.toFixed(2) : '—', color: e.pv > 0 ? (e.spi >= 1 ? GREEN : RED) : undefined },
+    { label: 'CPI', value: e.ac > 0 ? e.cpi.toFixed(2) : '—', color: e.ac > 0 ? (e.cpi >= 1 ? GREEN : RED) : undefined },
+    { label: 'EAC (likely)', value: moneyShort(f.eac.likely), color: f.eac.likely > e.bac ? RED : undefined },
+    { label: 'VAC', value: moneyShort(f.vac), color: f.vac < 0 ? RED : GREEN },
+    { label: 'Forecast finish', value: f.schedule.forecastFinish ? iso(f.schedule.forecastFinish) : '—' },
+  ];
+  const gap = 6, n = kpis.length, bw = (width - gap * (n - 1)) / n, bh = 46, ky = doc.y;
+  kpis.forEach((it, i) => {
+    const x = left + i * (bw + gap);
+    doc.save().roundedRect(x, ky, bw, bh, 4).fillAndStroke('#ffffff', '#e2e8f0').restore();
+    doc.fillColor('#94a3b8').font('Helvetica-Bold').fontSize(6.5).text(it.label.toUpperCase(), x + 6, ky + 8, { width: bw - 12, lineBreak: false, ellipsis: true });
+    doc.fillColor(it.color ?? '#0f172a').font('Helvetica-Bold').fontSize(13).text(it.value, x + 6, ky + 21, { width: bw - 12, lineBreak: false, ellipsis: true });
+  });
+  doc.y = ky + bh;
 
   // ---------- 1. Status summary ----------
   heading('1. Status Summary');
@@ -227,6 +292,23 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
 
   doc.fillColor(GRAY).fontSize(7.5).font('Helvetica').moveDown(0.5)
     .text('Generated by Prismatix. EVM figures use the project’s delivery methodology (WBS / agile points / hybrid). % complete (weighted) reflects budget & effort, which can differ from a simple task count.', left, doc.y, { align: 'left', width });
+
+  // ---------- Footer on every page (project · classification · page N) ----------
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i);
+    // Writing below the bottom margin makes PDFKit auto-add a page; zero the bottom margin
+    // for this page so the footer sits in the margin area without spawning blank pages.
+    doc.page.margins.bottom = 0;
+    const fy = pageH - 30;
+    doc.save();
+    doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(left, fy).lineTo(right, fy).stroke();
+    doc.font('Helvetica').fontSize(7).fillColor('#94a3b8');
+    doc.text(`${r.project.code} — ${r.project.name}`, left, fy + 6, { width: width * 0.5, lineBreak: false, ellipsis: true });
+    doc.text('CONFIDENTIAL · Internal', left, fy + 6, { width, align: 'center', lineBreak: false });
+    doc.text(`Page ${i + 1} of ${range.count}`, left, fy + 6, { width, align: 'right', lineBreak: false });
+    doc.restore();
+  }
 
   doc.end();
   return done;
