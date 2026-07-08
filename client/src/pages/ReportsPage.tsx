@@ -7,6 +7,8 @@ import { formatIdrShort, formatDate } from '../lib/format';
 import DonutChart from '../components/DonutChart';
 import ForecastChart from '../components/ForecastChart';
 import ExecutiveReport from '../components/ExecutiveReport';
+import EvmTrendPanel from './panels/EvmTrendPanel';
+import ForecastPanel from './panels/ForecastPanel';
 
 type Period = 'weekly' | 'monthly';
 // The Reporting Hub's two-axis model. Cadence spans the full target set; only weekly/monthly
@@ -25,7 +27,7 @@ const NAV: { key: View; label: string; scope: string; desc: string; ready: boole
   { key: 'executive', label: 'Executive', scope: 'Portfolio', desc: 'One-screen portfolio health — RAG heatmap across every active project, delivered value and budget performance.', ready: true },
   { key: 'project', label: 'Project Report', scope: 'Single project', desc: 'Formal status report for one project — schedule, cost, task completion & forecast.', ready: true },
   { key: 'portfolio', label: 'Portfolio', scope: 'Portfolio', desc: 'Roll-up across all projects — aggregate SPI/CPI, budget vs actual, and per-project status table.', ready: false },
-  { key: 'analytics', label: 'Analytics', scope: 'Single project', desc: 'Cross-project analytics surfaced centrally — EVM trend, forecast and agile velocity with a project picker.', ready: false },
+  { key: 'analytics', label: 'Analytics', scope: 'Single project', desc: 'Deep analytics surfaced centrally — EVM trend and forecast for any project, without leaving the reporting hub.', ready: true },
 ];
 
 const HEALTH: Record<string, { color: string; label: string }> = {
@@ -141,10 +143,37 @@ export default function ReportsPage() {
           {/* Executive — portfolio health overview (built). */}
           {view === 'executive' && <ExecutiveReport />}
 
+          {/* Analytics — deep per-project analytics, centralized (built). */}
+          {view === 'analytics' && (
+            projects.length ? <AnalyticsView projectId={selected} />
+              : <EmptyState title="No projects to analyze" hint="Analytics needs a project past the draft stage." />
+          )}
+
           {/* Not-yet-built views — describe the target so the IA is legible. */}
-          {(view === 'portfolio' || view === 'analytics') && <ComingSoon nav={activeNav} />}
+          {view === 'portfolio' && <ComingSoon nav={activeNav} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Centralized deep analytics: the same per-project panels used inside the project workspace,
+// reachable from the hub with a project picker. A sub-tab switches lens (each panel self-fetches).
+function AnalyticsView({ projectId }: { projectId: string }) {
+  const [lens, setLens] = useState<'evm' | 'forecast'>('evm');
+  const LENSES = [{ k: 'evm', label: 'EVM Trend' }, { k: 'forecast', label: 'Forecast' }] as const;
+  return (
+    <div className="space-y-5">
+      <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+        {LENSES.map((l) => (
+          <button key={l.k} onClick={() => setLens(l.k)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${lens === l.k ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+            {l.label}
+          </button>
+        ))}
+      </div>
+      {lens === 'evm' && <EvmTrendPanel projectId={projectId} />}
+      {lens === 'forecast' && <ForecastPanel projectId={projectId} />}
     </div>
   );
 }
