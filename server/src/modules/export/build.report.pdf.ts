@@ -146,9 +146,76 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
     kv('Projected margin (at likely EAC)', formatIdr(f.margin.projected), f.margin.projected < 0 ? RED : GREEN);
   }
 
-  // ---------- 5. EVM S-curve (period) ----------
+  // ---------- 5. Project chart — EVM S-curve (vector line chart, then exact figures) ----------
   if (f.sCurve.length) {
-    heading(`5. EVM S-curve (${r.period === 'weekly' ? 'weekly' : 'monthly'})`);
+    heading(`5. Project chart — EVM S-curve (${r.period})`);
+    const pts = f.sCurve;
+    const padL = 42; // left gutter for the y-axis (money) labels
+    const cX = left + padL;
+    const cW = width - padL;
+    const cH = 160;
+    if (doc.y > doc.page.height - (cH + 90)) doc.addPage();
+    const cY = doc.y + 4;
+    const xs = pts.map((p) => +new Date(p.t));
+    const xMin = Math.min(...xs);
+    const xMax = Math.max(...xs);
+    const now = +new Date(r.asOf);
+    const vals: number[] = [e.bac];
+    pts.forEach((p) => { vals.push(p.pv); if (p.ac != null) vals.push(p.ac); if (p.forecast != null) vals.push(p.forecast); });
+    const yMax = Math.max(1, ...vals) * 1.08;
+    const X = (t: number) => cX + (xMax > xMin ? ((t - xMin) / (xMax - xMin)) * cW : 0);
+    const Y = (v: number) => cY + cH - (v / yMax) * cH;
+    const shortRp = (v: number) => `Rp ${Math.round(v / 1e6)}jt`;
+
+    doc.save();
+    // Horizontal gridlines + y-axis money labels in the left gutter.
+    doc.font('Helvetica').fontSize(6.5);
+    for (let i = 0; i <= 4; i++) {
+      const v = (yMax * i) / 4;
+      const y = Y(v);
+      doc.strokeColor('#eef2f7').lineWidth(0.6).moveTo(cX, y).lineTo(cX + cW, y).stroke();
+      doc.fillColor('#94a3b8').text(shortRp(v), left, y - 3, { width: padL - 6, align: 'right' });
+    }
+    // BAC dashed reference line.
+    const bacY = Y(e.bac);
+    doc.dash(3, { space: 2 }).strokeColor('#94a3b8').lineWidth(0.8).moveTo(cX, bacY).lineTo(cX + cW, bacY).stroke().undash();
+    doc.fillColor('#64748b').fontSize(6.5).text(`BAC ${shortRp(e.bac)}`, cX + 2, bacY - 8, { width: 90 });
+    // "Today" vertical marker.
+    if (now >= xMin && now <= xMax && xMax > xMin) {
+      const tx = X(now);
+      doc.dash(2, { space: 2 }).strokeColor('#cbd5e1').lineWidth(0.8).moveTo(tx, cY).lineTo(tx, cY + cH).stroke().undash();
+      doc.fillColor('#94a3b8').fontSize(6.5).text('today', tx - 7, cY - 1, { width: 30 });
+    }
+    // A PV/AC/forecast polyline.
+    const line = (sel: (p: (typeof pts)[number]) => number | null, color: string, dashed: boolean) => {
+      const seq = pts.map((p) => ({ t: +new Date(p.t), v: sel(p) })).filter((d): d is { t: number; v: number } => d.v != null);
+      if (!seq.length) return;
+      if (dashed) doc.dash(3, { space: 2 }); else doc.undash();
+      doc.strokeColor(color).lineWidth(1.4);
+      seq.forEach((d, i) => (i === 0 ? doc.moveTo(X(d.t), Y(d.v)) : doc.lineTo(X(d.t), Y(d.v))));
+      doc.stroke().undash();
+    };
+    line((p) => p.pv, '#334155', false); // Planned Value (slate)
+    line((p) => p.ac, '#0284c7', false); // Actual Cost (sky)
+    line((p) => p.forecast, ACCENT, true); // Forecast to EAC (coral, dashed)
+    // Axis frame.
+    doc.strokeColor('#cbd5e1').lineWidth(0.8).moveTo(cX, cY).lineTo(cX, cY + cH).lineTo(cX + cW, cY + cH).stroke();
+    doc.restore();
+
+    // X-axis date labels (start / end) + legend below the plot.
+    doc.fillColor('#94a3b8').font('Helvetica').fontSize(6.5);
+    doc.text(iso(new Date(xMin).toISOString()), cX, cY + cH + 3, { width: 80 });
+    doc.text(iso(new Date(xMax).toISOString()), cX + cW - 70, cY + cH + 3, { width: 70, align: 'right' });
+    let lx = cX;
+    const legendY = cY + cH + 16;
+    for (const [lbl, col] of [['Planned (PV)', '#334155'], ['Actual (AC)', '#0284c7'], ['Forecast', ACCENT]] as const) {
+      doc.save().strokeColor(col).lineWidth(2).moveTo(lx, legendY + 4).lineTo(lx + 14, legendY + 4).stroke().restore();
+      doc.fillColor('#475569').fontSize(7.5).font('Helvetica').text(lbl, lx + 18, legendY, { width: 90 });
+      lx += 18 + doc.widthOfString(lbl) + 16;
+    }
+    doc.y = legendY + 16;
+
+    // Exact figures below the chart.
     table(
       [
         { title: 'Date', w: 90 }, { title: 'Planned Value (PV)', w: 150, align: 'right' },
