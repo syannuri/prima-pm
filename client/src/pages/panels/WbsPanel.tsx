@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { GanttNode, ResourceItem, TaskDependency } from '../../api/types';
+import type { GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -317,9 +317,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
       </div>
 
       {!rows.length ? (
-        <p className="py-8 text-center text-slate-500 dark:text-slate-400">
-          No work packages yet.{canEdit ? ' Click “+ Add Task” to start the breakdown.' : ''}
-        </p>
+        <div className="py-6">
+          <p className="text-center text-slate-500 dark:text-slate-400">
+            No work packages yet.{canEdit ? ' Start from a template below, or click “+ Add Task”.' : ''}
+          </p>
+          {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-0 text-sm">
@@ -472,6 +475,50 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         />
       )}
     </Card>
+    </div>
+  );
+}
+
+// Empty-WBS starter: pick a curated template + a start date to seed a standard schedule.
+function TemplateStarter({ base, onApplied }: { base: string; onApplied: () => void }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [templateId, setTemplateId] = useState('');
+  const [startDate, setStartDate] = useState(formatDateInput(new Date()));
+
+  const q = useQuery({ queryKey: ['wbs-templates', base], queryFn: () => api.get<{ templates: WbsTemplateInfo[] }>(`${base}/templates`) });
+  const templates = q.data?.templates ?? [];
+  const selected = templates.find((t) => t.id === templateId);
+
+  const apply = useMutation({
+    mutationFn: () => api.post(`${base}/apply-template`, { templateId, startDate }),
+    onSuccess: () => { toast.success('WBS seeded from template'); onApplied(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to apply template'),
+  });
+
+  if (!templates.length) return null;
+  return (
+    <div className="mx-auto mt-4 max-w-xl rounded-xl border border-brand-200 bg-brand-50/50 p-4 dark:border-brand-900/50 dark:bg-brand-900/15">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-800 dark:text-brand-200"><span>🧱</span> Start from a template</div>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Template">
+          <Select value={templateId} onChange={(e) => setTemplateId(e.target.value)} className="min-w-[15rem]">
+            <option value="">— choose a template —</option>
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.taskCount} tasks)</option>)}
+          </Select>
+        </Field>
+        <Field label="Start date"><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
+        <Button
+          variant="secondary"
+          disabled={!templateId || apply.isPending}
+          onClick={async () => {
+            if (await confirm({ title: 'Apply template?', message: <>Seed the WBS with <strong>{selected?.taskCount}</strong> tasks from “{selected?.name}”, starting {startDate}? You can edit everything after.</>, confirmLabel: 'Apply' })) apply.mutate();
+          }}
+        >
+          {apply.isPending ? 'Applying…' : 'Apply'}
+        </Button>
+      </div>
+      {selected && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{selected.description}</p>}
     </div>
   );
 }

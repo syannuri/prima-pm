@@ -48,6 +48,11 @@ export const progressSchema = z.object({
   progressPct: z.coerce.number().int().min(0).max(100),
 });
 
+export const applyTemplateSchema = z.object({
+  templateId: z.string().min(1),
+  startDate: z.coerce.date().optional(),
+});
+
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
 export type ProgressInput = z.infer<typeof progressSchema>;

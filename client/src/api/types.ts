@@ -510,6 +510,9 @@ export interface UatSummary {
   blocked: number;
 }
 
+// A curated WBS template (list item) used to seed an empty schedule.
+export interface WbsTemplateInfo { id: string; name: string; category: string; description: string; taskCount: number }
+
 // Kick-Off Meeting minutes — one structured record per project (Initiating artifact).
 export type KickoffActionStatus = 'OPEN' | 'DONE';
 export interface KickoffMeeting {

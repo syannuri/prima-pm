@@ -5,6 +5,7 @@ import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
 import { computeEvm, type EvmTask } from '../../calc/evm.js';
 import { actualCostAsOf } from '../cost/cost.service.js';
 import { assertBaselineUnlocked } from '../projects/baseline.service.js';
+import { getTemplate, listTemplates } from './schedule.templates.js';
 import {
   durationDays,
   generateTaskCode,
@@ -101,6 +102,46 @@ export async function getGantt(projectId: string) {
   }));
 
   return { tree: buildGanttTree(enriched), dependencies: deps, baselinedAt: project?.scheduleBaselinedAt ?? null };
+}
+
+// Available WBS templates (list only — see schedule.templates.ts for the task bodies).
+export function getWbsTemplates() {
+  return listTemplates();
+}
+
+// Seed a project's WBS from a curated template. Requires a chartered project with an UNLOCKED
+// baseline and an EMPTY schedule (so it can't duplicate/clobber an existing WBS). Dates are
+// relative to `startDate`.
+export async function applyTemplate(projectId: string, templateId: string, startDate: Date, actorId: string) {
+  await ensureChartered(projectId);
+  await assertBaselineUnlocked(projectId);
+  const template = getTemplate(templateId);
+  if (!template) throw NotFound('Template not found');
+  const existing = await prisma.task.count({ where: { projectId } });
+  if (existing > 0) throw BadRequest('The WBS already has tasks — a template can only seed an empty schedule.');
+
+  const DAY = 86_400_000;
+  const base = new Date(startDate);
+  base.setUTCHours(0, 0, 0, 0);
+  const rows = template.tasks.map((t, i) => {
+    const planStart = new Date(+base + t.offsetDays * DAY);
+    const planEnd = new Date(+planStart + t.durationDays * DAY);
+    return {
+      projectId,
+      wbsCode: generateTaskCode(i + 1),
+      sortOrder: i,
+      name: t.name,
+      isMilestone: !!t.isMilestone,
+      planStart,
+      planEnd,
+      deliverable: t.deliverable ?? null,
+      acceptanceCriteria: t.acceptanceCriteria ?? null,
+      progressPct: 0,
+    };
+  });
+  await prisma.task.createMany({ data: rows });
+  await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: projectId, action: 'CREATE', after: { appliedTemplate: templateId, taskCount: rows.length } });
+  return { created: rows.length, template: template.name };
 }
 
 export async function createTask(projectId: string, input: UpsertTaskInput, actorId: string) {

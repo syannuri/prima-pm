@@ -787,6 +787,41 @@ describe('activation-ready notification (baselines complete → tell ADMIN/PMO)'
   });
 });
 
+describe('WBS templates (list + apply to seed an empty schedule)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Template-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+  });
+
+  it('lists the curated templates', async () => {
+    const res = await request(app).get(api(`/projects/${pid}/schedule/templates`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(res.status).toBe(200);
+    expect(res.body.templates.length).toBeGreaterThanOrEqual(3);
+    expect(res.body.templates.map((t: { id: string }) => t.id)).toContain('cloud-migration');
+  });
+
+  it('applies a template to seed the WBS, then blocks a second apply', async () => {
+    const apply = await request(app).post(api(`/projects/${pid}/schedule/apply-template`)).set(auth(tokens.PROJECT_MANAGER)).send({ templateId: 'server-migration', startDate: '2026-09-01' });
+    expect(apply.status).toBe(201);
+    expect(apply.body.created).toBe(10);
+    const sched = await request(app).get(api(`/projects/${pid}/schedule`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(sched.body.tasks.length).toBe(10);
+    // a second apply is rejected — templates only seed an empty schedule
+    const again = await request(app).post(api(`/projects/${pid}/schedule/apply-template`)).set(auth(tokens.PROJECT_MANAGER)).send({ templateId: 'server-migration' });
+    expect(again.status).toBe(400);
+  });
+
+  it('a VIEWER cannot apply (403); an unknown template is 404', async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Template-RBAC', pmUserId: ownerId });
+    const p2 = created.body.project.id;
+    await request(app).patch(api(`/projects/${p2}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    expect((await request(app).post(api(`/projects/${p2}/schedule/apply-template`)).set(auth(tokens.VIEWER)).send({ templateId: 'generic-it' })).status).toBe(403);
+    expect((await request(app).post(api(`/projects/${p2}/schedule/apply-template`)).set(auth(tokens.ADMIN)).send({ templateId: 'nope' })).status).toBe(404);
+  });
+});
+
 describe('Kick-Off meeting (details + attendees + action items + RBAC)', () => {
   let pid = '';
   beforeAll(async () => {

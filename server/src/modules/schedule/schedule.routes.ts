@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
-import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema } from './schedule.schemas.js';
+import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema, applyTemplateSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
 
@@ -37,6 +37,16 @@ router.get('/evm', canRead, asyncHandler(async (req, res) => {
 }));
 
 // Tasks.
+// Curated WBS templates (list) + apply one to seed an empty schedule.
+router.get('/templates', canRead, asyncHandler(async (_req, res) => {
+  res.json({ templates: svc.getWbsTemplates() });
+}));
+
+router.post('/apply-template', ...canWrite, validateBody(applyTemplateSchema), asyncHandler(async (req, res) => {
+  const result = await svc.applyTemplate(req.params.projectId, req.body.templateId, req.body.startDate ?? new Date(), req.user!.id);
+  res.status(201).json(result);
+}));
+
 router.post('/tasks', ...canWrite, validateBody(upsertTaskSchema), asyncHandler(async (req, res) => {
   const task = await svc.createTask(req.params.projectId, req.body, req.user!.id);
   res.status(201).json({ task });
