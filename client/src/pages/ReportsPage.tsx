@@ -6,6 +6,7 @@ import { Badge, Button, Card, EmptyState, Select, Spinner } from '../components/
 import { formatIdrShort, formatDate } from '../lib/format';
 import DonutChart from '../components/DonutChart';
 import ForecastChart from '../components/ForecastChart';
+import ExecutiveReport from '../components/ExecutiveReport';
 
 type Period = 'weekly' | 'monthly';
 // The Reporting Hub's two-axis model. Cadence spans the full target set; only weekly/monthly
@@ -21,7 +22,7 @@ const CADENCES: { key: Cadence; label: string; ready: boolean }[] = [
   { key: 'yearly', label: 'Yearly', ready: false },
 ];
 const NAV: { key: View; label: string; scope: string; desc: string; ready: boolean }[] = [
-  { key: 'executive', label: 'Executive', scope: 'Portfolio', desc: 'One-screen portfolio health — RAG heatmap across every active project, delivered value and budget performance.', ready: false },
+  { key: 'executive', label: 'Executive', scope: 'Portfolio', desc: 'One-screen portfolio health — RAG heatmap across every active project, delivered value and budget performance.', ready: true },
   { key: 'project', label: 'Project Report', scope: 'Single project', desc: 'Formal status report for one project — schedule, cost, task completion & forecast.', ready: true },
   { key: 'portfolio', label: 'Portfolio', scope: 'Portfolio', desc: 'Roll-up across all projects — aggregate SPI/CPI, budget vs actual, and per-project status table.', ready: false },
   { key: 'analytics', label: 'Analytics', scope: 'Single project', desc: 'Cross-project analytics surfaced centrally — EVM trend, forecast and agile velocity with a project picker.', ready: false },
@@ -53,8 +54,14 @@ export default function ReportsPage() {
   });
   const r = reportQ.data;
 
-  const download = () =>
-    api.download(`/projects/${selected}/report/pdf?period=${period}`, `${r?.project.code ?? 'project'}_${period}_report.pdf`);
+  const download = () => {
+    if (view === 'project') {
+      api.download(`/projects/${selected}/report/pdf?period=${period}`, `${r?.project.code ?? 'project'}_${period}_report.pdf`);
+    } else {
+      api.download('/portfolio/export/pdf', 'portfolio_report.pdf'); // Executive/Portfolio share the portfolio export.
+    }
+  };
+  const canDownload = view === 'project' ? !!selected && !!r : view === 'executive';
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -117,7 +124,7 @@ export default function ReportsPage() {
                 </div>
               </div>
             </div>
-            <Button variant="secondary" disabled={view !== 'project' || !selected || !r} onClick={download}>⬇ Download PDF</Button>
+            <Button variant="secondary" disabled={!canDownload} onClick={download}>⬇ Download PDF</Button>
           </Card>
 
           {/* Project Report — the built view */}
@@ -131,8 +138,11 @@ export default function ReportsPage() {
             </>
           )}
 
+          {/* Executive — portfolio health overview (built). */}
+          {view === 'executive' && <ExecutiveReport />}
+
           {/* Not-yet-built views — describe the target so the IA is legible. */}
-          {view !== 'project' && <ComingSoon nav={activeNav} />}
+          {(view === 'portfolio' || view === 'analytics') && <ComingSoon nav={activeNav} />}
         </div>
       </div>
     </div>
