@@ -30,7 +30,8 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
     queryFn: () => api.get<{ tree: unknown[]; baselinedAt: string | null }>(`/projects/${projectId}/schedule/gantt`),
   });
   const locked = !!data?.project?.baselineLockedAt;
-  const needScheduleBaseline = (scheduleQ.data?.tree?.length ?? 0) > 0 && !scheduleQ.data?.baselinedAt;
+  const hasWbs = (scheduleQ.data?.tree?.length ?? 0) > 0;
+  const needScheduleBaseline = hasWbs && !scheduleQ.data?.baselinedAt;
   const canManage = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
 
   const toggle = useMutation({
@@ -38,7 +39,12 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
     onSuccess: (_d, body) => {
       qc.invalidateQueries({ queryKey: ['project', projectId] });
       qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
-      toast.success(body.locked ? 'Baseline locked' : 'Baseline unlocked');
+      // On lock, confirm the baseline is now complete (both baselines for a WBS project).
+      toast.success(
+        body.locked
+          ? (hasWbs ? 'Baseline locked ✓ (2 of 2) — cost + schedule baseline set. Ready to activate.' : 'Baseline locked ✓ — ready to activate.')
+          : 'Baseline unlocked',
+      );
       setUnlockOpen(false);
       setReason('');
     },

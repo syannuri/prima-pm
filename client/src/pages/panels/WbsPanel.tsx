@@ -263,7 +263,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   });
   const baseline = useMutation({
     mutationFn: () => api.post(`${base}/baseline`),
-    onSuccess: () => { invalidate(); toast.success('Schedule baseline captured'); },
+    // First capture → tell the PM the remaining baseline (lock cost). Re-capture → plain confirm.
+    onSuccess: () => {
+      const first = !baselinedAt;
+      invalidate();
+      toast.success(first
+        ? 'Schedule baseline set ✓ (1 of 2) — next: lock the cost baseline on the Cost tab to finish.'
+        : 'Schedule baseline re-captured ✓');
+    },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to set baseline'),
   });
   const del = useMutation({
