@@ -58,8 +58,10 @@ test.describe('Project workspace', () => {
   });
 
   test('exposes export buttons on a chartered project', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /Excel/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /PDF/ })).toBeVisible();
+    // Excel/PDF export now live under the header's "⋯ More" overflow menu.
+    await page.getByRole('button', { name: /More/ }).click();
+    await expect(page.getByRole('menuitem', { name: /Excel/ })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /PDF/ })).toBeVisible();
   });
 
   test('audit tab lists committed history', async ({ page }) => {
