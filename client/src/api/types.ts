@@ -463,6 +463,27 @@ export interface ProjectDependency {
   updatedAt: string;
 }
 
+// --- Critical Path Method (CPM) ---
+export interface CpmTaskRow {
+  id: string;
+  wbsCode: string;
+  name: string;
+  planStart: string;
+  planEnd: string;
+  duration: number;
+  es: number; ef: number; ls: number; lf: number;
+  totalFloat: number;
+  critical: boolean;
+}
+export interface CpmResult {
+  hasNetwork: boolean;
+  cyclic: boolean;
+  projectDuration: number;
+  criticalCount: number;
+  taskCount: number;
+  tasks: CpmTaskRow[];
+}
+
 export interface Task {
   id: string;
   parentTaskId: string | null;

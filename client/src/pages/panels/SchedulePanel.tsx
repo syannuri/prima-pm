@@ -4,6 +4,7 @@ import { Badge, Card, SectionTitle } from '../../components/ui';
 import { formatNum } from '../../lib/format';
 import EvmHealth from '../../components/EvmHealth';
 import WbsPanel from './WbsPanel';
+import CriticalPathPanel from './CriticalPathPanel';
 
 export default function SchedulePanel({ projectId }: { projectId: string }) {
   const base = `/projects/${projectId}/schedule`;
@@ -13,6 +14,7 @@ export default function SchedulePanel({ projectId }: { projectId: string }) {
     <div className="space-y-5">
       <EvmHealth base={base} countLabel="leaf tasks" noBaselineHint="No schedule baseline set — capture one in the WBS section below to track finish variance." />
       <WbsPanel projectId={projectId} />
+      <CriticalPathPanel projectId={projectId} />
       <ManpowerSync rows={syncQ.data?.rows ?? []} />
     </div>
   );

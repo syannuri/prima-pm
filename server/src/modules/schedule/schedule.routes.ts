@@ -24,6 +24,11 @@ router.get('/gantt', canRead, asyncHandler(async (req, res) => {
   res.json(await svc.getGantt(req.params.projectId));
 }));
 
+// Critical Path Method: per-task early/late dates, total float & the critical path.
+router.get('/cpm', canRead, asyncHandler(async (req, res) => {
+  res.json(await svc.getCpm(req.params.projectId));
+}));
+
 // Manpower <-> schedule reconciliation.
 router.get('/manpower-sync', canRead, asyncHandler(async (req, res) => {
   res.json({ rows: await svc.getManpowerSync(req.params.projectId) });

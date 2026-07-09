@@ -1169,3 +1169,39 @@ describe('RAID — assumptions & dependencies registers', () => {
     expect((await request(app).delete(api(`/projects/${pid}/raid/dependencies/${d.body.dependency.id}`)).set(auth(tokens.PROJECT_MANAGER))).status).toBe(204);
   });
 });
+
+describe('critical path (CPM endpoint over the task network)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'CPM-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' }); // schedule tasks need a chartered project
+  });
+
+  it('reports no network before dependencies exist', async () => {
+    const cpm = await request(app).get(api(`/projects/${pid}/schedule/cpm`)).set(auth(tokens.ADMIN));
+    expect(cpm.status).toBe(200);
+    expect(cpm.body.hasNetwork).toBe(false);
+  });
+
+  it('computes the critical path over a linear chain A→B→C', async () => {
+    const mk = async (name: string, start: string, end: string) => {
+      const res = await request(app).post(api(`/projects/${pid}/schedule/tasks`)).set(auth(tokens.ADMIN)).send({ name, planStart: start, planEnd: end });
+      expect(res.status).toBe(201);
+      return res.body.task as { id: string };
+    };
+    const a = await mk('Task A', '2026-08-01', '2026-08-05'); // 4d
+    const b = await mk('Task B', '2026-08-05', '2026-08-10'); // 5d
+    const c = await mk('Task C', '2026-08-10', '2026-08-12'); // 2d
+    // successor gains a predecessor: A→B, B→C (finish-to-start)
+    expect((await request(app).post(api(`/projects/${pid}/schedule/tasks/${b.id}/dependencies`)).set(auth(tokens.ADMIN)).send({ predecessorId: a.id, type: 'FS' })).status).toBe(201);
+    expect((await request(app).post(api(`/projects/${pid}/schedule/tasks/${c.id}/dependencies`)).set(auth(tokens.ADMIN)).send({ predecessorId: b.id, type: 'FS' })).status).toBe(201);
+
+    const cpm = await request(app).get(api(`/projects/${pid}/schedule/cpm`)).set(auth(tokens.ADMIN));
+    expect(cpm.body.hasNetwork).toBe(true);
+    expect(cpm.body.cyclic).toBe(false);
+    expect(cpm.body.projectDuration).toBe(11); // 4 + 5 + 2
+    expect(cpm.body.criticalCount).toBe(3); // a linear chain is entirely critical
+    expect(cpm.body.tasks.every((t: { critical: boolean }) => t.critical)).toBe(true);
+  });
+});

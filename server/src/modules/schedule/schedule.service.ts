@@ -13,7 +13,9 @@ import {
   hasDependencyCycle,
   reconcileManpower,
   isCostLoaded,
+  computeCpm,
   type DependencyEdge,
+  type CpmDepType,
 } from './schedule.helpers.js';
 import type { DependencyInput, UpsertTaskInput } from './schedule.schemas.js';
 
@@ -102,6 +104,36 @@ export async function getGantt(projectId: string) {
   }));
 
   return { tree: buildGanttTree(enriched), dependencies: deps, baselinedAt: project?.scheduleBaselinedAt ?? null };
+}
+
+// Critical Path Method over the leaf tasks (activities) and their FS/SS/FF/SF
+// dependencies: early/late start & finish, total float, and the critical path.
+export async function getCpm(projectId: string) {
+  const [tasks, deps] = await Promise.all([
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, wbsCode: true, name: true, planStart: true, planEnd: true } }),
+    prisma.taskDependency.findMany({ where: { predecessor: { projectId } }, select: { predecessorId: true, successorId: true, type: true, lagDays: true } }),
+  ]);
+  // Activities = leaf tasks (a task that is no other task's parent).
+  const parentIds = new Set(tasks.map((t) => t.parentTaskId).filter(Boolean) as string[]);
+  const leaves = tasks.filter((t) => !parentIds.has(t.id));
+  const cpm = computeCpm(
+    leaves.map((t) => ({ id: t.id, duration: durationDays(t.planStart, t.planEnd) })),
+    deps.map((d) => ({ predecessorId: d.predecessorId, successorId: d.successorId, type: d.type as CpmDepType, lagDays: d.lagDays })),
+  );
+  const rows = leaves
+    .map((t) => {
+      const r = cpm.tasks[t.id] ?? { es: 0, ef: 0, ls: 0, lf: 0, totalFloat: 0, critical: false };
+      return { id: t.id, wbsCode: t.wbsCode, name: t.name, planStart: t.planStart, planEnd: t.planEnd, duration: durationDays(t.planStart, t.planEnd), ...r };
+    })
+    .sort((a, b) => a.es - b.es || a.wbsCode.localeCompare(b.wbsCode));
+  return {
+    hasNetwork: cpm.hasNetwork,
+    cyclic: cpm.cyclic,
+    projectDuration: cpm.projectDuration,
+    criticalCount: cpm.criticalTaskIds.length,
+    taskCount: leaves.length,
+    tasks: rows,
+  };
 }
 
 // Available WBS templates (list only — see schedule.templates.ts for the task bodies).

@@ -105,6 +105,103 @@ export function hasDependencyCycle(edges: DependencyEdge[]): boolean {
   return false;
 }
 
+// --- Critical Path Method (CPM) ---
+// Forward/backward pass over the task network to derive early/late start & finish,
+// total float, and the critical path (float = 0). Pure & unit-testable; works in
+// integer day-offsets from t=0 (durations + dependency logic only, calendar-independent).
+
+export type CpmDepType = 'FS' | 'SS' | 'FF' | 'SF';
+export interface CpmTaskInput { id: string; duration: number }
+export interface CpmEdgeInput { predecessorId: string; successorId: string; type: CpmDepType; lagDays: number }
+export interface CpmTaskResult { es: number; ef: number; ls: number; lf: number; totalFloat: number; critical: boolean }
+export interface CpmResult {
+  hasNetwork: boolean; // any dependency edge among the given tasks
+  cyclic: boolean;
+  projectDuration: number; // longest path length in days
+  tasks: Record<string, CpmTaskResult>;
+  criticalTaskIds: string[]; // float-0 tasks, in topological order
+}
+
+export function computeCpm(tasks: CpmTaskInput[], edges: CpmEdgeInput[]): CpmResult {
+  const ids = new Set(tasks.map((t) => t.id));
+  // Only edges whose BOTH ends are in the task set (e.g. leaf-to-leaf) drive CPM.
+  const es_edges = edges.filter((e) => ids.has(e.predecessorId) && ids.has(e.successorId));
+  const dur = new Map(tasks.map((t) => [t.id, Math.max(0, t.duration)]));
+  const empty = (): CpmResult => ({ hasNetwork: false, cyclic: false, projectDuration: 0, tasks: {}, criticalTaskIds: [] });
+  if (tasks.length === 0) return empty();
+  if (es_edges.length === 0) return { ...empty(), hasNetwork: false };
+  if (hasDependencyCycle(es_edges.map((e) => ({ from: e.predecessorId, to: e.successorId })))) {
+    return { hasNetwork: true, cyclic: true, projectDuration: 0, tasks: {}, criticalTaskIds: [] };
+  }
+
+  // Adjacency + topological order (Kahn) over the task set.
+  const outAdj = new Map<string, CpmEdgeInput[]>();
+  const inAdj = new Map<string, CpmEdgeInput[]>();
+  const indeg = new Map<string, number>();
+  for (const t of tasks) { outAdj.set(t.id, []); inAdj.set(t.id, []); indeg.set(t.id, 0); }
+  for (const e of es_edges) {
+    outAdj.get(e.predecessorId)!.push(e);
+    inAdj.get(e.successorId)!.push(e);
+    indeg.set(e.successorId, (indeg.get(e.successorId) ?? 0) + 1);
+  }
+  const topo: string[] = [];
+  const queue = tasks.filter((t) => (indeg.get(t.id) ?? 0) === 0).map((t) => t.id);
+  while (queue.length) {
+    const n = queue.shift()!;
+    topo.push(n);
+    for (const e of outAdj.get(n) ?? []) {
+      indeg.set(e.successorId, (indeg.get(e.successorId) ?? 0) - 1);
+      if ((indeg.get(e.successorId) ?? 0) === 0) queue.push(e.successorId);
+    }
+  }
+
+  const es = new Map<string, number>(tasks.map((t) => [t.id, 0]));
+  const D = (id: string) => dur.get(id) ?? 0;
+  // Forward pass — earliest start/finish.
+  for (const id of topo) {
+    let start = 0;
+    for (const e of inAdj.get(id) ?? []) {
+      const pES = es.get(e.predecessorId)!, pEF = pES + D(e.predecessorId);
+      const cand =
+        e.type === 'FS' ? pEF + e.lagDays :
+        e.type === 'SS' ? pES + e.lagDays :
+        e.type === 'FF' ? pEF + e.lagDays - D(id) :
+        /* SF */ pES + e.lagDays - D(id);
+      if (cand > start) start = cand;
+    }
+    es.set(id, Math.max(0, start));
+  }
+  const ef = new Map<string, number>(topo.map((id) => [id, es.get(id)! + D(id)]));
+  const projectDuration = Math.max(0, ...tasks.map((t) => ef.get(t.id) ?? 0));
+
+  // Backward pass — latest finish/start.
+  const lf = new Map<string, number>(tasks.map((t) => [t.id, projectDuration]));
+  for (const id of [...topo].reverse()) {
+    let finish = projectDuration;
+    for (const e of outAdj.get(id) ?? []) {
+      const sLF = lf.get(e.successorId)!, sLS = sLF - D(e.successorId);
+      const cand =
+        e.type === 'FS' ? sLS - e.lagDays :
+        e.type === 'SS' ? sLS - e.lagDays + D(id) :
+        e.type === 'FF' ? sLF - e.lagDays :
+        /* SF */ sLF - e.lagDays + D(id);
+      if (cand < finish) finish = cand;
+    }
+    lf.set(id, finish);
+  }
+
+  const result: Record<string, CpmTaskResult> = {};
+  const criticalTaskIds: string[] = [];
+  for (const id of topo) {
+    const _es = es.get(id)!, _ef = ef.get(id)!, _lf = lf.get(id)!, _ls = _lf - D(id);
+    const totalFloat = _ls - _es;
+    const critical = totalFloat <= 0;
+    result[id] = { es: _es, ef: _ef, ls: _ls, lf: _lf, totalFloat, critical };
+    if (critical) criticalTaskIds.push(id);
+  }
+  return { hasNetwork: true, cyclic: false, projectDuration, tasks: result, criticalTaskIds };
+}
+
 // --- Manpower <-> Schedule reconciliation ---
 
 export interface ManpowerSyncInput {
