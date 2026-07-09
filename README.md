@@ -32,7 +32,8 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **Audit log** — immutable, role-scoped trail of who changed what and when.
 - **Notifications** — a personal **inbox** (assigned as PM, change-request submitted / decided) plus on-demand alerts (overdue tasks, high risks, budget overrun) in a portfolio bell.
 - **Attachments** — upload/download files against charter, risks or the project. Uploads are restricted to a **safe type whitelist** (PDF, XLSX, DOCX, PNG, JPG), stored under server-generated filenames with a 10 MB cap.
-- **Exports** — per-project **PDF** (PDFKit) and **Excel** (ExcelJS) reports incl. cost, risk, schedule, EVM and the Issue Log — pure JS, no headless browser.
+- **Reporting Hub** — a dedicated **`/reports`** page that separates *working dashboards* (in-context, interactive) from *formal reports* (point-in-time, exportable), on a **View × Cadence** model: an **Executive** one-screen portfolio health (KPI band, RAG schedule-health distribution, worst-first project heatmap), the formal **Project Report** (schedule / cost / task completion / forecast), and **Analytics** (EVM-trend + forecast for any project) — with weekly/monthly cadence.
+- **Exports** — per-project **and portfolio** **PDF** (PDFKit) and **Excel** (ExcelJS) reports incl. cost, risk, schedule, EVM and the Issue Log — pure JS, no headless browser. The PDFs are **corporate-styled**: a navy cover band + RAG status pill, an auto-written **Executive Summary (BLUF)**, a KPI band, and a per-page CONFIDENTIAL footer.
 - **Resource master pool** — named/generic resources with rate cards (linkable to login accounts); cross-project **capacity & over-allocation**, and **earned vs consumed man-days + efficiency** fed from timesheets.
 - **Admin** — user management (create / role / reset password / activate — with **live green/red field validation**), project (PM) reassignment, rate cards. All accounts are **admin-provisioned** — there is no open self-registration.
 - **Public landing page** — a bilingual (EN/ID), **aurora-dark** homepage greets guests at `/` and introduces Prismatix before sign-in — offered as a contribution to the global project-management community. Every call-to-action leads to the login.
@@ -54,6 +55,10 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 | **Forecast — EAC scenarios, schedule/margin forecast & S-curve** | **Timesheet — plan vs earned vs consumed man-days & efficiency** |
 | ![Forecast at completion with best/likely/worst EAC, completion metrics and a cost S-curve](docs/screenshots/forecast.png) | ![Timesheet effort table with plan, earned, consumed man-days and labour efficiency](docs/screenshots/timesheet.png) |
 
+**Reporting Hub** — the centralized `/reports` page: an Executive one-screen portfolio health view (KPI band, RAG schedule-health distribution, worst-first project heatmap), plus formal Project Report and Analytics views, with corporate-styled PDF/Excel export.
+
+![Reporting Hub — Executive portfolio-health view with a KPI band, RAG distribution and a worst-first project heatmap](docs/screenshots/reports.png)
+
 **Guided next steps** — a contextual card on every project that tells the PM what to do next for the current lifecycle stage (charter → baseline → activate → track → close), jumping straight to the right tab.
 
 ![Guided next-steps card showing record-acceptance, capture-lessons and close-project cues for a project in execution](docs/screenshots/next-steps.png)
@@ -72,7 +77,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 ## 🏛️ Architecture
 
 - **Pure calc core** (`server/src/calc/*`): money, cost rollup, risk EMV, EVM — all pure & unit-tested. Money is `Decimal`.
-- **Modular API** under `/api/v1`: `auth`, `users`, `projects`, `charter`, `cost`, `ratecard`, `risk`, `issue`, `schedule`, `agile`, `portfolio`, `resource`, `attachment`, `audit`, `notification`, `export`.
+- **Modular API** under `/api/v1`: `auth`, `users`, `projects`, `charter`, `cost`, `ratecard`, `risk`, `issue`, `schedule`, `agile`, `timesheet`, `forecast`, `portfolio`, `evm`, `report`, `closeout`, `resource`, `attachment`, `audit`, `notification`, `export`.
 - **RBAC middleware**: role guards + project-ownership checks; functional roles (Finance/Risk) bypass ownership where appropriate.
 - **Single-origin in production**: one Node process serves the **API and the built React app** from the same port, so the client's relative `/api/v1` calls need no proxy or CORS.
 
