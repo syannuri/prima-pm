@@ -7,6 +7,7 @@ import { formatIdrShort, formatDate } from '../lib/format';
 import DonutChart from '../components/DonutChart';
 import ForecastChart from '../components/ForecastChart';
 import ExecutiveReport from '../components/ExecutiveReport';
+import PortfolioReport from '../components/PortfolioReport';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ForecastPanel from './panels/ForecastPanel';
 import AgileReports from './panels/AgileReports';
@@ -26,7 +27,7 @@ const CADENCES: { key: Cadence; label: string; ready: boolean }[] = [
 const NAV: { key: View; label: string; scope: string; desc: string; ready: boolean }[] = [
   { key: 'executive', label: 'Executive', scope: 'Portfolio', desc: 'One-screen portfolio health — RAG heatmap across every active project, delivered value and budget performance.', ready: true },
   { key: 'project', label: 'Project Report', scope: 'Single project', desc: 'Formal status report for one project — schedule, cost, task completion & forecast.', ready: true },
-  { key: 'portfolio', label: 'Portfolio', scope: 'Portfolio', desc: 'Roll-up across all projects — aggregate SPI/CPI, budget vs actual, and per-project status table.', ready: false },
+  { key: 'portfolio', label: 'Portfolio', scope: 'Portfolio', desc: 'Financial roll-up across all projects — budget vs actual, cost variance and CPI per project.', ready: true },
   { key: 'analytics', label: 'Analytics', scope: 'Single project', desc: 'Deep analytics surfaced centrally — EVM trend and forecast for any project, without leaving the reporting hub.', ready: true },
 ];
 
@@ -64,7 +65,7 @@ export default function ReportsPage() {
     }
   };
   const downloadExcel = () => api.download('/portfolio/export/excel', 'portfolio_report.xlsx'); // Executive portfolio export.
-  const canDownload = view === 'project' ? !!selected && !!r : view === 'executive';
+  const canDownload = view === 'project' ? !!selected && !!r : view === 'executive' || view === 'portfolio';
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -129,7 +130,7 @@ export default function ReportsPage() {
             </div>
             <div className="flex gap-2">
               <Button variant="secondary" disabled={!canDownload} onClick={download}>⬇ PDF</Button>
-              {view === 'executive' && <Button variant="secondary" disabled={!canDownload} onClick={downloadExcel}>⬇ Excel</Button>}
+              {(view === 'executive' || view === 'portfolio') && <Button variant="secondary" disabled={!canDownload} onClick={downloadExcel}>⬇ Excel</Button>}
             </div>
           </Card>
 
@@ -154,7 +155,7 @@ export default function ReportsPage() {
           )}
 
           {/* Not-yet-built views — describe the target so the IA is legible. */}
-          {view === 'portfolio' && <ComingSoon nav={activeNav} />}
+          {view === 'portfolio' && <PortfolioReport />}
         </div>
       </div>
     </div>
@@ -194,20 +195,6 @@ function AgileLens({ projectId }: { projectId: string }) {
   if (q.isLoading) return <Card><div className="flex justify-center py-10"><Spinner /></div></Card>;
   const b = q.data;
   return <AgileReports sprints={b?.sprints ?? []} items={b?.items ?? []} snapshots={b?.snapshots ?? []} />;
-}
-
-function ComingSoon({ nav }: { nav: (typeof NAV)[number] }) {
-  return (
-    <Card className="flex flex-col items-center gap-3 py-14 text-center">
-      <div className="grid h-12 w-12 place-items-center rounded-xl bg-brand-50 text-2xl dark:bg-brand-900/30">📊</div>
-      <div>
-        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">{nav.label} report</h2>
-        <Badge color="slate">Coming soon</Badge>
-      </div>
-      <p className="max-w-md text-sm text-slate-500 dark:text-slate-400">{nav.desc}</p>
-      <p className="text-xs text-slate-400">Scope: {nav.scope} · part of the centralized Reporting Hub</p>
-    </Card>
-  );
 }
 
 function ReportBody({ r }: { r: ProjectReportData }) {
