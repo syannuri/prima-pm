@@ -1129,3 +1129,43 @@ describe('procurement register (PMBOK Procurement KA)', () => {
     expect((await request(app).delete(api(`/projects/${pid}/procurements/${id}`)).set(auth(tokens.PROJECT_MANAGER))).status).toBe(204);
   });
 });
+
+describe('RAID — assumptions & dependencies registers', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'RAID-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+  });
+
+  it('owning PM logs an assumption (ASM code) and a dependency (DEP code); FINANCE reads both', async () => {
+    const a = await request(app).post(api(`/projects/${pid}/raid/assumptions`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ statement: 'Vendor delivers the SIEM by Q3', impact: 'HIGH', status: 'OPEN', ownerUserId: ownerId });
+    expect(a.status).toBe(201);
+    expect(a.body.assumption.code).toBe('ASM-001');
+    expect(a.body.assumption.owner.name).toBe('Owner PM'); // relation resolved
+
+    const d = await request(app).post(api(`/projects/${pid}/raid/dependencies`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ description: 'Network team must open firewall ports', direction: 'INBOUND', counterparty: 'Network Ops', status: 'AT_RISK', impact: 'CRITICAL' });
+    expect(d.status).toBe(201);
+    expect(d.body.dependency.code).toBe('DEP-001');
+
+    const al = await request(app).get(api(`/projects/${pid}/raid/assumptions`)).set(auth(tokens.FINANCE));
+    expect(al.status).toBe(200);
+    expect(al.body.assumptions).toHaveLength(1);
+    const dl = await request(app).get(api(`/projects/${pid}/raid/dependencies`)).set(auth(tokens.FINANCE));
+    expect(dl.body.dependencies[0].status).toBe('AT_RISK');
+  });
+
+  it('VIEWER and a non-owner PM cannot write either register (403)', async () => {
+    expect((await request(app).post(api(`/projects/${pid}/raid/assumptions`)).set(auth(tokens.VIEWER)).send({ statement: 'x' })).status).toBe(403);
+    expect((await request(app).post(api(`/projects/${pid}/raid/dependencies`)).set(auth(tokens.PM2)).send({ description: 'x' })).status).toBe(403);
+  });
+
+  it('owning PM updates an assumption status and deletes a dependency', async () => {
+    const a = await request(app).post(api(`/projects/${pid}/raid/assumptions`)).set(auth(tokens.PROJECT_MANAGER)).send({ statement: 'Temp assumption' });
+    const upd = await request(app).put(api(`/projects/${pid}/raid/assumptions/${a.body.assumption.id}`)).set(auth(tokens.PROJECT_MANAGER)).send({ statement: 'Temp assumption', status: 'VALIDATED' });
+    expect(upd.body.assumption.status).toBe('VALIDATED');
+    const d = await request(app).post(api(`/projects/${pid}/raid/dependencies`)).set(auth(tokens.PROJECT_MANAGER)).send({ description: 'Temp dep' });
+    expect((await request(app).delete(api(`/projects/${pid}/raid/dependencies/${d.body.dependency.id}`)).set(auth(tokens.PROJECT_MANAGER))).status).toBe(204);
+  });
+});

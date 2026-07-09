@@ -429,6 +429,40 @@ export interface Procurement {
   updatedAt: string;
 }
 
+// --- RAID: Assumptions & Dependencies (completes RAID with Risk + Issue) ---
+export type AssumptionStatus = 'OPEN' | 'VALIDATED' | 'INVALIDATED';
+export interface Assumption {
+  id: string;
+  code: string;
+  statement: string;
+  category: string | null;
+  status: AssumptionStatus;
+  impact: IssueImpact;
+  ownerUserId: string | null;
+  owner?: { id: string; name: string } | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DependencyDirection = 'INBOUND' | 'OUTBOUND';
+export type DependencyStatus = 'PENDING' | 'ON_TRACK' | 'AT_RISK' | 'RESOLVED';
+export interface ProjectDependency {
+  id: string;
+  code: string;
+  description: string;
+  direction: DependencyDirection;
+  counterparty: string | null;
+  dueDate: string | null;
+  status: DependencyStatus;
+  impact: IssueImpact;
+  ownerUserId: string | null;
+  owner?: { id: string; name: string } | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Task {
   id: string;
   parentTaskId: string | null;

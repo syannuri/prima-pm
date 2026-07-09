@@ -179,6 +179,8 @@ model User {
   charters          ProjectCharter[] @relation("CharterPM")
   ownedRisks        Risk[]          @relation("RiskOwner")
   ownedIssues       Issue[]         @relation("IssueOwner")
+  ownedAssumptions  Assumption[]        @relation("AssumptionOwner")
+  ownedDependencies ProjectDependency[] @relation("DependencyOwner")
   assignedTasks     Task[]          @relation("TaskPIC")
   manpowerItems     CostItemDirect[] @relation("ManpowerResource")
   auditLogs         AuditLog[]
@@ -260,6 +262,8 @@ model Project {
   acceptances      AcceptanceSignoff[]
   stakeholders     Stakeholder[]
   procurements     Procurement[]
+  assumptions      Assumption[]
+  dependencies     ProjectDependency[]
   evmSnapshots     EvmSnapshot[]
   uatTestCases     UatTestCase[]
   kickoffMeeting   KickoffMeeting?
@@ -657,6 +661,77 @@ model Procurement {
   notes         String?           @db.Text
 
   createdById String? // FK-less (kept light)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, code])
+  @@index([projectId, status])
+}
+
+// =====================================================================
+// RAID — Assumptions & Dependencies (completes RAID with Risk + Issue)
+// =====================================================================
+
+enum AssumptionStatus {
+  OPEN
+  VALIDATED
+  INVALIDATED
+}
+
+// Assumption register — things taken as true for planning; each gets validated
+// or invalidated over time (an invalidated assumption often becomes a risk/issue).
+model Assumption {
+  id          String           @id @default(uuid())
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code        String
+  statement   String           @db.Text
+  category    String?
+  status      AssumptionStatus @default(OPEN)
+  impact      IssueImpact      @default(MEDIUM) // impact if it proves false
+  ownerUserId String?
+  owner       User?            @relation("AssumptionOwner", fields: [ownerUserId], references: [id])
+  notes       String?          @db.Text
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, code])
+  @@index([projectId, status])
+}
+
+// Direction of a cross-team / external dependency.
+enum DependencyDirection {
+  INBOUND // we need something from someone else
+  OUTBOUND // someone else needs something from us
+}
+
+enum DependencyStatus {
+  PENDING
+  ON_TRACK
+  AT_RISK
+  RESOLVED
+}
+
+// Project-level dependency register (RAID "D") — external/cross-team dependencies,
+// distinct from TaskDependency (the intra-schedule FS/SS/FF/SF links used by CPM).
+model ProjectDependency {
+  id           String              @id @default(uuid())
+  projectId    String
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code         String
+  description  String              @db.Text
+  direction    DependencyDirection @default(INBOUND)
+  counterparty String? // the other team / project / vendor
+  dueDate      DateTime?
+  status       DependencyStatus    @default(PENDING)
+  impact       IssueImpact         @default(MEDIUM) // criticality
+  ownerUserId  String?
+  owner        User?               @relation("DependencyOwner", fields: [ownerUserId], references: [id])
+  notes        String?             @db.Text
+
+  createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
