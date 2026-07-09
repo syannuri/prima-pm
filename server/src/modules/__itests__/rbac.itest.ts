@@ -1009,7 +1009,8 @@ describe('project status report (weekly/monthly, PM + ADMIN/PMO)', () => {
   });
 
   it('rejects a bad period (400) and denies FINANCE / a non-owner PM (403)', async () => {
-    expect((await request(app).get(api(`/projects/${pid}/report?period=daily`)).set(auth(tokens.ADMIN))).status).toBe(400);
+    // daily/weekly/monthly/yearly are all valid now; only an off-enum value is rejected.
+    expect((await request(app).get(api(`/projects/${pid}/report?period=hourly`)).set(auth(tokens.ADMIN))).status).toBe(400);
     expect((await request(app).get(api(`/projects/${pid}/report`)).set(auth(tokens.FINANCE))).status).toBe(403);
     expect((await request(app).get(api(`/projects/${pid}/report`)).set(auth(tokens.PM2))).status).toBe(403);
   });
