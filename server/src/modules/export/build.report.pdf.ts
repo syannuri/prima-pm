@@ -85,7 +85,7 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
   doc.save();
   doc.rect(0, 0, pageW, bandH).fill('#0f172a');
   doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(19).text('PRISMATIX', left, 22, { lineBreak: false, characterSpacing: 1 });
-  doc.fillColor('#94a3b8').font('Helvetica').fontSize(9).text(`PROJECT STATUS REPORT   ·   ${r.period === 'weekly' ? 'WEEKLY' : 'MONTHLY'}`, left, 50, { lineBreak: false, characterSpacing: 0.5 });
+  doc.fillColor('#94a3b8').font('Helvetica').fontSize(9).text(`PROJECT STATUS REPORT   ·   ${r.period.toUpperCase()}`, left, 50, { lineBreak: false, characterSpacing: 0.5 });
   doc.fillColor('#64748b').fontSize(8).text(r.periodLabel, left, 64, { lineBreak: false });
   // RAG status pill, top-right.
   const pillW = 118, pillH = 28, pillX = right - pillW, pillY = 26;

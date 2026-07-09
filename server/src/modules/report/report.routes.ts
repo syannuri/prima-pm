@@ -9,7 +9,7 @@ const router = Router({ mergeParams: true });
 
 // Reporting period + as-of date. period drives the S-curve granularity + the period label.
 const reportQuerySchema = z.object({
-  period: z.enum(['weekly', 'monthly']).default('weekly'),
+  period: z.enum(['daily', 'weekly', 'monthly', 'yearly']).default('weekly'),
   asOf: z.coerce.date().optional(),
 });
 

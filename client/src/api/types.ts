@@ -468,7 +468,7 @@ export interface Forecast {
 // S-curve granularity + the period label. Reuses the Forecast payload for the chart + EAC.
 export interface ProjectReportData {
   project: { code: string; name: string; pmName: string; status: string; deliveryApproach: string };
-  period: 'weekly' | 'monthly';
+  period: 'daily' | 'weekly' | 'monthly' | 'yearly';
   asOf: string;
   periodLabel: string;
   health: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';

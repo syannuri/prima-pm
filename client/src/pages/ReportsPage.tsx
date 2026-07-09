@@ -10,18 +10,17 @@ import ExecutiveReport from '../components/ExecutiveReport';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ForecastPanel from './panels/ForecastPanel';
 
-type Period = 'weekly' | 'monthly';
-// The Reporting Hub's two-axis model. Cadence spans the full target set; only weekly/monthly
-// are wired to the report engine today — daily & yearly are surfaced (disabled) so the IA reads
-// complete. View = the centralized sub-nav; only 'project' is built in this POC.
+// The Reporting Hub's two-axis model. All four cadences are now wired to the report engine
+// (they drive the S-curve granularity + the period label). View = the centralized sub-nav.
 type Cadence = 'daily' | 'weekly' | 'monthly' | 'yearly';
+type Period = Cadence;
 type View = 'executive' | 'project' | 'portfolio' | 'analytics';
 
 const CADENCES: { key: Cadence; label: string; ready: boolean }[] = [
-  { key: 'daily', label: 'Daily', ready: false },
+  { key: 'daily', label: 'Daily', ready: true },
   { key: 'weekly', label: 'Weekly', ready: true },
   { key: 'monthly', label: 'Monthly', ready: true },
-  { key: 'yearly', label: 'Yearly', ready: false },
+  { key: 'yearly', label: 'Yearly', ready: true },
 ];
 const NAV: { key: View; label: string; scope: string; desc: string; ready: boolean }[] = [
   { key: 'executive', label: 'Executive', scope: 'Portfolio', desc: 'One-screen portfolio health — RAG heatmap across every active project, delivered value and budget performance.', ready: true },
@@ -41,7 +40,7 @@ export default function ReportsPage() {
   const [view, setView] = useState<View>('project');
   const [projectId, setProjectId] = useState('');
   const [cadence, setCadence] = useState<Cadence>('weekly');
-  const period: Period = cadence === 'monthly' ? 'monthly' : 'weekly'; // engine only knows weekly/monthly today
+  const period: Period = cadence; // cadence maps 1:1 to the report engine's period
 
   const projectsQ = useQuery({ queryKey: ['projects'], queryFn: () => api.get<{ projects: Project[] }>('/projects') });
   // Only reportable projects (a report needs a committed charter / real state); exclude drafts.
@@ -214,7 +213,7 @@ function ReportBody({ r }: { r: ProjectReportData }) {
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">Project Status Report · {r.period === 'weekly' ? 'Weekly' : 'Monthly'}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">Project Status Report · {r.period.charAt(0).toUpperCase() + r.period.slice(1)}</div>
             <h2 className="mt-0.5 text-xl font-bold text-slate-800 dark:text-slate-100">{r.project.code} — {r.project.name}</h2>
             <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               PM {r.project.pmName} · {r.periodLabel} · as of {formatDate(r.asOf)}

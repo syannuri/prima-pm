@@ -7,31 +7,45 @@ import { getProjectForecast } from '../forecast/forecast.service.js';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export type ReportPeriod = 'weekly' | 'monthly';
+export type ReportPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type ProjectReport = Awaited<ReturnType<typeof getProjectReport>>;
 
-// Sample dates at weekly (Monday) or monthly (1st) steps across [start, end], always
-// including the key marks (today, planned finish, forecast finish) so the S-curve has
-// points exactly where the plan/forecast bends.
+// Cap on S-curve sample points: each sampled date is one getProjectEvm() call (a DB round-trip),
+// so daily/weekly cadence over a long window would otherwise fan out into hundreds of queries.
+// We keep the mandatory marks (start, end, today, finishes) and evenly thin the stepped points.
+const MAX_SAMPLE_POINTS = 53;
+
+// Sample dates at daily / weekly (Monday) / monthly (1st) / yearly (Jan 1) steps across
+// [start, end], always including the key marks (today, planned finish, forecast finish) so the
+// S-curve has points exactly where the plan/forecast bends.
 function sampleDates(start: number, end: number, period: ReportPeriod, extra: number[]): number[] {
-  const marks = new Set<number>(extra);
+  const stepped: number[] = [];
   const d = new Date(start);
   d.setUTCHours(0, 0, 0, 0);
   if (period === 'weekly') d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); // back to Monday
-  else d.setUTCDate(1);
+  else if (period === 'monthly') d.setUTCDate(1);
+  else if (period === 'yearly') d.setUTCMonth(0, 1); // back to 1 Jan
+  // daily: no snapping — step from the plan start itself.
   while (+d <= end) {
-    marks.add(+d);
-    if (period === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
-    else d.setUTCMonth(d.getUTCMonth() + 1);
+    stepped.push(+d);
+    if (period === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
+    else if (period === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1);
+    else d.setUTCDate(d.getUTCDate() + (period === 'weekly' ? 7 : 1));
   }
-  marks.add(start);
-  marks.add(end);
+  // Thin evenly if the cadence produced more points than the cap (bounds the EVM DB calls).
+  const sampled = stepped.length > MAX_SAMPLE_POINTS
+    ? stepped.filter((_, i) => i % Math.ceil(stepped.length / MAX_SAMPLE_POINTS) === 0)
+    : stepped;
+  const marks = new Set<number>([...sampled, ...extra, start, end]);
   return [...marks].filter((x) => x >= start && x <= end).sort((a, b) => a - b);
 }
 
-// Human label for the reporting period: "Week ending 12 Jul 2026" or "July 2026".
+// Human label for the reporting period, e.g. "9 Jul 2026" (daily), "Week ending 12 Jul 2026",
+// "July 2026" (monthly) or "Year 2026".
 export function periodLabel(asOf: Date, period: ReportPeriod): string {
+  if (period === 'yearly') return `Year ${asOf.toLocaleString('en', { year: 'numeric', timeZone: 'UTC' })}`;
   if (period === 'monthly') return asOf.toLocaleString('en', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  if (period === 'daily') return asOf.toLocaleString('en', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   const end = new Date(asOf);
   end.setUTCDate(end.getUTCDate() + (6 - ((end.getUTCDay() + 6) % 7))); // that week's Sunday
   return `Week ending ${end.toLocaleString('en', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`;
