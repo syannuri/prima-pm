@@ -34,29 +34,50 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-indigo-50 dark:from-[#0b1020] dark:via-slate-950 dark:to-black">
-      {/* Midnight Aurora — deep navy/black with coral + violet + indigo glows (dark-first);
-          light gets a softer tinted version of the same mesh */}
+    // `dark` forces this subtree into dark mode so the aurora-dark background reads correctly
+    // regardless of the app theme — matching the always-dark landing page (HomePage).
+    <div className="dark relative min-h-screen overflow-hidden bg-[#05070e] text-slate-200 antialiased">
+      {/* Aurora-dark backdrop — the same recipe as the public landing page (HomePage) so the
+          sign-in screen shares its midnight-aurora identity: a real aurora photo anchored to
+          the top over a #05070e base, twinkling stars, dark readability scrims, and soft
+          coral/indigo/violet glows drifting for depth. */}
       <style>{`
         @keyframes prima-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(22px,-26px)} }
         @keyframes prima-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-26px,20px)} }
         @keyframes prima-drift3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(18px,24px)} }
-        @media (prefers-reduced-motion: reduce){ .prima-orb{animation:none!important} }
+        @keyframes prima-twinkle { 0%,100%{opacity:.55} 50%{opacity:.95} }
+        .prima-stars { position:absolute; inset:0; opacity:.85; background-repeat:no-repeat;
+          background-image:
+            radial-gradient(1.6px 1.6px at 8% 16%,  rgba(255,255,255,.95), transparent),
+            radial-gradient(1.2px 1.2px at 17% 30%, rgba(255,255,255,.75), transparent),
+            radial-gradient(1.4px 1.4px at 27% 12%, rgba(255,255,255,.85), transparent),
+            radial-gradient(1px   1px   at 34% 24%, rgba(255,255,255,.65), transparent),
+            radial-gradient(1.5px 1.5px at 63% 14%, rgba(255,255,255,.9),  transparent),
+            radial-gradient(1.1px 1.1px at 72% 27%, rgba(255,255,255,.7),  transparent),
+            radial-gradient(1.3px 1.3px at 83% 18%, rgba(255,255,255,.85), transparent),
+            radial-gradient(1px   1px   at 91% 33%, rgba(255,255,255,.6),  transparent),
+            radial-gradient(1.2px 1.2px at 47% 9%,  rgba(255,255,255,.8),  transparent),
+            radial-gradient(1px   1px   at 55% 22%, rgba(255,255,255,.6),  transparent);
+          animation:prima-twinkle 6s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce){ .prima-orb,.prima-stars{animation:none!important} }
       `}</style>
-      {/* coral glow — top-left */}
-      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-brand-300/30 blur-3xl dark:bg-brand-600/30" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
-      {/* indigo glow — bottom-left */}
-      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/4 h-[34rem] w-[34rem] rounded-full bg-indigo-300/30 blur-3xl dark:bg-indigo-700/40" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
-      {/* violet glow — top-right, haloes the sign-in card */}
-      <div className="prima-orb pointer-events-none absolute -right-16 top-1/4 h-[28rem] w-[28rem] rounded-full bg-violet-300/30 blur-3xl dark:bg-violet-700/40" style={{ animation: 'prima-drift3 22s ease-in-out infinite' }} />
-      {/* deep-blue centre glow — adds midnight depth (mostly dark) */}
-      <div className="prima-orb pointer-events-none absolute left-1/3 top-1/3 h-80 w-80 rounded-full bg-sky-200/15 blur-3xl dark:bg-blue-800/30" style={{ animation: 'prima-drift1 26s ease-in-out infinite' }} />
 
-      {/* top wash — soft white (light) / violet glow (dark) */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(255,255,255,0.5),transparent)] dark:bg-[radial-gradient(ellipse_70%_55%_at_50%_0%,rgba(139,92,246,0.18),transparent)]" />
+      {/* real aurora photo anchored to the top, twinkling stars, then scrims that fade it into
+          the midnight base — identical treatment to the landing page hero */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[85vh] overflow-hidden">
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/aurora-bg.jpg)' }} />
+        <div className="prima-stars" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#05070e]/80 via-[#05070e]/45 to-[#05070e]" />
+        <div className="absolute inset-0 bg-[radial-gradient(85%_55%_at_50%_35%,rgba(5,7,14,0.5),transparent_72%)]" />
+      </div>
 
-      {/* dark-mode drama: glossy top sheen + bottom vignette for depth */}
-      <div className="pointer-events-none absolute inset-0 hidden dark:block bg-[radial-gradient(120%_80%_at_50%_-10%,rgba(255,255,255,0.06),transparent_50%),radial-gradient(120%_90%_at_50%_120%,rgba(0,0,0,0.7),transparent_55%)]" />
+      {/* soft drifting glows for depth — coral · indigo · violet, the same palette as the hero */}
+      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-brand-600/25 blur-3xl" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/4 h-[34rem] w-[34rem] rounded-full bg-indigo-700/30 blur-3xl" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
+      <div className="prima-orb pointer-events-none absolute -right-16 top-1/4 h-[28rem] w-[28rem] rounded-full bg-violet-700/30 blur-3xl" style={{ animation: 'prima-drift3 22s ease-in-out infinite' }} />
+
+      {/* bottom vignette for depth (matches the landing page) */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_120%,rgba(0,0,0,0.7),transparent_55%)]" />
 
       <div className="relative z-10 flex min-h-screen">
         {/* ---------- LEFT · tagline space (large screens) ---------- */}
