@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { Project, ProjectReportData } from '../api/types';
+import type { AgileBoard, Project, ProjectReportData } from '../api/types';
 import { Badge, Button, Card, EmptyState, Select, Spinner } from '../components/ui';
 import { formatIdrShort, formatDate } from '../lib/format';
 import DonutChart from '../components/DonutChart';
@@ -9,6 +9,7 @@ import ForecastChart from '../components/ForecastChart';
 import ExecutiveReport from '../components/ExecutiveReport';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ForecastPanel from './panels/ForecastPanel';
+import AgileReports from './panels/AgileReports';
 
 // The Reporting Hub's two-axis model. All four cadences are now wired to the report engine
 // (they drive the S-curve granularity + the period label). View = the centralized sub-nav.
@@ -163,8 +164,11 @@ export default function ReportsPage() {
 // Centralized deep analytics: the same per-project panels used inside the project workspace,
 // reachable from the hub with a project picker. A sub-tab switches lens (each panel self-fetches).
 function AnalyticsView({ projectId }: { projectId: string }) {
-  const [lens, setLens] = useState<'evm' | 'forecast'>('evm');
-  const LENSES = [{ k: 'evm', label: 'EVM Trend' }, { k: 'forecast', label: 'Forecast' }] as const;
+  const [lens, setLens] = useState<'evm' | 'forecast' | 'agile'>('evm');
+  const LENSES = [
+    { k: 'evm', label: 'EVM Trend' }, { k: 'forecast', label: 'Forecast' },
+    { k: 'agile', label: 'Velocity & Burndown' },
+  ] as const;
   return (
     <div className="space-y-5">
       <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
@@ -177,8 +181,19 @@ function AnalyticsView({ projectId }: { projectId: string }) {
       </div>
       {lens === 'evm' && <EvmTrendPanel projectId={projectId} />}
       {lens === 'forecast' && <ForecastPanel projectId={projectId} />}
+      {lens === 'agile' && <AgileLens projectId={projectId} />}
     </div>
   );
+}
+
+// Agile analytics lens — sprint velocity & burndown, reusing the AgileReports panel driven by
+// the board endpoint (sprints + items + snapshots). Non-agile projects have no sprints, so
+// AgileReports renders its own "No sprints yet" empty state.
+function AgileLens({ projectId }: { projectId: string }) {
+  const q = useQuery({ queryKey: ['agile', projectId], queryFn: () => api.get<AgileBoard>(`/projects/${projectId}/agile`) });
+  if (q.isLoading) return <Card><div className="flex justify-center py-10"><Spinner /></div></Card>;
+  const b = q.data;
+  return <AgileReports sprints={b?.sprints ?? []} items={b?.items ?? []} snapshots={b?.snapshots ?? []} />;
 }
 
 function ComingSoon({ nav }: { nav: (typeof NAV)[number] }) {
