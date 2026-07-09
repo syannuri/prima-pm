@@ -384,6 +384,51 @@ export interface Issue {
   updatedAt: string;
 }
 
+// --- Stakeholder management (PMBOK Stakeholder KA) ---
+export type StakeholderCategory = 'SPONSOR' | 'CUSTOMER' | 'TEAM' | 'VENDOR' | 'REGULATOR' | 'END_USER' | 'OTHER';
+export type InfluenceLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+export type EngagementLevel = 'UNAWARE' | 'RESISTANT' | 'NEUTRAL' | 'SUPPORTIVE' | 'LEADING';
+
+export interface Stakeholder {
+  id: string;
+  code: string;
+  name: string;
+  role: string | null;
+  organization: string | null;
+  category: StakeholderCategory;
+  power: InfluenceLevel;
+  interest: InfluenceLevel;
+  currentEngagement: EngagementLevel;
+  desiredEngagement: EngagementLevel;
+  email: string | null;
+  strategy: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Procurement management (PMBOK Procurement KA) ---
+export type ContractType = 'FIXED_PRICE' | 'TIME_AND_MATERIALS' | 'COST_PLUS' | 'PURCHASE_ORDER';
+export type ProcurementStatus = 'PLANNED' | 'SOLICITATION' | 'AWARDED' | 'IN_PROGRESS' | 'DELIVERED' | 'CLOSED' | 'CANCELLED';
+
+export interface Procurement {
+  id: string;
+  code: string;
+  title: string;
+  vendor: string | null;
+  vendorContact: string | null;
+  type: ContractType;
+  status: ProcurementStatus;
+  amount: number | null;
+  needBy: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  scope: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Task {
   id: string;
   parentTaskId: string | null;

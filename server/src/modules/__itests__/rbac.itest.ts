@@ -1058,3 +1058,74 @@ describe('awaiting-closure queue (delivery complete → tell ADMIN/PMO to close)
     expect((await inQueue(tokens.PROJECT_MANAGER)).count).toBe(0);
   });
 });
+
+describe('stakeholder register (PMBOK Stakeholder KA)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Stakeholder-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+  });
+
+  it('owning PM creates (auto STK code), FINANCE can read, list orders by code', async () => {
+    const a = await request(app).post(api(`/projects/${pid}/stakeholders`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ name: 'Dewi Sponsor', role: 'Sponsor', category: 'SPONSOR', power: 'HIGH', interest: 'HIGH', currentEngagement: 'NEUTRAL', desiredEngagement: 'LEADING' });
+    expect(a.status).toBe(201);
+    expect(a.body.stakeholder.code).toBe('STK-001');
+    const b = await request(app).post(api(`/projects/${pid}/stakeholders`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ name: 'Budi User', category: 'END_USER', power: 'LOW', interest: 'HIGH' });
+    expect(b.body.stakeholder.code).toBe('STK-002');
+
+    const list = await request(app).get(api(`/projects/${pid}/stakeholders`)).set(auth(tokens.FINANCE)); // functional role reads
+    expect(list.status).toBe(200);
+    expect(list.body.stakeholders.map((s: { code: string }) => s.code)).toEqual(['STK-001', 'STK-002']);
+  });
+
+  it('VIEWER and a non-owner PM cannot write (403); an invalid email is rejected (400)', async () => {
+    expect((await request(app).post(api(`/projects/${pid}/stakeholders`)).set(auth(tokens.VIEWER)).send({ name: 'x' })).status).toBe(403);
+    expect((await request(app).post(api(`/projects/${pid}/stakeholders`)).set(auth(tokens.PM2)).send({ name: 'x' })).status).toBe(403);
+    expect((await request(app).post(api(`/projects/${pid}/stakeholders`)).set(auth(tokens.PROJECT_MANAGER)).send({ name: 'Bad Email', email: 'not-an-email' })).status).toBe(400);
+  });
+
+  it('owning PM updates and deletes', async () => {
+    const created = await request(app).post(api(`/projects/${pid}/stakeholders`)).set(auth(tokens.PROJECT_MANAGER)).send({ name: 'Temp', power: 'LOW', interest: 'LOW' });
+    const id = created.body.stakeholder.id;
+    const upd = await request(app).put(api(`/projects/${pid}/stakeholders/${id}`)).set(auth(tokens.PROJECT_MANAGER)).send({ name: 'Temp', power: 'HIGH', interest: 'LOW' });
+    expect(upd.status).toBe(200);
+    expect(upd.body.stakeholder.power).toBe('HIGH');
+    expect((await request(app).delete(api(`/projects/${pid}/stakeholders/${id}`)).set(auth(tokens.PROJECT_MANAGER))).status).toBe(204);
+  });
+});
+
+describe('procurement register (PMBOK Procurement KA)', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Procurement-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+  });
+
+  it('owning PM creates (auto PRC code, amount serialised as a number), FINANCE reads', async () => {
+    const a = await request(app).post(api(`/projects/${pid}/procurements`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ title: 'Firewall appliances', vendor: 'NetSec Co', type: 'FIXED_PRICE', status: 'AWARDED', amount: 150000000 });
+    expect(a.status).toBe(201);
+    expect(a.body.procurement.code).toBe('PRC-001');
+    expect(a.body.procurement.amount).toBe(150000000); // number, not a Decimal string
+
+    const list = await request(app).get(api(`/projects/${pid}/procurements`)).set(auth(tokens.FINANCE));
+    expect(list.status).toBe(200);
+    expect(list.body.procurements[0].vendor).toBe('NetSec Co');
+  });
+
+  it('VIEWER and a non-owner PM cannot write (403)', async () => {
+    expect((await request(app).post(api(`/projects/${pid}/procurements`)).set(auth(tokens.VIEWER)).send({ title: 'x' })).status).toBe(403);
+    expect((await request(app).post(api(`/projects/${pid}/procurements`)).set(auth(tokens.PM2)).send({ title: 'x' })).status).toBe(403);
+  });
+
+  it('owning PM updates status and deletes', async () => {
+    const created = await request(app).post(api(`/projects/${pid}/procurements`)).set(auth(tokens.PROJECT_MANAGER)).send({ title: 'Laptops', status: 'PLANNED' });
+    const id = created.body.procurement.id;
+    const upd = await request(app).put(api(`/projects/${pid}/procurements/${id}`)).set(auth(tokens.PROJECT_MANAGER)).send({ title: 'Laptops', status: 'DELIVERED', amount: 50000000 });
+    expect(upd.status).toBe(200);
+    expect(upd.body.procurement.status).toBe('DELIVERED');
+    expect((await request(app).delete(api(`/projects/${pid}/procurements/${id}`)).set(auth(tokens.PROJECT_MANAGER))).status).toBe(204);
+  });
+});

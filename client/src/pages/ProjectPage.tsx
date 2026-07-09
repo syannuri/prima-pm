@@ -14,6 +14,8 @@ import TimesheetPanel from './panels/TimesheetPanel';
 import ForecastPanel from './panels/ForecastPanel';
 import RiskPanel from './panels/RiskPanel';
 import IssuePanel from './panels/IssuePanel';
+import StakeholderPanel from './panels/StakeholderPanel';
+import ProcurementPanel from './panels/ProcurementPanel';
 import SchedulePanel from './panels/SchedulePanel';
 import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
@@ -33,7 +35,7 @@ import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Kick-Off' | 'Agile' | 'Cost' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
+type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -87,8 +89,8 @@ export default function ProjectPage() {
   const tabs: Tab[] = [
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
-    'Cost', 'Timesheet', 'Forecast', 'EVM Trend', 'Risk', 'Issues', 'Change Req',
-    'Charter', 'Kick-Off', 'UAT', 'Closeout', 'Audit',
+    'Cost', 'Procurement', 'Timesheet', 'Forecast', 'EVM Trend', 'Risk', 'Issues', 'Change Req',
+    'Charter', 'Kick-Off', 'Stakeholders', 'UAT', 'Closeout', 'Audit',
   ];
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
   // chartered, land on the first working tab (Schedule/Agile); Charter stays
@@ -154,7 +156,7 @@ export default function ProjectPage() {
 
       <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} onSelect={(t) => setTab(t)} />
 
-      {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && (
+      {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && activeTab !== 'Stakeholders' && (
         <Card>
           <p className="text-center text-amber-600">
             Commit the Project Charter first to unlock {activeTab} Management.
@@ -165,6 +167,8 @@ export default function ProjectPage() {
       {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} />}
       {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
       {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
+      {activeTab === 'Procurement' && chartered && <ProcurementPanel projectId={projectId} />}
+      {activeTab === 'Stakeholders' && <StakeholderPanel projectId={projectId} />}
       {activeTab === 'Timesheet' && chartered && <TimesheetPanel projectId={projectId} />}
       {activeTab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
       {activeTab === 'EVM Trend' && chartered && <EvmTrendPanel projectId={projectId} />}
@@ -184,8 +188,8 @@ export default function ProjectPage() {
 // A single-tab phase renders as a plain tab; a multi-tab phase is a dropdown whose button
 // shows the active sub-tab (or the phase name) and highlights when one of its tabs is active.
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
-  { label: 'Charter', tabs: ['Charter', 'Kick-Off'] },
-  { label: 'Plan', tabs: ['Schedule', 'Agile', 'Cost', 'Risk'] },
+  { label: 'Charter', tabs: ['Charter', 'Kick-Off', 'Stakeholders'] },
+  { label: 'Plan', tabs: ['Schedule', 'Agile', 'Cost', 'Procurement', 'Risk'] },
   { label: 'Execute', tabs: ['Timesheet', 'Issues', 'UAT', 'Change Req'] },
   { label: 'Track', tabs: ['Forecast', 'EVM Trend'] },
   { label: 'Close', tabs: ['Closeout'] },
