@@ -1,5 +1,5 @@
 # 📐 BLUEPRINT — Integrated Project Management Web Application
-### "Prismatix" — Project Management Tool
+### "Prismatix" — Contribute to Project Management Community
 **Version:** 1.0 (As-Built · Delivered & live in production) · **Date:** 2026-07-09 · **Prepared by:** PMO/Solution Architect (multi-discipline)
 
 > **Status:** This document began as the v0.1 design draft (2026-06-27). It has been updated
