@@ -5,8 +5,15 @@
 #   sudo systemctl enable --now prima-pm
 # Logs:   journalctl -u prima-pm -f
 #
-# Runs as root because the checkout (incl. server/uploads for attachments) is
-# root-owned. If you chown the repo to a non-root user, set User=/Group= to match.
+# Runs as a dedicated non-login system user (least privilege), so the service
+# can't modify its own code. One-time setup for that user:
+#   sudo groupadd --system prima
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin --gid prima prima
+#   sudo chmod o+x /home/mamed                       # traverse-only into the home (no read/list)
+#   sudo chown root:prima server/.env && sudo chmod 640 server/.env   # prima reads secrets
+#   sudo chown -R prima:prima server/uploads         # attachments are written by the app
+# The rest of the checkout stays root-owned + world-readable, so prima can read
+# dist/node_modules but not alter them. (If you keep it root-owned, set User=root.)
 
 [Unit]
 Description=PRIMA-PM project management app
@@ -15,13 +22,19 @@ Wants=postgresql.service
 
 [Service]
 Type=simple
-User=root
+User=prima
+Group=prima
 WorkingDirectory=/home/mamed/prima-pm/server
 Environment=NODE_ENV=production
 EnvironmentFile=/home/mamed/prima-pm/server/.env
 ExecStart=/usr/bin/node dist/server.js
 Restart=on-failure
 RestartSec=5
+# Extra sandboxing (defense in depth). All writes go to server/uploads only.
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+ReadWritePaths=/home/mamed/prima-pm/server/uploads
 
 [Install]
 WantedBy=multi-user.target
