@@ -50,7 +50,7 @@ export default function RaidPanel({ projectId, onJump }: { projectId: string; on
 
       {/* Assumptions */}
       <Register<Assumption>
-        title="Assumptions" sub="Things taken as true for planning — validate or invalidate over time."
+        title="Assumptions" addLabel="assumption" sub="Things taken as true for planning — validate or invalidate over time."
         base={`${base}/assumptions`} queryKey={['assumptions', projectId]} rows={assumptions} canWrite={canWrite}
         columns={['Code', 'Assumption', 'Category', 'Impact', 'Status', 'Owner']}
         renderRow={(a) => (
@@ -68,7 +68,7 @@ export default function RaidPanel({ projectId, onJump }: { projectId: string; on
 
       {/* Dependencies */}
       <Register<ProjectDependency>
-        title="Dependencies" sub="Cross-team / external dependencies — inbound (we need) or outbound (we owe)."
+        title="Dependencies" addLabel="dependency" sub="Cross-team / external dependencies — inbound (we need) or outbound (we owe)."
         base={`${base}/dependencies`} queryKey={['dependencies', projectId]} rows={dependencies} canWrite={canWrite}
         columns={['Code', 'Dependency', 'Direction', 'Counterparty', 'Due', 'Impact', 'Status', 'Owner']}
         renderRow={(d) => (
@@ -109,8 +109,8 @@ function RaidStat({ letter, label, value, sub, onClick }: { letter: string; labe
 
 // Generic register card (table + add button) shared by Assumptions and Dependencies.
 interface RegRow { id: string }
-function Register<T extends RegRow>({ title, sub, base, queryKey, rows, canWrite, columns, renderRow, Form }: {
-  title: string; sub: string; base: string; queryKey: unknown[]; rows: T[]; canWrite: boolean;
+function Register<T extends RegRow>({ title, sub, addLabel, base, queryKey, rows, canWrite, columns, renderRow, Form }: {
+  title: string; sub: string; addLabel: string; base: string; queryKey: unknown[]; rows: T[]; canWrite: boolean;
   columns: string[]; renderRow: (row: T) => React.ReactNode;
   Form: (p: { base: string; row: T | null; onClose: () => void; onDone: () => void }) => React.ReactElement;
 }) {
@@ -122,7 +122,7 @@ function Register<T extends RegRow>({ title, sub, base, queryKey, rows, canWrite
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SectionTitle sub={sub}>{title}</SectionTitle>
-        {canWrite && <Button variant="secondary" onClick={() => setCreating(true)}>+ Add {title.toLowerCase().replace(/s$/, '')}</Button>}
+        {canWrite && <Button variant="secondary" onClick={() => setCreating(true)}>+ Add {addLabel}</Button>}
       </div>
       <div className="mt-3 overflow-x-auto">
         <table className="prima-rows w-full text-sm">
