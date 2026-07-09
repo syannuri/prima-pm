@@ -212,7 +212,7 @@ cd ../client && npm run typecheck && npm run build
 # End-to-end (Playwright, auto-boots server + client)
 cd ../e2e && npm test
 ```
-CI (`.github/workflows/ci.yml`) runs the server build + unit + Postgres-service integration tests, the client typecheck/build, and a **Playwright E2E gate** (login/RBAC + portfolio + project specs against a seeded DB) on every push and PR.
+CI (`.github/workflows/ci.yml`) runs the server build + unit + Postgres-service integration tests, the client typecheck/build, and a **Playwright E2E gate** (login/RBAC, portfolio, project, Reporting-Hub and PMBOK-module render specs against a seeded DB) on every push and PR.
 
 ---
 
