@@ -187,7 +187,8 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
           </div>
         </div>
       )}
-      <div className="overflow-x-auto">
+      {/* Desktop: table. Mobile (< sm): card list below. */}
+      <div className="hidden overflow-x-auto sm:block">
       <table className="prima-rows w-full min-w-[28rem] text-sm">
         <tbody>
           {data.actualCosts.map((a) => (
@@ -207,6 +208,27 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
         </tbody>
       </table>
       </div>
+
+      {/* Mobile card list — table hidden < sm. */}
+      <div className="space-y-2 sm:hidden">
+        {data.actualCosts.map((a) => (
+          <div key={a.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-slate-700 dark:text-slate-200">
+                  {a.description ?? '—'}
+                  {a.description === LABOUR_AC_DESC && <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">auto · timesheet</span>}
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{new Date(a.date).toLocaleDateString('en-GB')}</div>
+              </div>
+              <div className="shrink-0 font-medium tabular-nums text-slate-900 dark:text-white">{formatIdr(a.amount)}</div>
+            </div>
+            <div className="mt-1.5"><button onClick={() => confirmDelete(a.id)} className="text-xs text-red-500 hover:underline">delete</button></div>
+          </div>
+        ))}
+        {!data.actualCosts.length && <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">No actual cost recorded yet.</div>}
+      </div>
+
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
         <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
         <MoneyInput aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
