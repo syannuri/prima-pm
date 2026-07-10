@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 const initials = (name?: string) =>
@@ -12,6 +13,8 @@ const I = {
   users: 'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM21 21v-2a4 4 0 0 0-3-3.87',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   install: 'M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14',
+  moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
+  sun: 'M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4 7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
 };
 
 const Ico = ({ d }: { d: string }) => (
@@ -22,6 +25,8 @@ const Ico = ({ d }: { d: string }) => (
 // home for Settings, Manual and Logout (replacing the separate header buttons).
 export default function AvatarMenu() {
   const { user, logout } = useAuth();
+  const { theme, toggle } = useTheme();
+  const dark = theme === 'dark';
   const { canInstall, promptInstall } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -54,6 +59,13 @@ export default function AvatarMenu() {
               {canInstall && (
                 <button onClick={() => { close(); promptInstall(); }} className={`w-full ${itemCls}`}><Ico d={I.install} /> Pasang aplikasi</button>
               )}
+              {/* Theme toggle — stays open so the change is visible and reversible in place. */}
+              <button onClick={toggle} className={`w-full justify-between ${itemCls}`}>
+                <span className="flex items-center gap-3"><Ico d={dark ? I.sun : I.moon} /> {dark ? 'Mode terang' : 'Mode gelap'}</span>
+                <span className={`relative h-5 w-9 shrink-0 rounded-full transition ${dark ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${dark ? 'left-[1.125rem]' : 'left-0.5'}`} />
+                </span>
+              </button>
             </nav>
             <div className="border-t border-slate-100 p-1.5 dark:border-slate-800">
               <button onClick={() => { close(); logout(); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"><Ico d={I.logout} /> Logout</button>
