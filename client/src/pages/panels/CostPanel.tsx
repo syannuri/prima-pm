@@ -662,7 +662,8 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
   return (
     <Card>
       <SectionTitle sub="Overhead: transport, accommodation, meals, communication, supplies, venue…">Indirect Cost</SectionTitle>
-      <div className="overflow-x-auto">
+      {/* Desktop: table. Mobile (< sm): card list below (same edit/delete handlers). */}
+      <div className="hidden overflow-x-auto sm:block">
         <table className="prima-rows w-full text-sm">
           <tbody>
             {data.indirectCosts.map((i) => {
@@ -718,6 +719,52 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
           )}
         </table>
       </div>
+
+      {/* Mobile card list — table hidden < sm. Reuses the same edit/delete handlers. */}
+      <div className="space-y-2 sm:hidden">
+        {data.indirectCosts.map((i) => {
+          const editing = editId === i.id;
+          if (editing) return (
+            <div key={i.id} className="space-y-2 rounded-lg border border-brand-300 bg-brand-50/50 p-3 dark:border-brand-900/50 dark:bg-brand-900/10">
+              <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
+                {INDIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </Select>
+              <Input aria-label="Description" value={ef.description} onChange={(e) => setEf((p) => ({ ...p, description: e.target.value }))} placeholder="Description" />
+              {ef.type === 'OTHER' && (
+                <Input aria-label="Sub-category" value={ef.subCategory} onChange={(e) => setEf((p) => ({ ...p, subCategory: e.target.value }))} placeholder="Specify category *" />
+              )}
+              <MoneyInput aria-label="Amount" value={ef.amount} onValueChange={(v) => setEf((p) => ({ ...p, amount: v }))} />
+              <div className="flex justify-end gap-3">
+                <button onClick={() => update.mutate(i.id)} disabled={update.isPending} className="text-xs font-medium text-brand-600 hover:underline">save</button>
+                <button onClick={() => setEditId(null)} className="text-xs text-slate-400 hover:underline">cancel</button>
+              </div>
+            </div>
+          );
+          return (
+            <div key={i.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">{typeLabel(INDIRECT_LABEL, i.type, i.subCategory)}</div>
+                  <div className="font-medium text-slate-700 dark:text-slate-200">{i.description}</div>
+                </div>
+                <div className="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{formatIdr(i.amount)}</div>
+              </div>
+              <div className="mt-2 flex gap-4">
+                <button onClick={() => startEdit(i)} className="text-xs text-brand-600 hover:underline">edit</button>
+                <button onClick={() => confirmDelete(i)} className="text-xs text-red-500 hover:underline">delete</button>
+              </div>
+            </div>
+          );
+        })}
+        {!data.indirectCosts.length && <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">No indirect costs yet.</div>}
+        {data.indirectCosts.length > 0 && (
+          <div className="flex items-center justify-between border-t-2 border-slate-200 pt-2 text-sm font-semibold dark:border-slate-700">
+            <span className="text-slate-600 dark:text-slate-300">Total ({data.indirectCosts.length} {data.indirectCosts.length === 1 ? 'line' : 'lines'})</span>
+            <span className="tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal)}</span>
+          </div>
+        )}
+      </div>
+
       <div className={`mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 ${isOther ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
         <Select aria-label="Indirect cost type" value={type} onChange={(e) => setType(e.target.value)}>
           {INDIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
