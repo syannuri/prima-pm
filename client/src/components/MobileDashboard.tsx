@@ -17,6 +17,13 @@ const RAG: Record<PortfolioHealth, { c: string; dot: string; label: string }> = 
   NO_DATA: { c: '#64748b', dot: '#94a3b8', label: 'No data' },
 };
 const RANK: Record<string, number> = { RED: 0, AMBER: 1, GREEN: 2, NO_DATA: 3 };
+// Hero gradient follows portfolio health (literal classes so Tailwind's JIT keeps them).
+const HERO: Record<PortfolioHealth, { grad: string; shadow: string }> = {
+  GREEN: { grad: 'from-emerald-500 to-green-600', shadow: 'shadow-emerald-500/30' },
+  AMBER: { grad: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/30' },
+  RED: { grad: 'from-rose-500 to-red-600', shadow: 'shadow-red-500/30' },
+  NO_DATA: { grad: 'from-slate-500 to-slate-700', shadow: 'shadow-slate-500/30' },
+};
 
 // A phone-tailored portfolio dashboard (PM & PMO): a glanceable, card-first view —
 // gradient health hero, KPI tiles, the "needs attention" queues, and project cards
@@ -40,7 +47,7 @@ export default function MobileDashboard() {
   return (
     <div className="space-y-4">
       {/* Hero — portfolio health at a glance */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-500 to-brand-600 p-5 text-white shadow-lg shadow-brand-500/30">
+      <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${HERO[status].grad} p-5 text-white shadow-lg ${HERO[status].shadow}`}>
         <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/10" />
         <div className="relative flex items-start justify-between">
           <div>
