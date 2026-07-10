@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotificationCount } from '../hooks/useNotificationCount';
+import { haptic } from '../lib/haptics';
 
 const HOME = 'M3 9.5 12 3l9 6.5M5 10v9a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1v-9';
 const FOLDER = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
@@ -33,7 +34,7 @@ export default function MobileTabBar() {
     >
       <div className="grid grid-cols-3">
         {tabs.map((t) => (
-          <Link key={t.label} to={t.to} className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition ${t.active ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+          <Link key={t.label} to={t.to} onClick={() => haptic()} className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition ${t.active ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
             <span className="relative">
               <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={t.active ? 2.4 : 1.9} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
               {t.badge > 0 && (

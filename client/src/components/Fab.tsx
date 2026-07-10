@@ -1,3 +1,5 @@
+import { haptic } from '../lib/haptics';
+
 // Floating action button (phones only). A round, thumb-reachable primary
 // "add" control that floats above the bottom tab bar. Desktop keeps its inline
 // "+ New Project" button, so this is md:hidden.
@@ -5,7 +7,7 @@ export default function Fab({ onClick, label = 'Tambah', icon }: { onClick: () =
   const PLUS = 'M12 5v14M5 12h14';
   return (
     <button
-      onClick={onClick}
+      onClick={() => { haptic(); onClick(); }}
       aria-label={label}
       title={label}
       // `fab` marker lets the install banner lift this button above itself (see index.css).
