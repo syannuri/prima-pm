@@ -103,7 +103,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        {/* Plain greeting is hidden on phones so the mobile dashboard hero is the focus. */}
+        <div className="hidden sm:block">
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{greeting}, {firstName} 👋</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
         </div>
