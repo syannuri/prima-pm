@@ -125,7 +125,7 @@ export async function getMyTimesheet(userId: string) {
       id: true,
       label: true,
       planMandays: true,
-      project: { select: { code: true, name: true } },
+      project: { select: { code: true, name: true, status: true } },
       task: { select: { name: true, progressPct: true } },
     },
     orderBy: { createdAt: 'asc' },
@@ -144,6 +144,9 @@ export async function getMyTimesheet(userId: string) {
       id: l.id,
       projectCode: l.project.code,
       projectName: l.project.name,
+      // IN_PROGRESS = "active": only these can be logged against (client filters the picker,
+      // server enforces in addMyMandayEntry).
+      projectStatus: l.project.status,
       taskName: l.task?.name ?? null,
       planMandays: plan,
       progressPct,
@@ -156,10 +159,12 @@ export async function getMyTimesheet(userId: string) {
   const myEntries = lineIds.length
     ? await prisma.mandayEntry.findMany({ where: { recordedBy: userId, costItemId: { in: lineIds } }, orderBy: { date: 'desc' }, take: 100 })
     : [];
-  const labelById = new Map(lines.map((l) => [l.id, `${l.project.code} · ${l.task?.name ?? l.label}`]));
+  const labelById = new Map(lines.map((l) => [l.id, l.task?.name ?? l.label]));
+  const codeById = new Map(lines.map((l) => [l.id, l.project.code]));
   const entryViews = myEntries.map((e) => ({
     id: e.id,
     costItemId: e.costItemId,
+    projectCode: codeById.get(e.costItemId) ?? '—',
     lineLabel: labelById.get(e.costItemId) ?? '—',
     date: e.date,
     mandays: dec(e.mandays),
@@ -170,8 +175,13 @@ export async function getMyTimesheet(userId: string) {
 }
 
 export async function addMyMandayEntry(userId: string, input: MandayEntryInput) {
-  const line = await prisma.costItemDirect.findFirst({ where: { id: input.costItemId, ...mineWhere(userId) }, select: { id: true, projectId: true } });
+  const line = await prisma.costItemDirect.findFirst({
+    where: { id: input.costItemId, ...mineWhere(userId) },
+    select: { id: true, projectId: true, project: { select: { status: true } } },
+  });
   if (!line) throw Forbidden('That manpower line is not assigned to you');
+  // Time can only be logged against an active (in-progress) project.
+  if (line.project.status !== 'IN_PROGRESS') throw BadRequest('You can only log time on active (in-progress) projects');
 
   const entry = await prisma.mandayEntry.create({
     data: { projectId: line.projectId, costItemId: line.id, date: input.date, mandays: input.mandays, note: input.note ?? null, recordedBy: userId },
