@@ -28,22 +28,27 @@ export default function MobileTabBar() {
   ];
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/85 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/85 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/60 bg-white/60 backdrop-blur-2xl backdrop-saturate-150 dark:border-slate-700/50 dark:bg-slate-900/55 md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Primary"
     >
       <div className="grid grid-cols-3">
         {tabs.map((t) => (
-          <Link key={t.label} to={t.to} onClick={() => haptic()} className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition ${t.active ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-            <span className="relative">
-              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={t.active ? 2.4 : 1.9} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
+          <Link key={t.label} to={t.to} onClick={() => haptic()} className={`group relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors ${t.active ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+            <span className="relative grid place-items-center">
+              {/* iOS-style touch highlight — springs in on press, held while the tab is active. */}
+              <span
+                aria-hidden
+                className={`pointer-events-none absolute -inset-x-3.5 -inset-y-1.5 rounded-2xl bg-brand-500/10 transition-all duration-200 ease-out dark:bg-brand-400/15 ${t.active ? 'scale-100 opacity-100' : 'scale-50 opacity-0 group-active:scale-100 group-active:opacity-100'}`}
+              />
+              <svg viewBox="0 0 24 24" className="relative h-6 w-6 transition-transform duration-150 ease-out group-active:scale-90" fill="none" stroke="currentColor" strokeWidth={t.active ? 2.4 : 1.9} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
               {t.badge > 0 && (
-                <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-[1rem] place-items-center rounded-full bg-slate-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:bg-slate-600 dark:ring-slate-900">
+                <span className="absolute -right-2.5 -top-1.5 z-10 grid h-4 min-w-[1rem] place-items-center rounded-full bg-slate-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:bg-slate-600 dark:ring-slate-900">
                   {t.badge > 9 ? '9+' : t.badge}
                 </span>
               )}
             </span>
-            {t.label}
+            <span className="relative transition-transform duration-150 ease-out group-active:scale-95">{t.label}</span>
           </Link>
         ))}
       </div>

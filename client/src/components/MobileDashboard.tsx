@@ -166,13 +166,18 @@ function Ring({ pct }: { pct: number }) {
 }
 
 function QuickAction({ label, icon, tint, to, onClick }: { label: string; icon: string; tint: string; to?: string; onClick?: () => void }) {
-  const cls = 'flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition active:scale-95 dark:border-slate-800 dark:bg-slate-900';
+  const cls =
+    'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.02] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]';
   const inner = (
     <>
-      <span className={`grid h-11 w-11 place-items-center rounded-2xl ${tint}`}>
+      {/* Soft tinted halo behind the icon — clipped by the card for an elegant glow. */}
+      <span aria-hidden className={`pointer-events-none absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 -translate-y-6 rounded-full opacity-40 blur-2xl transition-opacity duration-200 group-hover:opacity-60 ${tint}`} />
+      {/* Top sheen for a glossy, premium finish. */}
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
+      <span className={`relative grid h-11 w-11 place-items-center rounded-2xl shadow-sm ring-1 ring-inset ring-white/50 transition-transform duration-200 group-active:scale-90 dark:ring-white/10 ${tint}`}>
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={icon} /></svg>
       </span>
-      <span className="mt-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">{label}</span>
+      <span className="relative mt-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>
     </>
   );
   return to ? <Link to={to} className={cls}>{inner}</Link> : <button type="button" onClick={onClick} className={cls}>{inner}</button>;
