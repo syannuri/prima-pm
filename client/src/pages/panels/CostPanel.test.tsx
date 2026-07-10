@@ -85,8 +85,11 @@ describe('CostPanel actual-cost mutations', () => {
     const user = userEvent.setup();
     const { invalidateSpy } = renderPanel();
 
-    // Wait for the actual-cost row to render (cost query resolved).
-    const cell = await screen.findByText(AC_DESC);
+    // Wait for the actual-cost row to render (cost query resolved). The panel renders
+    // BOTH a desktop table and a mobile card list (Tailwind hides one via CSS, which jsdom
+    // doesn't apply) — so the description appears twice; pick the one inside the <table>.
+    const cells = await screen.findAllByText(AC_DESC);
+    const cell = cells.find((el) => el.closest('tr'))!;
     const row = cell.closest('tr')!;
 
     // Click the row's "delete" link, then confirm in the modal.
