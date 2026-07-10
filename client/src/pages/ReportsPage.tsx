@@ -98,26 +98,26 @@ export default function ReportsPage() {
         <div className="min-w-0 space-y-5">
           {/* Control bar: Scope × Cadence × Export */}
           <Card className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
+            <div className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
+              <div className="w-full sm:w-auto">
                 <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Scope</span>
                 {activeNav.scope === 'Single project' && projects.length > 0 ? (
-                  <Select value={selected} onChange={(e) => setProjectId(e.target.value)} className="min-w-[16rem]">
+                  <Select value={selected} onChange={(e) => setProjectId(e.target.value)} className="w-full sm:w-auto sm:min-w-[16rem]">
                     {projects.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
                   </Select>
                 ) : (
-                  <div className="inline-flex h-[38px] items-center rounded-lg border border-slate-200 px-3 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                  <div className="inline-flex h-[38px] w-full items-center rounded-lg border border-slate-200 px-3 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300 sm:w-auto">
                     {activeNav.scope === 'Portfolio' ? '🏢 All projects (portfolio)' : '— no project —'}
                   </div>
                 )}
               </div>
-              <div>
+              <div className="w-full sm:w-auto">
                 <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cadence</span>
-                <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+                <div className="flex max-w-full overflow-x-auto rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
                   {CADENCES.map((c) => (
                     <button key={c.key} onClick={() => c.ready && setCadence(c.key)} disabled={!c.ready}
                       title={c.ready ? c.label : `${c.label} — coming soon`}
-                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition ${
                         cadence === c.key ? 'bg-brand-600 text-white shadow-sm'
                           : c.ready ? 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                           : 'cursor-not-allowed text-slate-300 dark:text-slate-600'

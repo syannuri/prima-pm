@@ -79,7 +79,8 @@ export default function PortfolioReport() {
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Budget vs actual</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">Per-project spend against budget, sorted by cost health (biggest overrun first). The bar shows actual cost against budget, with a tick at earned value.</p>
         </div>
-        <div className="overflow-x-auto">
+        {/* Desktop: table. Mobile (< sm): card list below. */}
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-400">
@@ -107,6 +108,46 @@ export default function PortfolioReport() {
               </tr>
             </tfoot>
           </table>
+        </div>
+
+        {/* Mobile card list — table hidden < sm. */}
+        <div className="space-y-2 sm:hidden">
+          {rows.map((r) => {
+            const rcv = r.ev - r.ac;
+            const acPct = r.bac > 0 ? Math.min(100, (r.ac / r.bac) * 100) : 0;
+            const evPct = r.bac > 0 ? Math.min(100, (r.ev / r.bac) * 100) : 0;
+            const over = r.ac > 0 && r.cpi < 1;
+            return (
+              <div key={r.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Dot h={r.costHealth} />
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-slate-800 dark:text-slate-100">{r.name}</div>
+                    <div className="text-[11px] text-slate-400">{r.code}{r.pm ? ` · ${r.pm}` : ''}</div>
+                  </div>
+                  <span className={`ml-auto shrink-0 text-sm tabular-nums ${over ? 'text-red-600 dark:text-red-400' : r.ac > 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-400'}`}>CPI {r.ac > 0 ? r.cpi.toFixed(2) : '—'}</span>
+                </div>
+                <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums">
+                  <div><div className="text-slate-400">Budget</div><div className="text-slate-800 dark:text-slate-100">{formatIdrShort(r.bac)}</div></div>
+                  <div><div className="text-slate-400">Earned</div><div className="text-slate-600 dark:text-slate-300">{formatIdrShort(r.ev)}</div></div>
+                  <div><div className="text-slate-400">Actual</div><div className="text-slate-600 dark:text-slate-300">{r.ac > 0 ? formatIdrShort(r.ac) : '—'}</div></div>
+                  <div><div className="text-slate-400">Variance</div><div className={r.ac > 0 ? (rcv < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : 'text-slate-400'}>{r.ac > 0 ? formatIdrShort(rcv) : '—'}</div></div>
+                </div>
+                <div className="relative mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" title={`Spent ${formatIdrShort(r.ac)} of ${formatIdrShort(r.bac)} · earned ${formatIdrShort(r.ev)}`}>
+                  <div className="h-full rounded-full" style={{ width: `${acPct}%`, backgroundColor: over ? RAG.RED.c : RAG.GREEN.c }} />
+                  {r.ev > 0 && <div className="absolute top-0 h-full w-0.5 bg-slate-500 dark:bg-slate-300" style={{ left: `calc(${evPct}% - 1px)` }} />}
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between rounded-lg border-2 border-slate-200 p-3 text-sm font-semibold dark:border-slate-700">
+            <span className="text-slate-700 dark:text-slate-200">Portfolio total</span>
+            <span className="flex flex-wrap justify-end gap-x-3 gap-y-0.5 tabular-nums">
+              <span className="text-slate-600 dark:text-slate-300">BAC {formatIdrShort(t.bac)}</span>
+              <span className="text-slate-600 dark:text-slate-300">AC {formatIdrShort(t.ac)}</span>
+              <span className={cv < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>CV {formatIdrShort(cv)}</span>
+            </span>
+          </div>
         </div>
       </div>
     </div>

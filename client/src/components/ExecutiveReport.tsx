@@ -78,7 +78,8 @@ export default function ExecutiveReport() {
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Project heatmap</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">Sorted by schedule health, most at-risk first.</p>
         </div>
-        <div className="overflow-x-auto">
+        {/* Desktop: table. Mobile (< sm): card list below. */}
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-400">
@@ -96,6 +97,34 @@ export default function ExecutiveReport() {
               {rows.map((r) => <Row key={r.id} r={r} />)}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card list — table hidden < sm. */}
+        <div className="space-y-2 sm:hidden">
+          {rows.map((r) => {
+            const pct = Math.round(r.percentComplete * 100);
+            const v = r.finishVarianceDays;
+            return (
+              <div key={r.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-slate-800 dark:text-slate-100">{r.name}</div>
+                    <div className="text-[11px] text-slate-400">{r.code}{r.pm ? ` · ${r.pm}` : ''} · {r.status.replace('_', ' ').toLowerCase()}</div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 text-[10px] uppercase tracking-wide text-slate-400">
+                    <span className="flex items-center gap-1">Sched <Dot h={r.health} /></span>
+                    <span className="flex items-center gap-1">Cost <Dot h={r.costHealth} /></span>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums">
+                  <div><div className="text-slate-400">SPI</div><div className={r.pv > 0 && r.spi < 0.95 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}>{r.pv > 0 ? r.spi.toFixed(2) : '—'}</div></div>
+                  <div><div className="text-slate-400">CPI</div><div className={r.ac > 0 && r.cpi < 0.95 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}>{r.ac > 0 ? r.cpi.toFixed(2) : '—'}</div></div>
+                  <div><div className="text-slate-400">Done</div><div className="text-slate-600 dark:text-slate-300">{pct}%</div></div>
+                  <div><div className="text-slate-400">Finish</div><div className={v != null && v > 0 ? 'text-red-600 dark:text-red-400' : v != null && v < 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-400'}>{v == null ? '—' : v === 0 ? 'on plan' : `${v > 0 ? '+' : ''}${v}d`}</div></div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Card>
     </div>
