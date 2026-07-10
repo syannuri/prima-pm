@@ -99,3 +99,17 @@ html.dark .prima-rows tbody tr:hover {
 body.has-install-banner .fab {
   bottom: calc(9rem + env(safe-area-inset-bottom));
 }
+
+/* Page transition — a subtle fade-in replayed on each route/view change.
+   Opacity-only so it never creates a containing block for fixed children
+   (the FAB lives inside the routed content). */
+@keyframes prima-page-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.prima-page {
+  animation: prima-page-in 0.22s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .prima-page { animation: none; }
+}

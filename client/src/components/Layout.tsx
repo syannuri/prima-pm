@@ -8,6 +8,7 @@ import CommandPalette from './CommandPalette';
 import MobileTabBar from './MobileTabBar';
 import AvatarMenu from './AvatarMenu';
 import InstallPrompt from './InstallPrompt';
+import PageTransition from './PageTransition';
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { logout } = useAuth();
@@ -127,7 +128,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 overflow-y-auto overscroll-y-contain px-4 pb-24 pt-6 sm:px-6 md:pb-6">
-          <div className="mx-auto max-w-7xl">{children}</div>
+          <div className="mx-auto max-w-7xl"><PageTransition>{children}</PageTransition></div>
         </main>
       </div>
 
