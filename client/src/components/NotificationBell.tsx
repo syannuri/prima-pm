@@ -131,7 +131,7 @@ export default function NotificationBell() {
           key={fireKey}
           onClick={() => { setRemind(false); setOpen(true); }}
           style={{ ['--remind-ms' as string]: `${REMIND_MS}ms` }}
-          className="prima-remind absolute right-0 top-full z-20 mt-2 flex items-center gap-2 whitespace-nowrap rounded-full border border-amber-300/40 bg-amber-50/70 px-3 py-1.5 text-xs font-medium text-amber-800 shadow-lg backdrop-blur-md dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200"
+          className="prima-remind absolute right-0 top-full z-20 mt-2 flex max-w-[calc(100vw-1rem)] items-center gap-2 rounded-full border border-amber-300/40 bg-amber-50/70 px-3 py-1.5 text-xs font-medium text-amber-800 shadow-lg backdrop-blur-md dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200 sm:whitespace-nowrap"
         >
           <span className="relative flex h-2 w-2">
             <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${high > 0 ? 'bg-red-400' : 'bg-amber-400'}`} />
@@ -144,7 +144,8 @@ export default function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="prima-toast absolute right-0 z-20 mt-2 max-h-[80vh] w-80 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90">
+          {/* Mobile: pinned below the header, full width with margins (a right-anchored w-80 ran off-screen left). sm+: dropdown under the bell. */}
+          <div className="prima-toast fixed inset-x-2 top-14 z-20 max-h-[75vh] w-auto overflow-y-auto rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[80vh] sm:w-80">
             {/* Personal inbox — assignment & other discrete events */}
             {!!inbox?.items.length && (
               <div className="mb-3">

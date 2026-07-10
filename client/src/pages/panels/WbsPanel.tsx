@@ -358,16 +358,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 <th className="w-12">WBS</th>
                 <th className="min-w-[14rem]">Task</th>
                 <th title="Owner (PIC) responsible for the task">Owner</th>
-                <th className="text-right">Start</th>
-                <th className="text-right">Finish</th>
-                <th className="text-right">Dur</th>
-                <th className="text-right" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
+                <th className="hidden text-right sm:table-cell">Start</th>
+                <th className="hidden text-right sm:table-cell">Finish</th>
+                <th className="hidden text-right sm:table-cell">Dur</th>
+                <th className="hidden text-right sm:table-cell" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
                 <th className="text-right">% </th>
                 <th>Status</th>
-                <th className="text-right" title="Finish variance vs baseline (days)">Var</th>
-                {canEdit && <th className="text-right">Actions</th>}
+                <th className="hidden text-right sm:table-cell" title="Finish variance vs baseline (days)">Var</th>
+                {canEdit && <th className="hidden text-right sm:table-cell">Actions</th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
-                <th>
+                <th className="hidden sm:table-cell">
                   <div className="relative h-4" style={{ width: axis?.width }}>
                     {axis?.ticks.map((t) => (
                       <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
@@ -410,10 +410,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </span>
                     </td>
                     <td><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></td>
-                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.start))}</td>
-                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.end))}</td>
-                    <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
-                    <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
+                    <td className="hidden whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400 sm:table-cell">{formatDate(new Date(r.start))}</td>
+                    <td className="hidden whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400 sm:table-cell">{formatDate(new Date(r.end))}</td>
+                    <td className="hidden text-right tabular-nums text-xs text-slate-500 dark:text-slate-400 sm:table-cell">{r.dur}d</td>
+                    <td className={`hidden text-right tabular-nums text-xs sm:table-cell ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
                       {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
                     </td>
                     <td className="text-right">
@@ -432,7 +432,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     <td><Badge color={st.color}>{st.label}</Badge></td>
-                    <td className="text-right tabular-nums text-xs">
+                    <td className="hidden text-right tabular-nums text-xs sm:table-cell">
                       {varDays == null ? (
                         <span className="text-slate-300 dark:text-slate-600">—</span>
                       ) : (
@@ -442,13 +442,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     {canEdit && (
-                      <td className="whitespace-nowrap text-right text-xs">
+                      <td className="hidden whitespace-nowrap text-right text-xs sm:table-cell">
                         <button onClick={() => setForm({ parentId: node.id })} className="text-brand-600 hover:underline" title="Add subtask">+ Sub</button>
                         <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400">Edit</button>
                         <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
                       </td>
                     )}
-                    <td>
+                    <td className="hidden sm:table-cell">
                       <div className="relative h-6" style={{ width: axis?.width }}>
                         {/* month/period gridlines + today marker for orientation */}
                         {axis?.ticks.filter((t) => t.major).map((t) => (
