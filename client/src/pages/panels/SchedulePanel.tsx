@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { Badge, Card, SectionTitle } from '../../components/ui';
+import { Card, SectionTitle } from '../../components/ui';
 import { formatNum } from '../../lib/format';
 import EvmHealth from '../../components/EvmHealth';
 import WbsPanel from './WbsPanel';
@@ -24,7 +24,6 @@ interface ManpowerSyncRow {
   taskId: string; taskName: string; scheduleWorkingDays: number; linkedPlanMandays: number; variance: number;
   status: 'OK' | 'OVER_ALLOCATED' | 'UNDER_ALLOCATED' | 'NO_MANPOWER';
 }
-const SYNC_COLOR: Record<string, string> = { OK: 'green', OVER_ALLOCATED: 'red', UNDER_ALLOCATED: 'amber', NO_MANPOWER: 'slate' };
 
 function ManpowerSync({ rows }: { rows: ManpowerSyncRow[] }) {
   return (
@@ -34,7 +33,7 @@ function ManpowerSync({ rows }: { rows: ManpowerSyncRow[] }) {
         <thead>
           <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
             <th className="py-2">Task</th><th className="text-right">Sched. days</th><th className="text-right">Mandays</th>
-            <th className="text-right">Variance</th><th className="text-right">Status</th>
+            <th className="text-right">Variance</th>
           </tr>
         </thead>
         <tbody>
@@ -44,10 +43,9 @@ function ManpowerSync({ rows }: { rows: ManpowerSyncRow[] }) {
               <td className="text-right">{r.scheduleWorkingDays}</td>
               <td className="text-right">{formatNum(r.linkedPlanMandays)}</td>
               <td className="text-right">{formatNum(r.variance)}</td>
-              <td className="text-right"><Badge color={SYNC_COLOR[r.status]}>{r.status}</Badge></td>
             </tr>
           ))}
-          {!rows.length && <tr><td colSpan={5} className="py-3 text-center text-slate-500 dark:text-slate-400">No tasks.</td></tr>}
+          {!rows.length && <tr><td colSpan={4} className="py-3 text-center text-slate-500 dark:text-slate-400">No tasks.</td></tr>}
         </tbody>
       </table>
     </Card>

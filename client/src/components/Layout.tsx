@@ -46,6 +46,8 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
+          {/* Phones: initials avatar (account/settings) sits top-left. */}
+          <div className="md:hidden"><AvatarMenu /></div>
           {/* Hamburger removed on phones — the bottom tab bar handles navigation there. Kept for md as a fallback. */}
           <button
             onClick={() => setMobileOpen(true)}
@@ -99,8 +101,6 @@ export default function Layout({ children }: { children: ReactNode }) {
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
           </button>
           <NotificationBell />
-          {/* Phones: initials avatar → account sheet (Settings · Manual · Logout). Desktop keeps discrete buttons. */}
-          <div className="md:hidden"><AvatarMenu /></div>
           <Link
             to="/manual"
             title="Manual / Help"

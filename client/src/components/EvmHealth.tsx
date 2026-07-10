@@ -99,9 +99,9 @@ export default function EvmHealth({
 
 function HeroMetric({ label, value, warn, good, title }: { label: string; value: string; warn?: boolean; good?: boolean; title?: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700/70 dark:bg-slate-800/40" title={title}>
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700/70 dark:bg-slate-800/40" title={title}>
       <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-0.5 text-xl font-bold tabular-nums ${warn ? 'text-red-600 dark:text-red-400' : good ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-100'}`}>{value}</div>
+      <div className={`mt-0.5 break-words text-base font-bold leading-tight tabular-nums sm:text-xl ${warn ? 'text-red-600 dark:text-red-400' : good ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-100'}`}>{value}</div>
     </div>
   );
 }
