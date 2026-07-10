@@ -226,19 +226,23 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
 
   return (
     <div>
-      {/* Level 1 — phase groups */}
-      <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
-        {groups.map((g) => {
-          const active = g.tabs.includes(activeTab);
-          const single = g.tabs.length === 1;
-          return (
-            // Single-tab groups show the tab's own name (e.g. "Closeout"); multi-tab groups show
-            // the phase label + a stable aria-label so tests/AT can target the phase.
-            <button key={g.label} aria-label={single ? undefined : g.label} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
-              {single ? g.tabs[0] : g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
-            </button>
-          );
-        })}
+      {/* Level 1 — phase groups. Scrolls horizontally on narrow screens; a right-edge fade
+          hints there are more phases to swipe to (hidden on md+ where they all fit). */}
+      <div className="relative">
+        <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
+          {groups.map((g) => {
+            const active = g.tabs.includes(activeTab);
+            const single = g.tabs.length === 1;
+            return (
+              // Single-tab groups show the tab's own name (e.g. "Closeout"); multi-tab groups show
+              // the phase label + a stable aria-label so tests/AT can target the phase.
+              <button key={g.label} aria-label={single ? undefined : g.label} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
+                {single ? g.tabs[0] : g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
+              </button>
+            );
+          })}
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-slate-50 to-transparent dark:from-slate-950 md:hidden" />
       </div>
       {/* Level 2 — sub-tabs of the active group (only when the group has more than one) */}
       {activeGroup.tabs.length > 1 && (

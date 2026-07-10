@@ -134,7 +134,8 @@ export default function PortfolioSummary() {
       {/* KPI stat strip — one cohesive card with divided cells. All 8 sit on a single
           row on wide screens; on narrow ones the strip scrolls horizontally. */}
       <Card className="overflow-hidden !p-0">
-        <div className="flex divide-x divide-slate-200 overflow-x-auto dark:divide-slate-800">
+        {/* Mobile: 2-col grid so all KPIs are visible (thin dividers via gap-px). sm+: one scrollable strip. */}
+        <div className="grid grid-cols-2 gap-px bg-slate-200 dark:bg-slate-800 sm:flex sm:gap-0 sm:divide-x sm:divide-slate-200 sm:overflow-x-auto sm:bg-transparent sm:dark:divide-slate-800">
           {([
             { label: 'Projects', value: String(t.count), icon: KPI_ICON.projects },
             { label: 'Total BAC', value: formatIdrShort(t.bac), title: formatIdr(t.bac), strong: true, icon: KPI_ICON.bac },
@@ -145,7 +146,7 @@ export default function PortfolioSummary() {
             { label: '% Complete', value: `${formatNum(t.scheduleProgress * 100, 1)}%`, icon: KPI_ICON.percent },
             { label: 'Schedule slip', value: t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule', warn: t.slippedCount > 0, icon: KPI_ICON.schedule },
           ] as Array<{ label: string; value: string; icon: string; title?: string; strong?: boolean; warn?: boolean }>).map((s) => (
-            <div key={s.label} className="min-w-[7.25rem] flex-1 px-3.5 py-2.5">
+            <div key={s.label} className="min-w-[7.25rem] flex-1 bg-white px-3.5 py-2.5 dark:bg-slate-900 sm:bg-transparent sm:dark:bg-transparent">
               <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
                 <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={s.icon} /></svg>
                 <span className="truncate text-[10px] font-medium uppercase tracking-wide" title={s.label}>{s.label}</span>

@@ -104,29 +104,29 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{greeting}, {firstName} 👋</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex max-w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5 text-sm">
             <button
               onClick={() => setView('portfolio')}
-              className={`rounded-md px-3 py-1 transition ${view ==='portfolio' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1 transition ${view ==='portfolio' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
             >
               {isPmo ? 'Portfolio EVM' : 'My Projects'}
             </button>
             <button
               onClick={() => setView('forecast')}
-              className={`rounded-md px-3 py-1 transition ${view ==='forecast' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1 transition ${view ==='forecast' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
             >
               Forecast
             </button>
             <button
               onClick={() => setView('resources')}
-              className={`rounded-md px-3 py-1 transition ${view ==='resources' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1 transition ${view ==='resources' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
             >
               Utilization
             </button>
             <button
               onClick={() => setView('cards')}
-              className={`rounded-md px-3 py-1 transition ${view ==='cards' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1 transition ${view ==='cards' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}
             >
               Project Cards
             </button>
