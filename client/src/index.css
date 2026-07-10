@@ -93,3 +93,9 @@ html.dark .prima-rows tbody tr:hover {
     animation: none;
   }
 }
+
+/* Lift the floating action button above the install banner while it's shown,
+   so the FAB never covers the banner's Pasang/dismiss controls. */
+body.has-install-banner .fab {
+  bottom: calc(9rem + env(safe-area-inset-bottom));
+}

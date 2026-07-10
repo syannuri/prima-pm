@@ -24,6 +24,15 @@ export default function InstallPrompt() {
   }, []);
 
   const show = !dismissed && (canInstall || (iosHint && ready));
+
+  // While the banner is up, mark the body so a floating action button (if any)
+  // lifts itself above the banner instead of overlapping its buttons.
+  useEffect(() => {
+    const cls = 'has-install-banner';
+    document.body.classList.toggle(cls, show);
+    return () => document.body.classList.remove(cls);
+  }, [show]);
+
   if (!show) return null;
 
   const close = () => {

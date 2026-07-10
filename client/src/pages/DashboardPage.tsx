@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import MobileDashboard from '../components/MobileDashboard';
+import Fab from '../components/Fab';
 import { useIsMobile } from '../hooks/useIsMobile';
 import PortfolioForecast from '../components/PortfolioForecast';
 import PortfolioEvmTrend from '../components/PortfolioEvmTrend';
@@ -149,7 +150,7 @@ export default function DashboardPage() {
       <AssignmentBanner />
       {/* Phones (PM/PMO) get a tailored, card-first portfolio dashboard; desktop keeps the full stack. */}
       {view === 'portfolio' && (isMobile ? (
-        <MobileDashboard onNewProject={canCreate ? () => setShowForm(true) : undefined} />
+        <MobileDashboard />
       ) : (
         <>
           <PlanningReminders />
@@ -162,6 +163,11 @@ export default function DashboardPage() {
       ))}
       {view === 'forecast' && <PortfolioForecast />}
       {view === 'resources' && <ResourceCapacity />}
+
+      {/* Phones: floating "+" to create a project (portfolio & cards views). */}
+      {isMobile && canCreate && !showForm && (view === 'portfolio' || view === 'cards') && (
+        <Fab label="Proyek baru" onClick={() => setShowForm(true)} />
+      )}
 
       {showForm && (
         <Modal onClose={() => setShowForm(false)} title="New Project" size="lg">

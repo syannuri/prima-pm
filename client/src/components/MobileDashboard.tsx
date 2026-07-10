@@ -36,7 +36,7 @@ const ICON = {
   clock: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 7v5l3 2',
 };
 
-export default function MobileDashboard({ onNewProject }: { onNewProject?: () => void }) {
+export default function MobileDashboard() {
   const { user } = useAuth();
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const [statusDate] = useState(formatDateInput(new Date()));
@@ -55,12 +55,12 @@ export default function MobileDashboard({ onNewProject }: { onNewProject?: () =>
   const projects = [...data.projects].sort((a, b) => (RANK[a.health] - RANK[b.health]) || a.spi - b.spi);
 
   // Quick actions — route shortcuts most useful for PM/PMO on the go.
+  // ("New project" lives on the floating action button, not here.)
   const actions: { label: string; icon: string; tint: string; to?: string; onClick?: () => void }[] = [
     { label: 'Reports', icon: ICON.reports, tint: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400', to: '/reports' },
     isPmo
       ? { label: 'Resources', icon: ICON.resources, tint: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400', to: '/admin/resources' }
       : { label: 'Timesheet', icon: ICON.clock, tint: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400', to: '/my-timesheet' },
-    ...(isPmo && onNewProject ? [{ label: 'New project', icon: ICON.plus, tint: 'bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400', onClick: onNewProject }] : []),
   ];
   const actionCols = actions.length >= 3 ? 'grid-cols-3' : 'grid-cols-2';
 
