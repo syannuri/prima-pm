@@ -38,7 +38,7 @@ export default function MobileTabBar() {
             <span className="relative">
               <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={t.active ? 2.4 : 1.9} strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
               {t.badge > 0 && (
-                <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-[1rem] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-slate-900">
+                <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-[1rem] place-items-center rounded-full bg-slate-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:bg-slate-600 dark:ring-slate-900">
                   {t.badge > 9 ? '9+' : t.badge}
                 </span>
               )}

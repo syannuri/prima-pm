@@ -122,7 +122,7 @@ export default function NotificationBell() {
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
         {total > 0 && (
-          <span className={`absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full px-1 text-xs font-bold text-white ${high > 0 ? 'bg-red-600' : 'bg-amber-500'}`}>
+          <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-slate-500 px-1 text-xs font-bold text-white ring-2 ring-white dark:bg-slate-600 dark:ring-slate-900">
             {total}
           </span>
         )}
