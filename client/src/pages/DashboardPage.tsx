@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -21,6 +21,7 @@ import PortfolioSummary from '../components/PortfolioSummary';
 import MobileDashboard from '../components/MobileDashboard';
 import Fab from '../components/Fab';
 import PullToRefresh from '../components/PullToRefresh';
+import { useSwipe } from '../hooks/useSwipe';
 import { useIsMobile } from '../hooks/useIsMobile';
 import PortfolioForecast from '../components/PortfolioForecast';
 import PortfolioEvmTrend from '../components/PortfolioEvmTrend';
@@ -40,7 +41,7 @@ export default function DashboardPage() {
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState<'portfolio' | 'forecast' | 'resources' | 'cards'>('portfolio');
   // The mobile "Projects" tab deep-links to ?view=cards; keep the view in sync with the URL.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const v = searchParams.get('view');
     setView(v === 'cards' ? 'cards' : v === 'forecast' ? 'forecast' : v === 'resources' ? 'resources' : 'portfolio');
@@ -94,6 +95,17 @@ export default function DashboardPage() {
   const canCreate = isPmo;
   const isMobile = useIsMobile();
 
+  // Phones: swipe left/right to move between the two dashboard tabs
+  // (Home/portfolio ⇄ Projects/cards), mirroring the bottom tab bar.
+  const swipeRef = useRef<HTMLDivElement>(null);
+  const goView = (v: 'portfolio' | 'cards') =>
+    setSearchParams(v === 'cards' ? { view: 'cards' } : {}, { replace: true });
+  useSwipe(swipeRef, {
+    enabled: isMobile && (view === 'portfolio' || view === 'cards'),
+    onLeft: () => { if (view === 'portfolio') goView('cards'); },
+    onRight: () => { if (view === 'cards') goView('portfolio'); },
+  });
+
   // Warm header: time-based greeting + today's date + a one-line portfolio pulse,
   // in the user's chosen language (auto-detected from the browser, overridable in Settings).
   const now = new Date();
@@ -109,7 +121,7 @@ export default function DashboardPage() {
       : `${projectCount} ${noun} ${isPmo ? 'in the portfolio' : 'assigned to you'}`;
 
   return (
-    <div className="space-y-5">
+    <div ref={swipeRef} className="space-y-5">
       {/* Whole header row (greeting + view toggle + New Project) is desktop-only; on phones the
           mobile dashboard hero + quick actions + bottom tab bar handle greeting and navigation. */}
       <div className="hidden flex-wrap items-center justify-between gap-3 sm:flex">
