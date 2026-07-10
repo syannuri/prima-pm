@@ -109,7 +109,9 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
             No manpower lines yet. Add manpower in the Cost tab (and link it to a task) to track effort here.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Desktop: table. Mobile (< sm): card list below. */}
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase text-slate-400">
@@ -145,6 +147,40 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
               </tfoot>
             </table>
           </div>
+          {/* Mobile card list — table hidden < sm. */}
+          <div className="space-y-2 sm:hidden">
+            {lines.map((l) => (
+              <div key={l.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium text-slate-700 dark:text-slate-200">{l.resourceName}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{l.taskName ?? <span className="italic text-slate-400">unlinked</span>}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Efficiency</div>
+                    <div className={`font-semibold tabular-nums ${effClass(l.efficiency)}`}>{l.efficiency != null ? l.efficiency.toFixed(2) : '—'}</div>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  <div><div className="text-slate-400">Plan</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.planMandays, 0)}</div></div>
+                  <div><div className="text-slate-400">Earned</div><div className="tabular-nums text-slate-600 dark:text-slate-300">{formatNum(l.earnedMandays, 1)} <span className="text-slate-400">({l.progressPct}%)</span></div></div>
+                  <div><div className="text-slate-400">Logged</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.consumedMandays, 1)}</div></div>
+                </div>
+              </div>
+            ))}
+            <div className="rounded-lg border-2 border-slate-200 p-3 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-700 dark:text-slate-200">Total</span>
+                <span className={`font-semibold tabular-nums ${effClass(totalEff)}`}>Eff {totalEff != null ? totalEff.toFixed(2) : '—'}</span>
+              </div>
+              <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
+                <div><span className="text-slate-400">Plan </span><span className="tabular-nums font-medium">{formatNum(totals.planMandays, 0)}</span></div>
+                <div><span className="text-slate-400">Earned </span><span className="tabular-nums">{formatNum(totals.earnedMandays, 1)}</span></div>
+                <div><span className="text-slate-400">Logged </span><span className="tabular-nums font-medium">{formatNum(totals.consumedMandays, 1)}</span></div>
+              </div>
+            </div>
+          </div>
+          </>
         )}
       </Card>
 

@@ -145,7 +145,8 @@ export default function MyTimesheetPage() {
           {/* Assignments grouped by project. */}
           <Card>
             <SectionTitle sub="Planned vs delivered (progress × plan) vs logged, per project.">My assignments</SectionTitle>
-            <div className="overflow-x-auto">
+            {/* Desktop: table. Mobile (< sm): card list below. */}
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase text-slate-400">
@@ -177,6 +178,30 @@ export default function MyTimesheetPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            {/* Mobile card list — table hidden < sm. */}
+            <div className="space-y-4 sm:hidden">
+              {groups.map((g) => (
+                <div key={g.code}>
+                  <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-slate-400">{g.code}</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-200">{g.name}</span>
+                    <Badge color={PROJECT_STATUS_BADGE[g.status]}>{STATUS_TEXT[g.status] ?? g.status}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {g.lines.map((l) => (
+                      <div key={l.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                        <div className="font-medium text-slate-700 dark:text-slate-200">{l.taskName ?? <span className="italic text-slate-400">unlinked</span>}</div>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                          <div><div className="text-slate-400">Plan</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.planMandays, 0)}</div></div>
+                          <div><div className="text-slate-400">Earned</div><div className="tabular-nums text-slate-600 dark:text-slate-300">{formatNum(l.earnedMandays, 1)} <span className="text-slate-400">({l.progressPct}%)</span></div></div>
+                          <div><div className="text-slate-400">Logged</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.consumedMandays, 1)}</div></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </Card>
         </>
