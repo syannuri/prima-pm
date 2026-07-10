@@ -49,20 +49,17 @@ export default function MobileDashboard() {
       {/* Hero — portfolio health at a glance */}
       <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${HERO[status].grad} p-5 text-white shadow-lg ${HERO[status].shadow}`}>
         <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/10" />
-        <div className="relative flex items-start justify-between">
-          <div>
+        <div className="relative flex items-center gap-4">
+          <Ring pct={pct} />
+          <div className="min-w-0">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Portfolio health</div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-4xl font-bold leading-none">{pct}%</span>
-              <span className="text-sm text-white/80">complete</span>
+            <div className="mt-0.5 text-xl font-bold leading-tight">{RAG[status].label}</div>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-white/90">
+              <span><span className="text-white/70">SPI</span> <span className="font-semibold">{t.pv > 0 ? formatNum(t.spi, 2) : '—'}</span></span>
+              <span><span className="text-white/70">CPI</span> <span className="font-semibold">{t.ac > 0 ? formatNum(t.cpi, 2) : '—'}</span></span>
+              <span className="font-semibold">{t.count} <span className="font-normal text-white/70">projects</span></span>
             </div>
           </div>
-          <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold backdrop-blur-sm">{RAG[status].label}</span>
-        </div>
-        <div className="relative mt-4 flex items-center gap-4 text-sm">
-          <span><span className="text-white/70">SPI</span> <span className="font-semibold">{t.pv > 0 ? formatNum(t.spi, 2) : '—'}</span></span>
-          <span><span className="text-white/70">CPI</span> <span className="font-semibold">{t.ac > 0 ? formatNum(t.cpi, 2) : '—'}</span></span>
-          <span className="ml-auto font-semibold">{t.count} <span className="font-normal text-white/70">projects</span></span>
         </div>
         <div className="relative mt-4 flex flex-wrap gap-2">
           {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
@@ -118,6 +115,25 @@ export default function MobileDashboard() {
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// White %-complete donut on the coloured hero (track = translucent white, arc = white).
+function Ring({ pct }: { pct: number }) {
+  const r = 30;
+  const circ = 2 * Math.PI * r;
+  const dash = (Math.min(100, Math.max(0, pct)) / 100) * circ;
+  return (
+    <div className="relative h-[76px] w-[76px] shrink-0">
+      <svg viewBox="0 0 72 72" className="h-full w-full -rotate-90">
+        <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="7" />
+        <circle cx="36" cy="36" r={r} fill="none" stroke="white" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${dash} ${circ}`} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+        <span className="text-lg font-bold">{pct}%</span>
+        <span className="mt-0.5 text-[9px] uppercase tracking-wide text-white/70">done</span>
       </div>
     </div>
   );
