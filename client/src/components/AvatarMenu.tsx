@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 const initials = (name?: string) =>
   (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase() || 'U';
@@ -10,6 +11,7 @@ const I = {
   help: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM9.5 9a2.5 2.5 0 0 1 4.86.83c0 1.67-2.5 2.5-2.5 2.5M12 17h.01',
   users: 'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM21 21v-2a4 4 0 0 0-3-3.87',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+  install: 'M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14',
 };
 
 const Ico = ({ d }: { d: string }) => (
@@ -20,6 +22,7 @@ const Ico = ({ d }: { d: string }) => (
 // home for Settings, Manual and Logout (replacing the separate header buttons).
 export default function AvatarMenu() {
   const { user, logout } = useAuth();
+  const { canInstall, promptInstall } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const itemCls = 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800';
@@ -48,6 +51,9 @@ export default function AvatarMenu() {
               <Link to="/settings" onClick={close} className={itemCls}><Ico d={I.gear} /> Settings</Link>
               <Link to="/manual" onClick={close} className={itemCls}><Ico d={I.help} /> Manual &amp; help</Link>
               {user?.role === 'ADMIN' && <Link to="/admin/users" onClick={close} className={itemCls}><Ico d={I.users} /> Users</Link>}
+              {canInstall && (
+                <button onClick={() => { close(); promptInstall(); }} className={`w-full ${itemCls}`}><Ico d={I.install} /> Pasang aplikasi</button>
+              )}
             </nav>
             <div className="border-t border-slate-100 p-1.5 dark:border-slate-800">
               <button onClick={() => { close(); logout(); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"><Ico d={I.logout} /> Logout</button>

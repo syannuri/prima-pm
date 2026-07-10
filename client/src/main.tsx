@@ -34,3 +34,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// Register the service worker in production only (skips Vite dev/HMR). Enables
+// the installable PWA ("Add to Home Screen") and offline app-shell boot.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* SW is a progressive enhancement — ignore registration failures */
+    });
+  });
+}

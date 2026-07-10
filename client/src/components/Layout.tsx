@@ -7,6 +7,7 @@ import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
 import MobileTabBar from './MobileTabBar';
 import AvatarMenu from './AvatarMenu';
+import InstallPrompt from './InstallPrompt';
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { logout } = useAuth();
@@ -130,6 +131,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </main>
       </div>
 
+      <InstallPrompt />
       <MobileTabBar />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
