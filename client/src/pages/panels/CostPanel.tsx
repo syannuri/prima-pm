@@ -12,14 +12,34 @@ const DIRECT_TYPES = [
   { value: 'TECHNOLOGY_ONPREM', label: 'Technology — On-Premise' },
   { value: 'TECHNOLOGY_CLOUD', label: 'Technology — Cloud' },
   { value: 'HARDWARE_LICENSE', label: 'Hardware License' },
+  { value: 'HARDWARE_EQUIPMENT', label: 'Hardware / Equipment' },
   { value: 'SOFTWARE_LICENSE', label: 'Software License' },
+  { value: 'SUBCONTRACTOR', label: 'Subcontractor / Prof. Services' },
+  { value: 'TRAINING_CERTIFICATION', label: 'Training & Certification' },
+  { value: 'SUPPORT_MAINTENANCE', label: 'Support & Maintenance (AMC)' },
   { value: 'MANPOWER', label: 'Manpower' },
+  { value: 'OTHER', label: 'Other' },
 ];
 const INDIRECT_TYPES = [
   { value: 'TRANSPORTATION', label: 'Transportation' },
   { value: 'ACCOMMODATION', label: 'Accommodation' },
+  { value: 'MEALS_PERDIEM', label: 'Meals & Per Diem' },
+  { value: 'COMMUNICATION', label: 'Communication' },
+  { value: 'OFFICE_SUPPLIES', label: 'Office Supplies (ATK)' },
+  { value: 'MEETING_VENUE', label: 'Meeting & Venue' },
   { value: 'ENTERTAINMENT', label: 'Entertainment' },
+  { value: 'OTHER', label: 'Other' },
 ];
+
+// Enum value → friendly label lookup (falls back to a humanized enum for any unknown/legacy value).
+const DIRECT_LABEL: Record<string, string> = Object.fromEntries(DIRECT_TYPES.map((t) => [t.value, t.label]));
+const INDIRECT_LABEL: Record<string, string> = Object.fromEntries(INDIRECT_TYPES.map((t) => [t.value, t.label]));
+const humanize = (v: string) => v.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+// Render a type as its friendly label, appending the free-text sub-category for OTHER lines.
+const typeLabel = (map: Record<string, string>, type: string, subCategory?: string | null) => {
+  const base = map[type] ?? humanize(type);
+  return type === 'OTHER' && subCategory ? `${base} · ${subCategory}` : base;
+};
 
 // Flatten a gantt tree to its leaf tasks (work packages manpower is assigned to).
 function flattenLeaves(nodes: GanttNode[]): GanttNode[] {
@@ -177,6 +197,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
   const confirm = useConfirm();
   const [type, setType] = useState('TECHNOLOGY_CLOUD');
   const [label, setLabel] = useState('');
+  const [subCategory, setSubCategory] = useState('');
   const [qty, setQty] = useState('1');
   const [unitCost, setUnitCost] = useState('');
   const [planMandays, setMandays] = useState('');
@@ -185,6 +206,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
   const [taskId, setTaskId] = useState('');
   const [err, setErr] = useState('');
   const isManpower = type === 'MANPOWER';
+  const isOther = type === 'OTHER';
 
   // Manpower is loaded from the resource master pool (rate & role come from it).
   const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources') });
@@ -199,8 +221,8 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
     mutationFn: () =>
       api.post(`${base}/direct`, isManpower
         ? { type, label: label || picked?.name || '', resourceId, planMandays: Number(planMandays), unitCostPerManday: rateOverride === '' ? undefined : Number(rateOverride), taskId: taskId || undefined }
-        : { type, label, qty: Number(qty), unitCost: Number(unitCost) }),
-    onSuccess: () => { setLabel(''); setUnitCost(''); setMandays(''); setResourceId(''); setRateOverride(''); setTaskId(''); setErr(''); onChange(); },
+        : { type, label, qty: Number(qty), unitCost: Number(unitCost), subCategory: isOther ? subCategory : undefined }),
+    onSuccess: () => { setLabel(''); setSubCategory(''); setUnitCost(''); setMandays(''); setResourceId(''); setRateOverride(''); setTaskId(''); setErr(''); onChange(); },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
   const del = useMutation({
@@ -247,12 +269,13 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
 
   // --- Inline edit of an existing direct-cost line ---
   const [editId, setEditId] = useState<string | null>(null);
-  const [ef, setEf] = useState({ type: 'TECHNOLOGY_CLOUD', label: '', qty: '1', unitCost: '', mandays: '', rate: '' });
+  const [ef, setEf] = useState({ type: 'TECHNOLOGY_CLOUD', label: '', subCategory: '', qty: '1', unitCost: '', mandays: '', rate: '' });
   const startEdit = (d: DirectCost) => {
     setEditId(d.id);
     setEf({
       type: d.type,
       label: d.label,
+      subCategory: d.subCategory ?? '',
       qty: d.qty != null ? String(d.qty) : '1',
       unitCost: d.unitCost != null ? String(Math.trunc(Number(d.unitCost))) : '',
       mandays: d.planMandays != null ? String(d.planMandays) : '',
@@ -267,7 +290,7 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
             taskId: d.taskId ?? undefined, unitCostPerManday: Number(ef.rate),
             ...(d.resourceId ? { resourceId: d.resourceId } : { personnelRole: d.personnelRole }),
           }
-        : { type: ef.type, label: ef.label, qty: Number(ef.qty), unitCost: Number(ef.unitCost) }),
+        : { type: ef.type, label: ef.label, qty: Number(ef.qty), unitCost: Number(ef.unitCost), subCategory: ef.type === 'OTHER' ? ef.subCategory : undefined }),
     onSuccess: () => { setEditId(null); onChange(); toast.success('Cost line updated'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update cost line'),
   });
@@ -304,11 +327,16 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                     <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
                       {DIRECT_TYPES.filter((t) => t.value !== 'MANPOWER').map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </Select>
-                  ) : d.type}
+                  ) : typeLabel(DIRECT_LABEL, d.type, d.subCategory)}
                 </td>
                 <td>
                   {editing ? (
-                    <Input aria-label="Label" value={ef.label} onChange={(e) => setEf((p) => ({ ...p, label: e.target.value }))} placeholder="Label" />
+                    <>
+                      <Input aria-label="Label" value={ef.label} onChange={(e) => setEf((p) => ({ ...p, label: e.target.value }))} placeholder="Label" />
+                      {ef.type === 'OTHER' && (
+                        <Input aria-label="Sub-category" className="mt-1" value={ef.subCategory} onChange={(e) => setEf((p) => ({ ...p, subCategory: e.target.value }))} placeholder="Specify category *" />
+                      )}
+                    </>
                   ) : (
                     <>
                       <div>{d.label}</div>
@@ -438,13 +466,15 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
           <>
             <Input type="number" aria-label="Quantity" placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
             <MoneyInput aria-label="Unit cost (IDR)" placeholder="Unit cost" value={unitCost} onValueChange={setUnitCost} />
-            <div />
+            {isOther ? (
+              <Input aria-label="Sub-category" placeholder="Specify category *" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} title="Name the kind of cost (e.g. Insurance, Legal)" />
+            ) : <div />}
             <div />
           </>
         )}
         <Button
           onClick={() => add.mutate()}
-          disabled={add.isPending || (isManpower ? !resourceId || !planMandays : !label)}
+          disabled={add.isPending || (isManpower ? !resourceId || !planMandays : !label || (isOther && !subCategory.trim()))}
           title={isManpower ? (!resourceId ? 'Pick a Resource from the pool first' : !planMandays ? 'Enter Plan mandays' : 'Add manpower line') : !label ? 'Enter a label first' : 'Add cost line'}
         >
           Add
@@ -465,17 +495,19 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
   const confirm = useConfirm();
   const [type, setType] = useState('TRANSPORTATION');
   const [description, setDescription] = useState('');
+  const [subCategory, setSubCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [editId, setEditId] = useState<string | null>(null);
-  const [ef, setEf] = useState({ type: 'TRANSPORTATION', description: '', amount: '' });
+  const [ef, setEf] = useState({ type: 'TRANSPORTATION', description: '', subCategory: '', amount: '' });
+  const isOther = type === 'OTHER';
 
   const add = useMutation({
-    mutationFn: () => api.post(`${base}/indirect`, { type, description, amount: Number(amount) }),
-    onSuccess: () => { setDescription(''); setAmount(''); onChange(); },
+    mutationFn: () => api.post(`${base}/indirect`, { type, description, amount: Number(amount), subCategory: isOther ? subCategory : undefined }),
+    onSuccess: () => { setDescription(''); setSubCategory(''); setAmount(''); onChange(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to add indirect cost'),
   });
   const update = useMutation({
-    mutationFn: (id: string) => api.put(`${base}/indirect/${id}`, { type: ef.type, description: ef.description, amount: Number(ef.amount) }),
+    mutationFn: (id: string) => api.put(`${base}/indirect/${id}`, { type: ef.type, description: ef.description, amount: Number(ef.amount), subCategory: ef.type === 'OTHER' ? ef.subCategory : undefined }),
     onSuccess: () => { setEditId(null); onChange(); toast.success('Indirect cost updated'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update indirect cost'),
   });
@@ -487,9 +519,9 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
   const confirmDelete = async (i: { id: string; description: string }) => {
     if (await confirm({ title: 'Delete indirect cost?', message: <>Delete <strong>{i.description}</strong>?</>, confirmLabel: 'Delete', danger: true })) del.mutate(i.id);
   };
-  const startEdit = (i: { id: string; type: string; description: string; amount: string | number }) => {
+  const startEdit = (i: { id: string; type: string; description: string; subCategory: string | null; amount: string | number }) => {
     setEditId(i.id);
-    setEf({ type: i.type, description: i.description, amount: String(Math.trunc(Number(i.amount))) });
+    setEf({ type: i.type, description: i.description, subCategory: i.subCategory ?? '', amount: String(Math.trunc(Number(i.amount))) });
   };
   // Running total of recorded indirect lines, so the projected grand total can be
   // previewed before the new line is submitted.
@@ -498,7 +530,7 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
 
   return (
     <Card>
-      <SectionTitle sub="Transportation, accommodation, entertainment">Indirect Cost</SectionTitle>
+      <SectionTitle sub="Overhead: transport, accommodation, meals, communication, supplies, venue…">Indirect Cost</SectionTitle>
       <div className="overflow-x-auto">
         <table className="prima-rows w-full text-sm">
           <tbody>
@@ -511,9 +543,18 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
                     <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
                       {INDIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </Select>
-                  ) : i.type}
+                  ) : typeLabel(INDIRECT_LABEL, i.type, i.subCategory)}
                 </td>
-                <td>{editing ? <Input aria-label="Description" value={ef.description} onChange={(e) => setEf((p) => ({ ...p, description: e.target.value }))} /> : i.description}</td>
+                <td>
+                  {editing ? (
+                    <>
+                      <Input aria-label="Description" value={ef.description} onChange={(e) => setEf((p) => ({ ...p, description: e.target.value }))} />
+                      {ef.type === 'OTHER' && (
+                        <Input aria-label="Sub-category" className="mt-1" value={ef.subCategory} onChange={(e) => setEf((p) => ({ ...p, subCategory: e.target.value }))} placeholder="Specify category *" />
+                      )}
+                    </>
+                  ) : i.description}
+                </td>
                 <td className="text-right font-medium tabular-nums">
                   {editing ? <div className="ml-auto w-32"><MoneyInput aria-label="Amount" value={ef.amount} onValueChange={(v) => setEf((p) => ({ ...p, amount: v }))} /></div> : formatIdr(i.amount)}
                 </td>
@@ -546,13 +587,16 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
           )}
         </table>
       </div>
-      <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
+      <div className={`mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 ${isOther ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
         <Select aria-label="Indirect cost type" value={type} onChange={(e) => setType(e.target.value)}>
           {INDIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </Select>
+        {isOther && (
+          <Input aria-label="Sub-category" placeholder="Specify category *" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} title="Name the kind of cost (e.g. Insurance, Bank charges)" />
+        )}
         <Input aria-label="Indirect cost description" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
         <MoneyInput aria-label="Indirect cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
-        <Button onClick={() => add.mutate()} disabled={!description || !amount || add.isPending}>Add</Button>
+        <Button onClick={() => add.mutate()} disabled={!description || !amount || (isOther && !subCategory.trim()) || add.isPending}>Add</Button>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-sm">
         <span className="text-slate-500 dark:text-slate-400">Amount (auto): <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(addAmount)}</span></span>

@@ -224,6 +224,7 @@ export interface DirectCost {
   id: string;
   type: string;
   label: string;
+  subCategory: string | null;
   qty: string | null;
   unitCost: string | null;
   amount: string | null;
@@ -242,6 +243,7 @@ export interface IndirectCost {
   id: string;
   type: string;
   description: string;
+  subCategory: string | null;
   amount: string;
 }
 

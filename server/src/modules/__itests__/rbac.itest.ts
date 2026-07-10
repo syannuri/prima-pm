@@ -344,6 +344,54 @@ describe('RBAC enforcement (server-side, end-to-end)', () => {
   });
 });
 
+describe('cost categories: new types + OTHER sub-category', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Cost-Cats', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+  });
+
+  it('accepts a newly-added direct material type (SUPPORT_MAINTENANCE)', async () => {
+    const res = await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN))
+      .send({ type: 'SUPPORT_MAINTENANCE', label: 'Annual AMC', qty: 1, unitCost: 12_000_000 });
+    expect(res.status).toBe(201);
+    expect(res.body.line.type).toBe('SUPPORT_MAINTENANCE');
+    expect(res.body.line.subCategory).toBeNull();
+  });
+
+  it('rejects a direct OTHER line without a sub-category (400)', async () => {
+    const res = await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN))
+      .send({ type: 'OTHER', label: 'Misc', qty: 1, unitCost: 500_000 });
+    expect(res.status).toBe(400);
+  });
+
+  it('persists the sub-category on a direct OTHER line', async () => {
+    const res = await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN))
+      .send({ type: 'OTHER', label: 'Project liability cover', qty: 1, unitCost: 8_000_000, subCategory: 'Insurance' });
+    expect(res.status).toBe(201);
+    expect(res.body.line.type).toBe('OTHER');
+    expect(res.body.line.subCategory).toBe('Insurance');
+  });
+
+  it('accepts a newly-added indirect type (MEALS_PERDIEM)', async () => {
+    const res = await request(app).post(api(`/projects/${pid}/cost/indirect`)).set(auth(tokens.ADMIN))
+      .send({ type: 'MEALS_PERDIEM', description: 'Workshop lunches', amount: 2_500_000 });
+    expect(res.status).toBe(201);
+    expect(res.body.line.type).toBe('MEALS_PERDIEM');
+  });
+
+  it('rejects an indirect OTHER line without a sub-category (400), accepts it with one', async () => {
+    const bad = await request(app).post(api(`/projects/${pid}/cost/indirect`)).set(auth(tokens.ADMIN))
+      .send({ type: 'OTHER', description: 'Bank admin fees', amount: 150_000 });
+    expect(bad.status).toBe(400);
+    const ok = await request(app).post(api(`/projects/${pid}/cost/indirect`)).set(auth(tokens.ADMIN))
+      .send({ type: 'OTHER', description: 'Bank admin fees', amount: 150_000, subCategory: 'Bank charges' });
+    expect(ok.status).toBe(201);
+    expect(ok.body.line.subCategory).toBe('Bank charges');
+  });
+});
+
 describe('manpower → task Owner prefill (only when the task has no owner)', () => {
   let pid = '';
   let resourceId = '';

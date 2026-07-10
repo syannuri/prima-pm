@@ -63,6 +63,11 @@ enum DirectCostType {
   HARDWARE_LICENSE
   SOFTWARE_LICENSE
   MANPOWER
+  SUBCONTRACTOR
+  TRAINING_CERTIFICATION
+  SUPPORT_MAINTENANCE
+  HARDWARE_EQUIPMENT
+  OTHER
 }
 
 enum PersonnelRole {
@@ -74,6 +79,11 @@ enum IndirectCostType {
   TRANSPORTATION
   ACCOMMODATION
   ENTERTAINMENT
+  MEALS_PERDIEM
+  COMMUNICATION
+  OFFICE_SUPPLIES
+  MEETING_VENUE
+  OTHER
 }
 
 enum RiskKind {
@@ -324,8 +334,10 @@ model CostItemDirect {
   project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   type      DirectCostType
   label     String
+  // Free-text classification for type = OTHER (e.g. "Insurance", "Legal"); null otherwise.
+  subCategory String?
 
-  // --- Material fields (TECHNOLOGY_*, HARDWARE_LICENSE, SOFTWARE_LICENSE) ---
+  // --- Material fields (every non-MANPOWER type: TECHNOLOGY_*, HARDWARE_*, SOFTWARE_LICENSE, SUBCONTRACTOR, TRAINING_CERTIFICATION, SUPPORT_MAINTENANCE, OTHER) ---
   qty       Decimal?       @db.Decimal(18, 2)
   unitCost  Decimal?       @db.Decimal(18, 2)
   amount    Decimal?       @db.Decimal(18, 2) // = qty * unitCost
@@ -364,6 +376,8 @@ model CostItemIndirect {
   project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   type        IndirectCostType
   description String
+  // Free-text classification for type = OTHER (e.g. "Insurance", "Bank charges"); null otherwise.
+  subCategory String?
   amount      Decimal          @db.Decimal(18, 2)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt

@@ -134,6 +134,7 @@ export async function addDirectLine(projectId: string, input: DirectLineInput, a
     projectId,
     type: input.type,
     label: input.label ?? '',
+    subCategory: input.type === 'OTHER' ? input.subCategory?.trim() ?? null : null,
   };
 
   if (input.type === 'MANPOWER') {
@@ -176,7 +177,11 @@ export async function updateDirectLine(
   if (!existing) throw NotFound('Direct cost line not found');
   await assertBaselineUnlocked(projectId);
 
-  const data: Prisma.CostItemDirectUncheckedUpdateInput = { type: input.type, label: input.label ?? '' };
+  const data: Prisma.CostItemDirectUncheckedUpdateInput = {
+    type: input.type,
+    label: input.label ?? '',
+    subCategory: input.type === 'OTHER' ? input.subCategory?.trim() ?? null : null,
+  };
   if (input.type === 'MANPOWER') {
     const m = await resolveManpower(input);
     data.label = m.label;
@@ -241,7 +246,13 @@ export async function addIndirectLine(projectId: string, input: IndirectLineInpu
   await assertBaselineUnlocked(projectId);
   const line = await prisma.$transaction(async (tx) => {
     const created = await tx.costItemIndirect.create({
-      data: { projectId, type: input.type, description: input.description, amount: input.amount },
+      data: {
+        projectId,
+        type: input.type,
+        description: input.description,
+        subCategory: input.type === 'OTHER' ? input.subCategory?.trim() ?? null : null,
+        amount: input.amount,
+      },
     });
     await recomputeBaseline(projectId, tx);
     return created;
@@ -262,7 +273,12 @@ export async function updateIndirectLine(
   const line = await prisma.$transaction(async (tx) => {
     const updated = await tx.costItemIndirect.update({
       where: { id: itemId },
-      data: { type: input.type, description: input.description, amount: input.amount },
+      data: {
+        type: input.type,
+        description: input.description,
+        subCategory: input.type === 'OTHER' ? input.subCategory?.trim() ?? null : null,
+        amount: input.amount,
+      },
     });
     await recomputeBaseline(projectId, tx);
     return updated;

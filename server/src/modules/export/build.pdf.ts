@@ -84,13 +84,18 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
 
   // ---------- Cost ----------
   heading('2. Cost Management');
+  // Humanize the enum; append the free-text sub-category for OTHER lines.
+  const typeText = (t: string, sub?: string | null) => {
+    const base = t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return t === 'OTHER' && sub ? `${base} · ${sub}` : base;
+  };
   table(
     [
       { title: 'Type', w: 110 }, { title: 'Item', w: 150 },
       { title: 'Detail', w: 140 }, { title: 'Amount', w: 115, align: 'right' },
     ],
     data.cost.directCosts.map((d) => [
-      d.type, d.label,
+      typeText(d.type, d.subCategory), d.label,
       d.type === 'MANPOWER' ? `${num(d.unitCostPerManday).toLocaleString('id-ID')}/md × ${num(d.planMandays)}` : `${num(d.qty)} × ${num(d.unitCost).toLocaleString('id-ID')}`,
       formatIdr(d.type === 'MANPOWER' ? num(d.manpowerCost) : num(d.amount)),
     ]),
@@ -98,7 +103,7 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
   if (data.cost.indirectCosts.length) {
     table(
       [{ title: 'Indirect Type', w: 150 }, { title: 'Description', w: 250 }, { title: 'Amount', w: 115, align: 'right' }],
-      data.cost.indirectCosts.map((i) => [i.type, i.description, formatIdr(num(i.amount))]),
+      data.cost.indirectCosts.map((i) => [typeText(i.type, i.subCategory), i.description, formatIdr(num(i.amount))]),
     );
   }
   const b = data.cost.baseline;

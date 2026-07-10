@@ -56,6 +56,11 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
   // --- Cost ---
   const co = wb.addWorksheet('Cost');
   co.columns = [{ width: 22 }, { width: 34 }, { width: 30 }, { width: 20 }];
+  // Humanize the enum; append the free-text sub-category for OTHER lines.
+  const typeText = (t: string, sub?: string | null) => {
+    const base = t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return t === 'OTHER' && sub ? `${base} · ${sub}` : base;
+  };
   styleHeader(co.addRow(['Direct Cost — Type', 'Item', 'Detail', 'Amount (IDR)']));
   for (const d of data.cost.directCosts) {
     const detail =
@@ -63,13 +68,13 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
         ? `${d.personnelRole} · ${num(d.unitCostPerManday).toLocaleString('id-ID')}/md × ${num(d.planMandays)} md`
         : `${num(d.qty)} × ${num(d.unitCost).toLocaleString('id-ID')}`;
     const amount = d.type === 'MANPOWER' ? num(d.manpowerCost) : num(d.amount);
-    const row = co.addRow([d.type, d.label, detail, amount]);
+    const row = co.addRow([typeText(d.type, d.subCategory), d.label, detail, amount]);
     row.getCell(4).numFmt = IDR;
   }
   co.addRow([]);
   styleHeader(co.addRow(['Indirect Cost — Type', 'Description', '', 'Amount (IDR)']));
   for (const i of data.cost.indirectCosts) {
-    const row = co.addRow([i.type, i.description, '', num(i.amount)]);
+    const row = co.addRow([typeText(i.type, i.subCategory), i.description, '', num(i.amount)]);
     row.getCell(4).numFmt = IDR;
   }
   co.addRow([]);
