@@ -18,6 +18,8 @@ const HEALTH_PILL: Record<string, [string, string]> = {
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
+import MobileDashboard from '../components/MobileDashboard';
+import { useIsMobile } from '../hooks/useIsMobile';
 import PortfolioForecast from '../components/PortfolioForecast';
 import PortfolioEvmTrend from '../components/PortfolioEvmTrend';
 import AssignmentBanner from '../components/AssignmentBanner';
@@ -82,6 +84,7 @@ export default function DashboardPage() {
   // PMO/Admin get the portfolio-wide framing; PMs see a "my projects" view.
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const canCreate = isPmo;
+  const isMobile = useIsMobile();
 
   // Warm header: time-based greeting + today's date + a one-line portfolio pulse,
   // in the user's chosen language (auto-detected from the browser, overridable in Settings).
@@ -136,12 +139,19 @@ export default function DashboardPage() {
       </div>
 
       <AssignmentBanner />
-      {view === 'portfolio' && <PlanningReminders />}
-      {view === 'portfolio' && <AwaitingActivation />}
-      {view === 'portfolio' && <AwaitingClosure />}
-      {view === 'portfolio' && <PendingApprovals />}
-      {view === 'portfolio' && <PortfolioSummary />}
-      {view === 'portfolio' && <PortfolioEvmTrend />}
+      {/* Phones (PM/PMO) get a tailored, card-first portfolio dashboard; desktop keeps the full stack. */}
+      {view === 'portfolio' && (isMobile ? (
+        <MobileDashboard />
+      ) : (
+        <>
+          <PlanningReminders />
+          <AwaitingActivation />
+          <AwaitingClosure />
+          <PendingApprovals />
+          <PortfolioSummary />
+          <PortfolioEvmTrend />
+        </>
+      ))}
       {view === 'forecast' && <PortfolioForecast />}
       {view === 'resources' && <ResourceCapacity />}
 
