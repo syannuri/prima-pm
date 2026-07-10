@@ -239,7 +239,8 @@ export default function PortfolioSummary() {
           {!hasResources ? (
             <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No manpower loaded yet. Add manpower lines (from the resource pool) in each project's Cost tab.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="prima-rows w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -277,6 +278,32 @@ export default function PortfolioSummary() {
                 </tfoot>
               </table>
             </div>
+            {/* Mobile card list — table hidden < sm. */}
+            <div className="space-y-2 sm:hidden">
+              {resourceRows.map((p) => (
+                <div key={p.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                  <Link to={`/projects/${p.id}`} className="block">
+                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>{' '}
+                    <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
+                  </Link>
+                  <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums">
+                    <div><div className="text-slate-400">Resources</div><div className="text-slate-700 dark:text-slate-200">{p.resourceCount || 0}</div></div>
+                    <div><div className="text-slate-400">Mandays</div><div className="text-slate-700 dark:text-slate-200">{formatNum(p.planMandays, 0)}</div></div>
+                    <div><div className="text-slate-400">Cost</div><div className="text-slate-700 dark:text-slate-200">{formatIdrShort(p.manpowerCost)}</div></div>
+                    <div><div className="text-slate-400">% BAC</div><div className="text-slate-500 dark:text-slate-400">{p.bac > 0 ? `${formatNum((p.manpowerCost / p.bac) * 100, 0)}%` : '—'}</div></div>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between rounded-lg border-2 border-slate-200 p-3 text-sm font-semibold dark:border-slate-700">
+                <span className="text-slate-600 dark:text-slate-300">Total</span>
+                <span className="flex gap-3 tabular-nums text-slate-600 dark:text-slate-300">
+                  <span>{resTotals.resources} res</span>
+                  <span>{formatNum(resTotals.mandays, 0)} md</span>
+                  <span>{formatIdrShort(resTotals.cost)}</span>
+                </span>
+              </div>
+            </div>
+            </>
           )}
         </Card>
       )}
@@ -296,7 +323,8 @@ export default function PortfolioSummary() {
           {!hasFinancials ? (
             <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No cost/revenue captured yet. Set them per project under “Edit details”.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="prima-rows w-full text-sm tabular-nums [&_th]:px-3 [&_td]:px-3 [&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -339,6 +367,36 @@ export default function PortfolioSummary() {
                 </tfoot>
               </table>
             </div>
+            {/* Mobile card list — table hidden < sm. */}
+            <div className="space-y-2 sm:hidden">
+              {finRows.map((p) => {
+                const margin = p.revenue - p.plannedCost;
+                const has = p.revenue > 0 || p.plannedCost > 0;
+                return (
+                  <div key={p.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                    <Link to={`/projects/${p.id}`} className="block">
+                      <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>{' '}
+                      <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
+                    </Link>
+                    <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums">
+                      <div><div className="text-slate-400">Cost</div><div className="text-slate-700 dark:text-slate-200">{p.plannedCost ? formatIdrShort(p.plannedCost) : '—'}</div></div>
+                      <div><div className="text-slate-400">Revenue</div><div className="text-slate-700 dark:text-slate-200">{p.revenue ? formatIdrShort(p.revenue) : '—'}</div></div>
+                      <div><div className="text-slate-400">Profit</div><div className={has ? (margin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : 'text-slate-400'}>{has ? formatIdrShort(margin) : '—'}</div></div>
+                      <div><div className="text-slate-400">Margin</div><div className="text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((margin / p.revenue) * 100, 1)}%` : '—'}</div></div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex items-center justify-between rounded-lg border-2 border-slate-200 p-3 text-sm font-semibold dark:border-slate-700">
+                <span className="text-slate-600 dark:text-slate-300">Total</span>
+                <span className="flex flex-wrap justify-end gap-x-3 gap-y-0.5 tabular-nums text-slate-600 dark:text-slate-300">
+                  <span>Cost {formatIdrShort(finTotals.cost)}</span>
+                  <span>Rev {formatIdrShort(finTotals.revenue)}</span>
+                  <span className={finMargin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>Profit {formatIdrShort(finMargin)}</span>
+                </span>
+              </div>
+            </div>
+            </>
           )}
         </Card>
       )}
