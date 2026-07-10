@@ -20,6 +20,7 @@ import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import PortfolioSummary from '../components/PortfolioSummary';
 import MobileDashboard from '../components/MobileDashboard';
 import Fab from '../components/Fab';
+import PullToRefresh from '../components/PullToRefresh';
 import { useIsMobile } from '../hooks/useIsMobile';
 import PortfolioForecast from '../components/PortfolioForecast';
 import PortfolioEvmTrend from '../components/PortfolioEvmTrend';
@@ -150,7 +151,9 @@ export default function DashboardPage() {
       <AssignmentBanner />
       {/* Phones (PM/PMO) get a tailored, card-first portfolio dashboard; desktop keeps the full stack. */}
       {view === 'portfolio' && (isMobile ? (
-        <MobileDashboard />
+        <PullToRefresh onRefresh={() => qc.refetchQueries({ type: 'active' })}>
+          <MobileDashboard />
+        </PullToRefresh>
       ) : (
         <>
           <PlanningReminders />
