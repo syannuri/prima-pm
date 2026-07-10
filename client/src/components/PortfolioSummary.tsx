@@ -124,7 +124,8 @@ export default function PortfolioSummary() {
   return (
     <div className="space-y-3">
       <div className="flex items-end justify-end">
-        <div className="w-44">
+        {/* Full width on phones (no longer a cramped right-pushed box); compact & right-aligned on sm+. */}
+        <div className="w-full sm:w-44">
           <Field label="Status date (EVM)">
             <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} />
           </Field>
@@ -342,9 +343,9 @@ export default function PortfolioSummary() {
         </Card>
       )}
 
-      {/* Per-project EVM table */}
+      {/* Per-project EVM table (desktop) / card list (mobile) */}
       <Card>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto sm:block">
           <table className="prima-rows w-full text-sm tabular-nums [&_th]:px-3 [&_td]:px-3 [&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -410,6 +411,48 @@ export default function PortfolioSummary() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card list — table hidden < sm. */}
+        <div className="space-y-2 sm:hidden">
+          {data.projects.map((p) => {
+            const varText = p.finishVarianceDays == null ? '—' : p.finishVarianceDays > 0 ? `+${p.finishVarianceDays}d` : p.finishVarianceDays < 0 ? `${p.finishVarianceDays}d` : '0';
+            const varClass = p.finishVarianceDays == null ? 'text-slate-400' : p.finishVarianceDays > 0 ? 'text-red-600 dark:text-red-400' : p.finishVarianceDays < 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400';
+            return (
+              <div key={p.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
+                    {canOpen ? (
+                      <Link to={`/projects/${p.id}`} className="block font-medium text-brand-600 hover:underline">{p.name}</Link>
+                    ) : (
+                      <div className="font-medium text-slate-700 dark:text-slate-200">{p.name}</div>
+                    )}
+                    {p.clientName && <div className="text-xs text-slate-500 dark:text-slate-400">Client: {p.clientName}</div>}
+                  </div>
+                  <Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs tabular-nums">
+                  <div><div className="text-slate-400">BAC</div><div className="text-slate-700 dark:text-slate-200">{formatIdrShort(p.bac)}</div></div>
+                  <div><div className="text-slate-400">EV</div><div className="text-slate-700 dark:text-slate-200">{formatIdrShort(p.ev)}</div></div>
+                  <div><div className="text-slate-400">AC</div><div className="text-slate-700 dark:text-slate-200">{formatIdrShort(p.ac)}</div></div>
+                  <div><div className="text-slate-400">CPI</div><div className={p.cpi > 0 && p.cpi < 1 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}>{p.cpi ? formatNum(p.cpi, 2) : '—'}</div></div>
+                  <div><div className="text-slate-400">SPI</div><div className={p.spi > 0 && p.spi < 1 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}>{p.spi ? formatNum(p.spi, 2) : '—'}</div></div>
+                  <div><div className="text-slate-400">% Done</div><div className="text-slate-700 dark:text-slate-200">{formatNum(p.scheduleProgress * 100, 0)}%</div></div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
+                  <span className="text-slate-500 dark:text-slate-400">Var <span className={varClass}>{varText}</span></span>
+                  <span className="text-slate-500 dark:text-slate-400">Changes {p.changeCount}</span>
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <span className="text-slate-400">Cost</span>
+                    {p.costHealth === 'NO_DATA' ? <span className="text-slate-400" title={NODATA_HINT.cost}>—</span> : <Badge color={HEALTH_COLOR[p.costHealth]}>{HEALTH_LABEL[p.costHealth]}</Badge>}
+                    <span className="ml-1 text-slate-400">Sched</span>
+                    {p.health === 'NO_DATA' ? <span className="text-slate-400" title={NODATA_HINT.sched}>—</span> : <Badge color={HEALTH_COLOR[p.health]}>{HEALTH_LABEL[p.health]}</Badge>}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Card>
     </div>
