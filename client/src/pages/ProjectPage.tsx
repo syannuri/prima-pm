@@ -8,6 +8,7 @@ import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
 import { formatIdr } from '../lib/format';
 import { categoryLabel, PROJECT_STATUS_BADGE } from '../lib/labels';
+import { useIsMobile } from '../hooks/useIsMobile';
 import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
 import TimesheetPanel from './panels/TimesheetPanel';
@@ -45,6 +46,7 @@ export default function ProjectPage() {
   const canEdit = !!user && ['ADMIN', 'PMO'].includes(user.role); // mirrors EditProjectModal's gate
   const [tab, setTab] = useState<Tab | null>(null);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
+  const isMobile = useIsMobile();
   const [editOpen, setEditOpen] = useState(false);
 
   const exportReport = async (kind: 'excel' | 'pdf') => {
@@ -115,8 +117,9 @@ export default function ProjectPage() {
             <CloseProjectModal project={project} />
             <MoreMenu>
               {canEdit && <MenuItem onClick={() => setEditOpen(true)}>✏️ Edit details</MenuItem>}
-              {chartered && <MenuItem disabled={exporting !== null} onClick={() => exportReport('excel')}>⬇ {exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
-              {chartered && <MenuItem disabled={exporting !== null} onClick={() => exportReport('pdf')}>⬇ {exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
+              {/* Exports hidden on phones — download/print is a desktop task. */}
+              {chartered && !isMobile && <MenuItem disabled={exporting !== null} onClick={() => exportReport('excel')}>⬇ {exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
+              {chartered && !isMobile && <MenuItem disabled={exporting !== null} onClick={() => exportReport('pdf')}>⬇ {exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
             </MoreMenu>
           </div>
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}

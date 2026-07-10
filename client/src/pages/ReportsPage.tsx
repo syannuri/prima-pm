@@ -128,7 +128,8 @@ export default function ReportsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
+            {/* Exports are hidden on phones (download/print is a desktop task). */}
+            <div className="hidden gap-2 sm:flex">
               <Button variant="secondary" disabled={!canDownload} onClick={download}>⬇ PDF</Button>
               {(view === 'executive' || view === 'portfolio') && <Button variant="secondary" disabled={!canDownload} onClick={downloadExcel}>⬇ Excel</Button>}
             </div>

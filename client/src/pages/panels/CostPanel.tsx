@@ -553,12 +553,12 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
                 {isMp ? `${d.personnelRole} · ${formatIdr(d.unitCostPerManday)}/md × ${d.planMandays} md` : `${d.qty} × ${formatIdr(d.unitCost)}`}
               </div>
               {isMp && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <select value={d.resourceId ?? ''} disabled={reassign.isPending} onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })} aria-label={`Assign resource to ${d.label}`} className={`grow rounded border border-slate-200 bg-white px-1.5 py-1 text-xs dark:border-slate-800 dark:bg-slate-900 ${d.resourceId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'}`}>
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <select value={d.resourceId ?? ''} disabled={reassign.isPending} onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })} aria-label={`Assign resource to ${d.label}`} className={`w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs dark:border-slate-800 dark:bg-slate-900 ${d.resourceId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'}`}>
                     <option value="">👤 Unassigned</option>
                     {resourcesQ.data?.resources.map((r) => (<option key={r.id} value={r.id}>👤 {r.name}</option>))}
                   </select>
-                  <select value={d.taskId ?? ''} disabled={reassignTask.isPending} onChange={(e) => reassignTask.mutate({ d, taskId: e.target.value })} aria-label={`Link ${d.label} to a task`} className={`grow rounded border border-slate-200 bg-white px-1.5 py-1 text-xs dark:border-slate-800 dark:bg-slate-900 ${d.taskId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'}`}>
+                  <select value={d.taskId ?? ''} disabled={reassignTask.isPending} onChange={(e) => reassignTask.mutate({ d, taskId: e.target.value })} aria-label={`Link ${d.label} to a task`} className={`w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs dark:border-slate-800 dark:bg-slate-900 ${d.taskId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'}`}>
                     <option value="">📋 No task</option>
                     {leafTasks.map((t) => (<option key={t.id} value={t.id}>📋 {t.wbsCode} {t.name}</option>))}
                   </select>

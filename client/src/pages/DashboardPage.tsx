@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { DeliveryApproach, Project, ProjectCategory, PortfolioSummary as Summary, User } from '../api/types';
@@ -37,6 +37,12 @@ export default function DashboardPage() {
   const { lang } = useLang();
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState<'portfolio' | 'forecast' | 'resources' | 'cards'>('portfolio');
+  // The mobile "Projects" tab deep-links to ?view=cards; keep the view in sync with the URL.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const v = searchParams.get('view');
+    setView(v === 'cards' ? 'cards' : v === 'forecast' ? 'forecast' : v === 'resources' ? 'resources' : 'portfolio');
+  }, [searchParams]);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [clientName, setClientName] = useState('');
@@ -102,8 +108,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Plain greeting is hidden on phones so the mobile dashboard hero is the focus. */}
+      {/* Whole header row (greeting + view toggle + New Project) is desktop-only; on phones the
+          mobile dashboard hero + quick actions + bottom tab bar handle greeting and navigation. */}
+      <div className="hidden flex-wrap items-center justify-between gap-3 sm:flex">
         <div className="hidden sm:block">
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{greeting}, {firstName} 👋</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
