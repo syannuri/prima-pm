@@ -45,7 +45,10 @@ export default function Layout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
+        <header
+          className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900"
+          style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
+        >
           {/* Phones: initials avatar (account/settings) sits top-left. */}
           <div className="md:hidden"><AvatarMenu /></div>
           {/* Hamburger removed on phones — the bottom tab bar handles navigation there. Kept for md as a fallback. */}

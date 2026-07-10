@@ -148,7 +148,7 @@ export default function NotificationBell() {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           {/* Mobile: pinned below the header, full width with margins (a right-anchored w-80 ran off-screen left). sm+: dropdown under the bell. */}
-          <div className="prima-toast fixed inset-x-2 top-14 z-20 max-h-[75vh] w-auto overflow-y-auto rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[80vh] sm:w-80">
+          <div className="prima-toast fixed inset-x-2 top-[calc(3.5rem+env(safe-area-inset-top))] z-20 max-h-[75vh] w-auto overflow-y-auto rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[80vh] sm:w-80">
             {/* Personal inbox — assignment & other discrete events */}
             {!!inbox?.items.length && (
               <div className="mb-3">

@@ -114,11 +114,16 @@ export default function MobileDashboard() {
       <div>
         <h3 className="mb-2 px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Projects</h3>
         <div className="space-y-2.5">
-          {projects.map((p) => {
+          {projects.map((p, i) => {
             const ppct = Math.round(p.scheduleProgress * 100);
             const rag = RAG[p.health];
             return (
-              <Link key={p.id} to={`/projects/${p.id}`} className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition active:scale-[.99] dark:border-slate-800 dark:bg-slate-900">
+              <Link
+                key={p.id}
+                to={`/projects/${p.id}`}
+                className="prima-rise block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition active:scale-[.99] dark:border-slate-800 dark:bg-slate-900"
+                style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-slate-800 dark:text-slate-100">{p.name}</div>

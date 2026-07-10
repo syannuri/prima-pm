@@ -81,7 +81,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={api.current}>
       {children}
       {createPortal(
-        <div className="pointer-events-none fixed inset-x-0 top-4 z-[60] flex flex-col items-center gap-2 px-4 sm:items-end sm:px-6">
+        <div className="pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-4 sm:items-end sm:px-6" style={{ top: 'calc(1rem + env(safe-area-inset-top))' }}>
           {toasts.map((t) => (
             <div
               key={t.id}
