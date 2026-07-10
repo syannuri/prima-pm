@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
-import { Card, Spinner } from './ui';
+import { Card } from './ui';
 import { useAuth } from '../context/AuthContext';
+import MobileDashboardSkeleton from './MobileDashboardSkeleton';
 import { formatIdrShort, formatNum, formatDateInput } from '../lib/format';
 import PlanningReminders from './PlanningReminders';
 import AwaitingActivation from './AwaitingActivation';
@@ -45,7 +46,7 @@ export default function MobileDashboard() {
     queryFn: () => api.get<Summary>(`/portfolio/summary?statusDate=${statusDate}`),
   });
 
-  if (isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
+  if (isLoading) return <MobileDashboardSkeleton />;
   if (!data || data.totals.count === 0) return <Card><p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No projects in the portfolio yet.</p></Card>;
 
   const t = data.totals;
