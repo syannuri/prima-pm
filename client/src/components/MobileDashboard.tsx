@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
 import { Card, Spinner } from './ui';
+import { useAuth } from '../context/AuthContext';
 import { formatIdrShort, formatNum, formatDateInput } from '../lib/format';
 import PlanningReminders from './PlanningReminders';
 import AwaitingActivation from './AwaitingActivation';
@@ -28,7 +29,16 @@ const HERO: Record<PortfolioHealth, { grad: string; shadow: string }> = {
 // A phone-tailored portfolio dashboard (PM & PMO): a glanceable, card-first view —
 // gradient health hero, KPI tiles, the "needs attention" queues, and project cards
 // with progress bars. Rendered instead of the desktop stack on < sm screens.
-export default function MobileDashboard() {
+const ICON = {
+  reports: 'M18 20V10M12 20V4M6 20v-6',
+  resources: 'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM21 21v-2a4 4 0 0 0-3-3.87',
+  plus: 'M12 5v14M5 12h14',
+  clock: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 7v5l3 2',
+};
+
+export default function MobileDashboard({ onNewProject }: { onNewProject?: () => void }) {
+  const { user } = useAuth();
+  const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const [statusDate] = useState(formatDateInput(new Date()));
   const { data, isLoading } = useQuery({
     queryKey: ['portfolio', statusDate],
@@ -43,6 +53,16 @@ export default function MobileDashboard() {
   const status: PortfolioHealth = t.pv <= 0 ? 'NO_DATA' : t.spi >= 0.95 ? 'GREEN' : t.spi >= 0.85 ? 'AMBER' : 'RED';
   const cv = t.ev - t.ac;
   const projects = [...data.projects].sort((a, b) => (RANK[a.health] - RANK[b.health]) || a.spi - b.spi);
+
+  // Quick actions — route shortcuts most useful for PM/PMO on the go.
+  const actions: { label: string; icon: string; tint: string; to?: string; onClick?: () => void }[] = [
+    { label: 'Reports', icon: ICON.reports, tint: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400', to: '/reports' },
+    isPmo
+      ? { label: 'Resources', icon: ICON.resources, tint: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400', to: '/admin/resources' }
+      : { label: 'Timesheet', icon: ICON.clock, tint: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400', to: '/my-timesheet' },
+    ...(isPmo && onNewProject ? [{ label: 'New project', icon: ICON.plus, tint: 'bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400', onClick: onNewProject }] : []),
+  ];
+  const actionCols = actions.length >= 3 ? 'grid-cols-3' : 'grid-cols-2';
 
   return (
     <div className="space-y-4">
@@ -68,6 +88,11 @@ export default function MobileDashboard() {
             </span>
           ))}
         </div>
+      </div>
+
+      {/* Quick actions */}
+      <div className={`grid gap-2.5 ${actionCols}`}>
+        {actions.map((a) => <QuickAction key={a.label} {...a} />)}
       </div>
 
       {/* KPI tiles */}
@@ -137,6 +162,19 @@ function Ring({ pct }: { pct: number }) {
       </div>
     </div>
   );
+}
+
+function QuickAction({ label, icon, tint, to, onClick }: { label: string; icon: string; tint: string; to?: string; onClick?: () => void }) {
+  const cls = 'flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition active:scale-95 dark:border-slate-800 dark:bg-slate-900';
+  const inner = (
+    <>
+      <span className={`grid h-11 w-11 place-items-center rounded-2xl ${tint}`}>
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={icon} /></svg>
+      </span>
+      <span className="mt-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">{label}</span>
+    </>
+  );
+  return to ? <Link to={to} className={cls}>{inner}</Link> : <button type="button" onClick={onClick} className={cls}>{inner}</button>;
 }
 
 function KpiTile({ label, value, tone }: { label: string; value: string; tone?: 'red' | 'green' }) {

@@ -142,7 +142,7 @@ export default function DashboardPage() {
       <AssignmentBanner />
       {/* Phones (PM/PMO) get a tailored, card-first portfolio dashboard; desktop keeps the full stack. */}
       {view === 'portfolio' && (isMobile ? (
-        <MobileDashboard />
+        <MobileDashboard onNewProject={canCreate ? () => setShowForm(true) : undefined} />
       ) : (
         <>
           <PlanningReminders />
