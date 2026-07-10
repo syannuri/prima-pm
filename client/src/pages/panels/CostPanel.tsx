@@ -361,7 +361,8 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
   return (
     <Card>
       <SectionTitle sub="Material (qty × unit cost) and Manpower (rate × mandays)">Direct Cost</SectionTitle>
-      <div className="overflow-x-auto">
+      {/* Desktop: table. Mobile (< sm): a card list below (same handlers/state). */}
+      <div className="hidden overflow-x-auto sm:block">
         <table className="prima-rows w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -477,6 +478,84 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
             </tfoot>
           )}
         </table>
+      </div>
+
+      {/* Mobile card list — the table above is hidden < sm. Reuses the same edit/reassign/delete handlers. */}
+      <div className="space-y-2 sm:hidden">
+        {data.directCosts.map((d) => {
+          const editing = editId === d.id;
+          const isMp = d.type === 'MANPOWER';
+          if (editing) return (
+            <div key={d.id} className="space-y-2 rounded-lg border border-brand-300 bg-brand-50/50 p-3 dark:border-brand-900/50 dark:bg-brand-900/10">
+              {!isMp && (
+                <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
+                  {DIRECT_TYPES.filter((t) => t.value !== 'MANPOWER').map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </Select>
+              )}
+              <Input aria-label="Label" value={ef.label} onChange={(e) => setEf((p) => ({ ...p, label: e.target.value }))} placeholder="Label" />
+              {!isMp && ef.type === 'OTHER' && (
+                <Input aria-label="Sub-category" value={ef.subCategory} onChange={(e) => setEf((p) => ({ ...p, subCategory: e.target.value }))} placeholder="Specify category *" />
+              )}
+              {isMp ? (
+                <div className="flex items-center gap-1">
+                  <div className="flex-1"><MoneyInput aria-label="Rate per manday" value={ef.rate} onValueChange={(v) => setEf((p) => ({ ...p, rate: v }))} /></div>
+                  <span className="whitespace-nowrap text-xs text-slate-500">/md ×</span>
+                  <div className="w-20"><Input type="number" aria-label="Mandays" value={ef.mandays} onChange={(e) => setEf((p) => ({ ...p, mandays: e.target.value }))} /></div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <div className="w-20"><Input type="number" aria-label="Quantity" value={ef.qty} onChange={(e) => setEf((p) => ({ ...p, qty: e.target.value }))} /></div>
+                  <span className="text-xs text-slate-500">×</span>
+                  <div className="flex-1"><MoneyInput aria-label="Unit cost" value={ef.unitCost} onValueChange={(v) => setEf((p) => ({ ...p, unitCost: v }))} /></div>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500 dark:text-slate-400">Amount: <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(efAmount)}</span></span>
+                <div className="flex gap-3">
+                  <button onClick={() => update.mutate(d)} disabled={update.isPending} className="text-xs font-medium text-brand-600 hover:underline">save</button>
+                  <button onClick={() => setEditId(null)} className="text-xs text-slate-400 hover:underline">cancel</button>
+                </div>
+              </div>
+            </div>
+          );
+          return (
+            <div key={d.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">{typeLabel(DIRECT_LABEL, d.type, d.subCategory)}</div>
+                  <div className="font-medium text-slate-700 dark:text-slate-200">{d.label}</div>
+                </div>
+                <div className="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{formatIdr(isMp ? d.manpowerCost : d.amount)}</div>
+              </div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {isMp ? `${d.personnelRole} · ${formatIdr(d.unitCostPerManday)}/md × ${d.planMandays} md` : `${d.qty} × ${formatIdr(d.unitCost)}`}
+              </div>
+              {isMp && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <select value={d.resourceId ?? ''} disabled={reassign.isPending} onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })} aria-label={`Assign resource to ${d.label}`} className={`grow rounded border border-slate-200 bg-white px-1.5 py-1 text-xs dark:border-slate-800 dark:bg-slate-900 ${d.resourceId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <option value="">👤 Unassigned</option>
+                    {resourcesQ.data?.resources.map((r) => (<option key={r.id} value={r.id}>👤 {r.name}</option>))}
+                  </select>
+                  <select value={d.taskId ?? ''} disabled={reassignTask.isPending} onChange={(e) => reassignTask.mutate({ d, taskId: e.target.value })} aria-label={`Link ${d.label} to a task`} className={`grow rounded border border-slate-200 bg-white px-1.5 py-1 text-xs dark:border-slate-800 dark:bg-slate-900 ${d.taskId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <option value="">📋 No task</option>
+                    {leafTasks.map((t) => (<option key={t.id} value={t.id}>📋 {t.wbsCode} {t.name}</option>))}
+                  </select>
+                </div>
+              )}
+              <div className="mt-2 flex gap-4">
+                <button onClick={() => startEdit(d)} className="text-xs text-brand-600 hover:underline">edit</button>
+                <button onClick={() => confirmDelete(d)} className="text-xs text-red-500 hover:underline">delete</button>
+              </div>
+            </div>
+          );
+        })}
+        {!data.directCosts.length && <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">No direct costs yet.</div>}
+        {data.directCosts.length > 0 && (
+          <div className="flex items-center justify-between border-t-2 border-slate-200 pt-2 text-sm font-semibold dark:border-slate-700">
+            <span className="text-slate-600 dark:text-slate-300">Total ({data.directCosts.length} {data.directCosts.length === 1 ? 'line' : 'lines'})</span>
+            <span className="tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal)}</span>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-7">
