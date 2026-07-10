@@ -405,6 +405,54 @@ describe('cost categories: new types + OTHER sub-category', () => {
   });
 });
 
+describe('fill AC from timesheet (one-click, idempotent, manual entries untouched)', () => {
+  let pid = '';
+  let lineId = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Fill-AC', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    const mp = await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN))
+      .send({ type: 'MANPOWER', label: 'Dev', personnelRole: 'PROJECT_PERSONNEL', unitCostPerManday: 1_000_000, planMandays: 20 });
+    lineId = mp.body.line.id;
+  });
+
+  const log = (mandays: number, date = '2026-07-10') =>
+    request(app).post(api(`/projects/${pid}/timesheet`)).set(auth(tokens.ADMIN)).send({ costItemId: lineId, date, mandays });
+  const cost = () => request(app).get(api(`/projects/${pid}/cost`)).set(auth(tokens.ADMIN));
+
+  it('fills AC to the timesheet labour amount', async () => {
+    await log(3);
+    const res = await request(app).post(api(`/projects/${pid}/cost/actuals/fill-from-timesheet`)).set(auth(tokens.ADMIN));
+    expect(res.status).toBe(201);
+    expect(res.body.labourActual).toBe(3_000_000);
+    expect(Number(res.body.entry.amount)).toBe(3_000_000);
+    expect((await cost()).body.actualCostTotal).toBe(3_000_000);
+  });
+
+  it('re-filling replaces (no double-count) and tracks new logs', async () => {
+    await log(2); // total 5 md now
+    await request(app).post(api(`/projects/${pid}/cost/actuals/fill-from-timesheet`)).set(auth(tokens.ADMIN));
+    const c = await cost();
+    expect(c.body.actualCostTotal).toBe(5_000_000); // NOT 8M — single labour entry replaced
+    expect(c.body.actualCosts.filter((a: { description: string | null }) => a.description === 'Labour actual (from timesheet)')).toHaveLength(1);
+  });
+
+  it('leaves manual AC entries untouched', async () => {
+    await request(app).post(api(`/projects/${pid}/cost/actuals`)).set(auth(tokens.ADMIN))
+      .send({ date: '2026-07-09', amount: 2_000_000, description: 'Materials invoice' });
+    await request(app).post(api(`/projects/${pid}/cost/actuals/fill-from-timesheet`)).set(auth(tokens.ADMIN));
+    const c = await cost();
+    expect(c.body.actualCostTotal).toBe(7_000_000); // 5M labour + 2M manual
+    expect(c.body.actualCosts).toHaveLength(2);
+  });
+
+  it('a VIEWER cannot fill AC (403)', async () => {
+    const res = await request(app).post(api(`/projects/${pid}/cost/actuals/fill-from-timesheet`)).set(auth(tokens.VIEWER));
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('manpower → task Owner prefill (only when the task has no owner)', () => {
   let pid = '';
   let resourceId = '';

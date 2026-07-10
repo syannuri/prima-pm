@@ -352,6 +352,52 @@ export async function deleteActualCost(projectId: string, id: string, actorId: s
   await writeAudit({ projectId, userId: actorId, entity: 'ActualCostEntry', entityId: id, action: 'DELETE', before: existing });
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Labour cost implied by logged timesheets = Σ (consumed man-days × day-rate) over manpower lines.
+async function computeLabourActual(projectId: string) {
+  const [lines, mandaySums] = await Promise.all([
+    prisma.costItemDirect.findMany({ where: { projectId, type: 'MANPOWER' }, select: { id: true, unitCostPerManday: true } }),
+    prisma.mandayEntry.groupBy({ by: ['costItemId'], where: { projectId }, _sum: { mandays: true } }),
+  ]);
+  const consumedByLine = new Map(mandaySums.map((m) => [m.costItemId, dec(m._sum.mandays)]));
+  let labourActual = 0;
+  let labourConsumedMandays = 0;
+  for (const l of lines) {
+    const consumed = consumedByLine.get(l.id) ?? 0;
+    labourConsumedMandays += consumed;
+    labourActual += consumed * dec(l.unitCostPerManday);
+  }
+  return { labourActual: round2(labourActual), labourConsumedMandays: round2(labourConsumedMandays) };
+}
+
+// Sentinel description that marks the single auto-derived "labour from timesheet" AC entry.
+// Repeated fills replace it (never stack), so labour AC stays in sync without double-counting.
+export const LABOUR_AC_DESC = 'Labour actual (from timesheet)';
+
+// One-click: set the auto-derived labour Actual Cost entry to the current timesheet-implied
+// labour cost. Idempotent (replaces its own prior entry); manual AC entries are untouched.
+export async function fillActualCostFromTimesheet(projectId: string, actorId: string) {
+  await ensureChartered(projectId);
+  const { labourActual, labourConsumedMandays } = await computeLabourActual(projectId);
+  // Date it at the latest logged man-day so it feeds CPI within the effort period.
+  const latest = await prisma.mandayEntry.aggregate({ where: { projectId }, _max: { date: true } });
+  const entryDate = latest._max.date ?? new Date();
+
+  const result = await prisma.$transaction(async (tx) => {
+    const removed = await tx.actualCostEntry.deleteMany({ where: { projectId, description: LABOUR_AC_DESC } });
+    const entry = labourActual > 0
+      ? await tx.actualCostEntry.create({ data: { projectId, date: entryDate, amount: labourActual, description: LABOUR_AC_DESC, recordedBy: actorId } })
+      : null;
+    return { entry, replaced: removed.count };
+  });
+  await writeAudit({
+    projectId, userId: actorId, entity: 'ActualCostEntry', entityId: result.entry?.id ?? projectId,
+    action: 'UPDATE', after: { via: 'timesheet-fill', amount: labourActual, mandays: labourConsumedMandays, replaced: result.replaced },
+  });
+  return { entry: result.entry, labourActual, labourConsumedMandays, replaced: result.replaced };
+}
+
 export async function getCostSummary(projectId: string) {
   const [directCosts, indirectCosts, baseline, charter, actualCosts, mandaySums] = await Promise.all([
     prisma.costItemDirect.findMany({

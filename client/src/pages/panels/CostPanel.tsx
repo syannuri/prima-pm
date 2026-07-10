@@ -6,7 +6,11 @@ import { Button, Card, Input, MoneyInput, SectionTitle, Select, Spinner } from '
 import BaselineLock from '../../components/BaselineLock';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
+import { useAuth } from '../../context/AuthContext';
 import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
+
+// Sentinel description of the auto-derived "labour from timesheet" AC entry (mirrors the server).
+const LABOUR_AC_DESC = 'Labour actual (from timesheet)';
 
 const DIRECT_TYPES = [
   { value: 'TECHNOLOGY_ONPREM', label: 'Technology — On-Premise' },
@@ -94,6 +98,8 @@ export default function CostPanel({ projectId }: { projectId: string }) {
 function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string; onChange: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const { user } = useAuth();
+  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE'].includes(user.role);
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -102,6 +108,28 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
   const scheduleBase = base.replace(/\/cost$/, '/schedule');
   const evmQ = useQuery({ queryKey: ['evm', scheduleBase, '', formatDateInput(new Date())], queryFn: () => api.get<Evm>(`${scheduleBase}/evm?statusDate=${formatDateInput(new Date())}`) });
   const e = evmQ.data;
+
+  // Has the labour-from-timesheet AC entry already been filled, and is it up to date?
+  const syncedEntry = data.actualCosts.find((a) => a.description === LABOUR_AC_DESC);
+  const syncedInAc = syncedEntry ? Math.round(Number(syncedEntry.amount)) === Math.round(data.labourActual) : false;
+
+  const fill = useMutation({
+    mutationFn: () => api.post(`${base}/actuals/fill-from-timesheet`),
+    onSuccess: () => { onChange(); toast.success('Actual Cost filled from timesheet'); },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to fill from timesheet'),
+  });
+  const confirmFill = async () => {
+    const ok = await confirm({
+      title: syncedEntry ? 'Update AC from timesheet?' : 'Fill AC from timesheet?',
+      message: (
+        <>Set the <strong>“{LABOUR_AC_DESC}”</strong> Actual Cost entry to <strong>{formatIdr(data.labourActual)}</strong> ({formatNum(data.labourConsumedMandays, 1)} md).
+          {' '}This replaces the previous auto entry (no double-counting) and affects CPI. Your manual entries are unaffected.
+          {' '}If you also recorded labour manually, remove it to avoid double-counting.</>
+      ),
+      confirmLabel: syncedEntry ? 'Update AC' : 'Fill AC',
+    });
+    if (ok) fill.mutate();
+  };
 
   const add = useMutation({
     mutationFn: () => api.post(`${base}/actuals`, { date, amount: Number(amount), description: description || undefined }),
@@ -139,12 +167,24 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
         </div>
       )}
 
-      {/* Read-only reference: labour cost implied by logged timesheets. Does NOT feed AC/CPI. */}
+      {/* Labour cost implied by logged timesheets. Reference by default; one click fills it into AC. */}
       {data.labourActual > 0 && (
         <div className="mb-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-2.5 text-xs text-slate-600 dark:text-slate-300">
-          <span className="font-medium text-slate-700 dark:text-slate-200">🕒 Labour actual from timesheet: {formatIdr(data.labourActual)}</span>
-          <span className="text-slate-400"> · {formatNum(data.labourConsumedMandays, 1)} md logged</span>
-          <div className="mt-0.5 text-slate-400">Reference only — Σ logged man-days × day-rate. Not counted in AC or CPI; record Actual Cost manually below (include non-labour spend like materials &amp; licenses).</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="font-medium text-slate-700 dark:text-slate-200">🕒 Labour actual from timesheet: {formatIdr(data.labourActual)}</span>
+              <span className="text-slate-400"> · {formatNum(data.labourConsumedMandays, 1)} md logged</span>
+              {syncedInAc && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✓ in AC</span>}
+            </div>
+            {canWrite && (
+              <Button variant="secondary" onClick={confirmFill} disabled={fill.isPending || syncedInAc} title={syncedInAc ? 'Actual Cost already matches the timesheet labour' : 'Add/refresh the labour Actual Cost entry from logged timesheets'}>
+                {fill.isPending ? 'Filling…' : syncedEntry ? 'Update AC' : 'Fill AC from timesheet'}
+              </Button>
+            )}
+          </div>
+          <div className="mt-0.5 text-slate-400">
+            Σ logged man-days × day-rate. {syncedInAc ? 'Reflected in Actual Cost below.' : 'Reference only until you fill it — non-labour spend (materials, licenses) stays manual.'}
+          </div>
         </div>
       )}
       <div className="overflow-x-auto">
@@ -153,7 +193,10 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
           {data.actualCosts.map((a) => (
             <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800">
               <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{new Date(a.date).toLocaleDateString('en-GB')}</td>
-              <td>{a.description ?? '—'}</td>
+              <td>
+                {a.description ?? '—'}
+                {a.description === LABOUR_AC_DESC && <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">auto · timesheet</span>}
+              </td>
               <td className="text-right font-medium">{formatIdr(a.amount)}</td>
               <td className="text-right">
                 <button onClick={() => confirmDelete(a.id)} className="text-xs text-red-500 hover:underline">delete</button>

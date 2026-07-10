@@ -118,6 +118,17 @@ router.post(
   }),
 );
 
+// One-click: fill Actual Cost from logged timesheets (Σ md × day-rate). Idempotent —
+// replaces its own prior auto entry; manual AC entries are untouched.
+router.post(
+  '/actuals/fill-from-timesheet',
+  ...canWrite,
+  asyncHandler(async (req, res) => {
+    const result = await svc.fillActualCostFromTimesheet(req.params.projectId, req.user!.id);
+    res.status(201).json(result);
+  }),
+);
+
 router.delete(
   '/actuals/:entryId',
   ...canWrite,
