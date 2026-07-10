@@ -30,7 +30,11 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   await expect(page.getByLabel('Email')).toBeVisible();
   await page.getByLabel('Email').fill(acct.email);
   await page.getByLabel('Password').fill(acct.password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  // The redesigned form gates "Sign in" behind `canSubmit` (valid email + password);
+  // wait for it to enable so a fast fill→click doesn't hit a still-disabled button.
+  const signIn = page.getByRole('button', { name: 'Sign in' });
+  await expect(signIn).toBeEnabled();
+  await signIn.click();
 
   // Header logout button only renders once authenticated.
   await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible();
