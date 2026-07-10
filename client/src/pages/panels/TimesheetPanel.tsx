@@ -56,6 +56,7 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['timesheet', projectId] });
     qc.invalidateQueries({ queryKey: ['resource-capacity'] });
+    qc.invalidateQueries({ queryKey: ['cost', projectId] }); // refresh the Cost-tab "Labour actual" reference
   };
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : 'Something went wrong');
 

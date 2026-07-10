@@ -353,7 +353,7 @@ export async function deleteActualCost(projectId: string, id: string, actorId: s
 }
 
 export async function getCostSummary(projectId: string) {
-  const [directCosts, indirectCosts, baseline, charter, actualCosts] = await Promise.all([
+  const [directCosts, indirectCosts, baseline, charter, actualCosts, mandaySums] = await Promise.all([
     prisma.costItemDirect.findMany({
       where: { projectId },
       orderBy: { createdAt: 'asc' },
@@ -366,9 +366,23 @@ export async function getCostSummary(projectId: string) {
     prisma.costBaseline.findUnique({ where: { projectId } }),
     prisma.projectCharter.findUnique({ where: { projectId }, select: { hiCostIdr: true } }),
     prisma.actualCostEntry.findMany({ where: { projectId }, orderBy: { date: 'asc' } }),
+    prisma.mandayEntry.groupBy({ by: ['costItemId'], where: { projectId }, _sum: { mandays: true } }),
   ]);
 
   const actualCostTotal = actualCosts.reduce((s, a) => s + dec(a.amount), 0);
+
+  // Read-only reference: labour cost implied by logged timesheets = Σ (consumed man-days ×
+  // day-rate) over manpower lines. Purely informational — it does NOT feed AC or EVM (AC is
+  // entered manually and also covers non-labour spend like materials/licenses).
+  const consumedByLine = new Map(mandaySums.map((m) => [m.costItemId, dec(m._sum.mandays)]));
+  let labourActual = 0;
+  let labourConsumedMandays = 0;
+  for (const d of directCosts) {
+    if (d.type !== 'MANPOWER') continue;
+    const consumed = consumedByLine.get(d.id) ?? 0;
+    labourConsumedMandays += consumed;
+    labourActual += consumed * dec(d.unitCostPerManday);
+  }
 
   return {
     directCosts,
@@ -377,5 +391,7 @@ export async function getCostSummary(projectId: string) {
     highLevelCharterCost: charter ? dec(charter.hiCostIdr) : null,
     actualCosts,
     actualCostTotal,
+    labourActual: Math.round(labourActual * 100) / 100,
+    labourConsumedMandays: Math.round(labourConsumedMandays * 100) / 100,
   };
 }

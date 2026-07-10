@@ -390,6 +390,19 @@ describe('cost categories: new types + OTHER sub-category', () => {
     expect(ok.status).toBe(201);
     expect(ok.body.line.subCategory).toBe('Bank charges');
   });
+
+  it('reports a read-only labour-actual from logged timesheets (Σ md × day-rate), not affecting AC', async () => {
+    const mp = await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN))
+      .send({ type: 'MANPOWER', label: 'Engineer', personnelRole: 'PROJECT_PERSONNEL', unitCostPerManday: 1_000_000, planMandays: 10 });
+    expect(mp.status).toBe(201);
+    const log = await request(app).post(api(`/projects/${pid}/timesheet`)).set(auth(tokens.ADMIN))
+      .send({ costItemId: mp.body.line.id, date: '2026-07-10', mandays: 3 });
+    expect(log.status).toBe(201);
+    const cost = await request(app).get(api(`/projects/${pid}/cost`)).set(auth(tokens.ADMIN));
+    expect(cost.body.labourConsumedMandays).toBe(3);
+    expect(cost.body.labourActual).toBe(3_000_000); // 3 md × Rp1,000,000 — reference only
+    expect(cost.body.actualCostTotal).toBe(0); // AC stays manual; timesheet does NOT touch it
+  });
 });
 
 describe('manpower → task Owner prefill (only when the task has no owner)', () => {

@@ -261,6 +261,10 @@ export interface CostSummary {
   highLevelCharterCost: number | null;
   actualCosts: ActualCostEntry[];
   actualCostTotal: number;
+  // Read-only reference: labour cost implied by logged timesheets (Σ consumed md × day-rate).
+  // Does NOT feed AC/EVM — AC stays manual.
+  labourActual: number;
+  labourConsumedMandays: number;
 }
 
 export type CRStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';

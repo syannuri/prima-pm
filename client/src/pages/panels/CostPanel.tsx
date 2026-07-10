@@ -138,6 +138,15 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
           )}
         </div>
       )}
+
+      {/* Read-only reference: labour cost implied by logged timesheets. Does NOT feed AC/CPI. */}
+      {data.labourActual > 0 && (
+        <div className="mb-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-2.5 text-xs text-slate-600 dark:text-slate-300">
+          <span className="font-medium text-slate-700 dark:text-slate-200">🕒 Labour actual from timesheet: {formatIdr(data.labourActual)}</span>
+          <span className="text-slate-400"> · {formatNum(data.labourConsumedMandays, 1)} md logged</span>
+          <div className="mt-0.5 text-slate-400">Reference only — Σ logged man-days × day-rate. Not counted in AC or CPI; record Actual Cost manually below (include non-labour spend like materials &amp; licenses).</div>
+        </div>
+      )}
       <div className="overflow-x-auto">
       <table className="prima-rows w-full min-w-[28rem] text-sm">
         <tbody>
