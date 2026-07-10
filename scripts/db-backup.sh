@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Scheduled PostgreSQL backup for PRIMA-PM.
-# Dumps the DB (custom format, compressed) to backups/ and prunes old files.
+# Scheduled backup for PRIMA-PM.
+# Dumps the DB (custom format, compressed) AND tars up the uploaded attachments
+# (server/uploads) into backups/, prunes old files, then mirrors off-box.
 # Reads DATABASE_URL from server/.env. Safe to run by hand or from cron.
 #
 #   Env overrides:
@@ -23,6 +24,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT/server/.env"
 BACKUP_DIR="${PRIMA_BACKUP_DIR:-$ROOT/backups}"
 RETENTION="${PRIMA_BACKUP_RETENTION:-14}"
+# Where the app stores uploaded attachments (server UUID filenames). Backed up
+# alongside the DB because the DB only holds metadata + the filename, not bytes.
+UPLOADS_DIR="${PRIMA_UPLOADS_DIR:-$ROOT/server/uploads}"
 
 mkdir -p "$BACKUP_DIR"
 LOG="$BACKUP_DIR/backup.log"
@@ -47,12 +51,30 @@ else
   rc=$?; log "ERROR: pg_dump failed (exit $rc)"; rm -f "$OUT"; exit "$rc"
 fi
 
-# Rotation: keep the newest $RETENTION dumps, delete the rest.
-while IFS= read -r f; do
-  rm -f "$f" && log "pruned $f"
-done < <(ls -1t "$BACKUP_DIR"/prima_pm_*.dump 2>/dev/null | tail -n +"$((RETENTION + 1))")
+# --- Uploaded attachments (best-effort, must not fail the DB backup) --------
+# The DB dump above holds attachment metadata only; the actual files live in
+# server/uploads. Tar them so a restore has both. A missing/empty uploads dir
+# is normal (no attachments yet) — log and carry on, never fail the run.
+UPLOADS_OUT="$BACKUP_DIR/prima_uploads_${TS}.tar.gz"
+if [ -d "$UPLOADS_DIR" ] && [ -n "$(ls -A "$UPLOADS_DIR" 2>/dev/null)" ]; then
+  if tar -czf "$UPLOADS_OUT" -C "$UPLOADS_DIR" . 2>>"$LOG"; then
+    log "OK uploads $UPLOADS_OUT ($(du -h "$UPLOADS_OUT" | cut -f1); $(find "$UPLOADS_DIR" -type f | wc -l) file(s))"
+  else
+    log "WARN uploads: tar failed — DB backup is fine, attachment archive skipped this run"
+    rm -f "$UPLOADS_OUT"
+  fi
+else
+  log "uploads: none to archive ($UPLOADS_DIR empty or absent)"
+fi
 
-log "done; $(ls -1 "$BACKUP_DIR"/prima_pm_*.dump 2>/dev/null | wc -l) backup(s) retained in $BACKUP_DIR"
+# Rotation: keep the newest $RETENTION of each artifact, delete the rest.
+for pat in 'prima_pm_*.dump' 'prima_uploads_*.tar.gz'; do
+  while IFS= read -r f; do
+    rm -f "$f" && log "pruned $f"
+  done < <(ls -1t "$BACKUP_DIR"/$pat 2>/dev/null | tail -n +"$((RETENTION + 1))")
+done
+
+log "done; $(ls -1 "$BACKUP_DIR"/prima_pm_*.dump 2>/dev/null | wc -l) DB + $(ls -1 "$BACKUP_DIR"/prima_uploads_*.tar.gz 2>/dev/null | wc -l) uploads backup(s) retained in $BACKUP_DIR"
 
 # --- Off-box copy (best-effort) -------------------------------------------
 # Mirror the backups dir to another machine over SSH so a disk/host failure
@@ -66,7 +88,8 @@ if [ -n "$OFFBOX_DEST" ]; then
     SSH_CMD="ssh -i $OFFBOX_KEY -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
     # --delete keeps the remote in lockstep with local retention (same 14 dumps).
     if rsync -az --delete --timeout=60 -e "$SSH_CMD" \
-         --include='prima_pm_*.dump' --include='backup.log' --exclude='*' \
+         --include='prima_pm_*.dump' --include='prima_uploads_*.tar.gz' \
+         --include='backup.log' --exclude='*' \
          "$BACKUP_DIR"/ "$OFFBOX_DEST"/ >>"$LOG" 2>&1; then
       log "off-box: OK -> $OFFBOX_DEST"
     else
