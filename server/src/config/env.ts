@@ -27,11 +27,6 @@ export const env = {
   // Set SECURE=true once the app is served over HTTPS (behind a TLS proxy). It turns on
   // HSTS + upgrade-insecure-requests, which must stay OFF on a plain-http LAN deploy.
   secure: process.env.SECURE === 'true',
-  // Cookie Domain attribute. Leave UNSET for a single-origin deploy (cookies stay host-only,
-  // the safest default). Set to a leading-dot registrable domain (e.g. ".example.com") for a
-  // split deploy where the SPA and API live on sibling subdomains (app.example.com /
-  // api.example.com) so the JS-readable prima_csrf cookie is shared across them.
-  cookieDomain: process.env.COOKIE_DOMAIN?.trim() || undefined,
   // Number of proxy hops to trust for req.ip / X-Forwarded-* (e.g. TRUST_PROXY=1 behind
   // one nginx). Leave unset for a direct bind — trusting a spoofable header is unsafe then.
   trustProxy: process.env.TRUST_PROXY,

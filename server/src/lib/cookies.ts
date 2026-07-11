@@ -30,11 +30,8 @@ const RT_MAX_AGE = ttlToMs(env.jwt.refreshTtl, 7 * 86_400_000);
 // on cross-site requests); Secure is gated on SECURE=true so the cookie still works on the
 // plain-http LAN / localhost dev (browsers treat http://localhost + 127.0.0.1 as secure
 // contexts, so Secure cookies are accepted there even without the flag).
-// env.cookieDomain is set only for a split (app./api. sibling-subdomain) deploy so the trio
-// is shared across the registrable domain; unset → host-only cookies (single-origin default).
-// SameSite=Strict still holds across sibling subdomains (they share one registrable site).
 function base(httpOnly: boolean) {
-  return { httpOnly, secure: env.secure, sameSite: 'strict' as const, domain: env.cookieDomain };
+  return { httpOnly, secure: env.secure, sameSite: 'strict' as const };
 }
 
 // Set the auth cookie trio after a successful login / refresh / password change. A fresh

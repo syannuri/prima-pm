@@ -6,11 +6,6 @@ to a live, HTTPS-secured Prismatix deployment. Two TLS paths are covered — pic
 - **Path A — Public domain (VPS / cloud)** → TLS via **Let's Encrypt** (`certbot`).
 - **Path B — LAN / on-prem by IP (no domain)** → TLS via a **local CA** you install on each device.
 
-> **Shared hosting (e.g. Hostinger Business Web)?** Shared plans run PHP/MySQL and cannot host
-> the Node API or PostgreSQL. If you must use one, see **[`../deploy/hostinger/`](../deploy/hostinger/README.md)**
-> for a *split* deploy (static frontend on shared hosting + API/DB on a Node host). A single VPS
-> (this guide) is simpler and usually cheaper.
-
 Everything else (OS packages, PostgreSQL, the Node app, systemd, hardening, backups) is
 **common to both paths**. Do **Part 1** first, then your chosen **Part 2**.
 
