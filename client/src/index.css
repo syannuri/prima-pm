@@ -114,6 +114,18 @@ body.has-install-banner .fab {
   .prima-page { animation: none; }
 }
 
+/* Install-banner entrance — slides up + fades so it doesn't pop in abruptly. */
+@keyframes prima-slide-up {
+  from { opacity: 0; transform: translateY(0.75rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.prima-slide-up {
+  animation: prima-slide-up 0.28s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .prima-slide-up { animation: none; }
+}
+
 /* Staggered list entrance — subtle rise+fade, delayed per item (see MobileDashboard). */
 @keyframes prima-rise {
   from { opacity: 0; transform: translateY(10px); }

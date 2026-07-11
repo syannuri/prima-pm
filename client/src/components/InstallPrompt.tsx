@@ -46,7 +46,7 @@ export default function InstallPrompt() {
 
   return (
     <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 px-3 md:hidden">
-      <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-xl dark:border-slate-700 dark:bg-slate-800/95">
+      <div className="prima-slide-up mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-xl dark:border-slate-700 dark:bg-slate-800/95">
         <img src="/icon-192.png" alt="" className="h-9 w-9 shrink-0 rounded-lg" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Pasang Prismatix</p>

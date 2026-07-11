@@ -130,7 +130,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <Button variant="secondary" onClick={logout} className="hidden md:inline-flex">Logout</Button>
         </header>
 
-        <main className="flex-1 overflow-y-auto overscroll-y-contain px-4 pb-24 pt-6 sm:px-6 md:pb-6">
+        <main className="flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-6">
           <div className="mx-auto max-w-7xl"><PageTransition>{children}</PageTransition></div>
         </main>
       </div>
