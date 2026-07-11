@@ -7,7 +7,6 @@ import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
 import MobileTabBar from './MobileTabBar';
 import AvatarMenu from './AvatarMenu';
-import Logo from './Logo';
 import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
 
@@ -50,11 +49,11 @@ export default function Layout({ children }: { children: ReactNode }) {
           className="relative flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900"
           style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
         >
-          {/* Phones: brand lockup centred (the sidebar logo is hidden on mobile). Decorative
-              + non-interactive so it never blocks the avatar/search/bell taps around it. */}
-          <div aria-hidden className="pointer-events-none absolute left-1/2 flex items-center gap-1.5 md:hidden" style={{ top: 'calc(50% + env(safe-area-inset-top) / 2)', transform: 'translate(-50%, -50%)' }}>
-            <Logo className="h-5 w-5" />
-            <span className="font-brand text-sm font-bold tracking-wide text-slate-700 dark:text-slate-200">Prismatix</span>
+          {/* Phones: the same boxed PRISMATIX wordmark as the login page (the sidebar brand is
+              hidden on mobile). Decorative + non-interactive so it never blocks the surrounding
+              avatar/search/bell taps. */}
+          <div aria-hidden className="pointer-events-none absolute left-1/2 md:hidden" style={{ top: 'calc(50% + env(safe-area-inset-top) / 2)', transform: 'translate(-50%, -50%)' }}>
+            <span className="inline-block border-2 border-slate-900 px-2 py-0.5 font-brand text-sm font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">PRISMATIX</span>
           </div>
           {/* Phones: initials avatar (account/settings) sits top-left. */}
           <div className="md:hidden"><AvatarMenu /></div>

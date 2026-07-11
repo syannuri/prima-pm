@@ -46,6 +46,16 @@ export default function MobileDashboard() {
     queryKey: ['portfolio', statusDate],
     queryFn: () => api.get<Summary>(`/portfolio/summary?statusDate=${statusDate}`),
   });
+  // Bookmarked projects (device-local) float to the very top and get an amber highlight.
+  const [pinned, setPinned] = useState<Set<string>>(() => {
+    try { return new Set<string>(JSON.parse(localStorage.getItem('prima_pinned_projects') || '[]')); } catch { return new Set(); }
+  });
+  const togglePin = (id: string) => setPinned((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    try { localStorage.setItem('prima_pinned_projects', JSON.stringify([...next])); } catch { /* ignore */ }
+    return next;
+  });
 
   if (isLoading) return <MobileDashboardSkeleton />;
   if (!data || data.totals.count === 0) return <Card><p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No projects in the portfolio yet.</p></Card>;
@@ -54,7 +64,13 @@ export default function MobileDashboard() {
   const pct = Math.round(t.scheduleProgress * 100);
   const status: PortfolioHealth = t.pv <= 0 ? 'NO_DATA' : t.spi >= 0.95 ? 'GREEN' : t.spi >= 0.85 ? 'AMBER' : 'RED';
   const cv = t.ev - t.ac;
-  const projects = [...data.projects].sort((a, b) => (RANK[a.health] - RANK[b.health]) || a.spi - b.spi);
+  const isActive = (s: string) => s === 'IN_PROGRESS';
+  const projects = [...data.projects].sort((a, b) =>
+    (Number(pinned.has(b.id)) - Number(pinned.has(a.id)))         // bookmarked first
+    || (Number(isActive(b.status)) - Number(isActive(a.status)))  // then active (in-progress)
+    || (RANK[a.health] - RANK[b.health])                          // then worst health
+    || (a.spi - b.spi),
+  );
 
   // Quick actions — route shortcuts most useful for PM/PMO on the go.
   // ("New project" lives on the floating action button, not here.)
@@ -122,7 +138,7 @@ export default function MobileDashboard() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className="prima-rise relative block overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.02] transition active:scale-[.99] dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]"
+                className={`prima-rise relative block overflow-hidden rounded-2xl border bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm transition active:scale-[.99] dark:from-slate-800/80 dark:to-slate-900/90 ${pinned.has(p.id) ? 'border-amber-300 ring-2 ring-amber-400/50 dark:border-amber-500/40' : 'border-slate-200/70 ring-1 ring-black/[0.02] dark:border-slate-700/60 dark:ring-white/[0.03]'}`}
                 style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
               >
                 {/* Top sheen — unifies with the quick-action + KPI tiles. */}
@@ -132,9 +148,22 @@ export default function MobileDashboard() {
                     <div className="truncate font-semibold text-slate-800 dark:text-slate-100">{p.name}</div>
                     <div className="text-[11px] text-slate-400">{p.code}{p.pm ? ` · ${p.pm}` : ''}</div>
                   </div>
-                  <span className="flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ backgroundColor: `${rag.c}1a`, color: rag.c }}>
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: rag.c }} />{rag.label}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ backgroundColor: `${rag.c}1a`, color: rag.c }}>
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: rag.c }} />{rag.label}
+                    </span>
+                    {/* Bookmark toggle — pin a project to the top; preventDefault so it doesn't navigate. */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); haptic(); togglePin(p.id); }}
+                      aria-label={pinned.has(p.id) ? 'Hapus bookmark' : 'Bookmark proyek'}
+                      className={`-mr-1 grid h-7 w-7 place-items-center rounded-lg transition ${pinned.has(p.id) ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500 dark:text-slate-600 dark:hover:text-amber-400'}`}
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill={pinned.has(p.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-brand-500" style={{ width: `${ppct}%` }} /></div>
