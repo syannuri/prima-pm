@@ -2,6 +2,7 @@
 
 > Multi-project, multi-user project-management platform covering the full delivery lifecycle:
 > **Charter → WBS/Schedule → Cost → Risk → Change Control → EVM/Forecast → Closure**, aligned to PMBOK.
+> Each project's modules are organized under the **five PMBOK process groups** — Initiating · Planning · Executing · Monitoring & Controlling · Closing.
 
 Prismatix gives PMs, PMO and finance one clear, role-aware view of project **health, cost, schedule and risk** —
 turning scattered updates into Earned Value insight (CPI/SPI), resource utilization and an auditable trail.
@@ -17,6 +18,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ## ✨ Features
 
+- **PMBOK process-group workspace** — inside a project, modules are grouped under five phase tabs: **Initiating** (Charter · Kick-Off · Stakeholders), **Planning** (Schedule · Agile · Cost · Procurement · Risk), **Executing** (Timesheet · RAID · Issues · UAT · Change Request), **Monitoring & Controlling** (Forecast · EVM Trend) and **Closing** (Closeout), with a cross-cutting **Audit** tab.
 - **Role-aware dashboard** — Admin/PMO get **Portfolio EVM** (a compact KPI **stat strip**, CPI/SPI, status & health charts, activity-by-project, resource load); **Project Managers** get a *"My Projects"* view with elegant **CPI/SPI donut charts** and a **baseline-vs-actual progress** chart — plus a Resource **Utilization** heatmap and project cards. Personalised, time-based greeting (auto **ID/EN**).
 - **⌘K Command Palette** — jump to any project, page or quick action from anywhere (**Ctrl/⌘ K**), keyboard-first.
 - **Project Charter** — goals, scope, sponsor, high-level cost, and the **delivery approach** (Predictive / Agile / Hybrid) chosen at initiation; committing locks a baseline and unlocks the other modules.
@@ -59,7 +61,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ![Reporting Hub — Executive portfolio-health view with a KPI band, RAG distribution and a worst-first project heatmap](docs/screenshots/reports.png)
 
-**Guided next steps** — a contextual card on every project that tells the PM what to do next for the current lifecycle stage (charter → baseline → activate → track → close), jumping straight to the right tab.
+**Guided next steps** — a contextual card on every project that tells the PM what to do next for the current lifecycle stage (charter → baseline → activate → monitor → close), jumping straight to the right tab.
 
 ![Guided next-steps card showing record-acceptance, capture-lessons and close-project cues for a project in execution](docs/screenshots/next-steps.png)
 
