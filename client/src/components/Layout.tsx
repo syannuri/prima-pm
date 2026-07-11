@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLang, greet } from '../context/LanguageContext';
 import { Button } from './ui';
 import NotificationBell from './NotificationBell';
 import Sidebar from './Sidebar';
@@ -11,9 +12,11 @@ import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const { lang } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
+  const onHome = location.pathname === '/';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('prima_sidebar_collapsed') === '1');
@@ -51,6 +54,13 @@ export default function Layout({ children }: { children: ReactNode }) {
         >
           {/* Phones: initials avatar (account/settings) sits top-left. */}
           <div className="md:hidden"><AvatarMenu /></div>
+          {/* Phones, home only: a monday.com-style greeting + full name beside the avatar. */}
+          {onHome && (
+            <div className="min-w-0 leading-tight md:hidden">
+              <div className="truncate text-xs text-slate-500 dark:text-slate-400">{greet(lang, new Date().getHours())}</div>
+              <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{user?.name}</div>
+            </div>
+          )}
           {/* Hamburger removed on phones — the bottom tab bar handles navigation there. Kept for md as a fallback. */}
           <button
             onClick={() => setMobileOpen(true)}

@@ -46,7 +46,7 @@ function RateCardsSection({ canEditRates }: { canEditRates: boolean }) {
 
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Rate cards</h3>
         <span className="text-xs text-slate-500 dark:text-slate-400">Day-rate per role/level — drives manpower cost</span>
       </div>
@@ -55,9 +55,9 @@ function RateCardsSection({ canEditRates }: { canEditRates: boolean }) {
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[34rem] text-sm">
             <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:whitespace-nowrap [&>th]:pr-3">
                 <th className="py-2">Role</th><th>Level</th><th className="text-right">Cost / manday</th><th>Status</th><th></th>
               </tr>
             </thead>
@@ -154,7 +154,7 @@ function ResourcesSection({ canEdit }: { canEdit: boolean }) {
 
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resource pool</h3>
         {canEdit && <Button onClick={() => setAdding(true)}>+ Add resource</Button>}
       </div>
@@ -162,9 +162,9 @@ function ResourcesSection({ canEdit }: { canEdit: boolean }) {
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[48rem] text-sm">
             <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:whitespace-nowrap [&>th]:pr-3">
                 <th className="py-2">Name</th><th>Type</th><th>Role</th><th className="text-right">Rate / manday</th><th className="text-right">Cap/day</th><th>Dept</th><th>Login</th><th>Status</th><th></th>
               </tr>
             </thead>
