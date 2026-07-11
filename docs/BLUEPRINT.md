@@ -15,7 +15,9 @@
 A multi-project, multi-user web application that operationalizes the PMBOK knowledge areas
 (Integration, Scope, Cost, Risk, Schedule, Resource) into a single integrated tool — delivered
 end-to-end across the full delivery lifecycle: **Charter → WBS/Schedule → Cost → Risk → Change
-Control → EVM/Forecast → Closure**, for **Predictive, Agile and Hybrid** projects.
+Control → EVM/Forecast → Closure**, for **Predictive, Agile and Hybrid** projects. In the UI, a
+project's modules are organized under the **five PMBOK process groups** as top-level phase tabs —
+**Initiating → Planning → Executing → Monitoring & Controlling → Closing**.
 
 **Core principle — Single Source of Truth & Integration:**
 The modules are **not** isolated forms. They are linked through a shared, lockable baseline:
@@ -155,6 +157,20 @@ Timesheet effort — actual man-days logged against Manpower lines (plan vs earn
 ---
 
 ## 5. MODULE SPECIFICATIONS (as delivered)
+
+**Workspace navigation** — inside a project, the modules below are grouped in the UI under the
+**five PMBOK process groups** as top-level phase tabs (a cross-cutting **Audit** tab sits alongside):
+
+| Process group | Modules (tabs) |
+|---|---|
+| **Initiating** | Charter · Kick-Off · Stakeholders |
+| **Planning** | Schedule/WBS · Agile · Cost · Procurement · Risk |
+| **Executing** | Timesheet · RAID · Issues · UAT · Change Request |
+| **Monitoring & Controlling** | Forecast · EVM Trend |
+| **Closing** | Closeout (Acceptance sign-offs & Lessons learned) |
+
+The underlying module/tab identifiers are unchanged (e.g. the Closing phase opens the `Closeout`
+panel) — only the top-level phase labels follow the PMBOK process-group naming.
 
 ### 5.1 Project Charter
 Capture & lock the project baseline. Fields: description, goals, **project category**
