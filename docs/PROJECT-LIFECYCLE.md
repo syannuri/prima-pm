@@ -1,6 +1,6 @@
 # 🔄 Project Lifecycle & Flow — Prismatix
 
-**Version:** 1.1 · **Date:** 2026-07-07 · **Audience:** PM · PMO · onboarding
+**Version:** 1.2 · **Date:** 2026-07-11 · **Audience:** PM · PMO · onboarding
 
 > End-to-end flow of a project in Prismatix, from creation to close, mapped to the
 > five PMBOK process groups. The app enforces this flow through a status **state
@@ -79,7 +79,7 @@ flowchart TD
     Hold -->|no| CloseReady{"Work complete?"}
 
     CloseReady -->|not yet| Exec
-    CloseReady -->|yes| Closeout["📋 Closeout tab:<br/>lessons learned + acceptance sign-off"]
+    CloseReady -->|yes| Closeout["📋 Closing tab (Closeout panel):<br/>lessons learned + acceptance sign-off"]
     Closeout --> CloseGate{"🚦 Closure gate<br/>schedule 100%?"}
     CloseGate -->|blocker| ForceC["ADMIN/PMO force-close<br/>(reason, audited)"]
     CloseGate -->|ready| Closed
@@ -90,6 +90,11 @@ flowchart TD
 ---
 
 ## 3. The five phases (PMBOK process groups)
+
+These five process groups are the **top-level phase tabs** in a project's workspace —
+**Initiating · Planning · Executing · Monitoring & Controlling · Closing** — each grouping the
+relevant modules (a cross-cutting **Audit** tab sits alongside). The tab labels below match the
+menu; underlying module ids are unchanged (e.g. the **Closing** tab opens the `Closeout` panel).
 
 ### 3.1 Initiating — `DRAFT`
 | | |
@@ -125,7 +130,7 @@ flowchart TD
 ### 3.5 Closing — `→ CLOSED`
 | | |
 |---|---|
-| **Prepare** | **Closeout tab**: **Lessons Learned** (went well / wrong / recommendation) + **Acceptance Sign-offs** (formal deliverable acceptance by Sponsor/Customer). |
+| **Prepare** | **Closing tab** (Closeout panel): **Lessons Learned** (went well / wrong / recommendation) + **Acceptance Sign-offs** (formal deliverable acceptance by Sponsor/Customer). |
 | **Gate** | 🔴 **only hard blocker = Schedule 100%**. Open CRs / high risks / open issues / AC=0 / missing lessons/acceptance are **advisory warnings**, not blockers. |
 | **Override** | ADMIN/PMO **force-close** with a mandatory reason (audited `FORCE_CLOSE`); stores `closedAt` / `closedById` / `closureNote`. |
 | **After** | `CLOSED` is terminal & read-only. Correct a mistaken closure via **Reopen** (ADMIN/PMO + reason → `IN_PROGRESS`). |
