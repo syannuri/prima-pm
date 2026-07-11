@@ -38,7 +38,8 @@ Browser ──▶ https://app.example.com   (Business Web / LiteSpeed)   → cli
 ### A2. Deploy the server (Railway example)
 1. Point Railway at the repo, **root directory `server/`**. Build `npm ci && npm run build`,
    start `node dist/server.js`.
-2. Set the environment variables (Railway → Variables):
+2. Set the environment variables (Railway → Variables → **Raw Editor** → paste
+   [`backend.env.example`](backend.env.example) and fill the placeholders):
 
    ```env
    DATABASE_URL=postgresql://…?sslmode=require
