@@ -7,6 +7,7 @@ import { Card } from './ui';
 import { useAuth } from '../context/AuthContext';
 import MobileDashboardSkeleton from './MobileDashboardSkeleton';
 import { formatIdrShort, formatNum, formatDateInput } from '../lib/format';
+import { haptic } from '../lib/haptics';
 import PlanningReminders from './PlanningReminders';
 import AwaitingActivation from './AwaitingActivation';
 import AwaitingClosure from './AwaitingClosure';
@@ -57,11 +58,11 @@ export default function MobileDashboard() {
 
   // Quick actions — route shortcuts most useful for PM/PMO on the go.
   // ("New project" lives on the floating action button, not here.)
-  const actions: { label: string; icon: string; tint: string; to?: string; onClick?: () => void }[] = [
-    { label: 'Reports', icon: ICON.reports, tint: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400', to: '/reports' },
+  const actions: { label: string; icon: string; grad: string; glow: string; halo: string; to?: string; onClick?: () => void }[] = [
+    { label: 'Reports', icon: ICON.reports, grad: 'from-sky-400 to-blue-600', glow: 'shadow-blue-500/40', halo: 'bg-sky-400', to: '/reports' },
     isPmo
-      ? { label: 'Resources', icon: ICON.resources, tint: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400', to: '/admin/resources' }
-      : { label: 'Timesheet', icon: ICON.clock, tint: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400', to: '/my-timesheet' },
+      ? { label: 'Resources', icon: ICON.resources, grad: 'from-violet-400 to-indigo-600', glow: 'shadow-indigo-500/40', halo: 'bg-violet-400', to: '/admin/resources' }
+      : { label: 'Timesheet', icon: ICON.clock, grad: 'from-amber-400 to-orange-500', glow: 'shadow-orange-500/40', halo: 'bg-amber-400', to: '/my-timesheet' },
   ];
   const actionCols = actions.length >= 3 ? 'grid-cols-3' : 'grid-cols-2';
 
@@ -170,22 +171,28 @@ function Ring({ pct }: { pct: number }) {
   );
 }
 
-function QuickAction({ label, icon, tint, to, onClick }: { label: string; icon: string; tint: string; to?: string; onClick?: () => void }) {
+function QuickAction({ label, icon, grad, glow, halo, to, onClick }: { label: string; icon: string; grad: string; glow: string; halo: string; to?: string; onClick?: () => void }) {
   const cls =
     'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.02] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]';
   const inner = (
     <>
-      {/* Soft tinted halo behind the icon — clipped by the card for an elegant glow. */}
-      <span aria-hidden className={`pointer-events-none absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 -translate-y-6 rounded-full opacity-40 blur-2xl transition-opacity duration-200 group-hover:opacity-60 ${tint}`} />
-      {/* Top sheen for a glossy, premium finish. */}
+      {/* Soft coloured halo behind the icon — clipped by the card for an elegant glow. */}
+      <span aria-hidden className={`pointer-events-none absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 -translate-y-6 rounded-full opacity-45 blur-2xl transition-opacity duration-200 group-hover:opacity-70 ${halo}`} />
+      {/* Top sheen on the card for a glossy, premium finish. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
-      <span className={`relative grid h-11 w-11 place-items-center rounded-2xl shadow-sm ring-1 ring-inset ring-white/50 transition-transform duration-200 group-active:scale-90 dark:ring-white/10 ${tint}`}>
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={icon} /></svg>
+      {/* 3D gradient "app icon": vibrant diagonal gradient, a top gloss highlight for the
+          light-from-above read, a colour-matched elevation shadow, and a white glyph that
+          floats above it via a soft drop-shadow. */}
+      <span className={`relative grid h-12 w-12 place-items-center rounded-[1rem] bg-gradient-to-br text-white shadow-lg ring-1 ring-white/25 transition-transform duration-200 group-active:scale-90 ${grad} ${glow}`}>
+        <span aria-hidden className="pointer-events-none absolute inset-x-1 top-1 h-1/2 rounded-[0.75rem] bg-gradient-to-b from-white/45 to-transparent" />
+        <svg viewBox="0 0 24 24" className="relative h-6 w-6 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.35)]" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d={icon} /></svg>
       </span>
       <span className="relative mt-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>
     </>
   );
-  return to ? <Link to={to} className={cls}>{inner}</Link> : <button type="button" onClick={onClick} className={cls}>{inner}</button>;
+  return to
+    ? <Link to={to} onClick={() => haptic()} className={cls}>{inner}</Link>
+    : <button type="button" onClick={() => { haptic(); onClick?.(); }} className={cls}>{inner}</button>;
 }
 
 function KpiTile({ label, value, tone }: { label: string; value: string; tone?: 'red' | 'green' }) {
