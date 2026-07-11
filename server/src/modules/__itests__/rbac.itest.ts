@@ -1314,3 +1314,40 @@ describe('critical path (CPM endpoint over the task network)', () => {
     expect(cpm.body.tasks.every((t: { critical: boolean }) => t.critical)).toBe(true);
   });
 });
+
+describe('project bookmarks', () => {
+  let pid = '';
+  beforeAll(async () => {
+    const res = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Bookmark Target', pmUserId: ownerId });
+    pid = res.body.project.id;
+  });
+
+  it('requires auth', async () => {
+    expect((await request(app).get(api('/bookmarks'))).status).toBe(401);
+  });
+
+  it('add → list → remove, idempotent', async () => {
+    let res = await request(app).get(api('/bookmarks')).set(auth(tokens.PM2));
+    expect(res.status).toBe(200);
+    expect(res.body.projectIds).toEqual([]);
+    // add twice — idempotent (both 204, no duplicate)
+    expect((await request(app).put(api(`/bookmarks/${pid}`)).set(auth(tokens.PM2))).status).toBe(204);
+    expect((await request(app).put(api(`/bookmarks/${pid}`)).set(auth(tokens.PM2))).status).toBe(204);
+    res = await request(app).get(api('/bookmarks')).set(auth(tokens.PM2));
+    expect(res.body.projectIds).toEqual([pid]);
+    // remove
+    expect((await request(app).delete(api(`/bookmarks/${pid}`)).set(auth(tokens.PM2))).status).toBe(204);
+    res = await request(app).get(api('/bookmarks')).set(auth(tokens.PM2));
+    expect(res.body.projectIds).toEqual([]);
+  });
+
+  it('is private per-user', async () => {
+    await request(app).put(api(`/bookmarks/${pid}`)).set(auth(tokens.ADMIN));
+    expect((await request(app).get(api('/bookmarks')).set(auth(tokens.ADMIN))).body.projectIds).toEqual([pid]);
+    expect((await request(app).get(api('/bookmarks')).set(auth(tokens.PM2))).body.projectIds).toEqual([]);
+  });
+
+  it('404 on a non-existent project', async () => {
+    expect((await request(app).put(api('/bookmarks/does-not-exist')).set(auth(tokens.ADMIN))).status).toBe(404);
+  });
+});

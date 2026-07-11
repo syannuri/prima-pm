@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import MobileDashboardSkeleton from './MobileDashboardSkeleton';
 import { formatIdrShort, formatNum, formatDateInput } from '../lib/format';
 import { haptic } from '../lib/haptics';
+import { useBookmarks } from '../hooks/useBookmarks';
 import PlanningReminders from './PlanningReminders';
 import AwaitingActivation from './AwaitingActivation';
 import AwaitingClosure from './AwaitingClosure';
@@ -46,16 +47,9 @@ export default function MobileDashboard() {
     queryKey: ['portfolio', statusDate],
     queryFn: () => api.get<Summary>(`/portfolio/summary?statusDate=${statusDate}`),
   });
-  // Bookmarked projects (device-local) float to the very top and get an amber highlight.
-  const [pinned, setPinned] = useState<Set<string>>(() => {
-    try { return new Set<string>(JSON.parse(localStorage.getItem('prima_pinned_projects') || '[]')); } catch { return new Set(); }
-  });
-  const togglePin = (id: string) => setPinned((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    try { localStorage.setItem('prima_pinned_projects', JSON.stringify([...next])); } catch { /* ignore */ }
-    return next;
-  });
+  // Bookmarked projects (synced per-user via the server) float to the very top with an
+  // amber highlight.
+  const { pinned, toggle: togglePin } = useBookmarks();
 
   if (isLoading) return <MobileDashboardSkeleton />;
   if (!data || data.totals.count === 0) return <Card><p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No projects in the portfolio yet.</p></Card>;

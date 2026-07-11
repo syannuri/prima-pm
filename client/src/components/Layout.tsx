@@ -46,15 +46,9 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className="relative flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900"
+          className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900"
           style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
         >
-          {/* Phones: the same boxed PRISMATIX wordmark as the login page (the sidebar brand is
-              hidden on mobile). Decorative + non-interactive so it never blocks the surrounding
-              avatar/search/bell taps. */}
-          <div aria-hidden className="pointer-events-none absolute left-1/2 md:hidden" style={{ top: 'calc(50% + env(safe-area-inset-top) / 2)', transform: 'translate(-50%, -50%)' }}>
-            <span className="inline-block border-2 border-slate-900 px-2 py-0.5 font-brand text-sm font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">PRISMATIX</span>
-          </div>
           {/* Phones: initials avatar (account/settings) sits top-left. */}
           <div className="md:hidden"><AvatarMenu /></div>
           {/* Hamburger removed on phones — the bottom tab bar handles navigation there. Kept for md as a fallback. */}

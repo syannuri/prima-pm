@@ -1,0 +1,37 @@
+import { Router } from 'express';
+import { asyncHandler } from '../../middleware/validate.js';
+import { requireAuth } from '../../middleware/auth.js';
+import * as svc from './bookmark.service.js';
+
+// Personal project bookmarks for the signed-in user. Any authenticated user may
+// bookmark any existing project (it's a private pin, not an access grant).
+// Mounted at /api/v1/bookmarks.
+const router = Router();
+router.use(requireAuth);
+
+// List the current user's bookmarked project ids.
+router.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    res.json({ projectIds: await svc.listBookmarks(req.user!.id) });
+  }),
+);
+
+// Add / remove a bookmark (idempotent).
+router.put(
+  '/:projectId',
+  asyncHandler(async (req, res) => {
+    await svc.addBookmark(req.user!.id, req.params.projectId);
+    res.status(204).send();
+  }),
+);
+
+router.delete(
+  '/:projectId',
+  asyncHandler(async (req, res) => {
+    await svc.removeBookmark(req.user!.id, req.params.projectId);
+    res.status(204).send();
+  }),
+);
+
+export default router;

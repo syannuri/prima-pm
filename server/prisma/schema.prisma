@@ -277,9 +277,24 @@ model Project {
   evmSnapshots     EvmSnapshot[]
   uatTestCases     UatTestCase[]
   kickoffMeeting   KickoffMeeting?
+  bookmarks        ProjectBookmark[]
 
   @@index([status])
   @@index([pmUserId])
+}
+
+// Per-user project bookmark (personal "pin to top" flag). userId is stored FK-less
+// (kept light, like closedById); the project relation cascades so a deleted project
+// drops its bookmarks. One row per (user, project).
+model ProjectBookmark {
+  id        String   @id @default(uuid())
+  userId    String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, projectId])
+  @@index([userId])
 }
 
 model ProjectCharter {

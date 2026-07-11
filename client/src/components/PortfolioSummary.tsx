@@ -7,6 +7,7 @@ import { Badge, Card, Field, Input, Skeleton } from './ui';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
+import { useBookmarks } from '../hooks/useBookmarks';
 import PieChart, { type Slice } from './PieChart';
 import ProgressChart from './ProgressChart';
 import DonutChart, { type DonutSlice } from './DonutChart';
@@ -50,6 +51,7 @@ export default function PortfolioSummary() {
     queryKey: ['portfolio', statusDate],
     queryFn: () => api.get<Summary>(`/portfolio/summary?statusDate=${statusDate}`),
   });
+  const { pinned, toggle: togglePin } = useBookmarks();
 
   if (isLoading) {
     return (
@@ -111,6 +113,13 @@ export default function PortfolioSummary() {
     { resources: 0, mandays: 0, cost: 0 },
   );
   const hasResources = resTotals.resources > 0 || resTotals.cost > 0;
+
+  // Per-project EVM table order: bookmarked first, then active (in-progress), else the API
+  // order (stable sort preserves it).
+  const evmProjects = [...data.projects].sort((a, b) =>
+    (Number(pinned.has(b.id)) - Number(pinned.has(a.id)))
+    || (Number(a.status === 'IN_PROGRESS' ? 0 : 1) - Number(b.status === 'IN_PROGRESS' ? 0 : 1)),
+  );
 
   // Cost & revenue per project (PMO dashboard) — highest revenue first.
   const finRows = [...data.projects].sort((a, b) => b.revenue - a.revenue);
@@ -414,21 +423,26 @@ export default function PortfolioSummary() {
               </tr>
             </thead>
             <tbody>
-              {data.projects.map((p) => (
-                <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
+              {evmProjects.map((p) => (
+                <tr key={p.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 ${pinned.has(p.id) ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
                   <td className="py-2">
-                    {canOpen ? (
-                      <Link to={`/projects/${p.id}`} className="block">
-                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
-                        <div className="font-medium text-brand-600 hover:underline">{p.name}</div>
-                      </Link>
-                    ) : (
-                      <div>
-                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
-                        <div className="font-medium text-slate-700 dark:text-slate-200">{p.name}</div>
+                    <div className="flex items-start gap-2">
+                      <BookmarkStar on={pinned.has(p.id)} onToggle={() => togglePin(p.id)} />
+                      <div className="min-w-0">
+                        {canOpen ? (
+                          <Link to={`/projects/${p.id}`} className="block">
+                            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
+                            <div className="font-medium text-brand-600 hover:underline">{p.name}</div>
+                          </Link>
+                        ) : (
+                          <div>
+                            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
+                            <div className="font-medium text-slate-700 dark:text-slate-200">{p.name}</div>
+                          </div>
+                        )}
+                        {p.clientName && <div className="text-xs text-slate-500 dark:text-slate-400">Client: {p.clientName}</div>}
                       </div>
-                    )}
-                    {p.clientName && <div className="text-xs text-slate-500 dark:text-slate-400">Client: {p.clientName}</div>}
+                    </div>
                   </td>
                   <td><Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge></td>
                   <td className="text-right whitespace-nowrap" title={formatIdr(p.bac)}>{formatIdrShort(p.bac)}</td>
@@ -473,11 +487,11 @@ export default function PortfolioSummary() {
 
         {/* Mobile card list — table hidden < sm. */}
         <div className="space-y-2 sm:hidden">
-          {data.projects.map((p) => {
+          {evmProjects.map((p) => {
             const varText = p.finishVarianceDays == null ? '—' : p.finishVarianceDays > 0 ? `+${p.finishVarianceDays}d` : p.finishVarianceDays < 0 ? `${p.finishVarianceDays}d` : '0';
             const varClass = p.finishVarianceDays == null ? 'text-slate-400' : p.finishVarianceDays > 0 ? 'text-red-600 dark:text-red-400' : p.finishVarianceDays < 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400';
             return (
-              <div key={p.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+              <div key={p.id} className={`rounded-lg border p-3 ${pinned.has(p.id) ? 'border-amber-300 bg-amber-50/40 dark:border-amber-500/40 dark:bg-amber-900/10' : 'border-slate-200 dark:border-slate-800'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
@@ -488,7 +502,10 @@ export default function PortfolioSummary() {
                     )}
                     {p.clientName && <div className="text-xs text-slate-500 dark:text-slate-400">Client: {p.clientName}</div>}
                   </div>
-                  <Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge>
+                    <BookmarkStar on={pinned.has(p.id)} onToggle={() => togglePin(p.id)} />
+                  </div>
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs tabular-nums">
                   <div><div className="text-slate-400">BAC</div><div className="text-slate-700 dark:text-slate-200">{formatIdrShort(p.bac)}</div></div>
@@ -514,6 +531,23 @@ export default function PortfolioSummary() {
         </div>
       </Card>
     </div>
+  );
+}
+
+// Amber bookmark star toggle. Sits outside the project Link, so a tap only pins/unpins.
+function BookmarkStar({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={on ? 'Hapus bookmark' : 'Bookmark proyek'}
+      title={on ? 'Hapus bookmark' : 'Bookmark'}
+      className={`shrink-0 rounded p-0.5 transition ${on ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500 dark:text-slate-600 dark:hover:text-amber-400'}`}
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+      </svg>
+    </button>
   );
 }
 
