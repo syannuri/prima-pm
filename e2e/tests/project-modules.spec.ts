@@ -18,35 +18,35 @@ test.describe('Project modules render', () => {
   });
 
   test('Stakeholder register (Charter phase)', async ({ page }) => {
-    await openTab(page, 'Charter', 'Stakeholders');
+    await openTab(page, 'Initiating', 'Stakeholders');
     await expect(page.getByText('Stakeholder Register')).toBeVisible();
     await expect(page.getByRole('button', { name: /Add stakeholder/i })).toBeVisible();
   });
 
   test('Procurement register (Plan phase)', async ({ page }) => {
-    await openTab(page, 'Plan', 'Procurement');
+    await openTab(page, 'Planning', 'Procurement');
     await expect(page.getByText('Procurement Register')).toBeVisible();
   });
 
   test('RAID log with Assumptions & Dependencies (Execute phase)', async ({ page }) => {
-    await openTab(page, 'Execute', 'RAID');
+    await openTab(page, 'Executing', 'RAID');
     await expect(page.getByText('RAID Log')).toBeVisible();
     await expect(page.getByRole('button', { name: /Add assumption/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Add dependency/i })).toBeVisible();
   });
 
   test('Schedule tab surfaces the Critical Path (CPM)', async ({ page }) => {
-    await openTab(page, 'Plan', 'Schedule');
+    await openTab(page, 'Planning', 'Schedule');
     await expect(page.getByText(/Critical Path \(CPM\)/)).toBeVisible();
   });
 
   test('Forecast at completion (Track phase)', async ({ page }) => {
-    await openTab(page, 'Track', 'Forecast');
+    await openTab(page, 'Monitoring & Controlling', 'Forecast');
     await expect(page.getByText(/Forecast at Completion/i)).toBeVisible();
   });
 
   test('Timesheet effort table (Execute phase)', async ({ page }) => {
-    await openTab(page, 'Execute', 'Timesheet');
+    await openTab(page, 'Executing', 'Timesheet');
     await expect(page.getByText(/plan · earned · consumed/i)).toBeVisible();
   });
 });

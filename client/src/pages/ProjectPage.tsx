@@ -192,12 +192,16 @@ export default function ProjectPage() {
 // Lifecycle-phase grouping of the project tabs so the bar isn't a wall of 14 buttons.
 // A single-tab phase renders as a plain tab; a multi-tab phase is a dropdown whose button
 // shows the active sub-tab (or the phase name) and highlights when one of its tabs is active.
+// Level-1 phase labels follow the PMBOK process groups (Initiating / Planning /
+// Executing / Monitoring & Controlling / Closing). The underlying Tab ids are kept
+// stable (e.g. 'Charter', 'Closeout') so deep-links and server-emitted next-step cues
+// still resolve.
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
-  { label: 'Charter', tabs: ['Charter', 'Kick-Off', 'Stakeholders'] },
-  { label: 'Plan', tabs: ['Schedule', 'Agile', 'Cost', 'Procurement', 'Risk'] },
-  { label: 'Execute', tabs: ['Timesheet', 'RAID', 'Issues', 'UAT', 'Change Req'] },
-  { label: 'Track', tabs: ['Forecast', 'EVM Trend'] },
-  { label: 'Close', tabs: ['Closeout'] },
+  { label: 'Initiating', tabs: ['Charter', 'Kick-Off', 'Stakeholders'] },
+  { label: 'Planning', tabs: ['Schedule', 'Agile', 'Cost', 'Procurement', 'Risk'] },
+  { label: 'Executing', tabs: ['Timesheet', 'RAID', 'Issues', 'UAT', 'Change Req'] },
+  { label: 'Monitoring & Controlling', tabs: ['Forecast', 'EVM Trend'] },
+  { label: 'Closing', tabs: ['Closeout'] },
   { label: 'Audit', tabs: ['Audit'] },
 ];
 
@@ -237,10 +241,10 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
             const active = g.tabs.includes(activeTab);
             const single = g.tabs.length === 1;
             return (
-              // Single-tab groups show the tab's own name (e.g. "Closeout"); multi-tab groups show
-              // the phase label + a stable aria-label so tests/AT can target the phase.
-              <button key={g.label} aria-label={single ? undefined : g.label} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
-                {single ? g.tabs[0] : g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
+              // Every phase shows its process-group label (e.g. "Closing"); the stable
+              // aria-label lets tests/AT target the phase by that label.
+              <button key={g.label} aria-label={g.label} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
+                {g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
               </button>
             );
           })}
