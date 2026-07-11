@@ -6,6 +6,9 @@ to a live, HTTPS-secured Prismatix deployment. Two TLS paths are covered — pic
 - **Path A — Public domain (VPS / cloud)** → TLS via **Let's Encrypt** (`certbot`).
 - **Path B — LAN / on-prem by IP (no domain)** → TLS via a **local CA** you install on each device.
 
+> **On a Hostinger VPS?** See **[`HOSTINGER-VPS.md`](HOSTINGER-VPS.md)** — a provider-specific
+> checklist (VPS provisioning, DNS in hPanel, private-repo clone) that wraps Path A below.
+
 Everything else (OS packages, PostgreSQL, the Node app, systemd, hardening, backups) is
 **common to both paths**. Do **Part 1** first, then your chosen **Part 2**.
 
