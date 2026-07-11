@@ -108,7 +108,7 @@ export default function ProjectPage() {
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <span className="font-mono text-sm text-slate-500 dark:text-slate-400">{project.code}</span>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{project.name}</h1>
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 sm:text-2xl">{project.name}</h1>
           <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'}>{project.status}</Badge>
           <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>
           <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -125,17 +125,25 @@ export default function ProjectPage() {
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
-        <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
           <span>Client: {project.clientName ?? '—'} · PM: {project.pm?.name ?? '—'} · Sponsor: {project.sponsor ?? '—'}</span>
           <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
         </p>
         {(project.category || project.costBaselineIdr || project.totalRevenueIdr) && (
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-1.5 flex flex-col items-start gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
             {project.category && <Badge color="slate">{categoryLabel(project.category)}</Badge>}
             {project.costBaselineIdr && <span>Cost Baseline: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.costBaselineIdr)}</span></span>}
-            {project.totalRevenueIdr && <span>· Revenue: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.totalRevenueIdr)}</span></span>}
+            {project.totalRevenueIdr && (
+              <>
+                <span aria-hidden className="hidden text-slate-300 dark:text-slate-600 sm:inline">·</span>
+                <span>Revenue: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.totalRevenueIdr)}</span></span>
+              </>
+            )}
             {project.costBaselineIdr && project.totalRevenueIdr && (
-              <span>· Margin: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span></span>
+              <>
+                <span aria-hidden className="hidden text-slate-300 dark:text-slate-600 sm:inline">·</span>
+                <span>Margin: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span></span>
+              </>
             )}
           </div>
         )}
