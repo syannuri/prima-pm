@@ -43,7 +43,7 @@ const DOC: Record<Lang, Doc> = {
           'Masuk dengan akun Anda. Tampilan default dark mode (bisa diganti di Settings).',
           'Dari Dashboard, lihat ringkasan portfolio atau buka satu proyek dari sidebar kiri.',
           'Proyek baru dibuat oleh Admin/PMO lewat tombol “+ New Project”.',
-          'Di dalam proyek, kerjakan tiap tab berurutan: Charter → Schedule → Cost → Risk.',
+          'Di dalam proyek, tab teratas mengikuti Process Group PMBOK: Initiating → Planning → Executing → Monitoring & Controlling → Closing.',
         ] },
       ] },
       { id: 'konsep', nav: 'Konsep penting (EVM)', heading: '📐 Konsep penting (EVM)', blocks: [
@@ -71,14 +71,14 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'alur', nav: 'Alur kerja proyek', heading: '🔄 Alur kerja proyek (end-to-end)', blocks: [
+        { type: 'p', text: 'Tab teratas di ruang kerja proyek mengikuti lima Process Group PMBOK: Initiating → Planning → Executing → Monitoring & Controlling → Closing.' },
         { type: 'steps', items: [
-          'Charter — isi piagam proyek, lalu Commit untuk mengunci baseline & membuka modul lain (status: Draft → Chartered).',
-          'Schedule/WBS — susun rincian pekerjaan & tanggal, lalu Capture Schedule Baseline.',
-          'Cost & Risk — masukkan biaya + rencana manpower & daftarkan risiko, lalu Lock Cost Baseline (urutan benar: capture schedule dulu, baru lock cost).',
-          'Activate — PMO/Admin mengaktifkan proyek (Chartered → In-progress) setelah baseline lengkap.',
-          'Eksekusi — update progress & Actual Cost; kelola Issues, dan ajukan Change Request bila ada perubahan setelah commit.',
-          'Closing — catat Acceptance Sign-off & Lessons Learned (tab Closeout), lalu Close project.',
-          'Panduan "🧭 Next steps" di tiap proyek menuntun langkah berikutnya sesuai tahap; pantau kesehatan lewat Dashboard, Forecast, EVM Trend, & menu Reports (PDF/Excel).',
+          'Initiating — di tab Initiating: isi Charter (piagam proyek) lalu Commit untuk mengunci baseline & membuka modul lain (Draft → Chartered), dan daftarkan Stakeholders.',
+          'Planning — di tab Planning: susun Schedule/WBS lalu Capture Schedule Baseline, isi Cost + rencana manpower, daftarkan Risk & Procurement, terakhir Lock Cost Baseline (urutan benar: capture schedule dulu, baru lock cost). PMO/Admin lalu Activate proyek (Chartered → In-progress) setelah baseline lengkap.',
+          'Executing — di tab Executing: update progress & Actual Cost, kelola Issues & RAID, jalankan UAT, dan ajukan Change Request bila ada perubahan setelah commit.',
+          'Monitoring & Controlling — di tab Monitoring & Controlling: pantau kinerja lewat Forecast & EVM Trend, dilengkapi Dashboard & menu Reports (PDF/Excel).',
+          'Closing — di tab Closing: catat Acceptance Sign-off & Lessons Learned, lalu Close project.',
+          'Panduan "🧭 Next steps" di tiap proyek menuntun langkah berikutnya sesuai tahap proses.',
         ] },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
@@ -123,7 +123,7 @@ const DOC: Record<Lang, Doc> = {
           'EVM Trend — rekam "status" berkala (Capture status) untuk melihat CPI/SPI & EV dari waktu ke waktu (grafik tren + tabel snapshot).',
         ] },
       ] },
-      { id: 'closeout', nav: 'Closeout', heading: '🏁 Closeout (Acceptance & Lessons)', blocks: [
+      { id: 'closeout', nav: 'Closing', heading: '🏁 Closing (Acceptance & Lessons)', blocks: [
         { type: 'bullets', items: [
           'Acceptance Sign-off — persetujuan formal deliverable dari sponsor/customer (pihak, keputusan Accepted / Accepted-with-conditions / Rejected, nama penandatangan, tanggal).',
           'Lessons Learned — catatan Went-well / Went-wrong / Rekomendasi untuk proyek berikutnya.',
@@ -176,7 +176,7 @@ const DOC: Record<Lang, Doc> = {
           'Sign in with your account. The default theme is dark mode (changeable in Settings).',
           'From the Dashboard, review the portfolio or open a project from the left sidebar.',
           'New projects are created by Admin/PMO via the “+ New Project” button.',
-          'Inside a project, work each tab in order: Charter → Schedule → Cost → Risk.',
+          'Inside a project, the top tabs follow the PMBOK process groups: Initiating → Planning → Executing → Monitoring & Controlling → Closing.',
         ] },
       ] },
       { id: 'konsep', nav: 'Key concepts (EVM)', heading: '📐 Key concepts (EVM)', blocks: [
@@ -204,14 +204,14 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'alur', nav: 'Project workflow', heading: '🔄 Project workflow (end-to-end)', blocks: [
+        { type: 'p', text: 'The project workspace top tabs follow the five PMBOK process groups: Initiating → Planning → Executing → Monitoring & Controlling → Closing.' },
         { type: 'steps', items: [
-          'Charter — fill in the project charter, then Commit to lock the baseline & unlock the other modules (status: Draft → Chartered).',
-          'Schedule/WBS — build the work breakdown & dates, then Capture the Schedule Baseline.',
-          'Cost & Risk — enter costs + planned manpower & register risks, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost).',
-          'Activate — PMO/Admin activates the project (Chartered → In-progress) once the baseline is complete.',
-          'Execute — update progress & Actual Cost; manage Issues, and raise a Change Request for any change after commit.',
-          'Closing — record the Acceptance Sign-off & Lessons Learned (Closeout tab), then Close the project.',
-          'The "🧭 Next steps" guide on each project points to the next action for its stage; monitor health via the Dashboard, Forecast, EVM Trend & the Reports menu (PDF/Excel).',
+          'Initiating — on the Initiating tab: fill in the Charter, then Commit to lock the baseline & unlock the other modules (Draft → Chartered), and register Stakeholders.',
+          'Planning — on the Planning tab: build the Schedule/WBS then Capture the Schedule Baseline, enter Cost + planned manpower, register Risk & Procurement, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost). PMO/Admin then Activate the project (Chartered → In-progress) once the baseline is complete.',
+          'Executing — on the Executing tab: update progress & Actual Cost, manage Issues & RAID, run UAT, and raise a Change Request for any change after commit.',
+          'Monitoring & Controlling — on the Monitoring & Controlling tab: track performance via Forecast & EVM Trend, complemented by the Dashboard & the Reports menu (PDF/Excel).',
+          'Closing — on the Closing tab: record the Acceptance Sign-off & Lessons Learned, then Close the project.',
+          'The "🧭 Next steps" guide on each project points to the next action for its process stage.',
         ] },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
@@ -256,7 +256,7 @@ const DOC: Record<Lang, Doc> = {
           'EVM Trend — capture periodic "status" snapshots to see CPI/SPI & EV over time (trend chart + snapshot table).',
         ] },
       ] },
-      { id: 'closeout', nav: 'Closeout', heading: '🏁 Closeout (Acceptance & Lessons)', blocks: [
+      { id: 'closeout', nav: 'Closing', heading: '🏁 Closing (Acceptance & Lessons)', blocks: [
         { type: 'bullets', items: [
           'Acceptance Sign-off — formal deliverable acceptance from the sponsor/customer (party, decision Accepted / Accepted-with-conditions / Rejected, signer name, date).',
           'Lessons Learned — Went-well / Went-wrong / Recommendation notes for future projects.',
