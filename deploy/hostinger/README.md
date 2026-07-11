@@ -78,22 +78,34 @@ Browser ──▶ https://app.example.com   (Business Web / LiteSpeed)   → cli
 
 ---
 
-## Part B — Frontend (`app.example.com`) on Business Web
+## Part B — Frontend (`app.example.com`) on Business Web — upload checklist
 
-Build the SPA **pointing at the API**, then upload it.
+**Build (local machine):**
+- [ ] `cd client`
+- [ ] Build pointing at the API (baked in at build time → rebuild whenever the API URL or app
+      changes): `VITE_API_URL=https://api.example.com/api/v1 npm ci && npm run build`
+- [ ] Copy the SPA `.htaccess` into the build so it uploads together:
+      `cp ../deploy/hostinger/.htaccess dist/`
+- [ ] Zip the **contents** of `dist` (not the folder — so files land at the doc root, and the
+      dotfile is included): `cd dist && zip -r ../prismatix-frontend.zip .` → gives
+      `client/prismatix-frontend.zip`.
 
-1. On your machine:
-   ```bash
-   cd client
-   VITE_API_URL=https://api.example.com/api/v1 npm ci && npm run build
-   ```
-   (`VITE_API_URL` is baked in at build time — rebuild if the API URL changes.)
-2. In hPanel: **create the subdomain `app`** (Domains → Subdomains); note its document root
-   (e.g. `public_html/app`).
-3. Upload the **contents of `client/dist`** into that document root (hPanel File Manager or
-   FTP/SFTP), **plus the `.htaccess`** from this folder (`deploy/hostinger/.htaccess`).
-   The final layout is `…/app/index.html`, `…/app/assets/…`, `…/app/.htaccess`, `sw.js`, etc.
-4. In hPanel: **enable SSL** for `app.example.com` (Security → SSL → free Let's Encrypt).
+**hPanel:**
+- [ ] **Domains → Subdomains → create `app`**; note its document root (e.g.
+      `public_html/app` or `domains/app.example.com/public_html`). Serving on the **subdomain
+      root** keeps Vite's default `base: '/'` correct — no rebuild needed.
+- [ ] **Files → File Manager** → open that document root → **delete any default placeholder**
+      (`default.php`, sample `index.html`).
+- [ ] **Upload** `prismatix-frontend.zip` here → **right-click → Extract** into this folder →
+      delete the zip.
+- [ ] Enable **"show hidden files"** (File Manager settings) and confirm **`.htaccess`** is
+      present at the doc root. Final layout: `…/index.html`, `…/assets/…`, `…/.htaccess`,
+      `sw.js`, `manifest.webmanifest`, icons.
+- [ ] **Security → SSL** → install the free Let's Encrypt certificate for `app.example.com`
+      (wait until it's *Active*).
+
+> **Subfolder instead of a subdomain?** If you must serve at `example.com/app`, rebuild with
+> `base: '/app/'` in `vite.config.ts` (or `--base=/app/`), or asset URLs will 404.
 
 ---
 
