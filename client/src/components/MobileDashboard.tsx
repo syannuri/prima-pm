@@ -58,11 +58,11 @@ export default function MobileDashboard() {
 
   // Quick actions — route shortcuts most useful for PM/PMO on the go.
   // ("New project" lives on the floating action button, not here.)
-  const actions: { label: string; icon: string; grad: string; glow: string; halo: string; to?: string; onClick?: () => void }[] = [
-    { label: 'Reports', icon: ICON.reports, grad: 'from-sky-400 to-blue-600', glow: 'shadow-blue-500/40', halo: 'bg-sky-400', to: '/reports' },
+  const actions: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }[] = [
+    { label: 'Reports', icon: ICON.reports, grad: 'from-sky-400 to-blue-600', glow: 'shadow-blue-500/40', halo: 'bg-sky-400', tint: 'from-sky-500/25 to-blue-600/10', to: '/reports' },
     isPmo
-      ? { label: 'Resources', icon: ICON.resources, grad: 'from-violet-400 to-indigo-600', glow: 'shadow-indigo-500/40', halo: 'bg-violet-400', to: '/admin/resources' }
-      : { label: 'Timesheet', icon: ICON.clock, grad: 'from-amber-400 to-orange-500', glow: 'shadow-orange-500/40', halo: 'bg-amber-400', to: '/my-timesheet' },
+      ? { label: 'Resources', icon: ICON.resources, grad: 'from-violet-400 to-indigo-600', glow: 'shadow-indigo-500/40', halo: 'bg-violet-400', tint: 'from-violet-500/25 to-indigo-600/10', to: '/admin/resources' }
+      : { label: 'Timesheet', icon: ICON.clock, grad: 'from-amber-400 to-orange-500', glow: 'shadow-orange-500/40', halo: 'bg-amber-400', tint: 'from-amber-500/25 to-orange-600/10', to: '/my-timesheet' },
   ];
   const actionCols = actions.length >= 3 ? 'grid-cols-3' : 'grid-cols-2';
 
@@ -99,10 +99,10 @@ export default function MobileDashboard() {
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-3">
-        <KpiTile label="Total budget" value={formatIdrShort(t.bac)} />
-        <KpiTile label="Earned value" value={formatIdrShort(t.ev)} />
-        <KpiTile label="Actual cost" value={formatIdrShort(t.ac)} />
-        <KpiTile label="Cost variance" value={formatIdrShort(cv)} tone={cv < 0 ? 'red' : 'green'} />
+        <KpiTile label="Total budget" value={formatIdrShort(t.bac)} tint="from-indigo-500/20 to-blue-600/10" />
+        <KpiTile label="Earned value" value={formatIdrShort(t.ev)} tint="from-emerald-500/20 to-teal-600/10" />
+        <KpiTile label="Actual cost" value={formatIdrShort(t.ac)} tint="from-amber-500/20 to-orange-600/10" />
+        <KpiTile label="Cost variance" value={formatIdrShort(cv)} tone={cv < 0 ? 'red' : 'green'} tint="from-rose-500/20 to-pink-600/10" />
       </div>
 
       {/* Needs attention — the action queues (each renders nothing when empty) */}
@@ -173,11 +173,13 @@ function Ring({ pct }: { pct: number }) {
   );
 }
 
-function QuickAction({ label, icon, grad, glow, halo, to, onClick }: { label: string; icon: string; grad: string; glow: string; halo: string; to?: string; onClick?: () => void }) {
+function QuickAction({ label, icon, grad, glow, halo, tint, to, onClick }: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }) {
   const cls =
     'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.02] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]';
   const inner = (
     <>
+      {/* Elegant coloured wash over the whole tile (Spektrum palette, one hue per action). */}
+      <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint}`} />
       {/* Soft coloured halo behind the icon — clipped by the card for an elegant glow. */}
       <span aria-hidden className={`pointer-events-none absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 -translate-y-6 rounded-full opacity-45 blur-2xl transition-opacity duration-200 group-hover:opacity-70 ${halo}`} />
       {/* Top sheen on the card for a glossy, premium finish. */}
@@ -197,14 +199,16 @@ function QuickAction({ label, icon, grad, glow, halo, to, onClick }: { label: st
     : <button type="button" onClick={() => { haptic(); onClick?.(); }} className={cls}>{inner}</button>;
 }
 
-function KpiTile({ label, value, tone }: { label: string; value: string; tone?: 'red' | 'green' }) {
+function KpiTile({ label, value, tone, tint }: { label: string; value: string; tone?: 'red' | 'green'; tint: string }) {
   const valClass = tone === 'red' ? 'text-red-600 dark:text-red-400' : tone === 'green' ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-white';
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]">
+      {/* Elegant coloured wash (Spektrum palette, one hue per KPI). */}
+      <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint}`} />
       {/* Top sheen — matches the quick-action tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={`mt-1 text-xl font-bold tabular-nums ${valClass}`}>{value}</div>
+      <div className="relative text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`relative mt-1 text-xl font-bold tabular-nums ${valClass}`}>{value}</div>
     </div>
   );
 }
