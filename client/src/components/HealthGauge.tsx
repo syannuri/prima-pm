@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { PortfolioHealth } from '../api/types';
 
 // A 3D speedometer-style gauge for portfolio schedule health. The needle points to
@@ -35,7 +36,34 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel }: {
 }) {
   const noData = status === 'NO_DATA';
   const f = noData ? 0.5 : spiToF(spi);
-  const needleAngle = -(START - f * SWEEP); // SVG rotate is CW; math angle is CCW → negate
+
+  // Needle sweep: animate from the dial's start to the target value when the gauge appears
+  // (and re-tween if the value changes), with an ease-out-back "settle" like a real
+  // speedometer. Honours prefers-reduced-motion.
+  const [displayF, setDisplayF] = useState(noData ? 0.5 : 0);
+  const fromRef = useRef(noData ? 0.5 : 0);
+  useEffect(() => {
+    const target = noData ? 0.5 : f;
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { setDisplayF(target); fromRef.current = target; return; }
+    const from = fromRef.current;
+    const dur = 1150;
+    // easeOutBack — overshoots slightly then settles onto the target.
+    const ease = (x: number) => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+    let raf = 0; let startTs: number | undefined;
+    const step = (ts: number) => {
+      if (startTs === undefined) startTs = ts;
+      const p = Math.min(1, (ts - startTs) / dur);
+      const v = from + (target - from) * ease(p);
+      setDisplayF(v);
+      if (p < 1) raf = requestAnimationFrame(step);
+      else fromRef.current = target;
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [f, noData]);
+
+  const needleAngle = -(START - displayF * SWEEP); // SVG rotate is CW; math angle is CCW → negate
 
   // Zone boundaries in f-space: red 0.5–0.85, amber 0.85–0.95, green 0.95–1.5.
   const fAmber = spiToF(0.85);
