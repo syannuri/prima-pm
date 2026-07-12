@@ -6,11 +6,12 @@ test.describe('Portfolio dashboard', () => {
     await login(page, 'Admin');
   });
 
-  test('shows EVM KPI cards', async ({ page }) => {
+  test('shows the portfolio health command bar (gauge + KPIs)', async ({ page }) => {
+    // Consolidated hero: the gauge readout carries SPI/CPI/% complete; the KPI grid the money.
     await expect(page.getByText('Total BAC')).toBeVisible();
-    await expect(page.getByText('Portfolio CPI')).toBeVisible();
-    await expect(page.getByText('Portfolio SPI')).toBeVisible();
-    await expect(page.getByText('% Complete')).toBeVisible();
+    await expect(page.getByText('Earned Value')).toBeVisible();
+    await expect(page.getByText('Actual Cost')).toBeVisible();
+    await expect(page.getByText(/SPI \d/).first()).toBeVisible(); // gauge readout "SPI 1.10"
   });
 
   test('status date drives EVM (future date yields SPI)', async ({ page }) => {

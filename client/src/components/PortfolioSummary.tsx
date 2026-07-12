@@ -137,7 +137,7 @@ export default function PortfolioSummary() {
           <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Portfolio health · <span className="text-white/45">{t.count} projects</span></div>
           <div className="flex flex-col items-end">
             <label className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/40">Status date (EVM)</label>
-            <input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="w-40 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm text-white [color-scheme:dark] focus:border-white/30 focus:outline-none" />
+            <input aria-label="Status date (EVM)" type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="w-40 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm text-white [color-scheme:dark] focus:border-white/30 focus:outline-none" />
           </div>
         </div>
         <div className="relative flex flex-col items-center gap-5 lg:flex-row lg:items-center lg:gap-8">
