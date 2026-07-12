@@ -226,7 +226,8 @@ function AcceptanceForm({ base, onClose, onDone }: { base: string; onClose: () =
   return (
     <Modal onClose={onClose} title="Record an acceptance sign-off" size="lg">
       <div className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* 2-col even on phones so the sign-off Date picker isn't full-width (it pairs with "Signed by"). */}
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Accepting party"><Input value={f.party} onChange={(e) => set('party', e.target.value)} placeholder="e.g. Sponsor, Customer — Bank X" /></Field>
           <Field label="Decision">
             <Select value={f.decision} onChange={(e) => set('decision', e.target.value)}>
