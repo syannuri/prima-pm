@@ -334,5 +334,14 @@ disk-space monitor.
   an Agile-velocity analytics lens; refresh-token storage/rotation refinements; drop-root for the
   service. See `docs/AUDIT-2026-06-29.md` for the engineering audit & roadmap.
 
+## 12. UX / DESIGN NOTES (before / after)
+
+- [`dashboard-redesign.md`](./dashboard-redesign.md) — the Portfolio EVM dashboard UX pass:
+  gauge + KPIs consolidated into one command bar, de-duplicated metrics, SPI trend sparkline,
+  an action-center strip, tabbed per-project tables, and a 3-column pie row (with before/after shots).
+- [`mobile-redesign.md`](./mobile-redesign.md) — the phone experience: the 3D speedometer
+  health gauge (shared with desktop), a decluttered project header, inline WBS schedule dates,
+  and compact date pickers across every form (with before/after shots).
+
 ---
 *As-built v1.0 — reflects the delivered, production system. Supersedes design draft v0.1 (2026-06-27).*
