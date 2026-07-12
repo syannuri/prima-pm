@@ -43,7 +43,7 @@ export default function EvmHealth({
           {/* AC override is a desktop what-if analysis control — hidden on phones to declutter. */}
           <div className="hidden sm:block"><Field label="AC override (blank = recorded)"><Input type="number" placeholder="recorded AC" value={acOverride} onChange={(e2) => setAcOverride(e2.target.value)} /></Field></div>
           {/* Compact date field on phones (the native calendar picker otherwise dominates the row). */}
-          <div className="w-36 sm:w-auto"><Field label="Status date"><Input type="date" value={statusDate} onChange={(e2) => setStatusDate(e2.target.value)} /></Field></div>
+          <div className="w-40 sm:w-auto"><Field label="Status date"><Input type="date" value={statusDate} onChange={(e2) => setStatusDate(e2.target.value)} /></Field></div>
         </div>
       </div>
       {e && (

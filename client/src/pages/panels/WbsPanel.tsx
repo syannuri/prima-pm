@@ -409,8 +409,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
                       </span>
                       {/* Phones: the Start/Finish columns are desktop-only, so show the schedule dates inline under the task. */}
-                      <span className="mt-0.5 block whitespace-nowrap text-[11px] tabular-nums text-slate-400 dark:text-slate-500 sm:hidden" style={{ paddingLeft: `${depth * 18 + 20}px` }}>
-                        {node.isMilestone || r.start === r.end ? formatDate(new Date(r.start)) : <>{formatDate(new Date(r.start))} <span className="text-slate-300 dark:text-slate-600">→</span> {formatDate(new Date(r.end))}</>}
+                      {/* Phones: the Start/Finish columns are desktop-only, so show the dates inline under the task (with a calendar icon so they're clearly visible). */}
+                      <span className="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-medium tabular-nums text-brand-600 dark:text-brand-400 sm:hidden" style={{ paddingLeft: `${depth * 18 + 20}px` }}>
+                        <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 opacity-80" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+                        {node.isMilestone || r.start === r.end ? formatDate(new Date(r.start)) : <>{formatDate(new Date(r.start))} <span className="text-slate-400 dark:text-slate-500">→</span> {formatDate(new Date(r.end))}</>}
                       </span>
                     </td>
                     <td><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></td>

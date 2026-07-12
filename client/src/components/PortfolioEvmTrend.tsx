@@ -67,7 +67,7 @@ export default function PortfolioEvmTrend() {
           <div className="flex items-end gap-2">
             <label className="text-xs text-slate-500 dark:text-slate-400">
               <span className="mr-2 uppercase tracking-wide">Status date</span>
-              <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="!w-auto !py-1.5" />
+              <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="!w-40 !py-1.5" />
             </label>
             <Button onClick={() => captureAll.mutate()} disabled={captureAll.isPending}>📸 Capture all</Button>
           </div>

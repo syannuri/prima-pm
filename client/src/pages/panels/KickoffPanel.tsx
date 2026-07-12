@@ -57,7 +57,7 @@ function MeetingDetails({ base, data, canEdit, onSaved }: { base: string; data: 
   return (
     <Card>
       <SectionTitle sub="Kick-Off Meeting minutes — the project's opening alignment record.">Kick-Off Meeting</SectionTitle>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Field label="Meeting date"><Input type="date" value={meetingDate} onChange={(e) => setDate(e.target.value)} disabled={!canEdit} /></Field>
         <Field label="Location / mode"><Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Online (Teams)" disabled={!canEdit} /></Field>
         <Field label="Facilitator"><Input value={facilitator} onChange={(e) => setFacilitator(e.target.value)} placeholder="Who chairs" disabled={!canEdit} /></Field>
@@ -189,7 +189,7 @@ function ActionItems({ base, rows, canEdit, onChange }: { base: string; rows: Ki
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Action"><Input value={description} onChange={(e) => setDesc(e.target.value)} placeholder="What needs doing" /></Field>
           <Field label="Owner"><Input value={ownerName} onChange={(e) => setOwner(e.target.value)} placeholder="Who" /></Field>
-          <Field label="Due"><Input type="date" value={dueDate} onChange={(e) => setDue(e.target.value)} /></Field>
+          <div className="w-40"><Field label="Due"><Input type="date" value={dueDate} onChange={(e) => setDue(e.target.value)} /></Field></div>
           <Button variant="secondary" disabled={!description || add.isPending} onClick={() => add.mutate()}>+ Add action</Button>
         </div>
       )}

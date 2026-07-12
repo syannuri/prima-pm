@@ -38,7 +38,7 @@ export default function PortfolioForecast() {
         <SectionTitle sub="Projected outcome of the whole portfolio from current cost & schedule performance (likely EAC = BAC ÷ CPI).">Portfolio forecast</SectionTitle>
         <label className="text-xs text-slate-500 dark:text-slate-400">
           <span className="mr-2 uppercase tracking-wide">Status date</span>
-          <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="!w-auto !py-1.5" />
+          <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="!w-40 !py-1.5" />
         </label>
       </div>
 

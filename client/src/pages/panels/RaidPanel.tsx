@@ -196,7 +196,7 @@ function AssumptionForm({ base, row, onClose, onDone }: { base: string; row: Ass
     <Modal onClose={onClose} title={row ? `Edit ${row.code}` : 'Add an assumption'} size="lg">
       <div className="space-y-3">
         <Field label="Assumption"><Textarea rows={2} value={f.statement} onChange={(e) => set('statement', e.target.value)} placeholder="We assume that…" /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Category"><Input value={f.category} onChange={(e) => set('category', e.target.value)} placeholder="e.g. Resource, Technical, Vendor" /></Field>
           <Field label="Status"><Select value={f.status} onChange={(e) => set('status', e.target.value)}>{A_STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}</Select></Field>
           <ImpactSelect label="Impact if false" value={f.impact} onChange={(v) => set('impact', v)} />
@@ -236,7 +236,7 @@ function DependencyForm({ base, row, onClose, onDone }: { base: string; row: Pro
     <Modal onClose={onClose} title={row ? `Edit ${row.code}` : 'Add a dependency'} size="lg">
       <div className="space-y-3">
         <Field label="Dependency"><Textarea rows={2} value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="What is needed / owed, and by when…" /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Direction"><Select value={f.direction} onChange={(e) => set('direction', e.target.value)}>{D_DIRECTIONS.map((d) => <option key={d} value={d}>{DIR_LABEL[d]}</option>)}</Select></Field>
           <Field label="Counterparty"><Input value={f.counterparty} onChange={(e) => set('counterparty', e.target.value)} placeholder="Team / project / vendor" /></Field>
           <Field label="Due date"><Input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} /></Field>

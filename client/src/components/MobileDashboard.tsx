@@ -6,13 +6,14 @@ import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types'
 import { Card } from './ui';
 import { useAuth } from '../context/AuthContext';
 import MobileDashboardSkeleton from './MobileDashboardSkeleton';
-import { formatIdrShort, formatNum, formatDateInput } from '../lib/format';
+import { formatIdrShort, formatDateInput } from '../lib/format';
 import { haptic } from '../lib/haptics';
 import { useBookmarks } from '../hooks/useBookmarks';
 import PlanningReminders from './PlanningReminders';
 import AwaitingActivation from './AwaitingActivation';
 import AwaitingClosure from './AwaitingClosure';
 import PendingApprovals from './PendingApprovals';
+import HealthGauge from './HealthGauge';
 
 const RAG: Record<PortfolioHealth, { c: string; dot: string; label: string }> = {
   GREEN: { c: '#16a34a', dot: '#22c55e', label: 'On track' },
@@ -21,13 +22,6 @@ const RAG: Record<PortfolioHealth, { c: string; dot: string; label: string }> = 
   NO_DATA: { c: '#64748b', dot: '#94a3b8', label: 'No data' },
 };
 const RANK: Record<string, number> = { RED: 0, AMBER: 1, GREEN: 2, NO_DATA: 3 };
-// Hero gradient follows portfolio health (literal classes so Tailwind's JIT keeps them).
-const HERO: Record<PortfolioHealth, { grad: string; shadow: string }> = {
-  GREEN: { grad: 'from-emerald-500 to-green-600', shadow: 'shadow-emerald-500/30' },
-  AMBER: { grad: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/30' },
-  RED: { grad: 'from-rose-500 to-red-600', shadow: 'shadow-red-500/30' },
-  NO_DATA: { grad: 'from-slate-500 to-slate-700', shadow: 'shadow-slate-500/30' },
-};
 
 // A phone-tailored portfolio dashboard (PM & PMO): a glanceable, card-first view —
 // gradient health hero, KPI tiles, the "needs attention" queues, and project cards
@@ -78,24 +72,20 @@ export default function MobileDashboard() {
 
   return (
     <div className="space-y-4">
-      {/* Hero — portfolio health at a glance */}
-      <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${HERO[status].grad} p-5 text-white shadow-lg ${HERO[status].shadow}`}>
-        <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/10" />
-        <div className="relative flex items-center gap-4">
-          <Ring pct={pct} />
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Portfolio health</div>
-            <div className="mt-0.5 text-xl font-bold leading-tight">{RAG[status].label}</div>
-            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-white/90">
-              <span><span className="text-white/70">SPI</span> <span className="font-semibold">{t.pv > 0 ? formatNum(t.spi, 2) : '—'}</span></span>
-              <span><span className="text-white/70">CPI</span> <span className="font-semibold">{t.ac > 0 ? formatNum(t.cpi, 2) : '—'}</span></span>
-              <span className="font-semibold">{t.count} <span className="font-normal text-white/70">projects</span></span>
-            </div>
-          </div>
+      {/* Hero — a 3D speedometer of portfolio schedule health on a premium dark dial. */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 p-5 text-white shadow-lg ring-1 ring-white/10">
+        {/* Health-tinted glow so the card still signals RAG at a glance. */}
+        <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 h-48 w-48 rounded-full blur-2xl" style={{ backgroundColor: RAG[status].dot, opacity: 0.22 }} />
+        <div className="relative flex items-center justify-between">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Portfolio health</div>
+          <span className="text-[11px] font-medium text-white/60">{t.count} projects</span>
         </div>
-        <div className="relative mt-4 flex flex-wrap gap-2">
+        <div className="relative mt-1">
+          <HealthGauge spi={t.spi} cpi={t.cpi} pct={pct} status={status} statusLabel={RAG[status].label} />
+        </div>
+        <div className="relative mt-3 flex flex-wrap justify-center gap-2">
           {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
-            <span key={h} className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs backdrop-blur-sm">
+            <span key={h} className="flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs backdrop-blur-sm ring-1 ring-white/10">
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: RAG[h].dot }} />{RAG[h].label} {data.byHealth[h]}
             </span>
           ))}
@@ -172,25 +162,6 @@ export default function MobileDashboard() {
             );
           })}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// White %-complete donut on the coloured hero (track = translucent white, arc = white).
-function Ring({ pct }: { pct: number }) {
-  const r = 30;
-  const circ = 2 * Math.PI * r;
-  const dash = (Math.min(100, Math.max(0, pct)) / 100) * circ;
-  return (
-    <div className="relative h-[76px] w-[76px] shrink-0">
-      <svg viewBox="0 0 72 72" className="h-full w-full -rotate-90">
-        <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="7" />
-        <circle cx="36" cy="36" r={r} fill="none" stroke="white" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${dash} ${circ}`} />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-        <span className="text-lg font-bold">{pct}%</span>
-        <span className="mt-0.5 text-[9px] uppercase tracking-wide text-white/70">done</span>
       </div>
     </div>
   );
