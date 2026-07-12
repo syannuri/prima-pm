@@ -278,6 +278,7 @@ model Project {
   uatTestCases     UatTestCase[]
   kickoffMeeting   KickoffMeeting?
   bookmarks        ProjectBookmark[]
+  requirements     Requirement[]
 
   @@index([status])
   @@index([pmUserId])
@@ -813,6 +814,9 @@ model Task {
   predecessorOf TaskDependency[] @relation("DepPredecessor")
   successorOf   TaskDependency[] @relation("DepSuccessor")
 
+  // requirements traceability (which requirements this work delivers)
+  requirementLinks RequirementTaskLink[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1137,4 +1141,73 @@ model KickoffActionItem {
   updatedAt   DateTime            @updatedAt
 
   @@index([meetingId])
+}
+
+// ---------------------------------------------------------------------------
+// Requirements traceability (RTM) — a scope register linked to the WBS work
+// that delivers each requirement, yielding a coverage matrix + scope-gap view.
+// ---------------------------------------------------------------------------
+
+enum RequirementCategory {
+  FUNCTIONAL
+  NON_FUNCTIONAL
+  BUSINESS
+  TECHNICAL
+  REGULATORY
+  OTHER
+}
+
+// MoSCoW prioritisation.
+enum RequirementPriority {
+  MUST
+  SHOULD
+  COULD
+  WONT
+}
+
+enum RequirementStatus {
+  PROPOSED
+  APPROVED
+  IN_PROGRESS
+  VERIFIED
+  DEFERRED
+  REJECTED
+}
+
+model Requirement {
+  id                 String              @id @default(uuid())
+  projectId          String
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code               String // REQ-001, REQ-002, …
+  title              String
+  description        String?             @db.Text
+  category           RequirementCategory @default(FUNCTIONAL)
+  priority           RequirementPriority @default(MUST)
+  status             RequirementStatus   @default(PROPOSED)
+  source             String? // origin: stakeholder, document, charter clause…
+  acceptanceCriteria String?             @db.Text
+  notes              String?             @db.Text
+
+  taskLinks RequirementTaskLink[]
+
+  createdById String? // FK-less (kept light, like the other registers)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, code])
+  @@index([projectId])
+}
+
+// Forward traceability: requirement -> the WBS task(s) that deliver it.
+model RequirementTaskLink {
+  id            String      @id @default(uuid())
+  requirementId String
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  taskId        String
+  task          Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@unique([requirementId, taskId])
+  @@index([requirementId])
+  @@index([taskId])
 }

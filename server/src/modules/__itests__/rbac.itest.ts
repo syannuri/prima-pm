@@ -1351,3 +1351,82 @@ describe('project bookmarks', () => {
     expect((await request(app).put(api('/bookmarks/does-not-exist')).set(auth(tokens.ADMIN))).status).toBe(404);
   });
 });
+
+describe('requirements traceability (RTM: register + WBS links + coverage)', () => {
+  let pid = '';
+  let taskId = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Requirements-Project', pmUserId: ownerId });
+    pid = created.body.project.id;
+    // A CHARTERED project so we can create a WBS task to trace to.
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    const task = await request(app).post(api(`/projects/${pid}/schedule/tasks`)).set(auth(tokens.ADMIN)).send({ name: 'Build feature', planStart: '2026-08-01', planEnd: '2026-08-10' });
+    taskId = task.body.task.id;
+  });
+
+  it('owning PM creates (auto REQ code), FINANCE reads, coverage starts all-uncovered', async () => {
+    const a = await request(app).post(api(`/projects/${pid}/requirements`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ title: 'System must support SSO', category: 'FUNCTIONAL', priority: 'MUST', status: 'APPROVED' });
+    expect(a.status).toBe(201);
+    expect(a.body.requirement.code).toBe('REQ-001');
+    const b = await request(app).post(api(`/projects/${pid}/requirements`)).set(auth(tokens.PROJECT_MANAGER))
+      .send({ title: 'Response under 2s', category: 'NON_FUNCTIONAL', priority: 'SHOULD' });
+    expect(b.body.requirement.code).toBe('REQ-002');
+
+    const list = await request(app).get(api(`/projects/${pid}/requirements`)).set(auth(tokens.FINANCE)); // functional role reads
+    expect(list.status).toBe(200);
+    expect(list.body.requirements.map((r: { code: string }) => r.code)).toEqual(['REQ-001', 'REQ-002']);
+    expect(list.body.coverage).toMatchObject({ total: 2, covered: 0, uncovered: 2 });
+  });
+
+  it('VIEWER and a non-owner PM cannot write (403); a too-short title is rejected (400)', async () => {
+    expect((await request(app).post(api(`/projects/${pid}/requirements`)).set(auth(tokens.VIEWER)).send({ title: 'Valid title' })).status).toBe(403);
+    expect((await request(app).post(api(`/projects/${pid}/requirements`)).set(auth(tokens.PM2)).send({ title: 'Valid title' })).status).toBe(403);
+    expect((await request(app).post(api(`/projects/${pid}/requirements`)).set(auth(tokens.PROJECT_MANAGER)).send({ title: 'x' })).status).toBe(400);
+  });
+
+  it('links a WBS task → requirement becomes covered; duplicate link is 409; unlink reverts coverage', async () => {
+    const created = await request(app).post(api(`/projects/${pid}/requirements`)).set(auth(tokens.PROJECT_MANAGER)).send({ title: 'Traceable requirement' });
+    const reqId = created.body.requirement.id;
+
+    const link = await request(app).post(api(`/projects/${pid}/requirements/${reqId}/links`)).set(auth(tokens.PROJECT_MANAGER)).send({ taskId });
+    expect(link.status).toBe(201);
+    expect(link.body.link.task.name).toBe('Build feature');
+
+    // duplicate → 409
+    expect((await request(app).post(api(`/projects/${pid}/requirements/${reqId}/links`)).set(auth(tokens.PROJECT_MANAGER)).send({ taskId })).status).toBe(409);
+
+    const afterLink = await request(app).get(api(`/projects/${pid}/requirements`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(afterLink.body.coverage.covered).toBe(1);
+    const covered = afterLink.body.requirements.find((r: { id: string }) => r.id === reqId);
+    expect(covered.taskLinks).toHaveLength(1);
+
+    const unlink = await request(app).delete(api(`/projects/${pid}/requirements/${reqId}/links/${taskId}`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(unlink.status).toBe(204);
+    const afterUnlink = await request(app).get(api(`/projects/${pid}/requirements`)).set(auth(tokens.PROJECT_MANAGER));
+    expect(afterUnlink.body.coverage.covered).toBe(0);
+  });
+
+  it('rejects linking a task from another project (404)', async () => {
+    const other = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Other-Project', pmUserId: ownerId });
+    const opid = other.body.project.id;
+    await request(app).patch(api(`/projects/${opid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    const otherTask = await request(app).post(api(`/projects/${opid}/schedule/tasks`)).set(auth(tokens.ADMIN)).send({ name: 'Other task', planStart: '2026-08-01', planEnd: '2026-08-10' });
+    const req = await request(app).post(api(`/projects/${pid}/requirements`)).set(auth(tokens.PROJECT_MANAGER)).send({ title: 'Cross-project guard' });
+    const res = await request(app).post(api(`/projects/${pid}/requirements/${req.body.requirement.id}/links`)).set(auth(tokens.PROJECT_MANAGER)).send({ taskId: otherTask.body.task.id });
+    expect(res.status).toBe(404);
+  });
+
+  it('owning PM updates and deletes (cascading its links)', async () => {
+    const created = await request(app).post(api(`/projects/${pid}/requirements`)).set(auth(tokens.PROJECT_MANAGER)).send({ title: 'Temp requirement', priority: 'COULD' });
+    const id = created.body.requirement.id;
+    await request(app).post(api(`/projects/${pid}/requirements/${id}/links`)).set(auth(tokens.PROJECT_MANAGER)).send({ taskId });
+    const upd = await request(app).put(api(`/projects/${pid}/requirements/${id}`)).set(auth(tokens.PROJECT_MANAGER)).send({ title: 'Temp requirement', priority: 'MUST', status: 'VERIFIED' });
+    expect(upd.status).toBe(200);
+    expect(upd.body.requirement.status).toBe('VERIFIED');
+    expect((await request(app).delete(api(`/projects/${pid}/requirements/${id}`)).set(auth(tokens.PROJECT_MANAGER))).status).toBe(204);
+    // the link cascaded away with the requirement
+    const links = await prisma.requirementTaskLink.count({ where: { requirementId: id } });
+    expect(links).toBe(0);
+  });
+});

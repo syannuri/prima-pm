@@ -16,6 +16,7 @@ import ForecastPanel from './panels/ForecastPanel';
 import RiskPanel from './panels/RiskPanel';
 import IssuePanel from './panels/IssuePanel';
 import StakeholderPanel from './panels/StakeholderPanel';
+import RequirementsPanel from './panels/RequirementsPanel';
 import ProcurementPanel from './panels/ProcurementPanel';
 import RaidPanel from './panels/RaidPanel';
 import SchedulePanel from './panels/SchedulePanel';
@@ -37,7 +38,7 @@ import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
+type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -93,7 +94,7 @@ export default function ProjectPage() {
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
     'Cost', 'Procurement', 'Timesheet', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
-    'Charter', 'Kick-Off', 'Stakeholders', 'UAT', 'Closeout', 'Audit',
+    'Charter', 'Kick-Off', 'Stakeholders', 'Requirements', 'UAT', 'Closeout', 'Audit',
   ];
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
   // chartered, land on the first working tab (Schedule/Agile); Charter stays
@@ -170,7 +171,7 @@ export default function ProjectPage() {
 
       <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} onSelect={(t) => setTab(t)} />
 
-      {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && activeTab !== 'Stakeholders' && activeTab !== 'RAID' && (
+      {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && activeTab !== 'Stakeholders' && activeTab !== 'Requirements' && activeTab !== 'RAID' && (
         <Card>
           <p className="text-center text-amber-600">
             Commit the Project Charter first to unlock {activeTab} Management.
@@ -183,6 +184,7 @@ export default function ProjectPage() {
       {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
       {activeTab === 'Procurement' && chartered && <ProcurementPanel projectId={projectId} />}
       {activeTab === 'Stakeholders' && <StakeholderPanel projectId={projectId} />}
+      {activeTab === 'Requirements' && <RequirementsPanel projectId={projectId} />}
       {activeTab === 'Timesheet' && chartered && <TimesheetPanel projectId={projectId} />}
       {activeTab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
       {activeTab === 'EVM Trend' && chartered && <EvmTrendPanel projectId={projectId} />}
@@ -207,7 +209,7 @@ export default function ProjectPage() {
 // stable (e.g. 'Charter', 'Closeout') so deep-links and server-emitted next-step cues
 // still resolve.
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
-  { label: 'Initiating', tabs: ['Charter', 'Kick-Off', 'Stakeholders'] },
+  { label: 'Initiating', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
   { label: 'Planning', tabs: ['Schedule', 'Agile', 'Cost', 'Procurement', 'Risk'] },
   { label: 'Executing', tabs: ['Timesheet', 'RAID', 'Issues', 'UAT', 'Change Req'] },
   { label: 'Monitoring & Controlling', tabs: ['Forecast', 'EVM Trend'] },

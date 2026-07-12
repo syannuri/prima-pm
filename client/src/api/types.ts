@@ -435,6 +435,42 @@ export interface Procurement {
   updatedAt: string;
 }
 
+// --- Requirements traceability (RTM: requirement ↔ WBS task) ---
+export type RequirementCategory = 'FUNCTIONAL' | 'NON_FUNCTIONAL' | 'BUSINESS' | 'TECHNICAL' | 'REGULATORY' | 'OTHER';
+export type RequirementPriority = 'MUST' | 'SHOULD' | 'COULD' | 'WONT'; // MoSCoW
+export type RequirementStatus = 'PROPOSED' | 'APPROVED' | 'IN_PROGRESS' | 'VERIFIED' | 'DEFERRED' | 'REJECTED';
+
+export interface RequirementTaskLink {
+  id: string;
+  taskId: string;
+  task: { id: string; wbsCode: string; name: string; progressPct: number; isMilestone: boolean };
+}
+
+export interface Requirement {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  category: RequirementCategory;
+  priority: RequirementPriority;
+  status: RequirementStatus;
+  source: string | null;
+  acceptanceCriteria: string | null;
+  notes: string | null;
+  taskLinks: RequirementTaskLink[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RequirementCoverage {
+  total: number;
+  covered: number;
+  uncovered: number;
+  verified: number;
+  byStatus: Record<string, number>;
+  byPriority: Record<string, number>;
+}
+
 // --- RAID: Assumptions & Dependencies (completes RAID with Risk + Issue) ---
 export type AssumptionStatus = 'OPEN' | 'VALIDATED' | 'INVALIDATED';
 export interface Assumption {
