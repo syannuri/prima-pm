@@ -1,0 +1,24 @@
+import { chromium } from '@playwright/test';
+import { PrismaClient } from '/home/mamed/prima-pm/server/node_modules/@prisma/client/index.js';
+const OUT='/tmp/claude-0/-home-mamed/560838a1-f8a4-44df-9a90-820a4f1302be/scratchpad/qa';
+const PREVIEW='http://127.0.0.1:4200';
+const p=new PrismaClient();
+const a=await p.user.findFirst({where:{role:'ADMIN',isActive:true}});
+const {signAccessToken}=await import('/home/mamed/prima-pm/server/dist/lib/jwt.js');
+const tk=signAccessToken({sub:a.id,role:a.role,email:a.email,tv:a.tokenVersion});
+await p.$disconnect();
+const b=await chromium.launch();
+const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+await ctx.addCookies([{name:'prima_at',value:tk,url:PREVIEW,sameSite:'Strict',secure:false}]);
+const pg=await ctx.newPage();
+let over=null;
+await pg.goto(`${PREVIEW}/admin/resources`,{waitUntil:'domcontentloaded'});
+await pg.waitForTimeout(2500);
+over=await pg.evaluate(()=>{const d=document.documentElement,bd=document.body,vw=window.innerWidth,sw=Math.max(d.scrollWidth,bd.scrollWidth);let worst=0,tag='';for(const el of document.querySelectorAll('body *')){const r=el.getBoundingClientRect();if(r.width>0&&r.right>vw+1&&r.right-vw>worst){worst=Math.round(r.right-vw);tag=el.tagName+'.'+(typeof el.className==='string'?el.className.split(' ')[0]:'');}}return{over:Math.max(0,sw-vw),worst,tag};});
+await pg.screenshot({path:`${OUT}/resources-fixed-top.png`});
+// scroll to the resource pool section lower down
+await pg.evaluate(()=>window.scrollTo(0,document.body.scrollHeight*0.62));
+await pg.waitForTimeout(600);
+await pg.screenshot({path:`${OUT}/resources-fixed-pool.png`});
+console.log('resources over=',over.over,'worst=',over.worst,over.tag);
+await b.close();

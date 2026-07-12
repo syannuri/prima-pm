@@ -54,25 +54,33 @@ function RateCardsSection({ canEditRates }: { canEditRates: boolean }) {
       {isLoading ? (
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:whitespace-nowrap [&>th]:pr-3">
-                <th className="py-2">Role</th><th>Level</th><th className="text-right">Cost / manday</th><th>Status</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.rateCards.map((rc) => <RateCardRow key={rc.id} rc={rc} canEdit={canEditRates} onChange={invalidate} />)}
-              {!data?.rateCards.length && <tr><td colSpan={5} className="py-3 text-center text-slate-500 dark:text-slate-400">No rate cards yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Desktop: full table. Mobile: stacked cards so the day-rate never gets clipped off-screen. */}
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[34rem] text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:whitespace-nowrap [&>th]:pr-3">
+                  <th className="py-2">Role</th><th>Level</th><th className="text-right">Cost / manday</th><th>Status</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data?.rateCards.map((rc) => <RateCardRow key={rc.id} rc={rc} canEdit={canEditRates} onChange={invalidate} />)}
+                {!data?.rateCards.length && <tr><td colSpan={5} className="py-3 text-center text-slate-500 dark:text-slate-400">No rate cards yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="space-y-2 sm:hidden">
+            {data?.rateCards.map((rc) => <RateCardCard key={rc.id} rc={rc} canEdit={canEditRates} onChange={invalidate} />)}
+            {!data?.rateCards.length && <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No rate cards yet.</p>}
+          </div>
+        </>
       )}
     </Card>
   );
 }
 
-function RateCardRow({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolean; onChange: () => void }) {
+// Shared save/activate logic + editable-rate state for a rate card, used by both the desktop row and mobile card.
+function useRateCardActions(rc: RateCard, onChange: () => void) {
   const toast = useToast();
   const [rate, setRate] = useState(String(rc.unitCostPerManday));
   const [err, setErr] = useState('');
@@ -88,6 +96,45 @@ function RateCardRow({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolean
   });
   const dirty = Number(rate) !== Number(rc.unitCostPerManday);
   const rateOk = isPositiveNum(rate);
+  return { rate, setRate, err, save, toggle, dirty, rateOk };
+}
+
+function RateCardCard({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolean; onChange: () => void }) {
+  const { rate, setRate, err, save, toggle, dirty, rateOk } = useRateCardActions(rc, onChange);
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-700 dark:text-slate-200">{rc.roleName}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{rc.level || 'No level'}</p>
+        </div>
+        <Badge color={rc.isActive ? 'green' : 'slate'}>{rc.isActive ? 'Active' : 'Inactive'}</Badge>
+      </div>
+      <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+        <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Cost / manday</p>
+        {canEdit ? (
+          <div className="mt-1 flex items-center gap-2">
+            <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} state={fieldState(dirty, rateOk)} className="!py-1 text-sm" />
+            {dirty && <button onClick={() => save.mutate()} disabled={save.isPending || !rateOk} className="shrink-0 text-xs font-medium text-brand-600 hover:underline disabled:opacity-40">Save</button>}
+          </div>
+        ) : (
+          <p className="mt-0.5 font-semibold tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(Number(rc.unitCostPerManday))}</p>
+        )}
+        {err && <div className="mt-1 text-xs text-red-600">{err}</div>}
+      </div>
+      {canEdit && (
+        <div className="mt-2 flex justify-end border-t border-slate-100 pt-2 dark:border-slate-800">
+          <button onClick={() => toggle.mutate()} disabled={toggle.isPending} className={`text-xs font-medium hover:underline ${rc.isActive ? 'text-red-500' : 'text-green-600'}`}>
+            {rc.isActive ? 'Deactivate' : 'Activate'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RateCardRow({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolean; onChange: () => void }) {
+  const { rate, setRate, err, save, toggle, dirty, rateOk } = useRateCardActions(rc, onChange);
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 align-middle">
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{rc.roleName}</td>
@@ -161,26 +208,34 @@ function ResourcesSection({ canEdit }: { canEdit: boolean }) {
       {isLoading ? (
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[48rem] text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:whitespace-nowrap [&>th]:pr-3">
-                <th className="py-2">Name</th><th>Type</th><th>Role</th><th className="text-right">Rate / manday</th><th className="text-right">Cap/day</th><th>Dept</th><th>Login</th><th>Status</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.resources.map((r) => <ResourceRow key={r.id} r={r} canEdit={canEdit} onEdit={() => setEditing(r)} onChange={invalidate} />)}
-              {!data?.resources.length && <tr><td colSpan={9} className="py-3 text-center text-slate-500 dark:text-slate-400">No resources yet. Add your manpower pool to use it in the WBS.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Desktop: full table. Mobile: stacked cards so the rate/capacity columns never get clipped off-screen. */}
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[48rem] text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:whitespace-nowrap [&>th]:pr-3">
+                  <th className="py-2">Name</th><th>Type</th><th>Role</th><th className="text-right">Rate / manday</th><th className="text-right">Cap/day</th><th>Dept</th><th>Login</th><th>Status</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data?.resources.map((r) => <ResourceRow key={r.id} r={r} canEdit={canEdit} onEdit={() => setEditing(r)} onChange={invalidate} />)}
+                {!data?.resources.length && <tr><td colSpan={9} className="py-3 text-center text-slate-500 dark:text-slate-400">No resources yet. Add your manpower pool to use it in the WBS.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="space-y-2 sm:hidden">
+            {data?.resources.map((r) => <ResourceCard key={r.id} r={r} canEdit={canEdit} onEdit={() => setEditing(r)} onChange={invalidate} />)}
+            {!data?.resources.length && <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No resources yet. Add your manpower pool to use it in the WBS.</p>}
+          </div>
+        </>
       )}
       {(adding || editing) && <ResourceModal resource={editing} onClose={() => { setAdding(false); setEditing(null); }} onSaved={() => { invalidate(); setAdding(false); setEditing(null); }} />}
     </Card>
   );
 }
 
-function ResourceRow({ r, canEdit, onEdit, onChange }: { r: ResourceItem; canEdit: boolean; onEdit: () => void; onChange: () => void }) {
+// Shared activate/refresh-rate logic + rate-drift flags for a resource, used by both the desktop row and mobile card.
+function useResourceActions(r: ResourceItem, onChange: () => void) {
   const toast = useToast();
   const toggle = useMutation({
     mutationFn: () => api.patch(`/resources/${r.id}/active`, { isActive: !r.isActive }),
@@ -196,6 +251,68 @@ function ResourceRow({ r, canEdit, onEdit, onChange }: { r: ResourceItem; canEdi
   // Flag when the stored rate has drifted from the linked rate card's current rate.
   const cardRate = r.rateCard ? Number(r.rateCard.unitCostPerManday) : null;
   const differs = cardRate != null && Math.round(cardRate) !== Math.round(Number(r.unitCostPerManday));
+  return { toggle, refresh, rcLabel, cardRate, differs };
+}
+
+function ResourceCard({ r, canEdit, onEdit, onChange }: { r: ResourceItem; canEdit: boolean; onEdit: () => void; onChange: () => void }) {
+  const { toggle, refresh, rcLabel, cardRate, differs } = useResourceActions(r, onChange);
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-700 dark:text-slate-200">{r.name}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{r.roleTitle || (r.personnelRole === 'PM' ? 'Project Manager' : 'Project Personnel')}</p>
+        </div>
+        <Badge color={r.resourceType === 'NAMED' ? 'indigo' : 'slate'}>{r.resourceType === 'NAMED' ? 'Named' : 'Generic'}</Badge>
+      </div>
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+        <div className="col-span-2">
+          <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Rate / manday</dt>
+          <dd className="tabular-nums">
+            <span className={differs ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}>{formatIdr(Number(r.unitCostPerManday))}</span>
+            {rcLabel && <span className="ml-1 text-[10px] text-slate-500 dark:text-slate-400">· {rcLabel}</span>}
+            {differs && (
+              <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+                <span>≠ card {formatIdr(cardRate!)}</span>
+                {canEdit && (
+                  <button onClick={() => refresh.mutate()} disabled={refresh.isPending} className="rounded bg-amber-100 px-1 font-medium text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200">
+                    {refresh.isPending ? '…' : '↻ refresh'}
+                  </button>
+                )}
+              </div>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Cap / day</dt>
+          <dd className="tabular-nums text-slate-700 dark:text-slate-200">{Number(r.capacityPerDay)}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Department</dt>
+          <dd className="text-slate-600 dark:text-slate-300">{r.department || '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Login</dt>
+          <dd className="truncate text-slate-600 dark:text-slate-300">{r.user ? r.user.name : '—'}</dd>
+        </div>
+      </dl>
+      <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 dark:border-slate-800">
+        <Badge color={r.isActive ? 'green' : 'slate'}>{r.isActive ? 'Active' : 'Inactive'}</Badge>
+        {canEdit && (
+          <div className="flex gap-4">
+            <button onClick={onEdit} className="text-xs font-medium text-brand-600 hover:underline">Edit</button>
+            <button onClick={() => toggle.mutate()} disabled={toggle.isPending} className={`text-xs font-medium hover:underline ${r.isActive ? 'text-red-500' : 'text-green-600'}`}>
+              {r.isActive ? 'Deactivate' : 'Activate'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ResourceRow({ r, canEdit, onEdit, onChange }: { r: ResourceItem; canEdit: boolean; onEdit: () => void; onChange: () => void }) {
+  const { toggle, refresh, rcLabel, cardRate, differs } = useResourceActions(r, onChange);
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 align-middle">
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{r.name}</td>
