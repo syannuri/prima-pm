@@ -131,7 +131,8 @@ export default function MobileDashboard() {
 
       {/* Projects — worst health first, filterable by lifecycle status */}
       <div>
-        <div className="mb-2.5 flex items-center justify-between px-1">
+        {/* Heading + filter kept left-aligned (not justify-between) so the chips don't sit under the bottom-right FAB. */}
+        <div className="mb-2.5 flex items-center gap-3 px-1">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Projects</h3>
           <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
             {([['all', 'All'], ['active', 'Active'], ['closed', 'Closed']] as const).map(([key, label]) => (
