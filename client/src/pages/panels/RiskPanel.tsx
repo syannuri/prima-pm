@@ -192,13 +192,14 @@ function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
 
   return (
     <div className="mt-4 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
-      <div className="grid gap-2 md:grid-cols-4">
-        <Field label="Title"><Input value={f.title} onChange={(e) => set('title', e.target.value)} /></Field>
-        <Field label="Kind">
+      {/* 2-col on phones: Title/Kind full-width, then the score & cost fields pair up (heatmap, EMV, residual). */}
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="col-span-2 md:col-span-1"><Field label="Title"><Input value={f.title} onChange={(e) => set('title', e.target.value)} /></Field></div>
+        <div className="col-span-2 md:col-span-1"><Field label="Kind">
           <Select value={f.kind} onChange={(e) => set('kind', e.target.value)}>
             <option value="THREAT">Threat</option><option value="OPPORTUNITY">Opportunity</option>
           </Select>
-        </Field>
+        </Field></div>
         <Field label="Probability (1-5)" hint="Qualitative — heatmap & severity">
           <Input type="number" min={1} max={5} value={f.probabilityScore} onChange={(e) => set('probabilityScore', e.target.value)} title="Likelihood score 1–5 (qualitative). Sets the risk's row on the 5×5 heatmap and its severity — separate from Probability %." />
         </Field>

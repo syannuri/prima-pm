@@ -142,7 +142,8 @@ function IssueForm({ base, issue, onClose, onDone }: { base: string; issue: Issu
     <Modal onClose={onClose} title={issue ? `Edit ${issue.code}` : 'Log an issue'} size="lg">
       <div className="space-y-3">
         <Field label="Title"><Input value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="What went wrong?" /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* 2-col even on phones so "Date raised" isn't full-width and the form is tidier. */}
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Category"><Input value={f.category} onChange={(e) => set('category', e.target.value)} placeholder="e.g. Technical, Vendor, Scope" /></Field>
           <Field label="Date raised"><Input type="date" value={f.raisedAt} onChange={(e) => set('raisedAt', e.target.value)} /></Field>
           <Field label="Impact">
