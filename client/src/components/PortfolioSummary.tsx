@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
 import HealthGauge from './HealthGauge';
-import { Badge, Card, Field, Input, Skeleton } from './ui';
+import { Badge, Card, Skeleton } from './ui';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
@@ -16,16 +16,6 @@ import DonutChart, { type DonutSlice } from './DonutChart';
 const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#f4675f' };
 
 // Mono line-icons (feather-style) for the KPI cards — purely for scannability.
-const KPI_ICON = {
-  projects: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
-  bac: 'M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16v-5M18 12a2 2 0 0 0 0 4h4v-4z',
-  ev: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6',
-  ac: 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
-  cpi: 'M22 12h-4l-3 9L9 3l-3 9H2',
-  spi: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
-  percent: 'M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z',
-  schedule: 'M3 4h18v18H3zM3 10h18M8 2v4M16 2v4',
-};
 
 const HEALTH_COLOR: Record<string, string> = { GREEN: 'green', AMBER: 'amber', RED: 'red', NO_DATA: 'slate' };
 // Human-friendly labels instead of the raw enum (GREEN/NO_DATA/…).
@@ -68,7 +58,6 @@ export default function PortfolioSummary() {
   }
   if (!data || data.totals.count === 0) return null;
   const t = data.totals;
-  const spiBehind = t.spi > 0 && t.spi < 1;
   // Portfolio schedule-health status for the speedometer (same thresholds as the mobile hero).
   const gaugeStatus: PortfolioHealth = t.pv <= 0 ? 'NO_DATA' : t.spi >= 0.95 ? 'GREEN' : t.spi >= 0.85 ? 'AMBER' : 'RED';
   const HEALTH_META: Record<PortfolioHealth, { dot: string; label: string }> = {
@@ -139,87 +128,51 @@ export default function PortfolioSummary() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-end justify-end">
-        {/* Compact date field, right-aligned (the native picker shouldn't span the row). */}
-        <div className="w-40 sm:w-44">
-          <Field label="Status date (EVM)">
-            <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} />
-          </Field>
-        </div>
-      </div>
-
-      {/* Portfolio-health speedometer — the same 3D gauge as the mobile hero, on a premium dark panel. */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 p-5 text-white shadow-lg ring-1 ring-white/10">
+      {/* Command bar — the gauge (health), the money/scope KPIs (filling what used to be
+          empty space) and the status date, consolidated into one tight hero. SPI/CPI/%
+          complete/projects live in the gauge + header, so they're not repeated here. */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 p-4 text-white shadow-lg ring-1 ring-white/10 sm:p-5">
         <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: HEALTH_META[gaugeStatus].dot, opacity: 0.18 }} />
-        <div className="relative flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-12">
-          <div className="w-full max-w-[300px]">
-            <div className="mb-1 text-center text-[11px] font-semibold uppercase tracking-wide text-white/70">Portfolio health</div>
+        <div className="relative mb-3 flex items-start justify-between gap-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Portfolio health · <span className="text-white/45">{t.count} projects</span></div>
+          <div className="flex flex-col items-end">
+            <label className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/40">Status date (EVM)</label>
+            <input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="w-40 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm text-white [color-scheme:dark] focus:border-white/30 focus:outline-none" />
+          </div>
+        </div>
+        <div className="relative flex flex-col items-center gap-5 lg:flex-row lg:items-center lg:gap-8">
+          <div className="w-full max-w-[280px] shrink-0">
             <HealthGauge spi={t.spi} cpi={t.cpi} pct={Math.round(t.scheduleProgress * 100)} status={gaugeStatus} statusLabel={HEALTH_META[gaugeStatus].label} />
           </div>
-          {/* Health breakdown by project count. */}
-          <div className="flex flex-wrap justify-center gap-2 sm:flex-col sm:gap-2.5">
-            <div className="mb-0.5 hidden text-[11px] font-semibold uppercase tracking-wide text-white/50 sm:block">{t.count} projects</div>
-            {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
-              <span key={h} className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm ring-1 ring-white/10">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: HEALTH_META[h].dot }} />
-                <span className="text-white/80">{HEALTH_META[h].label}</span>
-                <span className="font-bold tabular-nums">{data.byHealth[h]}</span>
-              </span>
-            ))}
+          <div className="w-full flex-1">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+              {([
+                { label: 'Total BAC', value: formatIdrShort(t.bac), title: formatIdr(t.bac) },
+                { label: 'Earned Value', value: formatIdrShort(t.ev), title: formatIdr(t.ev) },
+                { label: 'Actual Cost', value: formatIdrShort(t.ac), title: formatIdr(t.ac) },
+                { label: 'Schedule slip', value: t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule', warn: t.slippedCount > 0 },
+                { label: 'Changes', value: String(totalChanges) },
+                { label: 'Contingency', value: formatIdrShort(t.contingencyReserve), title: formatIdr(t.contingencyReserve) },
+              ] as Array<{ label: string; value: string; title?: string; warn?: boolean }>).map((s) => (
+                <div key={s.label} className="rounded-xl bg-white/5 px-3 py-2 ring-1 ring-white/10">
+                  <div className="truncate text-[10px] font-medium uppercase tracking-wide text-white/50">{s.label}</div>
+                  <div title={s.title} className={`mt-0.5 truncate text-lg font-bold leading-tight tabular-nums ${s.warn ? 'text-red-300' : 'text-white'}`}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
+                <span key={h} className="flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs ring-1 ring-white/10">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: HEALTH_META[h].dot }} />
+                  <span className="text-white/80">{HEALTH_META[h].label}</span>
+                  <span className="font-bold tabular-nums">{data.byHealth[h]}</span>
+                </span>
+              ))}
+              {(data.byHealth.NO_DATA ?? 0) > 0 && <span className="text-[11px] text-white/40">“No data” = not started by this date — pick a later one.</span>}
+            </div>
           </div>
         </div>
       </div>
-
-      {/* KPI stat strip — one cohesive card with divided cells. All 8 sit on a single
-          row on wide screens; on narrow ones the strip scrolls horizontally. */}
-      <Card className="overflow-hidden !p-0">
-        {/* Mobile: 2-col grid so all KPIs are visible (thin dividers via gap-px). sm+: one scrollable strip. */}
-        <div className="grid grid-cols-2 gap-px bg-slate-200 dark:bg-slate-800 sm:flex sm:gap-0 sm:divide-x sm:divide-slate-200 sm:overflow-x-auto sm:bg-transparent sm:dark:divide-slate-800">
-          {([
-            { label: 'Projects', value: String(t.count), icon: KPI_ICON.projects },
-            { label: 'Total BAC', value: formatIdrShort(t.bac), title: formatIdr(t.bac), strong: true, icon: KPI_ICON.bac },
-            { label: 'Earned Value', value: formatIdrShort(t.ev), title: formatIdr(t.ev), icon: KPI_ICON.ev },
-            { label: 'Actual Cost', value: formatIdrShort(t.ac), title: formatIdr(t.ac), icon: KPI_ICON.ac },
-            { label: showPies ? 'Portfolio CPI' : 'CPI', value: t.cpi ? formatNum(t.cpi, 2) : '—', warn: t.cpi > 0 && t.cpi < 1, icon: KPI_ICON.cpi },
-            { label: showPies ? 'Portfolio SPI' : 'SPI', value: t.spi ? formatNum(t.spi, 2) : '—', warn: spiBehind, icon: KPI_ICON.spi },
-            { label: '% Complete', value: `${formatNum(t.scheduleProgress * 100, 1)}%`, icon: KPI_ICON.percent },
-            { label: 'Schedule slip', value: t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule', warn: t.slippedCount > 0, icon: KPI_ICON.schedule },
-          ] as Array<{ label: string; value: string; icon: string; title?: string; strong?: boolean; warn?: boolean }>).map((s) => (
-            <div key={s.label} className="min-w-[7.25rem] flex-1 bg-white px-3.5 py-2.5 dark:bg-slate-900 sm:bg-transparent sm:dark:bg-transparent">
-              <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={s.icon} /></svg>
-                <span className="truncate text-[10px] font-medium uppercase tracking-wide" title={s.label}>{s.label}</span>
-              </div>
-              <div
-                title={s.title}
-                className={`mt-0.5 truncate text-base leading-tight tabular-nums ${
-                  s.warn ? 'font-semibold text-red-600 dark:text-red-400' : s.strong ? 'font-bold text-slate-900 dark:text-white' : 'font-semibold text-slate-800 dark:text-slate-100'
-                }`}
-              >
-                {s.value}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Health distribution */}
-      <Card className="!p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Schedule health:</span>
-          {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as const).map((h) => (
-            <Badge key={h} color={HEALTH_COLOR[h]}>{HEALTH_LABEL[h]}: {data.byHealth[h] ?? 0}</Badge>
-          ))}
-          <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-            Contingency held: {formatIdr(t.contingencyReserve)}
-          </span>
-        </div>
-        {(data.byHealth.NO_DATA ?? 0) > 0 && (
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            “No data” means the project hasn’t started by the status date (or has no recorded actual cost). Pick a later status date above to see progress.
-          </p>
-        )}
-      </Card>
 
       {/* PMO dashboard — portfolio pie charts */}
       {showPies && (
