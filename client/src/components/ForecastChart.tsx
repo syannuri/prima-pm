@@ -79,9 +79,9 @@ export default function ForecastChart({ data }: { data: Forecast }) {
         {ticks.map((tk) => (
           <line key={tk.ms} x1={tickX(tk.ms)} x2={tickX(tk.ms)} y1={H - padB} y2={H - padB + 4} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" />
         ))}
-        {/* labels */}
+        {/* labels — when BAC ≈ EAC the two reference lines nearly coincide, so drop the EAC label below its line to avoid the labels overprinting each other. */}
         <text x={W - padR} y={bacY - 3} textAnchor="end" className="fill-slate-400 text-[10px]">BAC {formatIdrShort(data.bac)}</text>
-        <text x={W - padR} y={eacY - 3} textAnchor="end" fill={FC} className="text-[10px]" opacity="0.9">EAC {formatIdrShort(data.eac.likely)}</text>
+        <text x={W - padR} y={Math.abs(eacY - bacY) < 12 ? eacY + 11 : eacY - 3} textAnchor="end" fill={FC} className="text-[10px]" opacity="0.9">EAC {formatIdrShort(data.eac.likely)}</text>
         <text x={Math.min(nowX + 4, W - 40)} y={padT + 10} className="fill-slate-400 text-[10px]">today</text>
       </svg>
       {/* Month labels — HTML overlay (crisp; SVG text would stretch under preserveAspectRatio=none), aligned to the same x-scale as the curve. */}

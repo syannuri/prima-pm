@@ -1,0 +1,17 @@
+import { chromium } from '@playwright/test';
+import { PrismaClient } from '/home/mamed/prima-pm/server/node_modules/@prisma/client/index.js';
+const OUT='/tmp/claude-0/-home-mamed/560838a1-f8a4-44df-9a90-820a4f1302be/scratchpad/qa';
+const PV='http://127.0.0.1:4200';const PID='a13628da-3294-4e33-a4e5-6ff3fe6d494b';
+const p=new PrismaClient();const a=await p.user.findFirst({where:{role:'ADMIN',isActive:true}});
+const {signAccessToken}=await import('/home/mamed/prima-pm/server/dist/lib/jwt.js');
+const tk=signAccessToken({sub:a.id,role:a.role,email:a.email,tv:a.tokenVersion});await p.$disconnect();
+const b=await chromium.launch();
+const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+await ctx.addCookies([{name:'prima_at',value:tk,url:PV,sameSite:'Strict',secure:false}]);
+const pg=await ctx.newPage();
+await pg.goto(`${PV}/projects/${PID}`,{waitUntil:'domcontentloaded'});await pg.waitForTimeout(2200);
+await pg.getByRole('button',{name:'Monitoring & Controlling',exact:true}).first().click();await pg.waitForTimeout(300);
+await pg.getByRole('button',{name:'Forecast',exact:true}).first().click();await pg.waitForTimeout(1200);
+await pg.getByText('Cost projection',{exact:false}).first().scrollIntoViewIfNeeded().catch(()=>{});
+await pg.waitForTimeout(500);await pg.screenshot({path:`${OUT}/nt-scurve-fixed.png`});
+await b.close();
