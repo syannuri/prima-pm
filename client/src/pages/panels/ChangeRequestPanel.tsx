@@ -127,38 +127,77 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
           {!filtered.length ? (
             <p className="py-4 text-sm text-slate-500 dark:text-slate-400">No change requests{filter !== 'ALL' ? ` with status ${label(filter)}` : ''}.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="prima-rows w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-                    <th className="py-2">Change request</th><th>Status</th><th>Requested</th><th>Reviewed</th><th>Decided</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((cr) => (
-                    <tr key={cr.id} className="border-b border-slate-100 align-top dark:border-slate-800">
-                      <td className="py-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-slate-700 dark:text-slate-200">{cr.title}</span>
-                          <Badge color={cr.magnitude === 'MAJOR' ? 'red' : 'slate'}>{cr.magnitude}</Badge>
-                          {cr.chargeable
-                            ? <Badge color="amber">{cr.amountIdr != null ? formatIdr(cr.amountIdr) : 'Chargeable'}</Badge>
-                            : <Badge color="green">No-cost</Badge>}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">by {cr.requester?.name ?? '—'}</div>
-                      </td>
-                      <td className="py-2"><Badge color={CR_COLOR[cr.status] ?? 'slate'}>{label(cr.status)}</Badge></td>
-                      <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{formatDate(cr.createdAt)}</td>
-                      <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{cr.reviewedAt ? `${formatDate(cr.reviewedAt)}${cr.reviewer ? ` · ${cr.reviewer.name}` : ''}` : '—'}</td>
-                      <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{cr.decidedAt ? `${formatDate(cr.decidedAt)}${cr.decider ? ` · ${cr.decider.name}` : ''}` : '—'}</td>
-                      <td className="py-2 text-right">
-                        <button onClick={() => setDetail(cr)} className="text-xs font-medium text-brand-600 hover:underline">View</button>
-                      </td>
+            <>
+              {/* Desktop: full log table. Mobile: stacked cards so the Requested/Reviewed/Decided dates + View never clip. */}
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="prima-rows w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+                      <th className="py-2">Change request</th><th>Status</th><th>Requested</th><th>Reviewed</th><th>Decided</th><th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filtered.map((cr) => (
+                      <tr key={cr.id} className="border-b border-slate-100 align-top dark:border-slate-800">
+                        <td className="py-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-slate-700 dark:text-slate-200">{cr.title}</span>
+                            <Badge color={cr.magnitude === 'MAJOR' ? 'red' : 'slate'}>{cr.magnitude}</Badge>
+                            {cr.chargeable
+                              ? <Badge color="amber">{cr.amountIdr != null ? formatIdr(cr.amountIdr) : 'Chargeable'}</Badge>
+                              : <Badge color="green">No-cost</Badge>}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">by {cr.requester?.name ?? '—'}</div>
+                        </td>
+                        <td className="py-2"><Badge color={CR_COLOR[cr.status] ?? 'slate'}>{label(cr.status)}</Badge></td>
+                        <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{formatDate(cr.createdAt)}</td>
+                        <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{cr.reviewedAt ? `${formatDate(cr.reviewedAt)}${cr.reviewer ? ` · ${cr.reviewer.name}` : ''}` : '—'}</td>
+                        <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{cr.decidedAt ? `${formatDate(cr.decidedAt)}${cr.decider ? ` · ${cr.decider.name}` : ''}` : '—'}</td>
+                        <td className="py-2 text-right">
+                          <button onClick={() => setDetail(cr)} className="text-xs font-medium text-brand-600 hover:underline">View</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="space-y-2 sm:hidden">
+                {filtered.map((cr) => (
+                  <div key={cr.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">{cr.title}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">by {cr.requester?.name ?? '—'}</p>
+                      </div>
+                      <Badge color={CR_COLOR[cr.status] ?? 'slate'}>{label(cr.status)}</Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge color={cr.magnitude === 'MAJOR' ? 'red' : 'slate'}>{cr.magnitude}</Badge>
+                      {cr.chargeable
+                        ? <Badge color="amber">{cr.amountIdr != null ? formatIdr(cr.amountIdr) : 'Chargeable'}</Badge>
+                        : <Badge color="green">No-cost</Badge>}
+                    </div>
+                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Requested</dt>
+                        <dd className="text-slate-600 dark:text-slate-300">{formatDate(cr.createdAt)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Reviewed</dt>
+                        <dd className="text-slate-600 dark:text-slate-300">{cr.reviewedAt ? `${formatDate(cr.reviewedAt)}${cr.reviewer ? ` · ${cr.reviewer.name}` : ''}` : '—'}</dd>
+                      </div>
+                      <div className="col-span-2">
+                        <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Decided</dt>
+                        <dd className="text-slate-600 dark:text-slate-300">{cr.decidedAt ? `${formatDate(cr.decidedAt)}${cr.decider ? ` · ${cr.decider.name}` : ''}` : '—'}</dd>
+                      </div>
+                    </dl>
+                    <div className="mt-2 flex justify-end border-t border-slate-100 pt-2 dark:border-slate-800">
+                      <button onClick={() => setDetail(cr)} className="text-xs font-medium text-brand-600 hover:underline">View</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
 

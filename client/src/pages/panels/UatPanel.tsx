@@ -69,40 +69,80 @@ export default function UatPanel({ projectId }: { projectId: string }) {
             No UAT test cases yet.{canEdit ? ' Click “+ Add test case” to build the acceptance test set.' : ''}
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400 [&>th]:py-2 [&>th]:pr-3">
-                  <th className="w-16">Code</th><th className="min-w-[14rem]">Test case</th><th>Expected</th>
-                  <th>Status</th><th>Tester</th><th className="text-right">Run</th>{canEdit && <th className="text-right">Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((t) => (
-                  <tr key={t.id} className="border-b border-slate-100 align-top dark:border-slate-800 [&>td]:py-2 [&>td]:pr-3">
-                    <td className="font-mono text-xs text-slate-500 dark:text-slate-400">{t.code}</td>
-                    <td>
-                      <div className="font-medium text-slate-800 dark:text-slate-100">{t.title}</div>
-                      {t.scenario && <div className="text-xs text-slate-500 dark:text-slate-400">{t.scenario}</div>}
-                      {t.status === 'FAIL' && t.notes && <div className="mt-0.5 text-xs text-red-600 dark:text-red-400">Defect: {t.notes}</div>}
-                    </td>
-                    <td className="text-xs text-slate-600 dark:text-slate-300">{t.expected}{t.actual && <div className="mt-0.5 text-slate-400">Actual: {t.actual}</div>}</td>
-                    <td><Badge color={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</Badge></td>
-                    <td className="text-xs text-slate-500 dark:text-slate-400">{t.testerName ?? '—'}</td>
-                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{t.executedAt ? formatDate(t.executedAt) : '—'}</td>
-                    {canEdit && (
-                      <td className="whitespace-nowrap text-right text-xs">
-                        <button onClick={() => setForm({ edit: t })} className="text-brand-600 hover:underline">Run / Edit</button>
-                        <button
-                          onClick={async () => { if (await confirm({ title: 'Delete test case?', message: <>Delete <strong>{t.code}</strong>?</>, confirmLabel: 'Delete', danger: true })) del.mutate(t.id); }}
-                          className="ml-2 text-red-500 hover:underline">Del</button>
-                      </td>
-                    )}
+          <>
+            {/* Desktop: full table. Mobile: stacked cards so Expected/Status/Tester/actions never clip off-screen. */}
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400 [&>th]:py-2 [&>th]:pr-3">
+                    <th className="w-16">Code</th><th className="min-w-[14rem]">Test case</th><th>Expected</th>
+                    <th>Status</th><th>Tester</th><th className="text-right">Run</th>{canEdit && <th className="text-right">Actions</th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {items.map((t) => (
+                    <tr key={t.id} className="border-b border-slate-100 align-top dark:border-slate-800 [&>td]:py-2 [&>td]:pr-3">
+                      <td className="font-mono text-xs text-slate-500 dark:text-slate-400">{t.code}</td>
+                      <td>
+                        <div className="font-medium text-slate-800 dark:text-slate-100">{t.title}</div>
+                        {t.scenario && <div className="text-xs text-slate-500 dark:text-slate-400">{t.scenario}</div>}
+                        {t.status === 'FAIL' && t.notes && <div className="mt-0.5 text-xs text-red-600 dark:text-red-400">Defect: {t.notes}</div>}
+                      </td>
+                      <td className="text-xs text-slate-600 dark:text-slate-300">{t.expected}{t.actual && <div className="mt-0.5 text-slate-400">Actual: {t.actual}</div>}</td>
+                      <td><Badge color={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</Badge></td>
+                      <td className="text-xs text-slate-500 dark:text-slate-400">{t.testerName ?? '—'}</td>
+                      <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{t.executedAt ? formatDate(t.executedAt) : '—'}</td>
+                      {canEdit && (
+                        <td className="whitespace-nowrap text-right text-xs">
+                          <button onClick={() => setForm({ edit: t })} className="text-brand-600 hover:underline">Run / Edit</button>
+                          <button
+                            onClick={async () => { if (await confirm({ title: 'Delete test case?', message: <>Delete <strong>{t.code}</strong>?</>, confirmLabel: 'Delete', danger: true })) del.mutate(t.id); }}
+                            className="ml-2 text-red-500 hover:underline">Del</button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="space-y-2 sm:hidden">
+              {items.map((t) => (
+                <div key={t.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{t.code}</span>
+                      <p className="font-medium text-slate-800 dark:text-slate-100">{t.title}</p>
+                      {t.scenario && <p className="text-xs text-slate-500 dark:text-slate-400">{t.scenario}</p>}
+                    </div>
+                    <Badge color={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                  </div>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
+                    <div className="col-span-2">
+                      <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Expected</dt>
+                      <dd className="text-slate-600 dark:text-slate-300">{t.expected}{t.actual && <div className="mt-0.5 text-slate-400">Actual: {t.actual}</div>}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Tester</dt>
+                      <dd className="text-slate-600 dark:text-slate-300">{t.testerName ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Run</dt>
+                      <dd className="text-slate-600 dark:text-slate-300">{t.executedAt ? formatDate(t.executedAt) : '—'}</dd>
+                    </div>
+                  </dl>
+                  {t.status === 'FAIL' && t.notes && <p className="mt-2 text-xs text-red-600 dark:text-red-400">Defect: {t.notes}</p>}
+                  {canEdit && (
+                    <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
+                      <button onClick={() => setForm({ edit: t })} className="font-medium text-brand-600 hover:underline">Run / Edit</button>
+                      <button
+                        onClick={async () => { if (await confirm({ title: 'Delete test case?', message: <>Delete <strong>{t.code}</strong>?</>, confirmLabel: 'Delete', danger: true })) del.mutate(t.id); }}
+                        className="font-medium text-red-500 hover:underline">Del</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </Card>
 
