@@ -408,6 +408,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
                         <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
                       </span>
+                      {/* Phones: the Start/Finish columns are desktop-only, so show the schedule dates inline under the task. */}
+                      <span className="mt-0.5 block whitespace-nowrap text-[11px] tabular-nums text-slate-400 dark:text-slate-500 sm:hidden" style={{ paddingLeft: `${depth * 18 + 20}px` }}>
+                        {node.isMilestone || r.start === r.end ? formatDate(new Date(r.start)) : <>{formatDate(new Date(r.start))} <span className="text-slate-300 dark:text-slate-600">→</span> {formatDate(new Date(r.end))}</>}
+                      </span>
                     </td>
                     <td><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></td>
                     <td className="hidden whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400 sm:table-cell">{formatDate(new Date(r.start))}</td>
@@ -533,7 +537,7 @@ function TemplateStarter({ base, onApplied }: { base: string; onApplied: () => v
             {templates.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.taskCount} tasks)</option>)}
           </Select>
         </Field>
-        <Field label="Start date"><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
+        <div className="w-40"><Field label="Start date"><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field></div>
         <Button
           variant="secondary"
           disabled={!templateId || apply.isPending}

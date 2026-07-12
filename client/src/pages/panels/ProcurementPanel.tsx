@@ -157,7 +157,8 @@ function ProcurementForm({ base, procurement, onClose, onDone }: { base: string;
     <Modal onClose={onClose} title={procurement ? `Edit ${procurement.code}` : 'Add a procurement'} size="lg">
       <div className="space-y-3">
         <Field label="Title"><Input value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="What is being procured?" /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* 2-col even on phones so the Need-by / Start / End date pickers aren't full-width. */}
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Vendor / supplier"><Input value={f.vendor} onChange={(e) => set('vendor', e.target.value)} placeholder="Company name" /></Field>
           <Field label="Vendor contact"><Input value={f.vendorContact} onChange={(e) => set('vendorContact', e.target.value)} placeholder="Name / email / phone" /></Field>
           <Field label="Contract type"><Select value={f.type} onChange={(e) => set('type', e.target.value)}>{TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}</Select></Field>
