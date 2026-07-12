@@ -30,6 +30,7 @@ import AwaitingActivation from '../components/AwaitingActivation';
 import AwaitingClosure from '../components/AwaitingClosure';
 import PlanningReminders from '../components/PlanningReminders';
 import PendingApprovals from '../components/PendingApprovals';
+import ActionCenter from '../components/ActionCenter';
 import ResourceCapacity from '../components/ResourceCapacity';
 
 const STATUS_COLOR = PROJECT_STATUS_BADGE;
@@ -168,6 +169,7 @@ export default function DashboardPage() {
         </PullToRefresh>
       ) : (
         <>
+          <ActionCenter />
           <PlanningReminders />
           <AwaitingActivation />
           <AwaitingClosure />

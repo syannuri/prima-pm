@@ -45,6 +45,11 @@ export default function PortfolioSummary() {
     queryKey: ['portfolio', statusDate],
     queryFn: () => api.get<Summary>(`/portfolio/summary?statusDate=${statusDate}`),
   });
+  // Rolled-up EVM history for the hero sparkline (shares the key with PortfolioEvmTrend → one fetch).
+  const { data: trend } = useQuery({
+    queryKey: ['portfolio-evm-trend'],
+    queryFn: () => api.get<{ series: { statusDate: string; spi: number; cpi: number }[] }>('/portfolio/evm/trend'),
+  });
   const { pinned, toggle: togglePin } = useBookmarks();
 
   if (isLoading) {
@@ -61,6 +66,10 @@ export default function PortfolioSummary() {
   }
   if (!data || data.totals.count === 0) return null;
   const t = data.totals;
+  // SPI trend for the hero sparkline (drop no-data 0s).
+  const spiSeries = (trend?.series ?? []).map((s) => s.spi).filter((v) => v > 0);
+  const spiLast = spiSeries.length ? spiSeries[spiSeries.length - 1] : null;
+  const spiDelta = spiSeries.length > 1 ? spiSeries[spiSeries.length - 1] - spiSeries[spiSeries.length - 2] : null;
   // Portfolio schedule-health status for the speedometer (same thresholds as the mobile hero).
   const gaugeStatus: PortfolioHealth = t.pv <= 0 ? 'NO_DATA' : t.spi >= 0.95 ? 'GREEN' : t.spi >= 0.85 ? 'AMBER' : 'RED';
   const HEALTH_META: Record<PortfolioHealth, { dot: string; label: string }> = {
@@ -175,6 +184,20 @@ export default function PortfolioSummary() {
             </div>
           </div>
         </div>
+        {/* SPI trend sparkline — the one thing the static gauge can't show. */}
+        {spiSeries.length >= 2 && spiLast !== null && (
+          <div className="relative mt-4 flex items-center gap-4 rounded-xl bg-white/5 px-4 py-2.5 ring-1 ring-white/10">
+            <div className="shrink-0">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-white/50">SPI trend</div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold tabular-nums text-white">{spiLast.toFixed(2)}</span>
+                {spiDelta !== null && <span className={`text-xs font-semibold ${spiDelta >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{spiDelta >= 0 ? '▲' : '▼'} {Math.abs(spiDelta).toFixed(2)} vs last</span>}
+              </div>
+            </div>
+            <Sparkline values={spiSeries} up={(spiDelta ?? 0) >= 0} className="h-9 flex-1" />
+            <span className="shrink-0 text-[10px] text-white/40">{spiSeries.length} status points</span>
+          </div>
+        )}
       </div>
 
       {/* PMO dashboard — portfolio pie charts */}
@@ -558,3 +581,33 @@ function BookmarkStar({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
+
+// Compact SPI trend line for the hero. Stretches to its container (non-scaling stroke),
+// green when improving / red when declining, with a soft area fill and a last-point dot.
+function Sparkline({ values, up, className }: { values: number[]; up: boolean; className?: string }) {
+  const W = 200, H = 36, pad = 3;
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = pad + (values.length === 1 ? 0 : (i / (values.length - 1)) * (W - 2 * pad));
+    const y = H - pad - ((v - min) / span) * (H - 2 * pad);
+    return [x, y] as const;
+  });
+  const line = pts.map((p) => p.join(',')).join(' ');
+  const area = `${pad},${H - pad} ${line} ${W - pad},${H - pad}`;
+  const color = up ? '#6ee7b7' : '#fca5a5';
+  const last = pts[pts.length - 1];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={className}>
+      <defs>
+        <linearGradient id="spkFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={area} fill="url(#spkFill)" />
+      <polyline points={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={last[0]} cy={last[1]} r="2.5" fill={color} />
+    </svg>
+  );
+}
