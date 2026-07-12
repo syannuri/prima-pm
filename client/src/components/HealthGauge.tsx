@@ -137,6 +137,12 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel }: {
           return <line key={tf} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#e2e8f0" strokeOpacity={major ? 0.9 : 0.4} strokeWidth={major ? 1.6 : 1} />;
         })}
 
+        {/* SPI scale labels at the major ticks (0.5 left · 1.0 top · 1.5 right). */}
+        {[{ f: 0, t: '0.5' }, { f: 0.5, t: '1.0' }, { f: 1, t: '1.5' }].map(({ f: lf, t: lt }) => {
+          const q = point(lf, R - 20);
+          return <text key={lt} x={q.x} y={q.y + 3} textAnchor="middle" className="fill-white/55 text-[8px] font-semibold tabular-nums">{lt}</text>;
+        })}
+
         {/* Needle */}
         {!noData && (
           <g transform={`rotate(${needleAngle} ${CX} ${CY})`} filter="url(#hgShadow)">
