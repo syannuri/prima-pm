@@ -438,7 +438,7 @@ export default function HomePage() {
                 height={1000}
                 loading="eager"
                 decoding="async"
-                alt="Prismatix Project Manager dashboard — CPI/SPI donuts and baseline-vs-actual progress"
+                alt="Prismatix Project Manager dashboard — a 3D portfolio-health speedometer, EVM KPIs, SPI trend and cost/schedule/status pies"
                 className="block w-full"
               />
             </div>
