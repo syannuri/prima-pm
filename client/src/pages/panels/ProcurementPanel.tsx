@@ -49,7 +49,8 @@ export default function ProcurementPanel({ projectId }: { projectId: string }) {
           <Stat label="Vendors" value={String(new Set(active.map((p) => p.vendor).filter(Boolean)).size)} sub="distinct" />
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        {/* Desktop: full register. Mobile: stacked cards so Value + Status never clip off the right edge. */}
+        <div className="mt-4 hidden overflow-x-auto sm:block">
           <table className="prima-rows w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -82,6 +83,48 @@ export default function ProcurementPanel({ projectId }: { projectId: string }) {
               {!list.length && <tr><td colSpan={8} className="py-4 text-center text-slate-500 dark:text-slate-400">No procurements yet.</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="mt-4 space-y-2 sm:hidden">
+          {list.map((p) => (
+            <div key={p.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{p.code}</span>
+                  <p className="font-medium text-slate-700 dark:text-slate-200">{p.title}</p>
+                  {p.scope && <p className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{p.scope}</p>}
+                </div>
+                <Badge color={STATUS_COLOR[p.status]}>{STATUS_LABEL[p.status]}</Badge>
+              </div>
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+                <div className="col-span-2">
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Vendor</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">
+                    {p.vendor ?? '—'}
+                    {p.vendorContact && <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">· {p.vendorContact}</span>}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Value</dt>
+                  <dd className="tabular-nums text-slate-700 dark:text-slate-200">{p.amount != null ? formatIdr(p.amount) : '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Type</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{TYPE_LABEL[p.type]}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Need by</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{p.needBy ? formatDate(p.needBy) : '—'}</dd>
+                </div>
+              </dl>
+              {canWrite && (
+                <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                  <button onClick={() => setEditing(p)} className="text-xs font-medium text-brand-600 hover:underline">edit</button>
+                  <DeleteBtn base={base} id={p.id} title={p.title} onDone={invalidate} />
+                </div>
+              )}
+            </div>
+          ))}
+          {!list.length && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">No procurements yet.</p>}
         </div>
       </Card>
 

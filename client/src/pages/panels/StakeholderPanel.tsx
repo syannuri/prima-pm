@@ -52,7 +52,8 @@ export default function StakeholderPanel({ projectId }: { projectId: string }) {
 
         {list.length > 0 && <PowerInterestGrid list={list} />}
 
-        <div className="mt-4 overflow-x-auto">
+        {/* Desktop: full register. Mobile: stacked cards so Strategy + Engagement gap never clip off-screen. */}
+        <div className="mt-4 hidden overflow-x-auto sm:block">
           <table className="prima-rows w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -90,6 +91,53 @@ export default function StakeholderPanel({ projectId }: { projectId: string }) {
               {!list.length && <tr><td colSpan={8} className="py-4 text-center text-slate-500 dark:text-slate-400">No stakeholders identified yet.</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="mt-4 space-y-2 sm:hidden">
+          {list.map((s) => {
+            const gap = ENG_RANK[s.currentEngagement] < ENG_RANK[s.desiredEngagement];
+            return (
+              <div key={s.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{s.code}</span>
+                    <p className="font-medium text-slate-700 dark:text-slate-200">{s.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{[s.role, s.organization].filter(Boolean).join(' · ') || '—'}{s.email ? ` · ${s.email}` : ''}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{CAT_LABEL[s.category]}</span>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Power</dt>
+                    <dd><Lvl v={s.power} /></dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Interest</dt>
+                    <dd><Lvl v={s.interest} /></dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Strategy</dt>
+                    <dd className="text-slate-600 dark:text-slate-300">{strategy(s.power, s.interest)}</dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Engagement</dt>
+                    <dd className="text-xs">
+                      <span className={gap ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}>
+                        {cap(s.currentEngagement)} {gap ? '→' : '='} {cap(s.desiredEngagement)}
+                      </span>
+                      {gap && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold uppercase text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">gap</span>}
+                    </dd>
+                  </div>
+                </dl>
+                {canWrite && (
+                  <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                    <button onClick={() => setEditing(s)} className="text-xs font-medium text-brand-600 hover:underline">edit</button>
+                    <DeleteBtn base={base} id={s.id} name={s.name} onDone={invalidate} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!list.length && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">No stakeholders identified yet.</p>}
         </div>
       </Card>
 

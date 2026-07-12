@@ -59,7 +59,8 @@ export default function RequirementsPanel({ projectId }: { projectId: string }) 
           </div>
         )}
 
-        <div className="mt-4 overflow-x-auto">
+        {/* Desktop: full traceability matrix. Mobile: stacked cards so Status + WBS trace never scroll off-screen. */}
+        <div className="mt-4 hidden overflow-x-auto sm:block">
           <table className="prima-rows w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -98,6 +99,43 @@ export default function RequirementsPanel({ projectId }: { projectId: string }) 
               {!list.length && <tr><td colSpan={7} className="py-4 text-center text-slate-500 dark:text-slate-400">No requirements yet.</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="mt-4 space-y-2 sm:hidden">
+          {list.map((r) => (
+            <div key={r.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{r.code}</span>
+                  <p className="font-medium text-slate-700 dark:text-slate-200">{r.title}</p>
+                </div>
+                <Badge color={STATUS_COLOR[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+              </div>
+              {r.description && <p className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{r.description}</p>}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Badge color={PRIORITY_COLOR[r.priority]}>{PRIORITY_LABEL[r.priority]}</Badge>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">{CATEGORY_LABEL[r.category]}</span>
+              </div>
+              <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Traces to (WBS)</p>
+                <div className="flex flex-wrap items-center gap-1">
+                  {r.taskLinks.map((l) => (
+                    <span key={l.id} className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300" title={l.task.name}>
+                      {l.task.wbsCode || l.task.name}
+                    </span>
+                  ))}
+                  {r.taskLinks.length === 0 && <span className="text-xs text-amber-600 dark:text-amber-400">⚠ no link</span>}
+                  {canWrite && <button onClick={() => setTracing(r)} className="ml-1 text-xs text-brand-600 hover:underline">+ link</button>}
+                </div>
+              </div>
+              {canWrite && (
+                <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                  <button onClick={() => setEditing(r)} className="text-xs font-medium text-brand-600 hover:underline">edit</button>
+                  <DeleteBtn base={base} id={r.id} title={r.title} onDone={invalidate} />
+                </div>
+              )}
+            </div>
+          ))}
+          {!list.length && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">No requirements yet.</p>}
         </div>
       </Card>
 

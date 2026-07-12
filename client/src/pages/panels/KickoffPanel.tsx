@@ -155,7 +155,8 @@ function ActionItems({ base, rows, canEdit, onChange }: { base: string; rows: Ki
     <Card>
       <SectionTitle sub={rows.length ? `${open} open of ${rows.length}` : 'Follow-up actions agreed at kick-off (owner + due date)'}>Action Items</SectionTitle>
       {rows.length > 0 && (
-        <table className="mb-3 w-full text-sm">
+        <div className="mb-3 hidden sm:block">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400 [&>th]:py-2 [&>th]:pr-3">
               <th className="w-8" /><th>Action</th><th>Owner</th><th>Due</th>{canEdit && <th className="text-right">Actions</th>}
@@ -184,6 +185,39 @@ function ActionItems({ base, rows, canEdit, onChange }: { base: string; rows: Ki
             })}
           </tbody>
         </table>
+        </div>
+      )}
+      {rows.length > 0 && (
+        <div className="mb-3 space-y-2 sm:hidden">
+          {rows.map((a) => {
+            const done = a.status === 'DONE';
+            const overdue = !done && a.dueDate && +new Date(a.dueDate) < Date.now();
+            return (
+              <div key={a.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                <div className="flex items-start gap-2">
+                  <button disabled={!canEdit} onClick={() => setStatus.mutate({ id: a.id, status: done ? 'OPEN' : 'DONE' })} title={done ? 'Mark open' : 'Mark done'}
+                    className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${done ? 'border-green-500 bg-green-500 text-white' : 'border-slate-300 text-transparent dark:border-slate-600'} ${canEdit ? 'hover:border-brand-500' : ''}`}>✓</button>
+                  <p className={`min-w-0 flex-1 font-medium ${done ? 'text-slate-400 line-through dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'}`}>{a.description}</p>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Owner</dt>
+                    <dd className="text-slate-600 dark:text-slate-300">{a.ownerName ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Due</dt>
+                    <dd>{a.dueDate ? <span className={overdue ? 'font-medium text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}>{formatDate(a.dueDate)}{overdue ? ' · overdue' : ''}</span> : <span className="text-slate-300 dark:text-slate-600">—</span>}</dd>
+                  </div>
+                </dl>
+                {canEdit && (
+                  <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                    <button onClick={async () => { if (await confirm({ title: 'Delete action item?', message: 'Delete this action item?', confirmLabel: 'Delete', danger: true })) del.mutate(a.id); }} className="text-xs text-red-500 hover:underline">Del</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
       {canEdit && (
         <div className="flex flex-wrap items-end gap-2">

@@ -44,7 +44,8 @@ export default function IssuePanel({ projectId }: { projectId: string }) {
           <Badge color={openCount > 0 ? 'red' : 'green'}>{openCount} unresolved</Badge>
         </div>
 
-        <div className="mt-3 overflow-x-auto">
+        {/* Desktop: full register. Mobile: stacked cards so Status + Resolution never clip off-screen. */}
+        <div className="mt-3 hidden overflow-x-auto sm:block">
           <table className="prima-rows w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -79,6 +80,54 @@ export default function IssuePanel({ projectId }: { projectId: string }) {
               {!issues.length && <tr><td colSpan={9} className="py-4 text-center text-slate-500 dark:text-slate-400">No issues logged yet.</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="mt-4 space-y-2 sm:hidden">
+          {issues.map((i) => (
+            <div key={i.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{i.code}</span>
+                  <p className="font-medium text-slate-700 dark:text-slate-200">{i.title}</p>
+                  {i.description && <p className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{i.description}</p>}
+                </div>
+                <Badge color={STATUS_COLOR[i.status]}>{statusLabel(i.status)}</Badge>
+              </div>
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Category</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{i.category ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Impact</dt>
+                  <dd><Badge color={IMPACT_COLOR[i.impact]}>{i.impact}</Badge></dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Owner</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{i.owner?.name ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Raised</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{formatDate(i.raisedAt)}</dd>
+                </div>
+                {i.resolution && (
+                  <div className="col-span-2">
+                    <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Resolution</dt>
+                    <dd className="whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300">
+                      {i.resolution}
+                      {i.resolvedAt && <span className="block text-slate-500 dark:text-slate-400">✓ {formatDate(i.resolvedAt)}</span>}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+              {canWrite && (
+                <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                  <button onClick={() => setEditing(i)} className="text-xs font-medium text-brand-600 hover:underline">edit</button>
+                  <DeleteIssue base={base} id={i.id} title={i.title} onDone={invalidate} />
+                </div>
+              )}
+            </div>
+          ))}
+          {!issues.length && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">No issues logged yet.</p>}
         </div>
       </Card>
 

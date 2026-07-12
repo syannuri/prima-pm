@@ -66,7 +66,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
 
       <Card>
         <SectionTitle sub="Identified risks with qualitative & quantitative analysis">Risk Register</SectionTitle>
-        <div className="overflow-x-auto">
+        <div className="mt-4 hidden overflow-x-auto sm:block">
           <table className="prima-rows w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -98,6 +98,47 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
               {!risksQ.data?.risks.length && <tr><td colSpan={8} className="py-3 text-center text-slate-500 dark:text-slate-400">No risks yet.</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="mt-4 space-y-2 sm:hidden">
+          {risksQ.data?.risks.map((r) => (
+            <div key={r.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{r.code}</span>
+                  <p className="font-medium text-slate-700 dark:text-slate-200">{r.title}</p>
+                </div>
+                <Badge color={SEV_COLOR[r.severity]}>{r.severity}</Badge>
+              </div>
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Kind</dt>
+                  <dd><Badge color={r.kind === 'THREAT' ? 'red' : 'green'}>{r.kind}</Badge></dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">P×I</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{r.probabilityScore}×{r.impactScore}={r.riskScore}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">EMV</dt>
+                  <dd className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(r.emv)}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Residual</dt>
+                  <dd className="tabular-nums text-slate-500 dark:text-slate-400">{r.residualEmv ? formatIdr(r.residualEmv) : '—'}</dd>
+                </div>
+              </dl>
+              <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <button
+                  onClick={() => setFilesFor((f) => (f?.id === r.id ? null : { id: r.id, code: r.code }))}
+                  className="text-xs font-medium text-brand-600 hover:underline"
+                >
+                  📎 files
+                </button>
+                <DeleteRisk base={base} id={r.id} title={r.title} onDone={invalidate} />
+              </div>
+            </div>
+          ))}
+          {!risksQ.data?.risks.length && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">No risks yet.</p>}
         </div>
         {filesFor && (
           <div className="mt-3">

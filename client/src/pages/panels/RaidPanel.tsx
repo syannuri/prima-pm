@@ -63,6 +63,43 @@ export default function RaidPanel({ projectId, onJump }: { projectId: string; on
             <td className="py-2 text-slate-600 dark:text-slate-300">{a.owner?.name ?? '—'}</td>
           </>
         )}
+        renderCard={(a, act) => (
+          <>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{a.code}</span>
+                <p className="whitespace-pre-wrap font-medium text-slate-700 dark:text-slate-200">{a.statement}</p>
+              </div>
+              <Badge color={A_COLOR[a.status]}>{cap(a.status)}</Badge>
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Category</dt>
+                <dd className="text-slate-600 dark:text-slate-300">{a.category ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Impact</dt>
+                <dd><Badge color={IMPACT_COLOR[a.impact]}>{a.impact}</Badge></dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Owner</dt>
+                <dd className="text-slate-600 dark:text-slate-300">{a.owner?.name ?? '—'}</dd>
+              </div>
+              {a.notes && (
+                <div className="col-span-2">
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Notes</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{a.notes}</dd>
+                </div>
+              )}
+            </dl>
+            {canWrite && (
+              <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <button onClick={act.edit} className="text-xs font-medium text-brand-600 hover:underline">edit</button>
+                {act.del}
+              </div>
+            )}
+          </>
+        )}
         Form={AssumptionForm}
       />
 
@@ -81,6 +118,51 @@ export default function RaidPanel({ projectId, onJump }: { projectId: string; on
             <td className="py-2"><Badge color={IMPACT_COLOR[d.impact]}>{d.impact}</Badge></td>
             <td className="py-2"><Badge color={D_COLOR[d.status]}>{cap(d.status)}</Badge></td>
             <td className="py-2 text-slate-600 dark:text-slate-300">{d.owner?.name ?? '—'}</td>
+          </>
+        )}
+        renderCard={(d, act) => (
+          <>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{d.code}</span>
+                <p className="whitespace-pre-wrap font-medium text-slate-700 dark:text-slate-200">{d.description}</p>
+              </div>
+              <Badge color={D_COLOR[d.status]}>{cap(d.status)}</Badge>
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+              <div className="col-span-2">
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Direction</dt>
+                <dd className="text-slate-600 dark:text-slate-300">{DIR_LABEL[d.direction]}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Counterparty</dt>
+                <dd className="text-slate-600 dark:text-slate-300">{d.counterparty ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Due</dt>
+                <dd className="text-slate-600 dark:text-slate-300">{d.dueDate ? formatDate(d.dueDate) : '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Impact</dt>
+                <dd><Badge color={IMPACT_COLOR[d.impact]}>{d.impact}</Badge></dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Owner</dt>
+                <dd className="text-slate-600 dark:text-slate-300">{d.owner?.name ?? '—'}</dd>
+              </div>
+              {d.notes && (
+                <div className="col-span-2">
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Notes</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{d.notes}</dd>
+                </div>
+              )}
+            </dl>
+            {canWrite && (
+              <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <button onClick={act.edit} className="text-xs font-medium text-brand-600 hover:underline">edit</button>
+                {act.del}
+              </div>
+            )}
           </>
         )}
         Form={DependencyForm}
@@ -109,9 +191,10 @@ function RaidStat({ letter, label, value, sub, onClick }: { letter: string; labe
 
 // Generic register card (table + add button) shared by Assumptions and Dependencies.
 interface RegRow { id: string }
-function Register<T extends RegRow>({ title, sub, addLabel, base, queryKey, rows, canWrite, columns, renderRow, Form }: {
+function Register<T extends RegRow>({ title, sub, addLabel, base, queryKey, rows, canWrite, columns, renderRow, renderCard, Form }: {
   title: string; sub: string; addLabel: string; base: string; queryKey: unknown[]; rows: T[]; canWrite: boolean;
   columns: string[]; renderRow: (row: T) => React.ReactNode;
+  renderCard: (row: T, actions: { edit: () => void; del: React.ReactNode }) => React.ReactNode;
   Form: (p: { base: string; row: T | null; onClose: () => void; onDone: () => void }) => React.ReactElement;
 }) {
   const qc = useQueryClient();
@@ -124,7 +207,8 @@ function Register<T extends RegRow>({ title, sub, addLabel, base, queryKey, rows
         <SectionTitle sub={sub}>{title}</SectionTitle>
         {canWrite && <Button variant="secondary" onClick={() => setCreating(true)}>+ Add {addLabel}</Button>}
       </div>
-      <div className="mt-3 overflow-x-auto">
+      {/* Desktop: full register. Mobile: stacked cards so status/owner columns never clip off-screen. */}
+      <div className="mt-3 hidden overflow-x-auto sm:block">
         <table className="prima-rows w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -144,6 +228,14 @@ function Register<T extends RegRow>({ title, sub, addLabel, base, queryKey, rows
             {!rows.length && <tr><td colSpan={columns.length + 1} className="py-4 text-center text-slate-500 dark:text-slate-400">None recorded yet.</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="mt-3 space-y-2 sm:hidden">
+        {rows.map((r) => (
+          <div key={r.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            {renderCard(r, { edit: () => setEditing(r), del: <DeleteBtn base={base} id={r.id} onDone={invalidate} /> })}
+          </div>
+        ))}
+        {!rows.length && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">None recorded yet.</p>}
       </div>
       {(creating || editing) && <Form base={base} row={editing} onClose={() => { setCreating(false); setEditing(null); }} onDone={invalidate} />}
     </Card>

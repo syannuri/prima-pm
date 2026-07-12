@@ -166,7 +166,8 @@ function AcceptanceSection({ projectId, canWrite }: { projectId: string; canWrit
         <Badge color={accepted > 0 ? 'green' : 'amber'}>{accepted > 0 ? `${accepted} acceptance${accepted > 1 ? 's' : ''} on record` : 'No acceptance yet'}</Badge>
       </div>
 
-      <div className="mt-3 overflow-x-auto">
+      {/* Desktop: full register. Mobile: stacked cards so Decision + Comments never clip off the right edge. */}
+      <div className="mt-3 hidden overflow-x-auto sm:block">
         <table className="prima-rows w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -193,6 +194,37 @@ function AcceptanceSection({ projectId, canWrite }: { projectId: string; canWrit
             {!acceptances.length && <tr><td colSpan={6} className="py-4 text-center text-slate-500 dark:text-slate-400">No sign-offs recorded yet.</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="mt-3 space-y-2 sm:hidden">
+        {acceptances.map((a) => (
+          <div key={a.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-medium text-slate-700 dark:text-slate-200">{a.party}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{a.signedByName ?? '—'}</p>
+              </div>
+              <Badge color={DECISION_COLOR[a.decision]}>{DECISION_LABEL[a.decision]}</Badge>
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Date</dt>
+                <dd className="text-slate-600 dark:text-slate-300">{formatDate(a.signedAt)}</dd>
+              </div>
+              {a.comments && (
+                <div className="col-span-2">
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Comments</dt>
+                  <dd className="whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300">{a.comments}</dd>
+                </div>
+              )}
+            </dl>
+            {canWrite && (
+              <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <DeleteBtn base={base} id={a.id} label={`${a.party} sign-off`} onDone={invalidate} kind="acceptance" />
+              </div>
+            )}
+          </div>
+        ))}
+        {!acceptances.length && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">No sign-offs recorded yet.</p>}
       </div>
 
       {creating && <AcceptanceForm base={base} onClose={() => setCreating(false)} onDone={invalidate} />}
