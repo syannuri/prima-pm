@@ -84,8 +84,9 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
       {canWrite && lines.length > 0 && (
         <Card>
           <SectionTitle sub="Record actual man-days spent by a resource on a given day.">Log man-days</SectionTitle>
-          <div className="grid gap-2 sm:grid-cols-[1fr_9rem_6rem_auto]">
-            <Select aria-label="Manpower line" value={costItemId} onChange={(e) => setCostItemId(e.target.value)}>
+          {/* Phones: date + man-days share a row (so the native date picker isn't full-width); resource, Log and note span both columns. */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_9rem_6rem_auto]">
+            <Select aria-label="Manpower line" className="col-span-2 sm:col-span-1" value={costItemId} onChange={(e) => setCostItemId(e.target.value)}>
               <option value="">— select a resource —</option>
               {lines.map((l) => (
                 <option key={l.id} value={l.id}>{l.resourceName}{l.taskName ? ` · ${l.taskName}` : ''}</option>
@@ -93,8 +94,8 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
             </Select>
             <Input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             <Input aria-label="Man-days" type="number" min={0} step="0.5" placeholder="man-days" value={mandays} onChange={(e) => setMandays(e.target.value)} />
-            <Button disabled={!canSubmit || add.isPending} onClick={() => add.mutate()}>{add.isPending ? 'Saving…' : '+ Log'}</Button>
-            <Input aria-label="Note" className="sm:col-span-4" placeholder="Note (optional) — what was done?" value={note} onChange={(e) => setNote(e.target.value)} />
+            <Button className="col-span-2 sm:col-span-1" disabled={!canSubmit || add.isPending} onClick={() => add.mutate()}>{add.isPending ? 'Saving…' : '+ Log'}</Button>
+            <Input aria-label="Note" className="col-span-2 sm:col-span-4" placeholder="Note (optional) — what was done?" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
         </Card>
       )}

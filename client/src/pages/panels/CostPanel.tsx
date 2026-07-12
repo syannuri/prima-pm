@@ -229,11 +229,12 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
         {!data.actualCosts.length && <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">No actual cost recorded yet.</div>}
       </div>
 
-      <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
+      {/* Phones: date + amount share a row (so the native date picker isn't full-width); description + button span both columns. */}
+      <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
         <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
         <MoneyInput aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
-        <Input aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <Button onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
+        <Input className="col-span-2 md:col-span-1" aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <Button className="col-span-2 md:col-span-1" onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
       </div>
     </Card>
   );
