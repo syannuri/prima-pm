@@ -27,15 +27,24 @@ export default function MoreMenu({ children }: { children: ReactNode }) {
   );
 }
 
-export function MenuItem({ onClick, disabled, danger, children }: { onClick: () => void; disabled?: boolean; danger?: boolean; children: ReactNode }) {
+export function MenuItem({ onClick, disabled, danger, indent, children }: { onClick: () => void; disabled?: boolean; danger?: boolean; indent?: boolean; children: ReactNode }) {
   return (
     <button
       role="menuitem"
       disabled={disabled}
       onClick={onClick}
-      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-800 ${danger ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}
+      className={`flex w-full items-center gap-2 py-2 pr-3 text-left text-sm transition disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-800 ${indent ? 'pl-7' : 'pl-3'} ${danger ? 'text-red-600 dark:text-red-400' : indent ? 'text-slate-500 dark:text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}
     >
       {children}
     </button>
   );
+}
+
+// A small non-interactive section label inside the menu.
+export function MenuHeader({ children }: { children: ReactNode }) {
+  return <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{children}</div>;
+}
+
+export function MenuDivider() {
+  return <div className="my-1 border-t border-slate-100 dark:border-slate-800" />;
 }

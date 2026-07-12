@@ -54,6 +54,7 @@ export default function MobileDashboard() {
   // Bookmarked projects (synced per-user via the server) float to the very top with an
   // amber highlight.
   const { pinned, toggle: togglePin } = useBookmarks();
+  const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
 
   if (isLoading) return <MobileDashboardSkeleton />;
   if (!data || data.totals.count === 0) return <Card><p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No projects in the portfolio yet.</p></Card>;
@@ -63,12 +64,19 @@ export default function MobileDashboard() {
   const status: PortfolioHealth = t.pv <= 0 ? 'NO_DATA' : t.spi >= 0.95 ? 'GREEN' : t.spi >= 0.85 ? 'AMBER' : 'RED';
   const cv = t.ev - t.ac;
   const isActive = (s: string) => s === 'IN_PROGRESS';
-  const projects = [...data.projects].sort((a, b) =>
+  const sorted = [...data.projects].sort((a, b) =>
     (Number(pinned.has(b.id)) - Number(pinned.has(a.id)))         // bookmarked first
     || (Number(isActive(b.status)) - Number(isActive(a.status)))  // then active (in-progress)
     || (RANK[a.health] - RANK[b.health])                          // then worst health
     || (a.spi - b.spi),
   );
+  // Filter chips: All / Active (not closed) / Closed.
+  const counts = {
+    all: data.projects.length,
+    active: data.projects.filter((p) => p.status !== 'CLOSED').length,
+    closed: data.projects.filter((p) => p.status === 'CLOSED').length,
+  };
+  const projects = sorted.filter((p) => filter === 'all' || (filter === 'active' ? p.status !== 'CLOSED' : p.status === 'CLOSED'));
 
   // Quick actions — route shortcuts most useful for PM/PMO on the go.
   // ("New project" lives on the floating action button, not here.)
@@ -121,9 +129,20 @@ export default function MobileDashboard() {
       <AwaitingClosure />
       <PendingApprovals />
 
-      {/* Projects — worst health first */}
+      {/* Projects — worst health first, filterable by lifecycle status */}
       <div>
-        <h3 className="mb-2 px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Projects</h3>
+        <div className="mb-2.5 flex items-center justify-between px-1">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Projects</h3>
+          <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+            {([['all', 'All'], ['active', 'Active'], ['closed', 'Closed']] as const).map(([key, label]) => (
+              <button key={key} onClick={() => { haptic(); setFilter(key); }}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${filter === key ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                {label} <span className="tabular-nums opacity-60">{counts[key]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {projects.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 py-6 text-center text-sm text-slate-400 dark:border-slate-700">No {filter !== 'all' ? filter : ''} projects.</p>}
         <div className="space-y-2.5">
           {projects.map((p, i) => {
             const ppct = Math.round(p.scheduleProgress * 100);

@@ -13,9 +13,10 @@ export default function SchedulePanel({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-5">
       <EvmHealth base={base} countLabel="leaf tasks" noBaselineHint="No schedule baseline set — capture one in the WBS section below to track finish variance." />
-      <WbsPanel projectId={projectId} />
-      <CriticalPathPanel projectId={projectId} />
-      <ManpowerSync rows={syncQ.data?.rows ?? []} />
+      {/* Anchor ids let the header "More → Jump to" menu deep-link to these sections. */}
+      <div id="section-wbs" className="scroll-mt-24"><WbsPanel projectId={projectId} /></div>
+      <div id="section-cpm" className="scroll-mt-24"><CriticalPathPanel projectId={projectId} /></div>
+      <div id="section-manpower" className="scroll-mt-24"><ManpowerSync rows={syncQ.data?.rows ?? []} /></div>
     </div>
   );
 }

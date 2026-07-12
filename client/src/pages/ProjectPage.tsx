@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -33,7 +33,7 @@ import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
 import LifecycleActions from '../components/LifecycleActions';
-import MoreMenu, { MenuItem } from '../components/MoreMenu';
+import MoreMenu, { MenuItem, MenuHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
@@ -46,6 +46,17 @@ export default function ProjectPage() {
   const { user } = useAuth();
   const canEdit = !!user && ['ADMIN', 'PMO'].includes(user.role); // mirrors EditProjectModal's gate
   const [tab, setTab] = useState<Tab | null>(null);
+  // "Jump to" (More menu) — switch tab and optionally deep-link to a section anchor within it.
+  const [jump, setJump] = useState<string | null>(null);
+  const goto = (t: Tab, sectionId?: string) => { setTab(t); setJump(sectionId ?? null); };
+  useEffect(() => {
+    if (!jump) return;
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setJump(null);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [jump, tab]);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
   const isMobile = useIsMobile();
   const [editOpen, setEditOpen] = useState(false);
@@ -123,18 +134,42 @@ export default function ProjectPage() {
               {/* Exports hidden on phones — download/print is a desktop task. */}
               {chartered && !isMobile && <MenuItem disabled={exporting !== null} onClick={() => exportReport('excel')}>⬇ {exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
               {chartered && !isMobile && <MenuItem disabled={exporting !== null} onClick={() => exportReport('pdf')}>⬇ {exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
+              {/* Jump to — deep-link to any tab (and to sections within Schedule). Handy on phones where the two-level tab bar scrolls. */}
+              <MenuDivider />
+              <MenuHeader>Jump to</MenuHeader>
+              {TAB_GROUPS.map((g) => {
+                const gTabs = g.tabs.filter((t) => tabs.includes(t));
+                if (!gTabs.length) return null;
+                return (
+                  <Fragment key={g.label}>
+                    {gTabs.map((t) => (
+                      <Fragment key={t}>
+                        <MenuItem onClick={() => goto(t)}>{t}</MenuItem>
+                        {t === 'Schedule' && (
+                          <>
+                            <MenuItem indent onClick={() => goto('Schedule', 'section-wbs')}>↳ WBS</MenuItem>
+                            <MenuItem indent onClick={() => goto('Schedule', 'section-cpm')}>↳ Critical Path (CPM)</MenuItem>
+                            <MenuItem indent onClick={() => goto('Schedule', 'section-manpower')}>↳ Manpower sync</MenuItem>
+                          </>
+                        )}
+                      </Fragment>
+                    ))}
+                  </Fragment>
+                );
+              })}
             </MoreMenu>
           </div>
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
+        {/* PM/Client/Sponsor line is desktop-only — phones keep the header tight (PM shows in the project cards / More menu). */}
+        <p className="mt-1 hidden flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400 sm:flex">
           {/* Phones show only the PM (the essential owner); Client/Sponsor are desktop-only to keep the header tidy. */}
           <span><span className="hidden sm:inline">Client: {project.clientName ?? '—'} · </span>PM: {project.pm?.name ?? '—'}<span className="hidden sm:inline"> · Sponsor: {project.sponsor ?? '—'}</span></span>
           <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
         </p>
         {(project.category || project.costBaselineIdr || project.totalRevenueIdr) && (
-          <div className="mt-1.5 flex flex-col items-start gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+          <div className="mt-1.5 hidden flex-col items-start gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
             {/* On phones only the category badge shows; the money breakdown lives in the Cost tab. */}
             {project.category && <Badge color="slate">{categoryLabel(project.category)}</Badge>}
             {project.costBaselineIdr && <span className="hidden sm:inline">Cost Baseline: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.costBaselineIdr)}</span></span>}
