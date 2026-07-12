@@ -98,6 +98,13 @@ export default function PortfolioSummary() {
     { label: 'On Progress', value: onProgress, color: PIE.amber },
     { label: 'Delay', value: delayed, color: PIE.red },
   ];
+  // Pie 3 — Schedule Status (by SPI health), the complement to the CPI pie.
+  const scheduleSlices: Slice[] = [
+    { label: 'On track', value: data.byHealth.GREEN ?? 0, color: PIE.green },
+    { label: 'At risk', value: data.byHealth.AMBER ?? 0, color: PIE.amber },
+    { label: 'Behind', value: data.byHealth.RED ?? 0, color: PIE.red },
+    { label: 'No data', value: data.byHealth.NO_DATA ?? 0, color: PIE.slate },
+  ];
 
   // PM/Finance donuts (with hover project lists), grouped by cost-health (CPI) and
   // schedule-health (SPI). Scoped to the caller's projects by the API already.
@@ -202,8 +209,9 @@ export default function PortfolioSummary() {
 
       {/* PMO dashboard — portfolio pie charts */}
       {showPies && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <PieChart title="Project Financial Status (by CPI)" data={financialSlices} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <PieChart title="Cost Status (by CPI)" data={financialSlices} />
+          <PieChart title="Schedule Status (by SPI)" data={scheduleSlices} />
           <PieChart title="Project Status" data={statusSlices} />
         </div>
       )}
