@@ -37,25 +37,37 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel }: {
   const noData = status === 'NO_DATA';
   const f = noData ? 0.5 : spiToF(spi);
 
-  // Needle sweep: animate from the dial's start to the target value when the gauge appears
-  // (and re-tween if the value changes), with an ease-out-back "settle" like a real
-  // speedometer. Honours prefers-reduced-motion.
+  // Needle animation: on first appearance run a car-dashboard "self-test" — the needle
+  // sweeps from the dial's start (min) all the way to max, holds briefly, then settles
+  // onto the actual value. Later value changes do a quick direct tween. Honours
+  // prefers-reduced-motion.
   const [displayF, setDisplayF] = useState(noData ? 0.5 : 0);
   const fromRef = useRef(noData ? 0.5 : 0);
+  const firstRef = useRef(true);
   useEffect(() => {
     const target = noData ? 0.5 : f;
     const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) { setDisplayF(target); fromRef.current = target; return; }
+    if (reduce || noData) { setDisplayF(target); fromRef.current = target; firstRef.current = false; return; }
+    const selfTest = firstRef.current;
+    firstRef.current = false;
     const from = fromRef.current;
-    const dur = 1150;
-    // easeOutBack — overshoots slightly then settles onto the target.
-    const ease = (x: number) => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+    const dur = selfTest ? 1900 : 750;
+    const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
+    const easeInOut = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const easeOutBack = (x: number) => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+    // Self-test trajectory: 0→max (sweep up), hold at max, then max→target (settle).
+    const UP = 0.4, HOLD = 0.52;
+    const value = (p: number) => {
+      if (!selfTest) return from + (target - from) * easeOutBack(p);
+      if (p <= UP) return easeOut(p / UP);                                  // min → max
+      if (p <= HOLD) return 1;                                             // hold at max
+      return 1 + easeInOut((p - HOLD) / (1 - HOLD)) * (target - 1);        // max → value
+    };
     let raf = 0; let startTs: number | undefined;
     const step = (ts: number) => {
       if (startTs === undefined) startTs = ts;
       const p = Math.min(1, (ts - startTs) / dur);
-      const v = from + (target - from) * ease(p);
-      setDisplayF(v);
+      setDisplayF(value(p));
       if (p < 1) raf = requestAnimationFrame(step);
       else fromRef.current = target;
     };
