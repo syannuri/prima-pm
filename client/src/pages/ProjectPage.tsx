@@ -129,23 +129,25 @@ export default function ProjectPage() {
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
-          <span>Client: {project.clientName ?? '—'} · PM: {project.pm?.name ?? '—'} · Sponsor: {project.sponsor ?? '—'}</span>
+          {/* Phones show only the PM (the essential owner); Client/Sponsor are desktop-only to keep the header tidy. */}
+          <span><span className="hidden sm:inline">Client: {project.clientName ?? '—'} · </span>PM: {project.pm?.name ?? '—'}<span className="hidden sm:inline"> · Sponsor: {project.sponsor ?? '—'}</span></span>
           <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
         </p>
         {(project.category || project.costBaselineIdr || project.totalRevenueIdr) && (
           <div className="mt-1.5 flex flex-col items-start gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+            {/* On phones only the category badge shows; the money breakdown lives in the Cost tab. */}
             {project.category && <Badge color="slate">{categoryLabel(project.category)}</Badge>}
-            {project.costBaselineIdr && <span>Cost Baseline: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.costBaselineIdr)}</span></span>}
+            {project.costBaselineIdr && <span className="hidden sm:inline">Cost Baseline: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.costBaselineIdr)}</span></span>}
             {project.totalRevenueIdr && (
               <>
                 <span aria-hidden className="hidden text-slate-300 dark:text-slate-600 sm:inline">·</span>
-                <span>Revenue: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.totalRevenueIdr)}</span></span>
+                <span className="hidden sm:inline">Revenue: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.totalRevenueIdr)}</span></span>
               </>
             )}
             {project.costBaselineIdr && project.totalRevenueIdr && (
               <>
                 <span aria-hidden className="hidden text-slate-300 dark:text-slate-600 sm:inline">·</span>
-                <span>Margin: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span></span>
+                <span className="hidden sm:inline">Margin: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span></span>
               </>
             )}
           </div>
