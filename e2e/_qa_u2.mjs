@@ -1,0 +1,18 @@
+import { chromium } from '@playwright/test';
+import { PrismaClient } from '/home/mamed/prima-pm/server/node_modules/@prisma/client/index.js';
+const OUT='/tmp/claude-0/-home-mamed/560838a1-f8a4-44df-9a90-820a4f1302be/scratchpad/qa';
+const PV='http://127.0.0.1:4200';
+const p=new PrismaClient();const a=await p.user.findFirst({where:{role:'ADMIN',isActive:true}});
+const {signAccessToken}=await import('/home/mamed/prima-pm/server/dist/lib/jwt.js');
+const tk=signAccessToken({sub:a.id,role:a.role,email:a.email,tv:a.tokenVersion});await p.$disconnect();
+const b=await chromium.launch();
+const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+await ctx.addCookies([{name:'prima_at',value:tk,url:PV,sameSite:'Strict',secure:false}]);
+const pg=await ctx.newPage();
+await pg.goto(`${PV}/admin/users`,{waitUntil:'domcontentloaded'});
+await pg.getByText('Reset password',{exact:false}).first().waitFor({timeout:8000}).catch(()=>{});
+await pg.waitForTimeout(800);
+await pg.getByText('User management',{exact:false}).first().scrollIntoViewIfNeeded().catch(()=>{});
+await pg.evaluate(()=>window.scrollBy(0,260));await pg.waitForTimeout(400);
+await pg.screenshot({path:`${OUT}/rest-users2.png`});
+await b.close();

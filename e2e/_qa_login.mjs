@@ -1,0 +1,13 @@
+import { chromium } from '@playwright/test';
+const OUT='/tmp/claude-0/-home-mamed/560838a1-f8a4-44df-9a90-820a4f1302be/scratchpad/qa';
+const PV='http://127.0.0.1:4200';
+const b=await chromium.launch();
+const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+const pg=await ctx.newPage();
+const errs=[];pg.on('console',m=>{if(m.type()==='error')errs.push(m.text().slice(0,100));});
+pg.on('pageerror',e=>errs.push('PE:'+e.message.slice(0,100)));
+await pg.goto(`${PV}/login`,{waitUntil:'domcontentloaded'});await pg.waitForTimeout(1800);
+const o=await pg.evaluate(()=>{const d=document.documentElement,bd=document.body,vw=innerWidth,sw=Math.max(d.scrollWidth,bd.scrollWidth);let w=0,t='';for(const el of document.querySelectorAll('body *')){const r=el.getBoundingClientRect();if(r.width>0&&r.right>vw+1&&r.right-vw>w){w=Math.round(r.right-vw);t=el.tagName;}}return{over:Math.max(0,sw-vw),worst:w,tag:t};});
+console.log('login over=',o.over,'worst=',o.worst,o.tag,'errs=',errs.length,errs[0]||'');
+await pg.screenshot({path:`${OUT}/rest-login.png`});
+await b.close();

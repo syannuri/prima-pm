@@ -43,20 +43,28 @@ export default function AdminUsersPage() {
         {isLoading ? (
           <div className="flex justify-center py-10"><Spinner /></div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="prima-rows w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-                  <th className="py-2">Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {data?.users.map((u) => (
-                  <UserRow key={u.id} u={u} isSelf={u.id === user.id} onChange={invalidate} onReset={() => setResetFor(u)} onEdit={() => setEditFor(u)} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Desktop: full table. Mobile: stacked cards so Email + Created + row actions never clip off-screen. */}
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="prima-rows w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+                    <th className="py-2">Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data?.users.map((u) => (
+                    <UserRow key={u.id} u={u} isSelf={u.id === user.id} onChange={invalidate} onReset={() => setResetFor(u)} onEdit={() => setEditFor(u)} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="space-y-2 sm:hidden">
+              {data?.users.map((u) => (
+                <UserCard key={u.id} u={u} isSelf={u.id === user.id} onChange={invalidate} onReset={() => setResetFor(u)} onEdit={() => setEditFor(u)} />
+              ))}
+            </div>
+          </>
         )}
       </Card>
 
@@ -66,7 +74,8 @@ export default function AdminUsersPage() {
   );
 }
 
-function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSelf: boolean; onChange: () => void; onReset: () => void; onEdit: () => void }) {
+// Shared role/activate mutations for a user row, used by both the desktop row and the mobile card.
+function useUserActions(u: AdminUser, onChange: () => void) {
   const toast = useToast();
   const confirm = useConfirm();
   const [err, setErr] = useState('');
@@ -86,6 +95,54 @@ function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSel
     }
     setActive.mutate(!u.isActive);
   };
+  return { err, setRole, setActive, toggleActive };
+}
+
+function UserCard({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSelf: boolean; onChange: () => void; onReset: () => void; onEdit: () => void }) {
+  const { err, setRole, setActive, toggleActive } = useUserActions(u, onChange);
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-700 dark:text-slate-200">{u.name}{isSelf && <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">(you)</span>}</p>
+          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{u.email}</p>
+        </div>
+        <Badge color={u.isActive ? 'green' : 'slate'}>{u.isActive ? 'Active' : 'Inactive'}</Badge>
+      </div>
+      <div className="mt-2 grid grid-cols-2 items-start gap-x-3 gap-y-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+        <div>
+          <span className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Role</span>
+          <Select
+            value={u.role}
+            disabled={isSelf || setRole.isPending}
+            title={isSelf ? 'You cannot change your own role' : 'Change role'}
+            onChange={(e) => setRole.mutate(e.target.value as Role)}
+            className="mt-0.5 !py-1 text-xs"
+          >
+            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          </Select>
+          {err && <span className="mt-1 block text-xs text-red-600">{err}</span>}
+        </div>
+        <div>
+          <span className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Created</span>
+          <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{formatDate(u.createdAt)}</p>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+        <button onClick={onEdit} className="text-xs font-medium text-brand-600 hover:underline">Edit</button>
+        <button onClick={onReset} className="text-xs font-medium text-brand-600 hover:underline">Reset password</button>
+        {!isSelf && (
+          <button onClick={toggleActive} disabled={setActive.isPending} className={`text-xs font-medium hover:underline ${u.isActive ? 'text-red-500' : 'text-green-600'}`}>
+            {u.isActive ? 'Deactivate' : 'Activate'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSelf: boolean; onChange: () => void; onReset: () => void; onEdit: () => void }) {
+  const { err, setRole, setActive, toggleActive } = useUserActions(u, onChange);
 
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 align-middle">
