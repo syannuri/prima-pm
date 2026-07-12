@@ -23,6 +23,16 @@ const RAG: Record<PortfolioHealth, { c: string; dot: string; label: string }> = 
 };
 const RANK: Record<string, number> = { RED: 0, AMBER: 1, GREEN: 2, NO_DATA: 3 };
 
+// Lifecycle status → a friendly label + badge colours. "Active" (IN_PROGRESS) is where
+// EVM health applies; CLOSED is a calm neutral (it's done, not "on track").
+const STATUS_META: Record<string, { label: string; cls: string }> = {
+  DRAFT: { label: 'Draft', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  CHARTERED: { label: 'Chartered', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300' },
+  IN_PROGRESS: { label: 'Active', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
+  ON_HOLD: { label: 'On hold', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
+  CLOSED: { label: 'Closed', cls: 'bg-slate-200 text-slate-500 dark:bg-slate-700/70 dark:text-slate-400' },
+};
+
 // A phone-tailored portfolio dashboard (PM & PMO): a glanceable, card-first view —
 // gradient health hero, KPI tiles, the "needs attention" queues, and project cards
 // with progress bars. Rendered instead of the desktop stack on < sm screens.
@@ -130,27 +140,33 @@ export default function MobileDashboard() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-slate-800 dark:text-slate-100">{p.name}</div>
-                    <div className="text-[11px] text-slate-400">{p.code}{p.pm ? ` · ${p.pm}` : ''}</div>
+                    <div className="mt-0.5 truncate text-[11px] text-slate-400">{p.code}{p.pm ? ` · ${p.pm}` : ''}</div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  {/* Bookmark toggle — pin a project to the top; preventDefault so it doesn't navigate. */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); haptic(); togglePin(p.id); }}
+                    aria-label={pinned.has(p.id) ? 'Hapus bookmark' : 'Bookmark proyek'}
+                    className={`-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-lg transition ${pinned.has(p.id) ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500 dark:text-slate-600 dark:hover:text-amber-400'}`}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill={pinned.has(p.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                    </svg>
+                  </button>
+                </div>
+                {/* Lifecycle status (always) + EVM health (only while active — a closed project isn't "on track"). */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${(STATUS_META[p.status] ?? STATUS_META.DRAFT).cls}`}>
+                    {(STATUS_META[p.status] ?? STATUS_META.DRAFT).label}
+                  </span>
+                  {isActive(p.status) && (
                     <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ backgroundColor: `${rag.c}1a`, color: rag.c }}>
                       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: rag.c }} />{rag.label}
                     </span>
-                    {/* Bookmark toggle — pin a project to the top; preventDefault so it doesn't navigate. */}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); haptic(); togglePin(p.id); }}
-                      aria-label={pinned.has(p.id) ? 'Hapus bookmark' : 'Bookmark proyek'}
-                      className={`-mr-1 grid h-7 w-7 place-items-center rounded-lg transition ${pinned.has(p.id) ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500 dark:text-slate-600 dark:hover:text-amber-400'}`}
-                    >
-                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill={pinned.has(p.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                      </svg>
-                    </button>
-                  </div>
+                  )}
                 </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-brand-500" style={{ width: `${ppct}%` }} /></div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full" style={{ width: `${ppct}%`, backgroundColor: isActive(p.status) ? rag.dot : '#94a3b8' }} /></div>
                   <span className="w-9 shrink-0 text-right text-xs font-medium tabular-nums text-slate-500 dark:text-slate-400">{ppct}%</span>
                 </div>
                 <div className="mt-2 flex items-center gap-4 text-xs tabular-nums text-slate-500 dark:text-slate-400">
