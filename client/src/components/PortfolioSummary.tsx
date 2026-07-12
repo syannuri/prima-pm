@@ -38,6 +38,9 @@ export default function PortfolioSummary() {
   // data.projects is already scoped to owned projects by the API for a PM).
   const showFinancials = showPies || isPM;
   const [statusDate, setStatusDate] = useState(formatDateInput(new Date()));
+  // Per-project detail tables are tabbed (EVM default) to cut scroll. EVM is always
+  // available; Resource load is PMO-only, Cost & revenue is PMO+PM.
+  const [tableTab, setTableTab] = useState<'evm' | 'resource' | 'cost'>('evm');
   const { data, isLoading } = useQuery({
     queryKey: ['portfolio', statusDate],
     queryFn: () => api.get<Summary>(`/portfolio/summary?statusDate=${statusDate}`),
@@ -220,8 +223,28 @@ export default function PortfolioSummary() {
         </Card>
       )}
 
+      {/* Per-project detail — tabbed (EVM · Resource load · Cost & revenue) to cut scroll. */}
+      {(() => {
+        const tabs = ([
+          { key: 'evm', label: 'EVM detail', show: true },
+          { key: 'resource', label: 'Resource load', show: showPies },
+          { key: 'cost', label: 'Cost & revenue', show: showFinancials },
+        ] as const).filter((tb) => tb.show);
+        if (tabs.length < 2) return null;
+        return (
+          <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/60">
+            {tabs.map((tb) => (
+              <button key={tb.key} onClick={() => setTableTab(tb.key)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${tableTab === tb.key ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+                {tb.label}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* PMO dashboard — resource / manpower summary per project */}
-      {showPies && (
+      {showPies && tableTab === 'resource' && (
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resource load by project</span>
@@ -300,7 +323,7 @@ export default function PortfolioSummary() {
       )}
 
       {/* Cost & revenue per project — PMO (portfolio) + PM (their own assigned projects) */}
-      {showFinancials && (
+      {showFinancials && tableTab === 'cost' && (
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cost &amp; revenue by project</span>
@@ -392,7 +415,8 @@ export default function PortfolioSummary() {
         </Card>
       )}
 
-      {/* Per-project EVM table (desktop) / card list (mobile) */}
+      {/* Per-project EVM table (desktop) / card list (mobile) — the default tab. */}
+      {tableTab === 'evm' && (
       <Card>
         <div className="hidden overflow-x-auto sm:block">
           <table className="prima-rows w-full text-sm tabular-nums [&_th]:px-3 [&_td]:px-3 [&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0">
@@ -512,6 +536,7 @@ export default function PortfolioSummary() {
           })}
         </div>
       </Card>
+      )}
     </div>
   );
 }
