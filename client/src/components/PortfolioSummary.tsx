@@ -133,8 +133,8 @@ export default function PortfolioSummary() {
   return (
     <div className="space-y-3">
       <div className="flex items-end justify-end">
-        {/* Full width on phones (no longer a cramped right-pushed box); compact & right-aligned on sm+. */}
-        <div className="w-full sm:w-44">
+        {/* Compact date field, right-aligned (the native picker shouldn't span the row). */}
+        <div className="w-40 sm:w-44">
           <Field label="Status date (EVM)">
             <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} />
           </Field>

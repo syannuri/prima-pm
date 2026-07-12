@@ -59,7 +59,7 @@ export default function EvmTrendPanel({ projectId }: { projectId: string }) {
         <SectionTitle sub="A recorded history of this project's earned value. Capture the status on a date to freeze PV/EV/AC/CPI/SPI — the S-curve and index trend build up over time.">EVM Trend</SectionTitle>
         <label className="text-xs text-slate-500 dark:text-slate-400">
           <span className="mr-2 uppercase tracking-wide">Status date</span>
-          <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="!w-auto !py-1.5" />
+          <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="!w-40 !py-1.5" />
         </label>
       </div>
 
