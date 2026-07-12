@@ -305,7 +305,8 @@ export default function DashboardPage() {
                         <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
                       </div>
                       <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                        <div className="h-full rounded-full bg-brand-500 transition-[width] duration-500" style={{ width: `${pct}%` }} />
+                        {/* Green while active, calm grey once closed/inactive — matches the mobile dashboard bar (no coral on a neutral metric). */}
+                        <div className={`h-full rounded-full transition-[width] duration-500 ${p.status === 'IN_PROGRESS' ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   )}
