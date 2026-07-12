@@ -240,7 +240,7 @@ prima-pm/
 
 ## 📝 Notes
 - `server/.env`, `backups/`, `server/uploads/`, `node_modules/` and `dist/` are git-ignored — never commit secrets.
-- See `docs/DEPLOYMENT.md` for the full production deployment runbook (VPS/cloud or LAN), `docs/BLUEPRINT.md` for the as-built architecture & module blueprint (v1.0), `docs/PROJECT-LIFECYCLE.md` for the end-to-end project flow (creation → close, with diagrams), `docs/ERD.md` for the data model, and `docs/AUDIT-2026-06-29.md` for the engineering audit & roadmap.
+- See `docs/DEPLOYMENT.md` for the full production deployment runbook (VPS/cloud or LAN), `docs/BLUEPRINT.md` for the as-built architecture & module blueprint (v1.0), `docs/PROJECT-LIFECYCLE.md` for the end-to-end project flow (creation → close, with diagrams), `docs/ERD.md` for the data model, `docs/AUDIT-2026-06-29.md` for the engineering audit & roadmap, and [`docs/dashboard-redesign.md`](docs/dashboard-redesign.md) for the portfolio-dashboard UX redesign (before/after).
 
 ---
 
