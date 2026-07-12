@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { PortfolioSummary as Summary } from '../api/types';
+import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
+import HealthGauge from './HealthGauge';
 import { Badge, Card, Field, Input, Skeleton } from './ui';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
@@ -68,6 +69,12 @@ export default function PortfolioSummary() {
   if (!data || data.totals.count === 0) return null;
   const t = data.totals;
   const spiBehind = t.spi > 0 && t.spi < 1;
+  // Portfolio schedule-health status for the speedometer (same thresholds as the mobile hero).
+  const gaugeStatus: PortfolioHealth = t.pv <= 0 ? 'NO_DATA' : t.spi >= 0.95 ? 'GREEN' : t.spi >= 0.85 ? 'AMBER' : 'RED';
+  const HEALTH_META: Record<PortfolioHealth, { dot: string; label: string }> = {
+    GREEN: { dot: '#22c55e', label: 'On track' }, AMBER: { dot: '#f59e0b', label: 'At risk' },
+    RED: { dot: '#ef4444', label: 'Behind' }, NO_DATA: { dot: '#94a3b8', label: 'No data' },
+  };
 
   // Pie 1 — Project Financial Status (by cost health / CPI).
   const finCount = { GREEN: 0, AMBER: 0, RED: 0, NO_DATA: 0 } as Record<string, number>;
@@ -138,6 +145,28 @@ export default function PortfolioSummary() {
           <Field label="Status date (EVM)">
             <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} />
           </Field>
+        </div>
+      </div>
+
+      {/* Portfolio-health speedometer — the same 3D gauge as the mobile hero, on a premium dark panel. */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 p-5 text-white shadow-lg ring-1 ring-white/10">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: HEALTH_META[gaugeStatus].dot, opacity: 0.18 }} />
+        <div className="relative flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-12">
+          <div className="w-full max-w-[300px]">
+            <div className="mb-1 text-center text-[11px] font-semibold uppercase tracking-wide text-white/70">Portfolio health</div>
+            <HealthGauge spi={t.spi} cpi={t.cpi} pct={Math.round(t.scheduleProgress * 100)} status={gaugeStatus} statusLabel={HEALTH_META[gaugeStatus].label} />
+          </div>
+          {/* Health breakdown by project count. */}
+          <div className="flex flex-wrap justify-center gap-2 sm:flex-col sm:gap-2.5">
+            <div className="mb-0.5 hidden text-[11px] font-semibold uppercase tracking-wide text-white/50 sm:block">{t.count} projects</div>
+            {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
+              <span key={h} className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm ring-1 ring-white/10">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: HEALTH_META[h].dot }} />
+                <span className="text-white/80">{HEALTH_META[h].label}</span>
+                <span className="font-bold tabular-nums">{data.byHealth[h]}</span>
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
