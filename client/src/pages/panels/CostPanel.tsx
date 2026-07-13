@@ -76,7 +76,7 @@ export default function CostPanel({ projectId }: { projectId: string }) {
         <BaselineLock projectId={projectId} />
       </div>
       {/* Baseline summary */}
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Direct" value={formatIdr(b?.directTotal)} />
         <Stat label="Indirect" value={formatIdr(b?.indirectTotal)} />
         <Stat label="Contingency" value={formatIdr(b?.contingencyReserve)} hint="from Risk EMV" />
