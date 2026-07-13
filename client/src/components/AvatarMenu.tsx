@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLang } from '../context/LanguageContext';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 const initials = (name?: string) =>
@@ -27,16 +28,30 @@ export default function AvatarMenu() {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const dark = theme === 'dark';
+  const { lang } = useLang();
+  const id = lang === 'id';
   const { canInstall, promptInstall } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+  // Labels follow the selected language (like the dashboard) so the account
+  // menu isn't a half-English/half-Indonesian mix when the toggle is flipped.
+  const t = {
+    account: id ? 'Akun & pengaturan' : 'Account & settings',
+    settings: id ? 'Pengaturan' : 'Settings',
+    manual: id ? 'Panduan & bantuan' : 'Manual & help',
+    users: id ? 'Pengguna' : 'Users',
+    install: id ? 'Pasang aplikasi' : 'Install app',
+    light: id ? 'Mode terang' : 'Light mode',
+    darkMode: id ? 'Mode gelap' : 'Dark mode',
+    logout: id ? 'Keluar' : 'Logout',
+  };
   const itemCls = 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800';
 
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label="Account & settings"
+        aria-label={t.account}
         className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-xs font-bold text-white shadow-sm ring-1 ring-black/5 transition active:scale-95"
       >
         {initials(user?.name)}
@@ -53,22 +68,22 @@ export default function AvatarMenu() {
               </div>
             </div>
             <nav className="p-1.5 text-sm">
-              <Link to="/settings" onClick={close} className={itemCls}><Ico d={I.gear} /> Settings</Link>
-              <Link to="/manual" onClick={close} className={itemCls}><Ico d={I.help} /> Manual &amp; help</Link>
-              {user?.role === 'ADMIN' && <Link to="/admin/users" onClick={close} className={itemCls}><Ico d={I.users} /> Users</Link>}
+              <Link to="/settings" onClick={close} className={itemCls}><Ico d={I.gear} /> {t.settings}</Link>
+              <Link to="/manual" onClick={close} className={itemCls}><Ico d={I.help} /> {t.manual}</Link>
+              {user?.role === 'ADMIN' && <Link to="/admin/users" onClick={close} className={itemCls}><Ico d={I.users} /> {t.users}</Link>}
               {canInstall && (
-                <button onClick={() => { close(); promptInstall(); }} className={`w-full ${itemCls}`}><Ico d={I.install} /> Pasang aplikasi</button>
+                <button onClick={() => { close(); promptInstall(); }} className={`w-full ${itemCls}`}><Ico d={I.install} /> {t.install}</button>
               )}
               {/* Theme toggle — stays open so the change is visible and reversible in place. */}
               <button onClick={toggle} className={`w-full justify-between ${itemCls}`}>
-                <span className="flex items-center gap-3"><Ico d={dark ? I.sun : I.moon} /> {dark ? 'Mode terang' : 'Mode gelap'}</span>
+                <span className="flex items-center gap-3"><Ico d={dark ? I.sun : I.moon} /> {dark ? t.light : t.darkMode}</span>
                 <span className={`relative h-5 w-9 shrink-0 rounded-full transition ${dark ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
                   <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${dark ? 'left-[1.125rem]' : 'left-0.5'}`} />
                 </span>
               </button>
             </nav>
             <div className="border-t border-slate-100 p-1.5 dark:border-slate-800">
-              <button onClick={() => { close(); logout(); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"><Ico d={I.logout} /> Logout</button>
+              <button onClick={() => { close(); logout(); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"><Ico d={I.logout} /> {t.logout}</button>
             </div>
           </div>
         </>

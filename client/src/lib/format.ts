@@ -31,6 +31,15 @@ export function formatIdrShort(value: number | string | null | undefined): strin
   return `Rp ${n.toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
 }
 
+// Group a raw digit string as IDR for display *inside a text input* ("Rp 1.500.000").
+// Returns '' for empty so placeholders still show. Pair with a digits-only onChange
+// (`e.target.value.replace(/\D/g, '')`) so the stored value stays Number()-parseable.
+export function formatIdrInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  return `Rp ${Number(digits).toLocaleString('id-ID')}`;
+}
+
 export function formatNum(value: number | string | null | undefined, digits = 2): string {
   const n = value == null ? 0 : Number(value);
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: digits }).format(n);

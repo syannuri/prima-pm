@@ -5,7 +5,7 @@ import type { PersonnelRole, RateCard, ResourceItem, ResourceType, User } from '
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
-import { formatIdr } from '../lib/format';
+import { formatIdr, formatIdrInput } from '../lib/format';
 import { fieldState } from '../lib/formValidation';
 
 const isPositiveNum = (v: string) => v.trim() !== '' && Number(v) > 0;
@@ -114,7 +114,7 @@ function RateCardCard({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolea
         <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Cost / manday</p>
         {canEdit ? (
           <div className="mt-1 flex items-center gap-2">
-            <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} state={fieldState(dirty, rateOk)} className="!py-1 text-sm" />
+            <Input inputMode="numeric" value={formatIdrInput(rate)} onChange={(e) => setRate(e.target.value.replace(/\D/g, ''))} state={fieldState(dirty, rateOk)} className="!py-1 text-sm" />
             {dirty && <button onClick={() => save.mutate()} disabled={save.isPending || !rateOk} className="shrink-0 text-xs font-medium text-brand-600 hover:underline disabled:opacity-40">Save</button>}
           </div>
         ) : (
@@ -142,7 +142,7 @@ function RateCardRow({ rc, canEdit, onChange }: { rc: RateCard; canEdit: boolean
       <td className="text-right">
         {canEdit ? (
           <div className="flex items-center justify-end gap-1">
-            <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} state={fieldState(dirty, rateOk)} className="!w-36 !py-1 text-right text-xs" />
+            <Input inputMode="numeric" value={formatIdrInput(rate)} onChange={(e) => setRate(e.target.value.replace(/\D/g, ''))} state={fieldState(dirty, rateOk)} className="!w-36 !py-1 text-right text-xs" />
             {dirty && <button onClick={() => save.mutate()} disabled={save.isPending || !rateOk} className="text-xs text-brand-600 hover:underline disabled:opacity-40">Save</button>}
           </div>
         ) : formatIdr(Number(rc.unitCostPerManday))}
@@ -180,7 +180,7 @@ function AddRateCard({ onChange }: { onChange: () => void }) {
       </Field>
       <Field label="Level (optional)"><Input value={level} onChange={(e) => setLevel(e.target.value)} placeholder="e.g. Senior" /></Field>
       <Field label="Cost / manday (IDR)">
-        <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 1500000" state={fieldState(!!rate, rateOk)} />
+        <Input inputMode="numeric" value={formatIdrInput(rate)} onChange={(e) => setRate(e.target.value.replace(/\D/g, ''))} placeholder="e.g. Rp 1.500.000" state={fieldState(!!rate, rateOk)} />
         {!!rate && !rateOk && <span className="mt-1 block text-xs text-red-500">Must be greater than 0</span>}
       </Field>
       <div className="flex items-end pt-6">
@@ -416,7 +416,7 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
             </Select>
           </Field>
           <Field label="Cost / manday (IDR)">
-            <Input type="number" min={0} value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder={pickedRate ? `from rate card: ${formatIdr(Number(pickedRate.unitCostPerManday))}` : 'override / custom'} state={fieldState(unitCost.trim() !== '', costOk)} />
+            <Input inputMode="numeric" value={formatIdrInput(unitCost)} onChange={(e) => setUnitCost(e.target.value.replace(/\D/g, ''))} placeholder={pickedRate ? `from rate card: ${formatIdr(Number(pickedRate.unitCostPerManday))}` : 'override / custom'} state={fieldState(unitCost.trim() !== '', costOk)} />
             {unitCost.trim() !== '' && !costOk && <span className="mt-1 block text-xs text-red-500">Must be 0 or more</span>}
           </Field>
           <Field label="Capacity / day (mandays)">
