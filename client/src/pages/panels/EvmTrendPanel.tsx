@@ -79,7 +79,7 @@ export default function EvmTrendPanel({ projectId }: { projectId: string }) {
 
       {/* KPI strip (latest capture) */}
       {latest && (
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi label="Latest CPI" value={latest.cpi ? formatNum(latest.cpi, 2) : '—'} sub={prev ? `${arrow(dir(prev.cpi, latest.cpi))} vs prev` : 'first capture'} tone={latest.cpi > 0 && latest.cpi < 1 ? 'red' : latest.cpi >= 1 ? 'green' : undefined} />
           <Kpi label="Latest SPI" value={latest.spi ? formatNum(latest.spi, 2) : '—'} sub={prev ? `${arrow(dir(prev.spi, latest.spi))} vs prev` : 'first capture'} tone={latest.spi > 0 && latest.spi < 1 ? 'red' : latest.spi >= 1 ? 'green' : undefined} />
           <Kpi label="% complete" value={`${Math.round(latest.weightedProgress * 100)}%`} sub={`EV ${formatIdr(latest.ev)}`} />

@@ -35,7 +35,7 @@ export default function AgileReports({ sprints, items, snapshots }: { sprints: S
       </div>
 
       {/* Sprint summary */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Committed" value={`${committed} pts`} />
         <Stat label="Completed" value={`${done} pts`} sub={`${pct}%`} />
         <Stat label="Remaining" value={`${remaining} pts`} warn={remaining > 0 && sprint?.status === 'CLOSED'} />

@@ -68,7 +68,7 @@ export default function EvmHealth({
             <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${showAll ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           {showAll && (
-            <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               <Metric label="PV" value={formatIdr(e.pv)} title="Planned Value (BCWS)" />
               <Metric label="EV" value={formatIdr(e.ev)} title="Earned Value (BCWP)" />
               <Metric label="AC" value={formatIdr(e.ac)} title="Actual Cost (ACWP)" />
