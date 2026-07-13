@@ -33,9 +33,10 @@ import ReassignPm from '../components/ReassignPm';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
 import LifecycleActions from '../components/LifecycleActions';
-import MoreMenu, { MenuItem, MenuHeader, MenuDivider } from '../components/MoreMenu';
+import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
 type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
@@ -59,6 +60,7 @@ export default function ProjectPage() {
   }, [jump, tab]);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
   const isMobile = useIsMobile();
+  const { lang } = useLang();
   const [editOpen, setEditOpen] = useState(false);
 
   const exportReport = async (kind: 'excel' | 'pdf') => {
@@ -129,22 +131,25 @@ export default function ProjectPage() {
             {/* Primary stage action stays prominent; secondary actions tuck into "⋯ More". */}
             <LifecycleActions project={project} />
             <CloseProjectModal project={project} />
-            <MoreMenu>
-              {canEdit && <MenuItem onClick={() => setEditOpen(true)}>✏️ Edit details</MenuItem>}
+            <MoreMenu title={project.name}>
+              {canEdit && <MenuHeader>{lang === 'id' ? 'Aksi' : 'Actions'}</MenuHeader>}
+              {canEdit && <MenuItem icon="✏️" onClick={() => setEditOpen(true)}>{lang === 'id' ? 'Ubah detail' : 'Edit details'}</MenuItem>}
               {/* Exports hidden on phones — download/print is a desktop task. */}
-              {chartered && !isMobile && <MenuItem disabled={exporting !== null} onClick={() => exportReport('excel')}>⬇ {exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
-              {chartered && !isMobile && <MenuItem disabled={exporting !== null} onClick={() => exportReport('pdf')}>⬇ {exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
-              {/* Jump to — deep-link to any tab (and to sections within Schedule). Handy on phones where the two-level tab bar scrolls. */}
-              <MenuDivider />
-              <MenuHeader>Jump to</MenuHeader>
+              {chartered && !isMobile && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('excel')}>{exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
+              {chartered && !isMobile && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('pdf')}>{exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
+              {/* Jump to — deep-link to any tab (and to sections within Schedule), grouped by PMBOK
+                  phase. Handy on phones where the two-level tab bar scrolls. */}
+              {canEdit && <MenuDivider />}
+              <MenuHeader>{lang === 'id' ? 'Lompat ke' : 'Jump to'}</MenuHeader>
               {TAB_GROUPS.map((g) => {
                 const gTabs = g.tabs.filter((t) => tabs.includes(t));
                 if (!gTabs.length) return null;
                 return (
                   <Fragment key={g.label}>
+                    <MenuGroupHeader>{lang === 'id' ? (GROUP_LABEL_ID[g.label] ?? g.label) : g.label}</MenuGroupHeader>
                     {gTabs.map((t) => (
                       <Fragment key={t}>
-                        <MenuItem onClick={() => goto(t)}>{t}</MenuItem>
+                        <MenuItem icon={TAB_ICONS[t]} active={t === activeTab} onClick={() => goto(t)}>{t}</MenuItem>
                         {t === 'Schedule' && (
                           <>
                             <MenuItem indent onClick={() => goto('Schedule', 'section-wbs')}>↳ WBS</MenuItem>
@@ -253,6 +258,26 @@ const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: 'Closing', tabs: ['Closeout'] },
   { label: 'Audit', tabs: ['Audit'] },
 ];
+
+// Emoji glyphs for the "Jump to" list — quick visual anchors, consistent with the app's
+// existing emoji usage (no icon-lib dependency).
+const TAB_ICONS: Record<Tab, string> = {
+  Charter: '📋', 'Kick-Off': '🎯', Stakeholders: '👥', Requirements: '📑',
+  Schedule: '📆', Agile: '🏃', Cost: '💰', Procurement: '🛒', Risk: '⚠️',
+  Timesheet: '⏱️', RAID: '🗂️', Issues: '🐞', UAT: '✅', 'Change Req': '🔁',
+  Forecast: '📈', 'EVM Trend': '📊', Closeout: '🏁', Audit: '🔎',
+};
+
+// Indonesian names for the PMBOK process-group headers (menu follows the language toggle;
+// the English `label` above stays the id used by the level-1 tab bar).
+const GROUP_LABEL_ID: Record<string, string> = {
+  Initiating: 'Inisiasi',
+  Planning: 'Perencanaan',
+  Executing: 'Pelaksanaan',
+  'Monitoring & Controlling': 'Pemantauan & Pengendalian',
+  Closing: 'Penutupan',
+  Audit: 'Audit',
+};
 
 function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; activeTab: Tab; changeCount: number; onSelect: (t: Tab) => void }) {
   const groups = TAB_GROUPS
