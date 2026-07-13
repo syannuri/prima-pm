@@ -122,6 +122,7 @@ export default function ExecutiveReport() {
                   <div><div className="text-slate-400">Done</div><div className="text-slate-600 dark:text-slate-300">{pct}%</div></div>
                   <div><div className="text-slate-400">Finish</div><div className={v != null && v > 0 ? 'text-red-600 dark:text-red-400' : v != null && v < 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-400'}>{v == null ? '—' : v === 0 ? 'on plan' : `${v > 0 ? '+' : ''}${v}d`}</div></div>
                 </div>
+                <ProgressBar status={r.status} pct={pct} className="mt-2 w-full" />
               </div>
             );
           })}
@@ -147,7 +148,7 @@ function Row({ r }: { r: PortfolioRow }) {
       <td className={`px-3 py-2 text-right tabular-nums ${r.ac > 0 && r.cpi < 0.95 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>{r.ac > 0 ? r.cpi.toFixed(2) : '—'}</td>
       <td className="px-3 py-2">
         <div className="flex items-center gap-2">
-          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className={`h-full rounded-full ${r.status === 'IN_PROGRESS' ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`} style={{ width: `${pct}%` }} /></div>
+          <ProgressBar status={r.status} pct={pct} className="w-20" />
           <span className="w-8 shrink-0 text-right text-xs tabular-nums text-slate-500 dark:text-slate-400">{pct}%</span>
         </div>
       </td>
@@ -155,6 +156,22 @@ function Row({ r }: { r: PortfolioRow }) {
         {v == null ? '—' : v === 0 ? 'on plan' : `${v > 0 ? '+' : ''}${v}d`}
       </td>
     </tr>
+  );
+}
+
+// Progress bar shared by the desktop table + the mobile card so both read identically:
+// green while the project is live (IN_PROGRESS), calm grey once it's inactive/closed.
+function barTitle(status: string, pct: number) {
+  return status === 'IN_PROGRESS'
+    ? `Green = active project · ${pct}% complete`
+    : `Grey = ${status.replace('_', ' ').toLowerCase()} (not active) · ${pct}% complete`;
+}
+
+function ProgressBar({ status, pct, className = '' }: { status: string; pct: number; className?: string }) {
+  return (
+    <div title={barTitle(status, pct)} className={`h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800 ${className}`}>
+      <div className={`h-full rounded-full ${status === 'IN_PROGRESS' ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} style={{ width: `${pct}%` }} />
+    </div>
   );
 }
 
