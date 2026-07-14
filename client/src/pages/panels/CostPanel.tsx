@@ -103,6 +103,7 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [category, setCategory] = useState<'DIRECT' | 'INDIRECT'>('DIRECT');
 
   // Pull EV/AC/CPI so the user can see how Actual Cost relates to Earned Value.
   const scheduleBase = base.replace(/\/cost$/, '/schedule');
@@ -132,7 +133,7 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
   };
 
   const add = useMutation({
-    mutationFn: () => api.post(`${base}/actuals`, { date, amount: Number(amount), description: description || undefined }),
+    mutationFn: () => api.post(`${base}/actuals`, { date, amount: Number(amount), description: description || undefined, category }),
     onSuccess: () => { setAmount(''); setDescription(''); onChange(); toast.success('Actual cost recorded'); },
     onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to record actual cost'),
   });
@@ -196,7 +197,9 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
               <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{new Date(a.date).toLocaleDateString('en-GB')}</td>
               <td>
                 {a.description ?? '—'}
-                {a.description === LABOUR_AC_DESC && <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">auto · timesheet</span>}
+                {a.description === LABOUR_AC_DESC
+                  ? <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">auto · timesheet</span>
+                  : <CatBadge category={a.category} />}
               </td>
               <td className="text-right font-medium">{formatIdr(a.amount)}</td>
               <td className="text-right">
@@ -217,7 +220,9 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
               <div className="min-w-0">
                 <div className="text-slate-700 dark:text-slate-200">
                   {a.description ?? '—'}
-                  {a.description === LABOUR_AC_DESC && <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">auto · timesheet</span>}
+                  {a.description === LABOUR_AC_DESC
+                    ? <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">auto · timesheet</span>
+                    : <CatBadge category={a.category} />}
                 </div>
                 <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{new Date(a.date).toLocaleDateString('en-GB')}</div>
               </div>
@@ -230,13 +235,27 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
       </div>
 
       {/* Phones: date + amount share a row (so the native date picker isn't full-width); description + button span both columns. */}
-      <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-5">
         <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
         <MoneyInput aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
+        <Select className="col-span-2 md:col-span-1" aria-label="Cost category" title="Which budget this spend draws down" value={category} onChange={(e) => setCategory(e.target.value as 'DIRECT' | 'INDIRECT')}>
+          <option value="DIRECT">Direct</option>
+          <option value="INDIRECT">Indirect</option>
+        </Select>
         <Input className="col-span-2 md:col-span-1" aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
         <Button className="col-span-2 md:col-span-1" onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
       </div>
     </Card>
+  );
+}
+
+// Direct/Indirect tag on an Actual Cost entry — mirrors the budget it draws down.
+function CatBadge({ category }: { category: 'DIRECT' | 'INDIRECT' }) {
+  const indirect = category === 'INDIRECT';
+  return (
+    <span className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${indirect ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'}`}>
+      {indirect ? 'Indirect' : 'Direct'}
+    </span>
   );
 }
 

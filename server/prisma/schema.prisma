@@ -75,6 +75,14 @@ enum PersonnelRole {
   PROJECT_PERSONNEL
 }
 
+// Splits an Actual Cost entry into the direct/indirect budget it draws down, so
+// "remaining Direct vs Indirect" can be computed (AC is otherwise uncategorised).
+// Labour-from-timesheet AC is always DIRECT.
+enum CostCategory {
+  DIRECT
+  INDIRECT
+}
+
 enum IndirectCostType {
   TRANSPORTATION
   ACCOMMODATION
@@ -482,6 +490,9 @@ model ActualCostEntry {
   date        DateTime
   amount      Decimal  @db.Decimal(18, 2)
   description String?
+  // Which budget this spend draws down (direct vs indirect). Defaults to DIRECT:
+  // existing rows + labour-from-timesheet are direct; the AC form can set INDIRECT.
+  category    CostCategory @default(DIRECT)
   recordedBy  String?
   createdAt   DateTime @default(now())
 

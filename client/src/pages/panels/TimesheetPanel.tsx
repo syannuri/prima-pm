@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
+import type { CostSummary } from '../../api/types';
 import { Button, Card, Input, Select, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../context/AuthContext';
-import { formatNum, formatDateInput } from '../../lib/format';
+import { formatNum, formatDateInput, formatIdr } from '../../lib/format';
 
 interface TimesheetLine {
   id: string;
@@ -34,6 +35,10 @@ interface TimesheetData {
 const effClass = (e: number | null) =>
   e == null ? 'text-slate-400' : e >= 1 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400';
 
+// Remaining is only meaningful once a budget exists; colour it red once spend exceeds budget.
+const remClass = (rem: number) =>
+  rem < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200';
+
 // Timesheet: log ACTUAL man-days consumed against a manpower line, and compare
 // against earned man-days (progress × plan). Efficiency = earned ÷ consumed — a
 // labour CPI: < 1 means more effort spent than the delivered work is worth.
@@ -46,6 +51,12 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['timesheet', projectId],
     queryFn: () => api.get<TimesheetData>(`/projects/${projectId}/timesheet`),
+  });
+  // Cost baseline + actuals — for the "remaining Direct/Indirect budget" context above the form.
+  // Shares the ['cost'] key with the Cost tab, so logging man-days (which invalidates it) refreshes both.
+  const { data: cost } = useQuery({
+    queryKey: ['cost', projectId],
+    queryFn: () => api.get<CostSummary>(`/projects/${projectId}/cost`),
   });
 
   const [costItemId, setCostItemId] = useState('');
@@ -77,9 +88,53 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
   const { lines, entries, totals } = data;
   const canSubmit = costItemId && date && Number(mandays) > 0;
   const totalEff = totals.consumedMandays > 0 ? totals.earnedMandays / totals.consumedMandays : null;
+  const remainingMandays = totals.planMandays - totals.consumedMandays;
+
+  // Remaining budget, split Direct vs Indirect. Budgets come from the frozen cost baseline;
+  // actuals are split server-side by their category (labour is always direct; the labour
+  // sentinel AC entry isn't double-counted).
+  const directBudget = Number(cost?.baseline?.directTotal ?? 0);
+  const indirectBudget = Number(cost?.baseline?.indirectTotal ?? 0);
+  const directActual = cost?.directActual ?? 0;
+  const indirectActual = cost?.indirectActual ?? 0;
+  const hasBudget = !!cost?.baseline && (directBudget > 0 || indirectBudget > 0);
 
   return (
     <div className="space-y-4">
+      {/* Pre-entry context: remaining budget (Direct/Indirect) + man-day headroom, shown BEFORE
+          you log time (logging updates AC via "Fill AC from timesheet" on the Cost tab). */}
+      {lines.length > 0 && (
+        <Card>
+          <SectionTitle sub="Where the budget and effort stand before you log — so you can see the remaining headroom.">
+            Remaining budget &amp; man-days
+          </SectionTitle>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {hasBudget ? (
+              <>
+                <RemainingCost title="Direct" budget={directBudget} actual={directActual} actualHint="labour + direct spend" />
+                <RemainingCost title="Indirect" budget={indirectBudget} actual={indirectActual} actualHint="indirect spend" />
+              </>
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-200 p-3 text-sm text-slate-500 sm:col-span-2 dark:border-slate-700 dark:text-slate-400">
+                No cost baseline yet — set Direct/Indirect budgets in the Cost tab to see remaining budget here.
+              </div>
+            )}
+            {/* Man-day headroom across all teams (per-team detail is in the effort table below). */}
+            <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Man-days (all teams)</div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-sm text-slate-500 dark:text-slate-400">Remaining</span>
+                <span className={`text-lg font-semibold tabular-nums ${remClass(remainingMandays)}`}>{formatNum(remainingMandays, 1)}</span>
+              </div>
+              <div className="mt-1 flex justify-between text-xs text-slate-400">
+                <span>Plan {formatNum(totals.planMandays, 0)}</span>
+                <span>Logged {formatNum(totals.consumedMandays, 1)}</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Log form first — the primary action (matches My Timesheet). */}
       {canWrite && lines.length > 0 && (
         <Card>
@@ -121,6 +176,7 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
                   <th className="px-2 text-right">Plan</th>
                   <th className="px-2 text-right">Earned</th>
                   <th className="px-2 text-right">Logged</th>
+                  <th className="px-2 text-right">Remaining</th>
                   <th className="px-2 text-right">Efficiency</th>
                 </tr>
               </thead>
@@ -132,6 +188,7 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
                     <td className="px-2 text-right tabular-nums">{formatNum(l.planMandays, 0)}</td>
                     <td className="px-2 text-right tabular-nums text-slate-500">{formatNum(l.earnedMandays, 1)} <span className="text-xs text-slate-400">({l.progressPct}%)</span></td>
                     <td className="px-2 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.consumedMandays, 1)}</td>
+                    <td className={`px-2 text-right tabular-nums font-medium ${remClass(l.planMandays - l.consumedMandays)}`}>{formatNum(l.planMandays - l.consumedMandays, 1)}</td>
                     <td className={`px-2 text-right font-semibold tabular-nums ${effClass(l.efficiency)}`}>{l.efficiency != null ? l.efficiency.toFixed(2) : '—'}</td>
                   </tr>
                 ))}
@@ -143,6 +200,7 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
                   <td className="px-2 text-right tabular-nums">{formatNum(totals.planMandays, 0)}</td>
                   <td className="px-2 text-right tabular-nums">{formatNum(totals.earnedMandays, 1)}</td>
                   <td className="px-2 text-right tabular-nums">{formatNum(totals.consumedMandays, 1)}</td>
+                  <td className={`px-2 text-right tabular-nums ${remClass(remainingMandays)}`}>{formatNum(remainingMandays, 1)}</td>
                   <td className={`px-2 text-right tabular-nums ${effClass(totalEff)}`}>{totalEff != null ? totalEff.toFixed(2) : '—'}</td>
                 </tr>
               </tfoot>
@@ -162,10 +220,11 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
                     <div className={`font-semibold tabular-nums ${effClass(l.efficiency)}`}>{l.efficiency != null ? l.efficiency.toFixed(2) : '—'}</div>
                   </div>
                 </div>
-                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <div><div className="text-slate-400">Plan</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.planMandays, 0)}</div></div>
                   <div><div className="text-slate-400">Earned</div><div className="tabular-nums text-slate-600 dark:text-slate-300">{formatNum(l.earnedMandays, 1)} <span className="text-slate-400">({l.progressPct}%)</span></div></div>
                   <div><div className="text-slate-400">Logged</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.consumedMandays, 1)}</div></div>
+                  <div><div className="text-slate-400">Remaining</div><div className={`tabular-nums font-medium ${remClass(l.planMandays - l.consumedMandays)}`}>{formatNum(l.planMandays - l.consumedMandays, 1)}</div></div>
                 </div>
               </div>
             ))}
@@ -174,10 +233,11 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
                 <span className="font-semibold text-slate-700 dark:text-slate-200">Total</span>
                 <span className={`font-semibold tabular-nums ${effClass(totalEff)}`}>Eff {totalEff != null ? totalEff.toFixed(2) : '—'}</span>
               </div>
-              <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
+              <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
                 <div><span className="text-slate-400">Plan </span><span className="tabular-nums font-medium">{formatNum(totals.planMandays, 0)}</span></div>
                 <div><span className="text-slate-400">Earned </span><span className="tabular-nums">{formatNum(totals.earnedMandays, 1)}</span></div>
                 <div><span className="text-slate-400">Logged </span><span className="tabular-nums font-medium">{formatNum(totals.consumedMandays, 1)}</span></div>
+                <div><span className="text-slate-400">Remaining </span><span className={`tabular-nums font-medium ${remClass(remainingMandays)}`}>{formatNum(remainingMandays, 1)}</span></div>
               </div>
             </div>
           </div>
@@ -202,6 +262,25 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+// One budget line: Direct or Indirect — budget, actual so far, and the remaining headroom
+// (red once actual exceeds budget). Money is IDR-formatted.
+function RemainingCost({ title, budget, actual, actualHint }: { title: string; budget: number; actual: number; actualHint: string }) {
+  const remaining = budget - actual;
+  return (
+    <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{title}</div>
+      <div className="mt-1 flex items-baseline justify-between">
+        <span className="text-sm text-slate-500 dark:text-slate-400">Remaining</span>
+        <span className={`text-lg font-semibold tabular-nums ${remClass(remaining)}`}>{formatIdr(remaining)}</span>
+      </div>
+      <div className="mt-1 space-y-0.5 text-xs text-slate-400">
+        <div className="flex justify-between"><span>Budget</span><span className="tabular-nums">{formatIdr(budget)}</span></div>
+        <div className="flex justify-between"><span>Actual <span className="text-slate-300 dark:text-slate-600">({actualHint})</span></span><span className="tabular-nums">{formatIdr(actual)}</span></div>
+      </div>
     </div>
   );
 }

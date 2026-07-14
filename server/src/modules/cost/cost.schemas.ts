@@ -95,6 +95,8 @@ export const actualCostSchema = z.object({
   date: z.coerce.date(),
   amount: z.coerce.number().positive(),
   description: z.string().max(300).optional(),
+  // Which budget this spend draws down. Defaults to DIRECT when omitted.
+  category: z.enum(['DIRECT', 'INDIRECT']).optional(),
 });
 
 export type ActualCostInput = z.infer<typeof actualCostSchema>;

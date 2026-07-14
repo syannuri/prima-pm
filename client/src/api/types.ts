@@ -252,6 +252,7 @@ export interface ActualCostEntry {
   date: string;
   amount: string;
   description: string | null;
+  category: 'DIRECT' | 'INDIRECT';
 }
 
 export interface CostSummary {
@@ -265,6 +266,10 @@ export interface CostSummary {
   // Does NOT feed AC/EVM — AC stays manual.
   labourActual: number;
   labourConsumedMandays: number;
+  // Actual spend split by the budget it draws down (labour is always direct). Used for the
+  // "remaining Direct / Indirect" summary; sums don't double-count the labour sentinel entry.
+  directActual: number;
+  indirectActual: number;
 }
 
 export type CRStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';

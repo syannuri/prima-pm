@@ -338,6 +338,7 @@ export async function addActualCost(projectId: string, input: ActualCostInput, a
       date: input.date,
       amount: input.amount,
       description: input.description ?? null,
+      category: input.category ?? 'DIRECT',
       recordedBy: actorId,
     },
   });
@@ -387,7 +388,7 @@ export async function fillActualCostFromTimesheet(projectId: string, actorId: st
   const result = await prisma.$transaction(async (tx) => {
     const removed = await tx.actualCostEntry.deleteMany({ where: { projectId, description: LABOUR_AC_DESC } });
     const entry = labourActual > 0
-      ? await tx.actualCostEntry.create({ data: { projectId, date: entryDate, amount: labourActual, description: LABOUR_AC_DESC, recordedBy: actorId } })
+      ? await tx.actualCostEntry.create({ data: { projectId, date: entryDate, amount: labourActual, description: LABOUR_AC_DESC, category: 'DIRECT', recordedBy: actorId } })
       : null;
     return { entry, replaced: removed.count };
   });
@@ -430,6 +431,19 @@ export async function getCostSummary(projectId: string) {
     labourActual += consumed * dec(d.unitCostPerManday);
   }
 
+  // Actual spend split by the budget it draws down. Labour is added via labourActual
+  // (the live timesheet figure), so the labour sentinel AC entry is skipped here to
+  // avoid double-counting even after "Fill AC from timesheet". Everything else is
+  // attributed by its category (legacy rows default to DIRECT in the schema).
+  let directMaterialActual = 0;
+  let indirectActual = 0;
+  for (const a of actualCosts) {
+    if (a.description === LABOUR_AC_DESC) continue;
+    if (a.category === 'INDIRECT') indirectActual += dec(a.amount);
+    else directMaterialActual += dec(a.amount);
+  }
+  const directActual = labourActual + directMaterialActual;
+
   return {
     directCosts,
     indirectCosts,
@@ -439,5 +453,7 @@ export async function getCostSummary(projectId: string) {
     actualCostTotal,
     labourActual: Math.round(labourActual * 100) / 100,
     labourConsumedMandays: Math.round(labourConsumedMandays * 100) / 100,
+    directActual: Math.round(directActual * 100) / 100,
+    indirectActual: Math.round(indirectActual * 100) / 100,
   };
 }
