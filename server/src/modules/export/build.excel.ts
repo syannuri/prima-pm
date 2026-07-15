@@ -94,6 +94,25 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
     row.getCell(4).numFmt = IDR;
   });
 
+  // Budget vs actual, split by the budget the spend draws down (matches the Cost/Timesheet
+  // "Sisa Direct/Indirect" cards). Remaining = budget − actual (can go negative on overrun).
+  co.addRow([]);
+  const dBudget = num(b?.directTotal);
+  const iBudget = num(b?.indirectTotal);
+  const dActual = num(data.cost.directActual);
+  const iActual = num(data.cost.indirectActual);
+  styleHeader(co.addRow(['Budget vs Actual', 'Budget (IDR)', 'Actual (IDR)', 'Remaining (IDR)']));
+  const bvaRows: [string, number, number, number][] = [
+    ['Direct (labour + material)', dBudget, dActual, dBudget - dActual],
+    ['Indirect', iBudget, iActual, iBudget - iActual],
+    ['Total', dBudget + iBudget, dActual + iActual, dBudget + iBudget - dActual - iActual],
+  ];
+  bvaRows.forEach(([label, bud, act, rem]) => {
+    const row = co.addRow([label, bud, act, rem]);
+    row.getCell(1).font = { bold: label === 'Total' };
+    [2, 3, 4].forEach((ci) => { row.getCell(ci).numFmt = IDR; });
+  });
+
   // --- Risk ---
   const ri = wb.addWorksheet('Risk');
   ri.columns = [

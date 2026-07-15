@@ -119,6 +119,25 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
     ],
   );
 
+  // Budget vs actual, split by the budget the spend draws down (matches the Cost/Timesheet
+  // "Sisa Direct/Indirect" cards). Direct actual = labour (from timesheets) + direct-category
+  // AC; Indirect actual = indirect-category AC. Remaining = budget − actual (can go negative).
+  const dBudget = num(b?.directTotal);
+  const iBudget = num(b?.indirectTotal);
+  const dActual = num(data.cost.directActual);
+  const iActual = num(data.cost.indirectActual);
+  table(
+    [
+      { title: 'Budget vs Actual', w: 131 }, { title: 'Budget', w: 128, align: 'right' },
+      { title: 'Actual', w: 128, align: 'right' }, { title: 'Remaining', w: 128, align: 'right' },
+    ],
+    [
+      ['Direct (labour + material)', formatIdr(dBudget), formatIdr(dActual), formatIdr(dBudget - dActual)],
+      ['Indirect', formatIdr(iBudget), formatIdr(iActual), formatIdr(iBudget - iActual)],
+      ['Total', formatIdr(dBudget + iBudget), formatIdr(dActual + iActual), formatIdr(dBudget + iBudget - dActual - iActual)],
+    ],
+  );
+
   // ---------- Risk ----------
   heading('3. Risk Management');
   table(
