@@ -350,10 +350,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
         </div>
       ) : (
-        <>
-        {/* Desktop: tree table + Gantt timeline. Mobile (< sm): card list below (the Gantt
-            column + Start/Finish/Budget/Var/Actions don't fit a phone, so they'd scroll off). */}
-        <div className="hidden overflow-x-auto sm:block">
+        <div className="overflow-x-auto">
+          {/* One scrollable table for every viewport — on phones swipe left/right to reach the
+              Start/Finish/Budget/Var/Actions columns and the Gantt timeline (WBS renders as the
+              Gantt/table view on mobile, not cards). */}
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-2 [&>th]:pr-3">
@@ -361,16 +361,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 <th className="w-12">WBS</th>
                 <th className="min-w-[14rem]">Task</th>
                 <th title="Owner (PIC) responsible for the task">Owner</th>
-                <th className="hidden text-right sm:table-cell">Start</th>
-                <th className="hidden text-right sm:table-cell">Finish</th>
-                <th className="hidden text-right sm:table-cell">Dur</th>
-                <th className="hidden text-right sm:table-cell" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
+                <th className="text-right">Start</th>
+                <th className="text-right">Finish</th>
+                <th className="text-right">Dur</th>
+                <th className="text-right" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
                 <th className="text-right">% </th>
                 <th>Status</th>
-                <th className="hidden text-right sm:table-cell" title="Finish variance vs baseline (days)">Var</th>
-                {canEdit && <th className="hidden text-right sm:table-cell">Actions</th>}
+                <th className="text-right" title="Finish variance vs baseline (days)">Var</th>
+                {canEdit && <th className="text-right">Actions</th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
-                <th className="hidden sm:table-cell">
+                <th>
                   <div className="relative h-4" style={{ width: axis?.width }}>
                     {axis?.ticks.map((t) => (
                       <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
@@ -411,18 +411,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
                         <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
                       </span>
-                      {/* Phones: the Start/Finish columns are desktop-only, so show the schedule dates inline under the task. */}
-                      {/* Phones: the Start/Finish columns are desktop-only, so show the dates inline under the task (with a calendar icon so they're clearly visible). */}
-                      <span className="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-medium tabular-nums text-brand-600 dark:text-brand-400 sm:hidden" style={{ paddingLeft: `${depth * 18 + 20}px` }}>
-                        <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 opacity-80" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
-                        {node.isMilestone || r.start === r.end ? formatDate(new Date(r.start)) : <>{formatDate(new Date(r.start))} <span className="text-slate-400 dark:text-slate-500">→</span> {formatDate(new Date(r.end))}</>}
-                      </span>
                     </td>
                     <td><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></td>
-                    <td className="hidden whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400 sm:table-cell">{formatDate(new Date(r.start))}</td>
-                    <td className="hidden whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400 sm:table-cell">{formatDate(new Date(r.end))}</td>
-                    <td className="hidden text-right tabular-nums text-xs text-slate-500 dark:text-slate-400 sm:table-cell">{r.dur}d</td>
-                    <td className={`hidden text-right tabular-nums text-xs sm:table-cell ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
+                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.start))}</td>
+                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.end))}</td>
+                    <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
+                    <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
                       {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
                     </td>
                     <td className="text-right">
@@ -441,7 +435,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     <td><Badge color={st.color}>{st.label}</Badge></td>
-                    <td className="hidden text-right tabular-nums text-xs sm:table-cell">
+                    <td className="text-right tabular-nums text-xs">
                       {varDays == null ? (
                         <span className="text-slate-300 dark:text-slate-600">—</span>
                       ) : (
@@ -451,13 +445,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     {canEdit && (
-                      <td className="hidden whitespace-nowrap text-right text-xs sm:table-cell">
+                      <td className="whitespace-nowrap text-right text-xs">
                         <button onClick={() => setForm({ parentId: node.id })} className="text-brand-600 hover:underline" title="Add subtask">+ Sub</button>
                         <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400">Edit</button>
                         <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
                       </td>
                     )}
-                    <td className="hidden sm:table-cell">
+                    <td>
                       <div className="relative h-6" style={{ width: axis?.width }}>
                         {/* month/period gridlines + today marker for orientation */}
                         {axis?.ticks.filter((t) => t.major).map((t) => (
@@ -494,86 +488,6 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </tbody>
           </table>
         </div>
-
-        {/* Mobile card list — one card per task, tree depth shown via left indentation. */}
-        <div className="space-y-2 sm:hidden">
-          {rows.map(({ node, depth, wbs }) => {
-            const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null };
-            const st = statusOf(r.pct);
-            const varDays = r.baseEnd != null ? Math.round((r.end - r.baseEnd) / day) : null;
-            const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.picResource || node.pic);
-            const isOpen = expanded.has(node.id);
-            const togglingId = progress.isPending && progress.variables?.id === node.id;
-            return (
-              <div key={node.id} className="rounded-xl border border-slate-200 dark:border-slate-800" style={{ marginLeft: Math.min(depth, 4) * 12 }}>
-                <div className="p-3">
-                  <div className="flex items-start gap-2">
-                    <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{wbs}</span>
-                        {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
-                        <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
-                      </div>
-                      <span className="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-medium tabular-nums text-brand-600 dark:text-brand-400">
-                        <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 opacity-80" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
-                        {node.isMilestone || r.start === r.end ? formatDate(new Date(r.start)) : <>{formatDate(new Date(r.start))} <span className="text-slate-400 dark:text-slate-500">→</span> {formatDate(new Date(r.end))}</>}
-                      </span>
-                    </div>
-                    <Badge color={st.color}>{st.label}</Badge>
-                  </div>
-                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
-                    <div className="col-span-2"><dt className="text-slate-500 dark:text-slate-400">Owner</dt><dd className="text-slate-700 dark:text-slate-200"><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></dd></div>
-                    <div>
-                      <dt className="text-slate-500 dark:text-slate-400">% complete</dt>
-                      <dd className="mt-0.5">
-                        {canEdit && !r.isParent ? (
-                          <input
-                            type="number" min={0} max={100} defaultValue={node.progressPct} key={node.progressPct}
-                            aria-label={`Percent complete for ${node.name}`}
-                            onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            className="w-16 rounded border border-slate-300 bg-white px-1 py-0.5 text-right tabular-nums dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                          />
-                        ) : (
-                          <span className={`tabular-nums ${r.isParent ? 'text-slate-500 dark:text-slate-400' : 'text-slate-700 dark:text-slate-200'}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>{r.pct}%{r.isParent && ' ∑'}</span>
-                        )}
-                      </dd>
-                    </div>
-                    <div><dt className="text-slate-500 dark:text-slate-400">Duration</dt><dd className="tabular-nums text-slate-700 dark:text-slate-200">{r.dur}d</dd></div>
-                    <div><dt className="text-slate-500 dark:text-slate-400">Budget</dt><dd className="tabular-nums text-slate-700 dark:text-slate-200">{r.budget > 0 ? formatIdrShort(r.budget) : '—'}</dd></div>
-                    <div>
-                      <dt className="text-slate-500 dark:text-slate-400">Finish var.</dt>
-                      <dd className="tabular-nums">
-                        {varDays == null ? <span className="text-slate-400 dark:text-slate-500">—</span> : (
-                          <span className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}>{varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}</span>
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-                {(canEdit || hasDict) && (
-                  <div className="flex items-center gap-3 border-t border-slate-100 px-3 py-2 text-xs dark:border-slate-800">
-                    <button onClick={() => toggle(node.id)} className={hasDict ? 'font-medium text-brand-600' : 'text-slate-400 dark:text-slate-500'}>{isOpen ? '▾ Hide details' : 'ⓘ Details'}</button>
-                    {canEdit && (
-                      <div className="ml-auto flex items-center gap-3">
-                        <button onClick={() => setForm({ parentId: node.id })} className="text-brand-600 hover:underline">+ Sub</button>
-                        <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="text-slate-500 hover:underline dark:text-slate-400">Edit</button>
-                        <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true })) del.mutate(node.id); }} className="text-red-500 hover:underline">Del</button>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {isOpen && (
-                  <div className="border-t border-slate-100 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-800/30">
-                    <DictionaryView node={node} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        </>
       )}
 
       {del.isError && <p className="mt-2 text-sm text-red-600">{(del.error as Error).message}</p>}
