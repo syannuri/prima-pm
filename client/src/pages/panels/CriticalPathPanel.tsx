@@ -32,7 +32,8 @@ export default function CriticalPathPanel({ projectId }: { projectId: string }) 
             <Stat label="Has slack" value={String(cpm.tasks.filter((t) => !t.critical).length)} sub="off the path" />
           </div>
 
-          <div className="mt-4 overflow-x-auto">
+          {/* Desktop: full network table. Mobile (< sm): card list below. */}
+          <div className="mt-4 hidden overflow-x-auto sm:block">
             <table className="prima-rows w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -62,6 +63,32 @@ export default function CriticalPathPanel({ projectId }: { projectId: string }) 
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile card list — same rows, so the Early/Late/Float columns don't scroll off-screen. */}
+          <div className="mt-4 space-y-2 sm:hidden">
+            {cpm.tasks.map((t) => (
+              <div key={t.id} className={`rounded-xl border p-3 ${t.critical ? 'border-brand-300 bg-brand-50/40 dark:border-brand-800 dark:bg-brand-900/10' : 'border-slate-200 dark:border-slate-800'}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-baseline gap-1.5">
+                    <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{t.wbsCode}</span>
+                    <span className={t.critical ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'}>
+                      {t.critical && <span className="mr-1 text-brand-500" title="On the critical path">▸</span>}{t.name}
+                    </span>
+                  </div>
+                  {t.critical ? <Badge color="coral">Critical</Badge> : <span className="text-xs text-slate-400">—</span>}
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
+                  <div><dt className="text-slate-500 dark:text-slate-400">Duration</dt><dd className="tabular-nums text-slate-700 dark:text-slate-200">{t.duration}d</dd></div>
+                  <div>
+                    <dt className="text-slate-500 dark:text-slate-400">Float</dt>
+                    <dd className={`tabular-nums font-medium ${t.critical ? 'text-brand-600 dark:text-brand-400' : t.totalFloat <= 2 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}>{t.totalFloat}d</dd>
+                  </div>
+                  <div><dt className="text-slate-500 dark:text-slate-400">Early (ES–EF)</dt><dd className="tabular-nums text-slate-600 dark:text-slate-300">d{t.es}–d{t.ef}</dd></div>
+                  <div><dt className="text-slate-500 dark:text-slate-400">Late (LS–LF)</dt><dd className="tabular-nums text-slate-600 dark:text-slate-300">d{t.ls}–d{t.lf}</dd></div>
+                </dl>
+              </div>
+            ))}
           </div>
           <p className="mt-2 text-xs text-slate-400">Days are network offsets from the earliest start (t=0), computed from durations &amp; dependency logic — independent of the calendar plan.</p>
         </>
