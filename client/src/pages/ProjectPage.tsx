@@ -114,6 +114,10 @@ export default function ProjectPage() {
   // available near the end but is no longer the default landing tab.
   const activeTab: Tab = tab ?? (chartered ? tabs[0] : 'Charter');
 
+  // Shared pill style for the compact header meta chips (add the display util per use so
+  // the conditionally-hidden chips can toggle with `hidden sm:inline-flex`).
+  const chipCls = 'items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+
   return (
     <div className="space-y-5">
       <div>
@@ -167,31 +171,30 @@ export default function ProjectPage() {
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
-        {/* PM/Client/Sponsor line is desktop-only — phones keep the header tight (PM shows in the project cards / More menu). */}
-        <p className="mt-1 hidden flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400 sm:flex">
-          {/* Phones show only the PM (the essential owner); Client/Sponsor are desktop-only to keep the header tidy. */}
-          <span><span className="hidden sm:inline">Client: {project.clientName ?? '—'} · </span>PM: {project.pm?.name ?? '—'}<span className="hidden sm:inline"> · Sponsor: {project.sponsor ?? '—'}</span></span>
-          <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
-        </p>
-        {(project.category || project.costBaselineIdr || project.totalRevenueIdr) && (
-          <div className="mt-1.5 hidden flex-col items-start gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-            {/* On phones only the category badge shows; the money breakdown lives in the Cost tab. */}
-            {project.category && <Badge color="slate">{categoryLabel(project.category)}</Badge>}
-            {project.costBaselineIdr && <span className="hidden sm:inline">Cost Baseline: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.costBaselineIdr)}</span></span>}
-            {project.totalRevenueIdr && (
-              <>
-                <span aria-hidden className="hidden text-slate-300 dark:text-slate-600 sm:inline">·</span>
-                <span className="hidden sm:inline">Revenue: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(project.totalRevenueIdr)}</span></span>
-              </>
-            )}
-            {project.costBaselineIdr && project.totalRevenueIdr && (
-              <>
-                <span aria-hidden className="hidden text-slate-300 dark:text-slate-600 sm:inline">·</span>
-                <span className="hidden sm:inline">Margin: <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span></span>
-              </>
-            )}
-          </div>
-        )}
+        {/* Compact meta chips — one light row replacing the old PM/Client/Sponsor + financials
+            lines. Cost Baseline & Revenue aren't duplicated here (they live in the Cost tab);
+            only the exec-level Margin is surfaced. Client/Sponsor hide on phones to stay tight. */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className={`inline-flex ${chipCls}`}>
+            <span aria-hidden>👤</span>
+            <span className="font-medium text-slate-700 dark:text-slate-200">{project.pm?.name ?? '—'}</span>
+            <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
+          </span>
+          {project.clientName && (
+            <span className={`hidden sm:inline-flex ${chipCls}`}><span aria-hidden>🏢</span>{project.clientName}</span>
+          )}
+          {project.sponsor && (
+            <span className={`hidden sm:inline-flex ${chipCls}`}><span aria-hidden>🎯</span>{project.sponsor}</span>
+          )}
+          {project.costBaselineIdr != null && project.totalRevenueIdr != null && (
+            <span className={`inline-flex ${chipCls}`}>
+              <span aria-hidden>💰</span>
+              <span className="text-slate-400 dark:text-slate-500">Margin</span>
+              <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span>
+            </span>
+          )}
+          {project.category && <Badge color="slate">{categoryLabel(project.category)}</Badge>}
+        </div>
         {project.status === 'ON_HOLD' && (
           <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
             ⏸ On hold{project.onHoldReason && <> · <span className="italic">“{project.onHoldReason}”</span></>}
