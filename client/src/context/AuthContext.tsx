@@ -6,6 +6,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  guestRegister: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -40,6 +41,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   };
 
+  // Self-service guest signup — same cookie flow as login (server auto-logs-in on success).
+  const guestRegister = async (name: string, email: string, password: string) => {
+    const res = await api.post<{ user: User }>('/auth/guest/register', { name, email, password });
+    tokenStore.clear();
+    setUser(res.user);
+  };
+
   const logout = () => {
     // Best-effort server-side revocation (bumps tokenVersion so the tokens can't be
     // reused elsewhere); clear locally regardless of the network result.
@@ -48,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, login, guestRegister, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {

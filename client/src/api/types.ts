@@ -5,7 +5,8 @@ export type Role =
   | 'FINANCE'
   | 'RISK_OFFICER'
   | 'TEAM_MEMBER'
-  | 'VIEWER';
+  | 'VIEWER'
+  | 'GUEST';
 
 export interface User {
   id: string;
@@ -115,6 +116,8 @@ export interface Project {
   totalRevenueIdr: string | null;
   status: ProjectStatus;
   pmUserId: string | null;
+  // When set, this is a personal (guest) project owned by that user — sandboxed + self-governed.
+  personalOwnerId?: string | null;
   closedAt?: string | null;
   closureNote?: string | null;
   onHoldReason?: string | null;

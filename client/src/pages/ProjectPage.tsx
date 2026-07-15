@@ -36,6 +36,7 @@ import LifecycleActions from '../components/LifecycleActions';
 import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
+import { canGovernProject } from '../lib/perms';
 import { useLang } from '../context/LanguageContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
@@ -45,7 +46,6 @@ export default function ProjectPage() {
   const { projectId = '' } = useParams();
   const toast = useToast();
   const { user } = useAuth();
-  const canEdit = !!user && ['ADMIN', 'PMO'].includes(user.role); // mirrors EditProjectModal's gate
   const [tab, setTab] = useState<Tab | null>(null);
   // "Jump to" (More menu) — switch tab and optionally deep-link to a section anchor within it.
   const [jump, setJump] = useState<string | null>(null);
@@ -98,6 +98,8 @@ export default function ProjectPage() {
   const project = data?.project;
   if (!project) return <Card>Project not found.</Card>;
 
+  // Governance rights: ADMIN/PMO on corporate projects, or the guest owner of a personal one.
+  const canEdit = canGovernProject(user, project);
   const chartered = project.status !== 'DRAFT';
   const isAgile = project.deliveryApproach === 'AGILE' || project.deliveryApproach === 'HYBRID';
   // Agile tab for agile/hybrid; the predictive Schedule (WBS/Gantt) is hidden for pure

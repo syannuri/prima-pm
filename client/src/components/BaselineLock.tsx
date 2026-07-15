@@ -5,6 +5,7 @@ import type { Project } from '../api/types';
 import { Button, Modal, Textarea } from './ui';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
+import { canGovernProject } from '../lib/perms';
 
 // Cost/schedule baseline (PMB/BAC) freeze control. When locked, cost lines, management
 // reserve, WBS tasks and the schedule baseline can't change — progress/actuals and risks
@@ -32,7 +33,8 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
   const locked = !!data?.project?.baselineLockedAt;
   const hasWbs = (scheduleQ.data?.tree?.length ?? 0) > 0;
   const needScheduleBaseline = hasWbs && !scheduleQ.data?.baselinedAt;
-  const canManage = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  // Corporate: ADMIN/PMO or the owning PM. Personal: the guest owner. (Server enforces PM ownership.)
+  const canManage = !!data?.project && canGovernProject(user, data.project, ['ADMIN', 'PMO', 'PROJECT_MANAGER']);
 
   const toggle = useMutation({
     mutationFn: (body: { locked: boolean; reason?: string }) => api.patch(`/projects/${projectId}/baseline-lock`, body),

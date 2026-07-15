@@ -11,23 +11,28 @@ const HIGHLIGHTS = [
 ];
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, guestRegister } = useAuth();
+  const [mode, setMode] = useState<'signin' | 'guest'>('signin');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const emailOk = isEmailValid(email);
-  const canSubmit = emailOk && password.length > 0 && !busy;
+  const isGuest = mode === 'guest';
+  // Guest signup needs a name + a strong-enough password (min 10 — server enforces the full rule).
+  const canSubmit = emailOk && !busy && (isGuest ? name.trim().length >= 2 && password.length >= 10 : password.length > 0);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      await login(email, password);
+      if (isGuest) await guestRegister(name.trim(), email, password);
+      else await login(email, password);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Login failed');
+      setError(err instanceof ApiError ? err.message : isGuest ? 'Could not create your account' : 'Login failed');
     } finally {
       setBusy(false);
     }
@@ -123,17 +128,23 @@ export default function LoginPage() {
               </div>
 
               <div className="mb-7 text-center">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Welcome back</h1>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Sign in to your Prismatix workspace</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{isGuest ? 'Create a guest account' : 'Welcome back'}</h1>
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{isGuest ? 'Manage your own projects — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
               </div>
 
               <form onSubmit={submit} className="space-y-4">
+                {isGuest && (
+                  <Field label="Name">
+                    <Input type="text" autoComplete="name" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required state={!name ? undefined : name.trim().length >= 2 ? 'valid' : 'invalid'} />
+                  </Field>
+                )}
                 <Field label="Email">
                   <Input type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required state={!email ? undefined : emailOk ? 'valid' : 'invalid'} />
                   {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">Enter a valid email address</span>}
                 </Field>
                 <Field label="Password">
-                  <Input type="password" autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? 'valid' : undefined} />
+                  <Input type="password" autoComplete={isGuest ? 'new-password' : 'current-password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? (isGuest && password.length < 10 ? 'invalid' : 'valid') : undefined} />
+                  {isGuest && <span className="mt-1 block text-xs text-slate-400">At least 10 characters, with a letter and a number.</span>}
                 </Field>
                 {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
                 <Button
@@ -141,12 +152,28 @@ export default function LoginPage() {
                   disabled={!canSubmit}
                   className="w-full bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 text-white shadow-lg shadow-brand-500/30 hover:from-brand-600 hover:to-brand-700"
                 >
-                  {busy ? 'Signing in…' : 'Sign in'}
+                  {busy ? (isGuest ? 'Creating…' : 'Signing in…') : isGuest ? 'Create account' : 'Sign in'}
                 </Button>
               </form>
 
-              <div className="mt-7 border-t border-slate-200/70 pt-4 dark:border-slate-700/60">
-                <p className="text-center text-xs text-slate-500 dark:text-slate-400">See where every project truly stands — cost, schedule, risk.</p>
+              {isGuest && (
+                <>
+                  <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                    <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" /> or <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" />
+                  </div>
+                  {/* Google sign-in — arrives once a public domain + OAuth client ID are set up. */}
+                  <button type="button" disabled title="Coming soon — needs a public domain + Google OAuth setup" className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-400 dark:border-slate-700">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 opacity-60" aria-hidden><path fill="#4285F4" d="M22.5 12.2c0-.7-.06-1.4-.18-2.06H12v3.9h5.9a5 5 0 0 1-2.19 3.3v2.74h3.54c2.07-1.9 3.25-4.71 3.25-7.88Z"/><path fill="#34A853" d="M12 23c2.94 0 5.42-.97 7.22-2.64l-3.54-2.74c-.98.66-2.24 1.05-3.68 1.05-2.83 0-5.23-1.91-6.08-4.48H2.27v2.82A11 11 0 0 0 12 23Z"/><path fill="#FBBC05" d="M5.92 14.19a6.6 6.6 0 0 1 0-4.38V6.99H2.27a11 11 0 0 0 0 9.82l3.65-2.62Z"/><path fill="#EA4335" d="M12 5.34c1.6 0 3.03.55 4.16 1.62l3.12-3.12A11 11 0 0 0 2.27 6.99l3.65 2.82C6.77 7.25 9.17 5.34 12 5.34Z"/></svg>
+                    Sign in with Google
+                    <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-700 dark:text-slate-300">soon</span>
+                  </button>
+                </>
+              )}
+
+              <div className="mt-6 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
+                <button type="button" onClick={() => { setMode(isGuest ? 'signin' : 'guest'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+                  {isGuest ? 'Have an account? Sign in' : 'New here? Create a guest account'}
+                </button>
               </div>
             </div>
           </div>

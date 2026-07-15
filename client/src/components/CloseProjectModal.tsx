@@ -5,6 +5,7 @@ import type { ClosureItem, ClosureReadiness, Project } from '../api/types';
 import { Button, Modal, Spinner, Textarea } from './ui';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
+import { canGovernProject } from '../lib/perms';
 
 // Only these lifecycle states can be closed (DRAFT must be chartered first; CLOSED is terminal).
 const CLOSEABLE = ['CHARTERED', 'IN_PROGRESS', 'ON_HOLD'];
@@ -42,7 +43,7 @@ export default function CloseProjectModal({ project }: { project: Project }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
 
-  const canManage = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  const canManage = canGovernProject(user, project);
   const closeable = CLOSEABLE.includes(project.status);
 
   const { data, isLoading } = useQuery({

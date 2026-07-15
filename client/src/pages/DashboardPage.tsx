@@ -93,7 +93,8 @@ export default function DashboardPage() {
 
   // PMO/Admin get the portfolio-wide framing; PMs see a "my projects" view.
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
-  const canCreate = isPmo;
+  // ADMIN/PMO create corporate projects; a GUEST creates their own personal project.
+  const canCreate = isPmo || user?.role === 'GUEST';
   const isMobile = useIsMobile();
 
   // Phones: swipe left/right to move between the two dashboard tabs
@@ -216,12 +217,15 @@ export default function DashboardPage() {
                     {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
                   </Select>
                 </Field>
-                <Field label="Assign Project Manager">
-                  <Select value={pmUserId} onChange={(e) => setPmUserId(e.target.value)}>
-                    <option value="">— unassigned —</option>
-                    {usersQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-                  </Select>
-                </Field>
+                {/* A guest owns their personal project themselves — no PM to assign. */}
+                {user?.role !== 'GUEST' && (
+                  <Field label="Assign Project Manager">
+                    <Select value={pmUserId} onChange={(e) => setPmUserId(e.target.value)}>
+                      <option value="">— unassigned —</option>
+                      {usersQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                    </Select>
+                  </Field>
+                )}
                 <Field label="Cost Baseline (IDR)">
                   <MoneyInput value={costBaseline} onValueChange={setCostBaseline} placeholder="e.g. 1.000.000.000" />
                 </Field>

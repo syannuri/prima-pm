@@ -5,6 +5,7 @@ import type { Project } from '../api/types';
 import { Button, Modal, Textarea } from './ui';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
+import { canGovernProject } from '../lib/perms';
 import ActivateModal from './ActivateModal';
 
 // Manual lifecycle transitions (ADMIN/PMO): Activate (→IN_PROGRESS), Put on hold
@@ -21,7 +22,7 @@ export default function LifecycleActions({ project }: { project: Project }) {
   // Activation goes through a guided modal (baseline-readiness checklist).
   const [activating, setActivating] = useState(false);
 
-  const canManage = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  const canManage = canGovernProject(user, project);
 
   const change = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.patch(`/projects/${project.id}`, body),
