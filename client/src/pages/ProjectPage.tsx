@@ -6,7 +6,6 @@ import type { Project } from '../api/types';
 import { Badge, Card, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
-import { formatIdr } from '../lib/format';
 import { categoryLabel, PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useIsMobile } from '../hooks/useIsMobile';
 import CharterPanel from './panels/CharterPanel';
@@ -30,6 +29,7 @@ import ProjectAlerts from './panels/ProjectAlerts';
 import NextStepsGuide from './panels/NextStepsGuide';
 import CrDecisionBanner from '../components/CrDecisionBanner';
 import ReassignPm from '../components/ReassignPm';
+import ProjectDetailsPopover from '../components/ProjectDetailsPopover';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
 import LifecycleActions from '../components/LifecycleActions';
@@ -186,13 +186,8 @@ export default function ProjectPage() {
           {project.sponsor && (
             <span className={`hidden sm:inline-flex ${chipCls}`}><span aria-hidden>🎯</span>{project.sponsor}</span>
           )}
-          {project.costBaselineIdr != null && project.totalRevenueIdr != null && (
-            <span className={`inline-flex ${chipCls}`}>
-              <span aria-hidden>💰</span>
-              <span className="text-slate-400 dark:text-slate-500">Margin</span>
-              <span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(Number(project.totalRevenueIdr) - Number(project.costBaselineIdr))}</span>
-            </span>
-          )}
+          {/* Margin chip doubles as the trigger for a Cost Baseline / Revenue breakdown popover. */}
+          <ProjectDetailsPopover project={project} />
           {project.category && <Badge color="slate">{categoryLabel(project.category)}</Badge>}
         </div>
         {project.status === 'ON_HOLD' && (
