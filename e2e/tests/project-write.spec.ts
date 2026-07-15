@@ -19,7 +19,7 @@ test.describe('Project write paths', () => {
   });
 
   test('add then remove a stakeholder round-trips through the register', async ({ page }) => {
-    await openTab(page, 'Initiation', 'Stakeholders');
+    await openTab(page, 'Initiating', 'Stakeholders');
     await expect(page.getByText('Stakeholder Register')).toBeVisible();
 
     // A distinctive name so we can find exactly our row and not a seed one.

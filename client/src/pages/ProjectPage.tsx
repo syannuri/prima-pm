@@ -252,7 +252,7 @@ export default function ProjectPage() {
 // kept stable (e.g. 'Charter', 'Closeout') so deep-links and server-emitted next-step cues
 // still resolve. A single-tab group renders as a plain tab; a multi-tab group shows a sub-row.
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
-  { label: 'Initiation', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
+  { label: 'Initiating', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
   { label: 'Schedule', tabs: ['Schedule', 'Agile'] },
   { label: 'Cost', tabs: ['Cost', 'Procurement'] },
   { label: 'Risk', tabs: ['Risk', 'RAID', 'Issues'] },
@@ -276,7 +276,7 @@ const TAB_ICONS: Record<Tab, string> = {
 // Indonesian names for the domain-group headers (menu follows the language toggle;
 // the English `label` above stays the id used by the level-1 tab bar).
 const GROUP_LABEL_ID: Record<string, string> = {
-  Initiation: 'Inisiasi',
+  Initiating: 'Inisiasi',
   Schedule: 'Jadwal',
   Cost: 'Biaya',
   Risk: 'Risiko',

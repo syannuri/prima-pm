@@ -17,8 +17,8 @@ test.describe('Project modules render', () => {
     await openFirstProject(page);
   });
 
-  test('Stakeholder register (Initiation)', async ({ page }) => {
-    await openTab(page, 'Initiation', 'Stakeholders');
+  test('Stakeholder register (Initiating)', async ({ page }) => {
+    await openTab(page, 'Initiating', 'Stakeholders');
     await expect(page.getByText('Stakeholder Register')).toBeVisible();
     await expect(page.getByRole('button', { name: /Add stakeholder/i })).toBeVisible();
   });

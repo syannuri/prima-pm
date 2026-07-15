@@ -176,7 +176,7 @@ const DOC: Record<Lang, Doc> = {
           'Sign in with your account. The default theme is dark mode (changeable in Settings).',
           'From the Dashboard, review the portfolio or open a project from the left sidebar.',
           'New projects are created by Admin/PMO via the “+ New Project” button.',
-          'Inside a project, the top tabs are grouped by management domain: Initiation · Schedule · Cost · Risk · Quality · Monitoring · Closing · Audit. The project’s stage sequence runs via the project status & the “Next steps” guide, not the tab order.',
+          'Inside a project, the top tabs are grouped by management domain: Initiating · Schedule · Cost · Risk · Quality · Monitoring · Closing · Audit. The project’s stage sequence runs via the project status & the “Next steps” guide, not the tab order.',
         ] },
       ] },
       { id: 'konsep', nav: 'Key concepts (EVM)', heading: '📐 Key concepts (EVM)', blocks: [
@@ -204,9 +204,9 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'alur', nav: 'Project workflow', heading: '🔄 Project workflow (end-to-end)', blocks: [
-        { type: 'p', text: 'The top tabs are grouped by MANAGEMENT DOMAIN (Initiation · Schedule · Cost · Risk · Quality · Monitoring · Closing · Audit), not by phase. Why: a tab like Schedule or Cost holds BOTH its baseline AND its actuals/tracking, so it can’t be boxed into one “phase”. The stage sequence instead runs via the project status (Draft → Chartered → In-progress → Closed), guided by Next-steps. End-to-end flow:' },
+        { type: 'p', text: 'The top tabs are grouped by MANAGEMENT DOMAIN (Initiating · Schedule · Cost · Risk · Quality · Monitoring · Closing · Audit), not by phase. Why: a tab like Schedule or Cost holds BOTH its baseline AND its actuals/tracking, so it can’t be boxed into one “phase”. The stage sequence instead runs via the project status (Draft → Chartered → In-progress → Closed), guided by Next-steps. End-to-end flow:' },
         { type: 'steps', items: [
-          'Initiation — on the Initiation tab: fill in the Charter, then Commit to lock the baseline & unlock the other modules (Draft → Chartered), and register Stakeholders & Requirements.',
+          'Initiating — on the Initiating tab: fill in the Charter, then Commit to lock the baseline & unlock the other modules (Draft → Chartered), and register Stakeholders & Requirements.',
           'Set the baseline — on the Schedule tab build the Schedule/WBS then Capture the Schedule Baseline; on the Cost tab enter Cost + planned manpower & Procurement, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost). Register Risk under the Risk tab. PMO/Admin then Activate the project (Chartered → In-progress) once the baseline is complete.',
           'Deliver & control — update progress (Schedule tab) & Actual Cost (Cost tab, optionally auto-posted from timesheets), log effort in Timesheet (Monitoring tab), manage Issues & RAID under Risk, run UAT under Quality, and raise a Change Request under Monitoring for any change after commit.',
           'Track performance — on the Monitoring tab: Forecast & EVM Trend, complemented by the Dashboard & the Reports menu (PDF/Excel).',

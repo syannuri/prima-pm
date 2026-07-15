@@ -57,5 +57,5 @@ export async function openFirstProject(page: Page) {
     .first();
   await expect(charteredCard).toBeVisible();
   await charteredCard.click();
-  await expect(page.getByRole('button', { name: 'Initiation', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Initiating', exact: true })).toBeVisible();
 }
