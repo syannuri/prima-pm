@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { login, openFirstProject } from './helpers';
 
-// Two-level tab bar: open the lifecycle phase (its aria-label) then the sub-tab.
+// Two-level tab bar: open the domain group (its aria-label) then the sub-tab.
 async function openTab(page: Page, phase: string, tab: string) {
   await page.getByRole('button', { name: phase, exact: true }).first().click();
   await page.getByRole('button', { name: tab, exact: true }).first().click();
@@ -19,7 +19,7 @@ test.describe('Project write paths', () => {
   });
 
   test('add then remove a stakeholder round-trips through the register', async ({ page }) => {
-    await openTab(page, 'Initiating', 'Stakeholders');
+    await openTab(page, 'Initiation', 'Stakeholders');
     await expect(page.getByText('Stakeholder Register')).toBeVisible();
 
     // A distinctive name so we can find exactly our row and not a seed one.

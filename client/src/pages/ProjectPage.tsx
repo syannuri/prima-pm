@@ -137,8 +137,8 @@ export default function ProjectPage() {
               {/* Exports hidden on phones — download/print is a desktop task. */}
               {chartered && !isMobile && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('excel')}>{exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
               {chartered && !isMobile && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('pdf')}>{exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
-              {/* Jump to — deep-link to any tab (and to sections within Schedule), grouped by PMBOK
-                  phase. Handy on phones where the two-level tab bar scrolls. */}
+              {/* Jump to — deep-link to any tab (and to sections within Schedule), grouped by
+                  management domain. Handy on phones where the two-level tab bar scrolls. */}
               {canEdit && <MenuDivider />}
               <MenuHeader>{lang === 'id' ? 'Lompat ke' : 'Jump to'}</MenuHeader>
               {TAB_GROUPS.map((g) => {
@@ -243,19 +243,21 @@ export default function ProjectPage() {
   );
 }
 
-// Lifecycle-phase grouping of the project tabs so the bar isn't a wall of 14 buttons.
-// A single-tab phase renders as a plain tab; a multi-tab phase is a dropdown whose button
-// shows the active sub-tab (or the phase name) and highlights when one of its tabs is active.
-// Level-1 phase labels follow the PMBOK process groups (Initiating / Planning /
-// Executing / Monitoring & Controlling / Closing). The underlying Tab ids are kept
-// stable (e.g. 'Charter', 'Closeout') so deep-links and server-emitted next-step cues
-// still resolve.
+// Grouping of the project tabs so the bar isn't a wall of 14 buttons. Grouped by MANAGEMENT
+// DOMAIN / knowledge area (what you manage), NOT by PMBOK process group. Rationale: an
+// artifact tab like Schedule or Cost holds BOTH its baseline AND its actuals/tracking, so it
+// can't sit cleanly in a "Planning" vs "Executing" phase — those tabs are used across the
+// whole lifecycle. The phase/lifecycle sequence lives instead in the project STATUS
+// (Draft→Chartered→In-progress→Closed) and the Next-steps guide. The underlying Tab ids are
+// kept stable (e.g. 'Charter', 'Closeout') so deep-links and server-emitted next-step cues
+// still resolve. A single-tab group renders as a plain tab; a multi-tab group shows a sub-row.
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
-  { label: 'Initiating', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
-  { label: 'Planning', tabs: ['Schedule', 'Agile', 'Cost', 'Procurement', 'Risk'] },
-  { label: 'Executing', tabs: ['Timesheet', 'RAID', 'Issues', 'UAT', 'Change Req'] },
-  { label: 'Monitoring & Controlling', tabs: ['Forecast', 'EVM Trend'] },
-  { label: 'Closing', tabs: ['Closeout'] },
+  { label: 'Initiation', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
+  { label: 'Schedule', tabs: ['Schedule', 'Agile'] },
+  { label: 'Cost', tabs: ['Cost', 'Procurement'] },
+  { label: 'Risk & Controls', tabs: ['Risk', 'RAID', 'Issues', 'UAT', 'Change Req'] },
+  { label: 'Performance', tabs: ['Timesheet', 'Forecast', 'EVM Trend'] },
+  { label: 'Closure', tabs: ['Closeout'] },
   { label: 'Audit', tabs: ['Audit'] },
 ];
 
@@ -268,14 +270,15 @@ const TAB_ICONS: Record<Tab, string> = {
   Forecast: '📈', 'EVM Trend': '📊', Closeout: '🏁', Audit: '🔎',
 };
 
-// Indonesian names for the PMBOK process-group headers (menu follows the language toggle;
+// Indonesian names for the domain-group headers (menu follows the language toggle;
 // the English `label` above stays the id used by the level-1 tab bar).
 const GROUP_LABEL_ID: Record<string, string> = {
-  Initiating: 'Inisiasi',
-  Planning: 'Perencanaan',
-  Executing: 'Pelaksanaan',
-  'Monitoring & Controlling': 'Pemantauan & Pengendalian',
-  Closing: 'Penutupan',
+  Initiation: 'Inisiasi',
+  Schedule: 'Jadwal',
+  Cost: 'Biaya',
+  'Risk & Controls': 'Risiko & Kontrol',
+  Performance: 'Kinerja',
+  Closure: 'Penutupan',
   Audit: 'Audit',
 };
 
@@ -290,7 +293,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
     <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-slate-200 px-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">{changeCount}</span>
   ) : null);
 
-  // Level 1: lifecycle-phase groups (underline tabs).
+  // Level 1: domain groups (underline tabs).
   const groupBtn = (active: boolean) =>
     `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition ${
       active
@@ -307,16 +310,16 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
 
   return (
     <div>
-      {/* Level 1 — phase groups. Scrolls horizontally on narrow screens; a right-edge fade
-          hints there are more phases to swipe to (hidden on md+ where they all fit). */}
+      {/* Level 1 — domain groups. Scrolls horizontally on narrow screens; a right-edge fade
+          hints there are more groups to swipe to (hidden on md+ where they all fit). */}
       <div className="relative">
         <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
           {groups.map((g) => {
             const active = g.tabs.includes(activeTab);
             const single = g.tabs.length === 1;
             return (
-              // Every phase shows its process-group label (e.g. "Closing"); the stable
-              // aria-label lets tests/AT target the phase by that label.
+              // Every group shows its domain label (e.g. "Schedule"); the stable
+              // aria-label lets tests/AT target the group by that label.
               <button key={g.label} aria-label={g.label} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
                 {g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
               </button>

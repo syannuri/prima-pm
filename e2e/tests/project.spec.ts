@@ -1,12 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { login, openFirstProject } from './helpers';
 
-// The tab bar groups tabs under PMBOK process-group phases (Initiating/Planning/Executing/
-// Monitoring & Controlling/Closing); open the phase (its stable aria-label) then click the
-// tab. Single-tab phases (Closing/Audit) are plain buttons and don't need this.
-async function openTab(page: Page, phase: string, tab: string) {
-  await page.getByRole('button', { name: phase, exact: true }).click();
-  await page.getByRole('button', { name: tab, exact: true }).click();
+// The tab bar groups tabs by management domain (Initiation/Schedule/Cost/Risk & Controls/
+// Performance/Closure/Audit); open the group (its stable aria-label) then click the tab.
+// `.first()` guards the case where a group label also exists as a sub-tab pill (e.g. the
+// "Cost" group contains a "Cost" tab). Single-tab groups (Closure/Audit) are plain buttons.
+async function openTab(page: Page, group: string, tab: string) {
+  await page.getByRole('button', { name: group, exact: true }).first().click();
+  await page.getByRole('button', { name: tab, exact: true }).first().click();
 }
 
 test.describe('Project workspace', () => {
@@ -17,18 +18,18 @@ test.describe('Project workspace', () => {
 
   test('switches between module tabs on a chartered project', async ({ page }) => {
     // Seed project is chartered → Cost/Risk/Schedule panels unlock.
-    await openTab(page, 'Planning', 'Cost');
+    await openTab(page, 'Cost', 'Cost');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
 
-    await openTab(page, 'Planning', 'Risk');
+    await openTab(page, 'Risk & Controls', 'Risk');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
 
-    await openTab(page, 'Planning', 'Schedule');
+    await openTab(page, 'Schedule', 'Schedule');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
   });
 
   test('manpower cost line offers a named-resource picker', async ({ page }) => {
-    await openTab(page, 'Planning', 'Cost');
+    await openTab(page, 'Cost', 'Cost');
     // The Direct Cost form's type selector switches the row to manpower fields.
     const typeSelect = page.locator('select').filter({ hasText: 'Manpower' }).first();
     await typeSelect.selectOption('MANPOWER');
@@ -41,7 +42,7 @@ test.describe('Project workspace', () => {
   });
 
   test('reassigns a resource inline on an existing manpower row', async ({ page }) => {
-    await openTab(page, 'Planning', 'Cost');
+    await openTab(page, 'Cost', 'Cost');
     // The per-row inline dropdown carries the "👤 Unassigned" placeholder option.
     const rowSelect = page.locator('select').filter({ hasText: '👤 Unassigned' }).first();
     await expect(rowSelect).toBeVisible();

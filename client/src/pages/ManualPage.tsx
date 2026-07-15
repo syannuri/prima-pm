@@ -43,7 +43,7 @@ const DOC: Record<Lang, Doc> = {
           'Masuk dengan akun Anda. Tampilan default dark mode (bisa diganti di Settings).',
           'Dari Dashboard, lihat ringkasan portfolio atau buka satu proyek dari sidebar kiri.',
           'Proyek baru dibuat oleh Admin/PMO lewat tombol “+ New Project”.',
-          'Di dalam proyek, tab teratas mengikuti Process Group PMBOK: Initiating → Planning → Executing → Monitoring & Controlling → Closing.',
+          'Di dalam proyek, tab teratas dikelompokkan per domain pengelolaan: Inisiasi · Jadwal · Biaya · Risiko & Kontrol · Kinerja · Penutupan · Audit. Urutan tahapan proyek sendiri berjalan lewat status proyek & panduan “Next steps”, bukan lewat urutan tab.',
         ] },
       ] },
       { id: 'konsep', nav: 'Konsep penting (EVM)', heading: '📐 Konsep penting (EVM)', blocks: [
@@ -71,14 +71,14 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'alur', nav: 'Alur kerja proyek', heading: '🔄 Alur kerja proyek (end-to-end)', blocks: [
-        { type: 'p', text: 'Tab teratas di ruang kerja proyek mengikuti lima Process Group PMBOK: Initiating → Planning → Executing → Monitoring & Controlling → Closing.' },
+        { type: 'p', text: 'Tab teratas dikelompokkan per DOMAIN pengelolaan (Inisiasi · Jadwal · Biaya · Risiko & Kontrol · Kinerja · Penutupan · Audit), bukan per tahap. Alasannya: satu tab seperti Jadwal atau Biaya memuat baseline SEKALIGUS aktual/tracking-nya, jadi tak bisa dikotak ke satu “fase”. Tahapan proyek justru berjalan lewat status (Draft → Chartered → In-progress → Closed) dan dituntun panduan Next-steps. Alur end-to-end:' },
         { type: 'steps', items: [
-          'Initiating — di tab Initiating: isi Charter (piagam proyek) lalu Commit untuk mengunci baseline & membuka modul lain (Draft → Chartered), dan daftarkan Stakeholders.',
-          'Planning — di tab Planning: susun Schedule/WBS lalu Capture Schedule Baseline, isi Cost + rencana manpower, daftarkan Risk & Procurement, terakhir Lock Cost Baseline (urutan benar: capture schedule dulu, baru lock cost). PMO/Admin lalu Activate proyek (Chartered → In-progress) setelah baseline lengkap.',
-          'Executing — di tab Executing: update progress & Actual Cost, kelola Issues & RAID, jalankan UAT, dan ajukan Change Request bila ada perubahan setelah commit.',
-          'Monitoring & Controlling — di tab Monitoring & Controlling: pantau kinerja lewat Forecast & EVM Trend, dilengkapi Dashboard & menu Reports (PDF/Excel).',
-          'Closing — di tab Closing: catat Acceptance Sign-off & Lessons Learned, lalu Close project.',
-          'Panduan "🧭 Next steps" di tiap proyek menuntun langkah berikutnya sesuai tahap proses.',
+          'Inisiasi — di tab Inisiasi: isi Charter (piagam proyek) lalu Commit untuk mengunci baseline & membuka modul lain (Draft → Chartered), dan daftarkan Stakeholders & Requirements.',
+          'Susun baseline — di tab Jadwal susun Schedule/WBS lalu Capture Schedule Baseline; di tab Biaya isi Cost + rencana manpower & Procurement, lalu Lock Cost Baseline (urutan benar: capture schedule dulu, baru lock cost). Daftarkan Risk di tab Risiko & Kontrol. PMO/Admin lalu Activate proyek (Chartered → In-progress) setelah baseline lengkap.',
+          'Jalankan & kendalikan — update progress (tab Jadwal) & Actual Cost (tab Biaya, bisa auto-post dari timesheet), catat effort di Timesheet (tab Kinerja), kelola Issues, RAID & UAT serta ajukan Change Request di tab Risiko & Kontrol bila ada perubahan setelah commit.',
+          'Pantau kinerja — di tab Kinerja: Forecast & EVM Trend, dilengkapi Dashboard & menu Reports (PDF/Excel).',
+          'Tutup — di tab Penutupan: catat Acceptance Sign-off & Lessons Learned, lalu Close project.',
+          'Panduan "🧭 Next steps" di tiap proyek menuntun langkah berikutnya sesuai tahap lifecycle.',
         ] },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
@@ -176,7 +176,7 @@ const DOC: Record<Lang, Doc> = {
           'Sign in with your account. The default theme is dark mode (changeable in Settings).',
           'From the Dashboard, review the portfolio or open a project from the left sidebar.',
           'New projects are created by Admin/PMO via the “+ New Project” button.',
-          'Inside a project, the top tabs follow the PMBOK process groups: Initiating → Planning → Executing → Monitoring & Controlling → Closing.',
+          'Inside a project, the top tabs are grouped by management domain: Initiation · Schedule · Cost · Risk & Controls · Performance · Closure · Audit. The project’s stage sequence runs via the project status & the “Next steps” guide, not the tab order.',
         ] },
       ] },
       { id: 'konsep', nav: 'Key concepts (EVM)', heading: '📐 Key concepts (EVM)', blocks: [
@@ -204,14 +204,14 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'alur', nav: 'Project workflow', heading: '🔄 Project workflow (end-to-end)', blocks: [
-        { type: 'p', text: 'The project workspace top tabs follow the five PMBOK process groups: Initiating → Planning → Executing → Monitoring & Controlling → Closing.' },
+        { type: 'p', text: 'The top tabs are grouped by MANAGEMENT DOMAIN (Initiation · Schedule · Cost · Risk & Controls · Performance · Closure · Audit), not by phase. Why: a tab like Schedule or Cost holds BOTH its baseline AND its actuals/tracking, so it can’t be boxed into one “phase”. The stage sequence instead runs via the project status (Draft → Chartered → In-progress → Closed), guided by Next-steps. End-to-end flow:' },
         { type: 'steps', items: [
-          'Initiating — on the Initiating tab: fill in the Charter, then Commit to lock the baseline & unlock the other modules (Draft → Chartered), and register Stakeholders.',
-          'Planning — on the Planning tab: build the Schedule/WBS then Capture the Schedule Baseline, enter Cost + planned manpower, register Risk & Procurement, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost). PMO/Admin then Activate the project (Chartered → In-progress) once the baseline is complete.',
-          'Executing — on the Executing tab: update progress & Actual Cost, manage Issues & RAID, run UAT, and raise a Change Request for any change after commit.',
-          'Monitoring & Controlling — on the Monitoring & Controlling tab: track performance via Forecast & EVM Trend, complemented by the Dashboard & the Reports menu (PDF/Excel).',
-          'Closing — on the Closing tab: record the Acceptance Sign-off & Lessons Learned, then Close the project.',
-          'The "🧭 Next steps" guide on each project points to the next action for its process stage.',
+          'Initiation — on the Initiation tab: fill in the Charter, then Commit to lock the baseline & unlock the other modules (Draft → Chartered), and register Stakeholders & Requirements.',
+          'Set the baseline — on the Schedule tab build the Schedule/WBS then Capture the Schedule Baseline; on the Cost tab enter Cost + planned manpower & Procurement, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost). Register Risk under Risk & Controls. PMO/Admin then Activate the project (Chartered → In-progress) once the baseline is complete.',
+          'Deliver & control — update progress (Schedule tab) & Actual Cost (Cost tab, optionally auto-posted from timesheets), log effort in Timesheet (Performance tab), manage Issues, RAID & UAT and raise a Change Request under Risk & Controls for any change after commit.',
+          'Track performance — on the Performance tab: Forecast & EVM Trend, complemented by the Dashboard & the Reports menu (PDF/Excel).',
+          'Close — on the Closure tab: record the Acceptance Sign-off & Lessons Learned, then Close the project.',
+          'The "🧭 Next steps" guide on each project points to the next action for its lifecycle stage.',
         ] },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
