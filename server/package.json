@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration:setup": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' prisma migrate deploy",
-    "test:integration": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' JWT_ACCESS_SECRET=test-access JWT_REFRESH_SECRET=test-refresh NODE_ENV=test vitest run --config vitest.integration.config.ts"
+    "test:integration": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' JWT_ACCESS_SECRET=test-access JWT_REFRESH_SECRET=test-refresh GUEST_SIGNUP_ENABLED=true NODE_ENV=test vitest run --config vitest.integration.config.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

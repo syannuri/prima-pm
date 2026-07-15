@@ -14,7 +14,12 @@ export interface CapacityQuery {
 // Portfolio-wide manpower allocation vs. capacity, scoped to the caller's visible projects.
 export async function getResourceCapacity(userId: string, role: string, q: CapacityQuery) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
-  if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+  if (role === 'GUEST') {
+    where.personalOwnerId = userId;
+  } else {
+    where.personalOwnerId = null; // corporate capacity view excludes personal (guest) projects
+    if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+  }
 
   const projects = await prisma.project.findMany({ where, select: { id: true } });
   const projectIds = projects.map((p) => p.id);

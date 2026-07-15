@@ -14,7 +14,12 @@ const num = (d: unknown): number => (d == null ? 0 : Number(d));
 
 function scopeWhere(userId: string, role: string, global: Role[]): Prisma.ProjectWhereInput {
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
-  if (!global.includes(role as Role)) where.pmUserId = userId;
+  if (role === 'GUEST') {
+    where.personalOwnerId = userId; // guests: only their own personal projects
+  } else {
+    where.personalOwnerId = null; // corporate aggregates never include personal (guest) projects
+    if (!global.includes(role as Role)) where.pmUserId = userId;
+  }
   return where;
 }
 

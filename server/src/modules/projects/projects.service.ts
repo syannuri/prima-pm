@@ -40,7 +40,14 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
 // List projects visible to the caller (global roles see all; others see owned).
 export async function listProjects(userId: string, role: Role) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
-  if (!GLOBAL_ROLES.includes(role)) where.pmUserId = userId;
+  if (role === 'GUEST') {
+    // Guests see ONLY their own personal projects (full sandbox).
+    where.personalOwnerId = userId;
+  } else {
+    // Corporate views never include personal (guest) projects.
+    where.personalOwnerId = null;
+    if (!GLOBAL_ROLES.includes(role)) where.pmUserId = userId;
+  }
 
   const projects = await prisma.project.findMany({
     where,
@@ -82,7 +89,7 @@ export async function getProject(id: string) {
 // Under concurrent creates two callers can still compute the same max + 1, so we retry
 // the auto-numbered path on the unique-code race (P2002). An explicit user-supplied code
 // that clashes is a real Conflict and is NOT retried.
-async function createProjectRow(input: CreateProjectInput, year: number) {
+async function createProjectRow(input: CreateProjectInput, year: number, personalOwnerId: string | null) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await prisma.$transaction(async (tx) => {
@@ -105,7 +112,11 @@ async function createProjectRow(input: CreateProjectInput, year: number) {
             name: input.name,
             clientName: input.clientName ?? null,
             sponsor: input.sponsor ?? null,
-            pmUserId: input.pmUserId ?? null,
+            // A guest's personal project is owned + managed by the guest; corporate projects
+            // use the assigned PM. personalOwnerId being set is what flips a project to the
+            // sandboxed/self-governed mode (see rbac + listProjects).
+            personalOwnerId: personalOwnerId,
+            pmUserId: personalOwnerId ?? input.pmUserId ?? null,
             category: input.category ?? null,
             deliveryApproach: input.deliveryApproach ?? 'PREDICTIVE',
             costBaselineIdr: input.costBaselineIdr ?? null,
@@ -121,10 +132,12 @@ async function createProjectRow(input: CreateProjectInput, year: number) {
   }
 }
 
-export async function createProject(input: CreateProjectInput, actorId: string) {
+export async function createProject(input: CreateProjectInput, actorId: string, actorRole?: Role) {
   // Year is derived from the actor's request time; passed explicitly to keep code testable.
   const year = new Date().getFullYear();
-  const project = await createProjectRow(input, year);
+  // A GUEST can only ever create a personal project owned by themselves — never a corporate one.
+  const personalOwnerId = actorRole === 'GUEST' ? actorId : null;
+  const project = await createProjectRow(input, year, personalOwnerId);
 
   await writeAudit({ projectId: project.id, userId: actorId, entity: 'Project', entityId: project.id, action: 'CREATE', after: project });
   await notifyPmAssigned(project.pmUserId, actorId, project);

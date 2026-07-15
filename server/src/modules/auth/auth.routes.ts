@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authRateLimit } from '../../middleware/rateLimit.js';
-import { changePasswordSchema, loginSchema, refreshSchema } from './auth.schemas.js';
+import { changePasswordSchema, guestRegisterSchema, loginSchema, refreshSchema } from './auth.schemas.js';
 import * as ctrl from './auth.controller.js';
 
 const router = Router();
@@ -23,9 +23,21 @@ const loginLimiter = authRateLimit({
   },
 });
 const refreshLimiter = authRateLimit({ windowMs: FIFTEEN_MIN, max: 30, name: 'refresh' });
+// Throttle guest signups per IP AND per target email (mirrors login) to blunt bulk abuse of
+// the one open-registration path.
+const guestLimiter = authRateLimit({
+  windowMs: FIFTEEN_MIN,
+  max: 10,
+  name: 'guest-register',
+  keyBy: (req) => {
+    const email = (req.body as { email?: unknown })?.email;
+    return [typeof email === 'string' ? `email:${email.trim().toLowerCase()}` : undefined];
+  },
+});
 
-// Open self-registration is intentionally disabled: this is an internal app and
-// accounts are provisioned by an ADMIN via POST /users. There is no public signup.
+// Corporate self-registration stays disabled (accounts are ADMIN-provisioned via POST /users).
+// The ONLY open signup is the sandboxed GUEST path below, itself gated by GUEST_SIGNUP_ENABLED.
+router.post('/guest/register', guestLimiter, validateBody(guestRegisterSchema), asyncHandler(ctrl.guestRegisterHandler));
 router.post('/login', loginLimiter, validateBody(loginSchema), asyncHandler(ctrl.loginHandler));
 router.post('/refresh', refreshLimiter, validateBody(refreshSchema), asyncHandler(ctrl.refreshHandler));
 router.get('/me', requireAuth, asyncHandler(ctrl.meHandler));

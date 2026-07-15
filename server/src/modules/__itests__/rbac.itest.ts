@@ -1504,3 +1504,72 @@ describe('requirements traceability (RTM: register + WBS links + coverage)', () 
     expect(links).toBe(0);
   });
 });
+
+describe('guest workspace (self-signup + personal-project sandbox + self-governance)', () => {
+  let guestToken = '';
+  let guestId = '';
+  let guest2Token = '';
+  let personalProjectId = '';
+  let corpProjectId = '';
+
+  beforeAll(async () => {
+    const corp = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Corp-For-Guest-Test', pmUserId: ownerId });
+    corpProjectId = corp.body.project.id;
+  });
+
+  it('a guest self-registers and is auto-logged-in as role GUEST', async () => {
+    const res = await request(app).post(api('/auth/guest/register')).send({ name: 'Gina Guest', email: 'gina.guest@example.com', password: 'GuestPass123' });
+    expect(res.status).toBe(201);
+    expect(res.body.user.role).toBe('GUEST');
+    expect(typeof res.body.accessToken).toBe('string');
+    guestToken = res.body.accessToken;
+    guestId = res.body.user.id;
+    const r2 = await request(app).post(api('/auth/guest/register')).send({ name: 'Hank Guest', email: 'hank.guest@example.com', password: 'GuestPass123' });
+    guest2Token = r2.body.accessToken;
+  });
+
+  it('rejects a duplicate email (409) and a weak password (400)', async () => {
+    expect((await request(app).post(api('/auth/guest/register')).send({ name: 'Dup', email: 'gina.guest@example.com', password: 'GuestPass123' })).status).toBe(409);
+    expect((await request(app).post(api('/auth/guest/register')).send({ name: 'Weak', email: 'weak.guest@example.com', password: 'password123' })).status).toBe(400);
+  });
+
+  it('a guest creates a personal project owned + sandboxed to them (pmUserId forced to self)', async () => {
+    // Even passing a pmUserId, the project comes out personal + self-owned (never corporate).
+    const res = await request(app).post(api('/projects')).set(auth(guestToken)).send({ name: 'My Personal Project', pmUserId: ownerId });
+    expect(res.status).toBe(201);
+    personalProjectId = res.body.project.id;
+    expect(res.body.project.personalOwnerId).toBe(guestId);
+    expect(res.body.project.pmUserId).toBe(guestId);
+  });
+
+  it('the personal project is invisible to corporate users (list + direct 403, even ADMIN)', async () => {
+    const list = await request(app).get(api('/projects')).set(auth(tokens.ADMIN));
+    expect(list.body.projects.find((p: { id: string }) => p.id === personalProjectId)).toBeUndefined();
+    expect((await request(app).get(api(`/projects/${personalProjectId}`)).set(auth(tokens.ADMIN))).status).toBe(403);
+  });
+
+  it('a guest sees only their own projects and cannot reach corporate ones', async () => {
+    const list = await request(app).get(api('/projects')).set(auth(guestToken));
+    expect(list.body.projects.every((p: { id: string }) => p.id === personalProjectId)).toBe(true);
+    expect(list.body.projects.some((p: { id: string }) => p.id === corpProjectId)).toBe(false);
+    expect((await request(app).get(api(`/projects/${corpProjectId}`)).set(auth(guestToken))).status).toBe(403);
+  });
+
+  it("another guest cannot access the first guest's project", async () => {
+    expect((await request(app).get(api(`/projects/${personalProjectId}`)).set(auth(guest2Token))).status).toBe(403);
+  });
+
+  it('the owner self-governs their personal project (PATCH /:id) — no approver — but others are blocked', async () => {
+    const edit = await request(app).patch(api(`/projects/${personalProjectId}`)).set(auth(guestToken)).send({ name: 'Renamed by owner' });
+    expect(edit.status).toBe(200);
+    expect(edit.body.project.name).toBe('Renamed by owner');
+    // a different guest AND even ADMIN cannot govern someone else's personal project
+    expect((await request(app).patch(api(`/projects/${personalProjectId}`)).set(auth(guest2Token)).send({ name: 'hijack' })).status).toBe(403);
+    expect((await request(app).patch(api(`/projects/${personalProjectId}`)).set(auth(tokens.ADMIN)).send({ name: 'admin-edit' })).status).toBe(403);
+  });
+
+  it('corporate governance is unchanged: ADMIN edits a corporate project, a non-owner functional role cannot', async () => {
+    expect((await request(app).patch(api(`/projects/${corpProjectId}`)).set(auth(tokens.ADMIN)).send({ name: 'Corp renamed' })).status).toBe(200);
+    expect((await request(app).patch(api(`/projects/${corpProjectId}`)).set(auth(tokens.FINANCE)).send({ name: 'nope' })).status).toBe(403);
+  });
+});

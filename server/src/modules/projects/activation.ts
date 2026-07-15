@@ -39,7 +39,8 @@ export async function getAwaitingActivation(role: string) {
   if (role !== 'ADMIN' && role !== 'PMO') return { items: [], count: 0 };
 
   const projects = await prisma.project.findMany({
-    where: { status: 'CHARTERED', deletedAt: null },
+    // personalOwnerId: null → this corporate ADMIN/PMO queue never lists guest projects.
+    where: { status: 'CHARTERED', deletedAt: null, personalOwnerId: null },
     select: { id: true, code: true, name: true, deliveryApproach: true, baselineLockedAt: true, scheduleBaselinedAt: true, pm: { select: { name: true } } },
     orderBy: { code: 'asc' },
   });
@@ -71,7 +72,12 @@ export async function getAwaitingActivation(role: string) {
  */
 export async function getPlanningReminders(userId: string, role: string) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { in: ['DRAFT', 'CHARTERED'] } };
-  if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+  if (role === 'GUEST') {
+    where.personalOwnerId = userId; // a guest sees their own planning reminders
+  } else {
+    where.personalOwnerId = null; // corporate reminders exclude personal (guest) projects
+    if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+  }
 
   const projects = await prisma.project.findMany({
     where,
@@ -122,10 +128,12 @@ export async function notifyActivationReady(projectId: string, actorId: string):
   try {
     const project = await prisma.project.findFirst({
       where: { id: projectId, deletedAt: null },
-      select: { id: true, name: true, code: true, status: true, activationReadyNotifiedAt: true },
+      select: { id: true, name: true, code: true, status: true, activationReadyNotifiedAt: true, personalOwnerId: true },
     });
     // Only for a chartered project that hasn't already been announced as ready.
     if (!project || project.status !== 'CHARTERED' || project.activationReadyNotifiedAt) return;
+    // Personal (guest) projects self-activate — never ping corporate ADMIN/PMO.
+    if (project.personalOwnerId) return;
 
     const readiness = await getActivationReadiness(projectId);
     if (!readiness.canActivate) return;

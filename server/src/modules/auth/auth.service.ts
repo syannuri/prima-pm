@@ -3,9 +3,10 @@ import type { Role, User } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js';
-import { Unauthorized } from '../../lib/errors.js';
+import { Unauthorized, Forbidden, Conflict } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
-import type { ChangePasswordInput, LoginInput } from './auth.schemas.js';
+import { env } from '../../config/env.js';
+import type { ChangePasswordInput, GuestRegisterInput, LoginInput } from './auth.schemas.js';
 
 interface AuthResult {
   user: { id: string; name: string; email: string; role: Role };
@@ -62,6 +63,25 @@ export async function login(input: LoginInput): Promise<AuthResult> {
   if (!ok) throw Unauthorized('Invalid credentials');
 
   await writeAudit({ userId: user.id, entity: 'User', entityId: user.id, action: 'LOGIN' });
+  return issueTokenPair(user);
+}
+
+// Self-service guest signup. The ONLY open-registration path — hard-codes role GUEST (a guest
+// is sandboxed to their own personal projects) and is gated behind GUEST_SIGNUP_ENABLED so a
+// deployment must opt in. Auto-logs in on success (returns a token pair like login).
+export async function guestRegister(input: GuestRegisterInput): Promise<AuthResult> {
+  if (!env.guestSignupEnabled) throw Forbidden('Guest signup is not enabled');
+  const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
+  if (existing) throw Conflict('That email is already registered');
+  const user = await prisma.user.create({
+    data: {
+      name: input.name,
+      email: input.email,
+      passwordHash: await hashPassword(input.password),
+      role: 'GUEST',
+    },
+  });
+  await writeAudit({ userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
   return issueTokenPair(user);
 }
 

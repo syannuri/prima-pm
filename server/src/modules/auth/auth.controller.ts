@@ -11,6 +11,12 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
   res.json(result);
 }
 
+export async function guestRegisterHandler(req: Request, res: Response): Promise<void> {
+  const result = await authService.guestRegister(req.body);
+  setAuthCookies(res, result); // auto-login on signup
+  res.status(201).json(result);
+}
+
 export async function refreshHandler(req: Request, res: Response): Promise<void> {
   // The refresh token comes from the httpOnly cookie (browser) or the JSON body (legacy /
   // automation clients). Either establishes a fresh, rotated pair.

@@ -30,6 +30,14 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+// Self-service guest signup — same strong-password rule as the rest of the app. Always
+// creates a GUEST (the service hard-codes the role; the client can't pick it).
+export const guestRegisterSchema = z.object({
+  name: z.string().min(2).max(120),
+  email: z.string().email().toLowerCase(),
+  password: strongPassword,
+});
+
 // refreshToken is optional in the body: the browser sends it as an httpOnly cookie instead
 // (the controller reads cookie-or-body). Legacy/automation clients may still post it here.
 export const refreshSchema = z.object({
@@ -47,5 +55,6 @@ export const changePasswordSchema = z
   });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+export type GuestRegisterInput = z.infer<typeof guestRegisterSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

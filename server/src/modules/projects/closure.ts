@@ -65,7 +65,8 @@ export async function getAwaitingClosure(role: string) {
   if (role !== 'ADMIN' && role !== 'PMO') return { items: [], count: 0 };
 
   const projects = await prisma.project.findMany({
-    where: { status: 'IN_PROGRESS', deletedAt: null },
+    // personalOwnerId: null → this corporate ADMIN/PMO queue never lists guest projects.
+    where: { status: 'IN_PROGRESS', deletedAt: null, personalOwnerId: null },
     select: { id: true, code: true, name: true, pm: { select: { name: true } } },
     orderBy: { code: 'asc' },
   });

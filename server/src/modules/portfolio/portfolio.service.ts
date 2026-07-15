@@ -58,7 +58,12 @@ export interface PortfolioRow {
 
 export async function getPortfolioSummary(userId: string, role: string, statusDate: Date) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
-  if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+  if (role === 'GUEST') {
+    where.personalOwnerId = userId;
+  } else {
+    where.personalOwnerId = null; // corporate portfolio excludes personal (guest) projects
+    if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+  }
 
   const projects = await prisma.project.findMany({
     where,

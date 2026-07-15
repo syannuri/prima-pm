@@ -25,6 +25,9 @@ enum Role {
   RISK_OFFICER
   TEAM_MEMBER
   VIEWER
+  // Self-service guest: self-signs up, sees/manages ONLY their own personal projects
+  // (Project.personalOwnerId == their id), self-governs them with no approval matrix.
+  GUEST
 }
 
 enum ProjectStatus {
@@ -245,6 +248,10 @@ model Project {
   deliveryApproach DeliveryApproach @default(PREDICTIVE)
   pmUserId  String?
   pm        User?         @relation("ProjectManager", fields: [pmUserId], references: [id])
+  // When set, this is a personal (guest) project owned by that user. Only the owner can see
+  // or manage it (full sandbox); the corporate portfolio excludes personalOwnerId != null.
+  // The owner self-governs it with no approval matrix. NULL = a normal corporate project.
+  personalOwnerId String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   deletedAt DateTime?

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireRole, requireProjectAccess, requireProjectGovernance } from '../../middleware/rbac.js';
 import {
   upsertCharterSchema,
   changeRequestSchema,
@@ -25,7 +25,7 @@ router.get(
 router.put(
   '/',
   requireProjectAccess({ write: true }),
-  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER'),
+  requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER'),
   validateBody(upsertCharterSchema),
   asyncHandler(async (req, res) => {
     const charter = await svc.upsertCharter(req.params.projectId, req.body, req.user!.id);
@@ -37,7 +37,7 @@ router.put(
 router.post(
   '/commit',
   requireProjectAccess({ write: true }),
-  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER'),
+  requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER'),
   asyncHandler(async (req, res) => {
     const charter = await svc.commitCharter(req.params.projectId, req.user!.id);
     res.json({ charter });

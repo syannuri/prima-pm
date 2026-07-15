@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireRole, requireProjectAccess, requireProjectGovernance } from '../../middleware/rbac.js';
 import { createProjectSchema, updateProjectSchema, reassignPmSchema } from './projects.schemas.js';
 import { z } from 'zod';
 import * as svc from './projects.service.js';
@@ -43,13 +43,14 @@ router.get(
   }),
 );
 
-// Only PMO (and ADMIN) may create projects and assign them to a PM.
+// ADMIN/PMO create corporate projects (assigning a PM). A GUEST may also create — but only a
+// PERSONAL project owned by themselves (the service forces personalOwnerId = pmUserId = self).
 router.post(
   '/',
-  requireRole('ADMIN', 'PMO'),
+  requireRole('ADMIN', 'PMO', 'GUEST'),
   validateBody(createProjectSchema),
   asyncHandler(async (req, res) => {
-    const project = await svc.createProject(req.body, req.user!.id);
+    const project = await svc.createProject(req.body, req.user!.id, req.user!.role);
     res.status(201).json({ project });
   }),
 );
@@ -101,7 +102,7 @@ router.get(
 // charter (while draft) and Change Requests, not top-level project edits.
 router.patch(
   '/:id',
-  requireRole('ADMIN', 'PMO'),
+  requireProjectGovernance('ADMIN', 'PMO'),
   validateBody(updateProjectSchema),
   asyncHandler(async (req, res) => {
     const project = await svc.updateProject(req.params.id, req.body, req.user!.id);
@@ -119,7 +120,7 @@ const baselineLockSchema = z.object({ locked: z.boolean(), reason: z.string().tr
 router.patch(
   '/:id/baseline-lock',
   requireProjectAccess({ write: true }),
-  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER'),
+  requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER'),
   validateBody(baselineLockSchema),
   asyncHandler(async (req, res) => {
     const project = await setBaselineLock(req.params.id, req.body.locked, req.body.reason, req.user!.id);
@@ -142,7 +143,7 @@ router.patch(
 
 router.delete(
   '/:id',
-  requireRole('ADMIN', 'PMO'),
+  requireProjectGovernance('ADMIN', 'PMO'),
   requireProjectAccess({ write: true }),
   asyncHandler(async (req, res) => {
     await svc.softDeleteProject(req.params.id, req.user!.id);

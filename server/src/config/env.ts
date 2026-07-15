@@ -30,6 +30,10 @@ export const env = {
   // Number of proxy hops to trust for req.ip / X-Forwarded-* (e.g. TRUST_PROXY=1 behind
   // one nginx). Leave unset for a direct bind — trusting a spoofable header is unsafe then.
   trustProxy: process.env.TRUST_PROXY,
+  // Opens the self-service guest signup (POST /auth/guest/register → role GUEST, sandboxed
+  // to personal projects). OFF by default — this is the one open-registration path, so it
+  // must be explicitly enabled per deployment. The endpoint 403s while disabled.
+  guestSignupEnabled: process.env.GUEST_SIGNUP_ENABLED === 'true',
 } as const;
 
 export const isProd = env.nodeEnv === 'production';
