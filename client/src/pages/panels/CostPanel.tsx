@@ -132,6 +132,14 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
     if (ok) fill.mutate();
   };
 
+  // Auto-post toggle: when on, the server re-syncs the labour AC on every man-day change, so
+  // the manual "Fill AC" control is replaced by an "✓ Auto" state.
+  const autoToggle = useMutation({
+    mutationFn: (enabled: boolean) => api.patch(`${base}/auto-post-labour`, { enabled }),
+    onSuccess: (_r, enabled) => { onChange(); toast.success(enabled ? 'Auto-post on — labour AC now tracks timesheets' : 'Auto-post off — labour AC is manual again'); },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to update auto-post'),
+  });
+
   const add = useMutation({
     mutationFn: () => api.post(`${base}/actuals`, { date, amount: Number(amount), description: description || undefined, category }),
     onSuccess: () => { setAmount(''); setDescription(''); onChange(); toast.success('Actual cost recorded'); },
@@ -178,13 +186,25 @@ function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string
               {syncedInAc && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✓ in AC</span>}
             </div>
             {canWrite && (
-              <Button variant="secondary" onClick={confirmFill} disabled={fill.isPending || syncedInAc} title={syncedInAc ? 'Actual Cost already matches the timesheet labour' : 'Add/refresh the labour Actual Cost entry from logged timesheets'}>
-                {fill.isPending ? 'Filling…' : syncedEntry ? 'Update AC' : 'Fill AC from timesheet'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <label className="flex cursor-pointer select-none items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300" title="Auto-refresh the labour Actual Cost entry whenever timesheets change">
+                  <input type="checkbox" className="accent-brand-500" checked={data.autoPostLabourAc} disabled={autoToggle.isPending} onChange={(ev) => autoToggle.mutate(ev.target.checked)} />
+                  Auto-post to AC
+                </label>
+                {data.autoPostLabourAc ? (
+                  <span className="rounded bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" title="Labour AC is kept in sync with timesheets automatically">✓ Auto</span>
+                ) : (
+                  <Button variant="secondary" onClick={confirmFill} disabled={fill.isPending || syncedInAc} title={syncedInAc ? 'Actual Cost already matches the timesheet labour' : 'Add/refresh the labour Actual Cost entry from logged timesheets'}>
+                    {fill.isPending ? 'Filling…' : syncedEntry ? 'Update AC' : 'Fill AC from timesheet'}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
           <div className="mt-0.5 text-slate-400">
-            Σ logged man-days × day-rate. {syncedInAc ? 'Reflected in Actual Cost below.' : 'Reference only until you fill it — non-labour spend (materials, licenses) stays manual.'}
+            Σ logged man-days × day-rate. {data.autoPostLabourAc
+              ? 'Auto-synced from timesheet — updates whenever time is logged. Non-labour spend (materials, licenses) stays manual.'
+              : syncedInAc ? 'Reflected in Actual Cost below.' : 'Reference only until you fill it — non-labour spend (materials, licenses) stays manual.'}
           </div>
         </div>
       )}

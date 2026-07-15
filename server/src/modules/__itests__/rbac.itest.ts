@@ -453,6 +453,80 @@ describe('fill AC from timesheet (one-click, idempotent, manual entries untouche
   });
 });
 
+describe('auto-post labour AC (per-project toggle, default off)', () => {
+  const LABOUR = 'Labour actual (from timesheet)';
+  let pid = '';
+  let lineId = '';
+  beforeAll(async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Auto-AC', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+    const mp = await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN))
+      .send({ type: 'MANPOWER', label: 'Dev', personnelRole: 'PROJECT_PERSONNEL', unitCostPerManday: 1_000_000, planMandays: 20 });
+    lineId = mp.body.line.id;
+  });
+  const log = (mandays: number, date = '2026-07-10') =>
+    request(app).post(api(`/projects/${pid}/timesheet`)).set(auth(tokens.ADMIN)).send({ costItemId: lineId, date, mandays });
+  const cost = () => request(app).get(api(`/projects/${pid}/cost`)).set(auth(tokens.ADMIN));
+  const setAuto = (enabled: boolean, token = tokens.ADMIN) =>
+    request(app).patch(api(`/projects/${pid}/cost/auto-post-labour`)).set(auth(token)).send({ enabled });
+  const labourEntries = (body: { actualCosts: { description: string | null }[] }) =>
+    body.actualCosts.filter((a) => a.description === LABOUR);
+
+  it('is off by default — logging a man-day does NOT post to AC', async () => {
+    await log(3);
+    const c = await cost();
+    expect(c.body.autoPostLabourAc).toBe(false);
+    expect(labourEntries(c.body)).toHaveLength(0);
+    expect(c.body.actualCostTotal).toBe(0);
+  });
+
+  it('enabling it syncs the labour AC immediately', async () => {
+    const res = await setAuto(true);
+    expect(res.status).toBe(200);
+    expect(res.body.autoPostLabourAc).toBe(true);
+    const c = await cost();
+    expect(c.body.autoPostLabourAc).toBe(true);
+    expect(labourEntries(c.body)).toHaveLength(1);
+    expect(c.body.actualCostTotal).toBe(3_000_000); // 3 md × Rp1,000,000
+  });
+
+  it('a later man-day log auto-updates AC with no click (single entry, no double-count)', async () => {
+    await log(2); // 5 md total now
+    const c = await cost();
+    expect(labourEntries(c.body)).toHaveLength(1);
+    expect(c.body.actualCostTotal).toBe(5_000_000);
+  });
+
+  it('deleting a man-day auto-syncs AC back down', async () => {
+    const extra = await log(4); // 9 md total
+    expect((await cost()).body.actualCostTotal).toBe(9_000_000);
+    const del = await request(app).delete(api(`/projects/${pid}/timesheet/${extra.body.entry.id}`)).set(auth(tokens.ADMIN));
+    expect(del.status).toBe(204);
+    expect((await cost()).body.actualCostTotal).toBe(5_000_000); // back to 5 md
+  });
+
+  it('disabling it leaves the existing labour AC in place (real spend already recorded)', async () => {
+    const res = await setAuto(false);
+    expect(res.status).toBe(200);
+    const c = await cost();
+    expect(c.body.autoPostLabourAc).toBe(false);
+    expect(labourEntries(c.body)).toHaveLength(1);
+    expect(c.body.actualCostTotal).toBe(5_000_000);
+  });
+
+  it('once disabled, further man-day logs no longer change AC', async () => {
+    await log(3); // 8 md logged, but auto is off → labour AC stays at the last synced 5M
+    const c = await cost();
+    expect(c.body.actualCostTotal).toBe(5_000_000);
+    expect(c.body.labourConsumedMandays).toBe(8); // timesheet still records the effort
+  });
+
+  it('a VIEWER cannot toggle auto-post (403)', async () => {
+    expect((await setAuto(true, tokens.VIEWER)).status).toBe(403);
+  });
+});
+
 describe('manpower → task Owner prefill (only when the task has no owner)', () => {
   let pid = '';
   let resourceId = '';

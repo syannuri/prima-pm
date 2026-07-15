@@ -376,10 +376,11 @@ async function computeLabourActual(projectId: string) {
 // Repeated fills replace it (never stack), so labour AC stays in sync without double-counting.
 export const LABOUR_AC_DESC = 'Labour actual (from timesheet)';
 
-// One-click: set the auto-derived labour Actual Cost entry to the current timesheet-implied
-// labour cost. Idempotent (replaces its own prior entry); manual AC entries are untouched.
-export async function fillActualCostFromTimesheet(projectId: string, actorId: string) {
-  await ensureChartered(projectId);
+// Core: replace the single auto-derived labour AC entry with the current timesheet-implied
+// labour cost (Σ md × day-rate). Idempotent — deletes its own prior sentinel entry then
+// re-creates it (or none, when labour is 0), so labour AC never double-counts and manual AC
+// entries are untouched. `via` tags the audit ('timesheet-fill' manual · 'timesheet-auto').
+async function resyncLabourAc(projectId: string, actorId: string, via: 'timesheet-fill' | 'timesheet-auto') {
   const { labourActual, labourConsumedMandays } = await computeLabourActual(projectId);
   // Date it at the latest logged man-day so it feeds CPI within the effort period.
   const latest = await prisma.mandayEntry.aggregate({ where: { projectId }, _max: { date: true } });
@@ -394,13 +395,47 @@ export async function fillActualCostFromTimesheet(projectId: string, actorId: st
   });
   await writeAudit({
     projectId, userId: actorId, entity: 'ActualCostEntry', entityId: result.entry?.id ?? projectId,
-    action: 'UPDATE', after: { via: 'timesheet-fill', amount: labourActual, mandays: labourConsumedMandays, replaced: result.replaced },
+    action: 'UPDATE', after: { via, amount: labourActual, mandays: labourConsumedMandays, replaced: result.replaced },
   });
   return { entry: result.entry, labourActual, labourConsumedMandays, replaced: result.replaced };
 }
 
+// One-click: set the auto-derived labour Actual Cost entry to the current timesheet-implied
+// labour cost. Idempotent (replaces its own prior entry); manual AC entries are untouched.
+export async function fillActualCostFromTimesheet(projectId: string, actorId: string) {
+  await ensureChartered(projectId);
+  return resyncLabourAc(projectId, actorId, 'timesheet-fill');
+}
+
+// Called after any man-day mutation (from the timesheet module). When the project has opted
+// in to auto-posting, re-sync the labour AC so it always tracks timesheets without a manual
+// click. Best-effort: never let an AC-sync failure break the timesheet write itself (a later
+// log re-syncs); no-op when the flag is off. Returns whether a sync ran.
+export async function syncLabourAcIfAuto(projectId: string, actorId: string): Promise<boolean> {
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { autoPostLabourAc: true } });
+  if (!project?.autoPostLabourAc) return false;
+  try {
+    await resyncLabourAc(projectId, actorId, 'timesheet-auto');
+    return true;
+  } catch (err) {
+    console.error(`[cost] auto labour-AC sync failed for project ${projectId}:`, err);
+    return false;
+  }
+}
+
+// Toggle the per-project auto-post flag. Turning it ON immediately syncs so AC reflects the
+// current timesheet right away; turning it OFF leaves the existing auto entry in place (it is
+// real spend already in AC — the manual "Fill AC" control simply reappears).
+export async function setAutoPostLabourAc(projectId: string, enabled: boolean, actorId: string) {
+  await ensureChartered(projectId);
+  await prisma.project.update({ where: { id: projectId }, data: { autoPostLabourAc: enabled } });
+  await writeAudit({ projectId, userId: actorId, entity: 'Project', entityId: projectId, action: 'UPDATE', after: { autoPostLabourAc: enabled } });
+  if (enabled) await resyncLabourAc(projectId, actorId, 'timesheet-auto');
+  return { autoPostLabourAc: enabled };
+}
+
 export async function getCostSummary(projectId: string) {
-  const [directCosts, indirectCosts, baseline, charter, actualCosts, mandaySums] = await Promise.all([
+  const [directCosts, indirectCosts, baseline, charter, actualCosts, mandaySums, project] = await Promise.all([
     prisma.costItemDirect.findMany({
       where: { projectId },
       orderBy: { createdAt: 'asc' },
@@ -414,6 +449,7 @@ export async function getCostSummary(projectId: string) {
     prisma.projectCharter.findUnique({ where: { projectId }, select: { hiCostIdr: true } }),
     prisma.actualCostEntry.findMany({ where: { projectId }, orderBy: { date: 'asc' } }),
     prisma.mandayEntry.groupBy({ by: ['costItemId'], where: { projectId }, _sum: { mandays: true } }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { autoPostLabourAc: true } }),
   ]);
 
   const actualCostTotal = actualCosts.reduce((s, a) => s + dec(a.amount), 0);
@@ -455,5 +491,6 @@ export async function getCostSummary(projectId: string) {
     labourConsumedMandays: Math.round(labourConsumedMandays * 100) / 100,
     directActual: Math.round(directActual * 100) / 100,
     indirectActual: Math.round(indirectActual * 100) / 100,
+    autoPostLabourAc: project?.autoPostLabourAc ?? false,
   };
 }

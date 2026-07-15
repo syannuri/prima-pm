@@ -261,6 +261,10 @@ model Project {
   // Stamped once when the project first becomes activation-ready (all baselines set) and
   // ADMIN/PMO have been notified — so the "ready to activate" alert fires only once.
   activationReadyNotifiedAt DateTime?
+  // When true, logging/editing/deleting a man-day auto-refreshes the single labour Actual
+  // Cost entry (Σ consumed md × day-rate) so AC stays in sync with timesheets without a
+  // manual "Fill AC" click. Default off — labour AC stays manual (one-click fill).
+  autoPostLabourAc Boolean @default(false)
 
   charter          ProjectCharter?
   charterVersions  CharterVersion[]

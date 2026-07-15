@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
+import { syncLabourAcIfAuto } from '../cost/cost.service.js';
 import type { MandayEntryInput } from './timesheet.schemas.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number => (v == null ? 0 : Number(v));
@@ -93,6 +94,7 @@ export async function addMandayEntry(projectId: string, input: MandayEntryInput,
     action: 'CREATE',
     after: { costItemId: input.costItemId, mandays: input.mandays },
   });
+  await syncLabourAcIfAuto(projectId, actorId);
   return entry;
 }
 
@@ -101,6 +103,7 @@ export async function deleteMandayEntry(projectId: string, entryId: string, acto
   if (!entry) throw NotFound('Timesheet entry not found');
   await prisma.mandayEntry.delete({ where: { id: entryId } });
   await writeAudit({ projectId, userId: actorId, entity: 'MandayEntry', entityId: entryId, action: 'DELETE' });
+  await syncLabourAcIfAuto(projectId, actorId);
 }
 
 // ---------------------------------------------------------------------------
@@ -187,6 +190,7 @@ export async function addMyMandayEntry(userId: string, input: MandayEntryInput) 
     data: { projectId: line.projectId, costItemId: line.id, date: input.date, mandays: input.mandays, note: input.note ?? null, recordedBy: userId },
   });
   await writeAudit({ projectId: line.projectId, userId, entity: 'MandayEntry', entityId: entry.id, action: 'CREATE', after: { costItemId: line.id, mandays: input.mandays, self: true } });
+  await syncLabourAcIfAuto(line.projectId, userId);
   return entry;
 }
 
@@ -196,4 +200,5 @@ export async function deleteMyMandayEntry(userId: string, entryId: string) {
   if (!entry) throw NotFound('Timesheet entry not found');
   await prisma.mandayEntry.delete({ where: { id: entryId } });
   await writeAudit({ projectId: entry.projectId, userId, entity: 'MandayEntry', entityId: entryId, action: 'DELETE' });
+  await syncLabourAcIfAuto(entry.projectId, userId);
 }

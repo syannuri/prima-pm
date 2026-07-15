@@ -270,6 +270,8 @@ export interface CostSummary {
   // "remaining Direct / Indirect" summary; sums don't double-count the labour sentinel entry.
   directActual: number;
   indirectActual: number;
+  // When true, each man-day mutation auto-refreshes the labour AC entry (no manual "Fill AC").
+  autoPostLabourAc: boolean;
 }
 
 export type CRStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';

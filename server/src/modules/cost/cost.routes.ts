@@ -6,6 +6,7 @@ import {
   indirectLineSchema,
   managementReserveSchema,
   actualCostSchema,
+  autoPostLabourSchema,
 } from './cost.schemas.js';
 import * as svc from './cost.service.js';
 
@@ -126,6 +127,18 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = await svc.fillActualCostFromTimesheet(req.params.projectId, req.user!.id);
     res.status(201).json(result);
+  }),
+);
+
+// Toggle auto-posting of labour AC: when on, each man-day mutation re-syncs the labour AC
+// entry. Turning it on syncs immediately.
+router.patch(
+  '/auto-post-labour',
+  ...canWrite,
+  validateBody(autoPostLabourSchema),
+  asyncHandler(async (req, res) => {
+    const result = await svc.setAutoPostLabourAc(req.params.projectId, req.body.enabled, req.user!.id);
+    res.json(result);
   }),
 );
 

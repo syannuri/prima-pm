@@ -45,6 +45,7 @@ vi.mock('../../api/client', () => {
       }),
       post: vi.fn(() => Promise.resolve({})),
       put: vi.fn(() => Promise.resolve({})),
+      patch: vi.fn(() => Promise.resolve({})),
       del: vi.fn(() => Promise.resolve({})),
     },
   };

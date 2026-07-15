@@ -99,6 +99,10 @@ export const actualCostSchema = z.object({
   category: z.enum(['DIRECT', 'INDIRECT']).optional(),
 });
 
+export const autoPostLabourSchema = z.object({
+  enabled: z.boolean(),
+});
+
 export type ActualCostInput = z.infer<typeof actualCostSchema>;
 
 export type DirectLineInput = z.infer<typeof directLineSchema>;
