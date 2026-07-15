@@ -2,9 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 import { login, openFirstProject } from './helpers';
 
 // The tab bar groups tabs by management domain (Initiating/Schedule/Cost/Risk/Quality/
-// Monitoring/Closing/Audit); open the group (its stable aria-label) then click the tab.
+// Monitoring/Closing/Governance & Audit); open the group (its stable aria-label) then click the tab.
 // `.first()` guards the case where a group label also exists as a sub-tab pill (e.g. the
-// "Cost" group contains a "Cost" tab). Single-tab groups (Closing/Audit) are plain buttons.
+// "Cost" group contains a "Cost" tab). Single-tab groups (Closing/Governance & Audit) are plain buttons.
 async function openTab(page: Page, group: string, tab: string) {
   await page.getByRole('button', { name: group, exact: true }).first().click();
   await page.getByRole('button', { name: tab, exact: true }).first().click();
@@ -66,7 +66,7 @@ test.describe('Project workspace', () => {
   });
 
   test('audit tab lists committed history', async ({ page }) => {
-    await page.getByRole('button', { name: /^Audit/ }).click(); // tab carries a change-count badge ("Audit N")
+    await page.getByRole('button', { name: /Governance & Audit/ }).click(); // single-tab group; carries a change-count badge
     // Seed data produces audit entries; expect at least one action badge in the table
     // (scoped to <table> to avoid matching the hidden filter <option> elements).
     await expect(page.locator('table').getByText(/COMMIT|CREATE|UPDATE/).first()).toBeVisible();

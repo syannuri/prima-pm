@@ -261,7 +261,8 @@ const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   // with the monitoring/control views (Forecast, EVM Trend) rather than with Quality.
   { label: 'Monitoring', tabs: ['Timesheet', 'Change Req', 'Forecast', 'EVM Trend'] },
   { label: 'Closing', tabs: ['Closeout'] },
-  { label: 'Audit', tabs: ['Audit'] },
+  // Label only; the Tab id stays 'Audit' so the change-count badge (keyed on g.tabs[0]) works.
+  { label: 'Governance & Audit', tabs: ['Audit'] },
 ];
 
 // Emoji glyphs for the "Jump to" list — quick visual anchors, consistent with the app's
@@ -283,7 +284,7 @@ const GROUP_LABEL_ID: Record<string, string> = {
   Quality: 'Kualitas',
   Monitoring: 'Pemantauan',
   Closing: 'Penutupan',
-  Audit: 'Audit',
+  'Governance & Audit': 'Tata Kelola & Audit',
 };
 
 function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; activeTab: Tab; changeCount: number; onSelect: (t: Tab) => void }) {
