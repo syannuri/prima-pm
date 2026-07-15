@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { login, openFirstProject } from './helpers';
 
 // The tab bar groups tabs by management domain (Initiation/Schedule/Cost/Risk/Quality/
-// Performance/Closure/Audit); open the group (its stable aria-label) then click the tab.
+// Monitoring/Closure/Audit); open the group (its stable aria-label) then click the tab.
 // `.first()` guards the case where a group label also exists as a sub-tab pill (e.g. the
 // "Cost" group contains a "Cost" tab). Single-tab groups (Closure/Audit) are plain buttons.
 async function openTab(page: Page, group: string, tab: string) {

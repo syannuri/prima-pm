@@ -258,8 +258,8 @@ const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: 'Risk', tabs: ['Risk', 'RAID', 'Issues'] },
   { label: 'Quality', tabs: ['UAT'] },
   // Change Req = Integrated Change Control, a Monitoring & Controlling activity → grouped
-  // with the performance/control views (Forecast, EVM Trend) rather than with Quality.
-  { label: 'Performance', tabs: ['Timesheet', 'Change Req', 'Forecast', 'EVM Trend'] },
+  // with the monitoring/control views (Forecast, EVM Trend) rather than with Quality.
+  { label: 'Monitoring', tabs: ['Timesheet', 'Change Req', 'Forecast', 'EVM Trend'] },
   { label: 'Closure', tabs: ['Closeout'] },
   { label: 'Audit', tabs: ['Audit'] },
 ];
@@ -281,7 +281,7 @@ const GROUP_LABEL_ID: Record<string, string> = {
   Cost: 'Biaya',
   Risk: 'Risiko',
   Quality: 'Kualitas',
-  Performance: 'Kinerja',
+  Monitoring: 'Pemantauan',
   Closure: 'Penutupan',
   Audit: 'Audit',
 };

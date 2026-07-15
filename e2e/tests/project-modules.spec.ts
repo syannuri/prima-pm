@@ -40,13 +40,13 @@ test.describe('Project modules render', () => {
     await expect(page.getByText(/Critical Path \(CPM\)/)).toBeVisible();
   });
 
-  test('Forecast at completion (Performance)', async ({ page }) => {
-    await openTab(page, 'Performance', 'Forecast');
+  test('Forecast at completion (Monitoring)', async ({ page }) => {
+    await openTab(page, 'Monitoring', 'Forecast');
     await expect(page.getByText(/Forecast at Completion/i)).toBeVisible();
   });
 
-  test('Timesheet effort table (Performance)', async ({ page }) => {
-    await openTab(page, 'Performance', 'Timesheet');
+  test('Timesheet effort table (Monitoring)', async ({ page }) => {
+    await openTab(page, 'Monitoring', 'Timesheet');
     await expect(page.getByText(/plan · earned · consumed/i)).toBeVisible();
   });
 });
