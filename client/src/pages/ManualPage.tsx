@@ -43,7 +43,7 @@ const DOC: Record<Lang, Doc> = {
           'Masuk dengan akun Anda. Tampilan default dark mode (bisa diganti di Settings).',
           'Dari Dashboard, lihat ringkasan portfolio atau buka satu proyek dari sidebar kiri.',
           'Proyek baru dibuat oleh Admin/PMO lewat tombol “+ New Project”.',
-          'Di dalam proyek, tab teratas dikelompokkan per domain pengelolaan: Inisiasi · Jadwal · Biaya · Risiko · Kualitas · Pemantauan · Penutupan · Tata Kelola & Audit. Urutan tahapan proyek sendiri berjalan lewat status proyek & panduan “Next steps”, bukan lewat urutan tab.',
+          'Di dalam proyek, tab teratas dikelompokkan per domain pengelolaan: Inisiasi · Jadwal & WBS · Biaya · Risiko · Kualitas · Pemantauan · Penutupan · Tata Kelola & Audit. Urutan tahapan proyek sendiri berjalan lewat status proyek & panduan “Next steps”, bukan lewat urutan tab.',
         ] },
       ] },
       { id: 'konsep', nav: 'Konsep penting (EVM)', heading: '📐 Konsep penting (EVM)', blocks: [
@@ -71,11 +71,11 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'alur', nav: 'Alur kerja proyek', heading: '🔄 Alur kerja proyek (end-to-end)', blocks: [
-        { type: 'p', text: 'Tab teratas dikelompokkan per DOMAIN pengelolaan (Inisiasi · Jadwal · Biaya · Risiko · Kualitas · Pemantauan · Penutupan · Tata Kelola & Audit), bukan per tahap. Alasannya: satu tab seperti Jadwal atau Biaya memuat baseline SEKALIGUS aktual/tracking-nya, jadi tak bisa dikotak ke satu “fase”. Tahapan proyek justru berjalan lewat status (Draft → Chartered → In-progress → Closed) dan dituntun panduan Next-steps. Alur end-to-end:' },
+        { type: 'p', text: 'Tab teratas dikelompokkan per DOMAIN pengelolaan (Inisiasi · Jadwal & WBS · Biaya · Risiko · Kualitas · Pemantauan · Penutupan · Tata Kelola & Audit), bukan per tahap. Alasannya: satu tab seperti Jadwal atau Biaya memuat baseline SEKALIGUS aktual/tracking-nya, jadi tak bisa dikotak ke satu “fase”. Tahapan proyek justru berjalan lewat status (Draft → Chartered → In-progress → Closed) dan dituntun panduan Next-steps. Alur end-to-end:' },
         { type: 'steps', items: [
           'Inisiasi — di tab Inisiasi: isi Charter (piagam proyek) lalu Commit untuk mengunci baseline & membuka modul lain (Draft → Chartered), dan daftarkan Stakeholders & Requirements.',
-          'Susun baseline — di tab Jadwal susun Schedule/WBS lalu Capture Schedule Baseline; di tab Biaya isi Cost + rencana manpower & Procurement, lalu Lock Cost Baseline (urutan benar: capture schedule dulu, baru lock cost). Daftarkan Risk di tab Risiko. PMO/Admin lalu Activate proyek (Chartered → In-progress) setelah baseline lengkap.',
-          'Jalankan & kendalikan — update progress (tab Jadwal) & Actual Cost (tab Biaya, bisa auto-post dari timesheet), catat effort di Timesheet (tab Pemantauan), kelola Issues & RAID di tab Risiko, jalankan UAT di tab Kualitas, dan ajukan Change Request di tab Pemantauan bila ada perubahan setelah commit.',
+          'Susun baseline — di tab Jadwal & WBS susun Schedule/WBS lalu Capture Schedule Baseline; di tab Biaya isi Cost + rencana manpower & Procurement, lalu Lock Cost Baseline (urutan benar: capture schedule dulu, baru lock cost). Daftarkan Risk di tab Risiko. PMO/Admin lalu Activate proyek (Chartered → In-progress) setelah baseline lengkap.',
+          'Jalankan & kendalikan — update progress (tab Jadwal & WBS) & Actual Cost (tab Biaya, bisa auto-post dari timesheet), catat effort di Timesheet (tab Pemantauan), kelola Issues & RAID di tab Risiko, jalankan UAT di tab Kualitas, dan ajukan Change Request di tab Pemantauan bila ada perubahan setelah commit.',
           'Pantau kinerja — di tab Pemantauan: Forecast & EVM Trend, dilengkapi Dashboard & menu Reports (PDF/Excel).',
           'Tutup — di tab Penutupan: catat Acceptance Sign-off & Lessons Learned, lalu Close project.',
           'Panduan "🧭 Next steps" di tiap proyek menuntun langkah berikutnya sesuai tahap lifecycle.',
@@ -176,7 +176,7 @@ const DOC: Record<Lang, Doc> = {
           'Sign in with your account. The default theme is dark mode (changeable in Settings).',
           'From the Dashboard, review the portfolio or open a project from the left sidebar.',
           'New projects are created by Admin/PMO via the “+ New Project” button.',
-          'Inside a project, the top tabs are grouped by management domain: Initiating · Schedule · Cost · Risk · Quality · Monitoring · Closing · Governance & Audit. The project’s stage sequence runs via the project status & the “Next steps” guide, not the tab order.',
+          'Inside a project, the top tabs are grouped by management domain: Initiating · Schedule & WBS · Cost · Risk · Quality · Monitoring · Closing · Governance & Audit. The project’s stage sequence runs via the project status & the “Next steps” guide, not the tab order.',
         ] },
       ] },
       { id: 'konsep', nav: 'Key concepts (EVM)', heading: '📐 Key concepts (EVM)', blocks: [
@@ -204,11 +204,11 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'alur', nav: 'Project workflow', heading: '🔄 Project workflow (end-to-end)', blocks: [
-        { type: 'p', text: 'The top tabs are grouped by MANAGEMENT DOMAIN (Initiating · Schedule · Cost · Risk · Quality · Monitoring · Closing · Governance & Audit), not by phase. Why: a tab like Schedule or Cost holds BOTH its baseline AND its actuals/tracking, so it can’t be boxed into one “phase”. The stage sequence instead runs via the project status (Draft → Chartered → In-progress → Closed), guided by Next-steps. End-to-end flow:' },
+        { type: 'p', text: 'The top tabs are grouped by MANAGEMENT DOMAIN (Initiating · Schedule & WBS · Cost · Risk · Quality · Monitoring · Closing · Governance & Audit), not by phase. Why: a tab like Schedule or Cost holds BOTH its baseline AND its actuals/tracking, so it can’t be boxed into one “phase”. The stage sequence instead runs via the project status (Draft → Chartered → In-progress → Closed), guided by Next-steps. End-to-end flow:' },
         { type: 'steps', items: [
           'Initiating — on the Initiating tab: fill in the Charter, then Commit to lock the baseline & unlock the other modules (Draft → Chartered), and register Stakeholders & Requirements.',
-          'Set the baseline — on the Schedule tab build the Schedule/WBS then Capture the Schedule Baseline; on the Cost tab enter Cost + planned manpower & Procurement, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost). Register Risk under the Risk tab. PMO/Admin then Activate the project (Chartered → In-progress) once the baseline is complete.',
-          'Deliver & control — update progress (Schedule tab) & Actual Cost (Cost tab, optionally auto-posted from timesheets), log effort in Timesheet (Monitoring tab), manage Issues & RAID under Risk, run UAT under Quality, and raise a Change Request under Monitoring for any change after commit.',
+          'Set the baseline — on the Schedule & WBS tab build the Schedule/WBS then Capture the Schedule Baseline; on the Cost tab enter Cost + planned manpower & Procurement, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost). Register Risk under the Risk tab. PMO/Admin then Activate the project (Chartered → In-progress) once the baseline is complete.',
+          'Deliver & control — update progress (Schedule & WBS tab) & Actual Cost (Cost tab, optionally auto-posted from timesheets), log effort in Timesheet (Monitoring tab), manage Issues & RAID under Risk, run UAT under Quality, and raise a Change Request under Monitoring for any change after commit.',
           'Track performance — on the Monitoring tab: Forecast & EVM Trend, complemented by the Dashboard & the Reports menu (PDF/Excel).',
           'Close — on the Closing tab: record the Acceptance Sign-off & Lessons Learned, then Close the project.',
           'The "🧭 Next steps" guide on each project points to the next action for its lifecycle stage.',

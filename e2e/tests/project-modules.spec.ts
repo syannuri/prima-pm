@@ -36,7 +36,7 @@ test.describe('Project modules render', () => {
   });
 
   test('Schedule tab surfaces the Critical Path (CPM)', async ({ page }) => {
-    await openTab(page, 'Schedule', 'Schedule');
+    await openTab(page, 'Schedule & WBS', 'Schedule');
     await expect(page.getByText(/Critical Path \(CPM\)/)).toBeVisible();
   });
 

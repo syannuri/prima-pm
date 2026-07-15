@@ -253,7 +253,7 @@ export default function ProjectPage() {
 // still resolve. A single-tab group renders as a plain tab; a multi-tab group shows a sub-row.
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: 'Initiating', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
-  { label: 'Schedule', tabs: ['Schedule', 'Agile'] },
+  { label: 'Schedule & WBS', tabs: ['Schedule', 'Agile'] },
   { label: 'Cost', tabs: ['Cost', 'Procurement'] },
   { label: 'Risk', tabs: ['Risk', 'RAID', 'Issues'] },
   { label: 'Quality', tabs: ['UAT'] },
@@ -278,7 +278,7 @@ const TAB_ICONS: Record<Tab, string> = {
 // the English `label` above stays the id used by the level-1 tab bar).
 const GROUP_LABEL_ID: Record<string, string> = {
   Initiating: 'Inisiasi',
-  Schedule: 'Jadwal',
+  'Schedule & WBS': 'Jadwal & WBS',
   Cost: 'Biaya',
   Risk: 'Risiko',
   Quality: 'Kualitas',
