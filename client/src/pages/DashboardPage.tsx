@@ -116,7 +116,10 @@ export default function DashboardPage() {
   const today = now.toLocaleDateString(dateLocale(lang), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const projectCount = data?.projects.length ?? 0;
   const noun = projectCount === 1 ? 'project' : 'projects';
-  const pulse = projectCount === 0
+  // Don't claim "No projects yet" while the list is still loading (misleads on a slow paint).
+  const pulse = isLoading
+    ? (lang === 'id' ? 'Memuat…' : 'Loading…')
+    : projectCount === 0
     ? (lang === 'id' ? 'Belum ada proyek' : 'No projects yet')
     : lang === 'id'
       ? `${projectCount} proyek ${isPmo ? 'di portfolio' : 'untuk Anda'}`

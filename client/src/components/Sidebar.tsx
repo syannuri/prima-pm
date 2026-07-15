@@ -34,7 +34,7 @@ const linkActive = 'bg-brand-600/15 text-white shadow-[inset_2px_0_0_#f4675f]';
 export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const { user } = useAuth();
   const isAdminPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
-  const { data } = useQuery({
+  const { data, isLoading: projectsLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.get<{ projects: Project[] }>('/projects'),
   });
@@ -97,7 +97,10 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
         )}
         {!collapsed && <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Projects</div>}
         {collapsed && <div className="my-2 border-t border-slate-800" />}
-        {!collapsed && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-500">No projects yet</div>}
+        {/* Don't flash "No projects yet" while the list is still loading (looks like the
+            projects vanished on a slow first paint). */}
+        {!collapsed && projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-500">Loading…</div>}
+        {!collapsed && !projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-500">No projects yet</div>}
         {visibleProjects.map((p) => (
           <NavLink key={p.id} to={`/projects/${p.id}`} onClick={onNavigate} title={p.name} className={({ isActive }) => cx(isActive)}>
             {collapsed ? (
