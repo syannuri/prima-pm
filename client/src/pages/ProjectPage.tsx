@@ -255,8 +255,11 @@ const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: 'Initiation', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
   { label: 'Schedule', tabs: ['Schedule', 'Agile'] },
   { label: 'Cost', tabs: ['Cost', 'Procurement'] },
-  { label: 'Risk & Controls', tabs: ['Risk', 'RAID', 'Issues', 'UAT', 'Change Req'] },
-  { label: 'Performance', tabs: ['Timesheet', 'Forecast', 'EVM Trend'] },
+  { label: 'Risk', tabs: ['Risk', 'RAID', 'Issues'] },
+  { label: 'Quality', tabs: ['UAT'] },
+  // Change Req = Integrated Change Control, a Monitoring & Controlling activity → grouped
+  // with the performance/control views (Forecast, EVM Trend) rather than with Quality.
+  { label: 'Performance', tabs: ['Timesheet', 'Change Req', 'Forecast', 'EVM Trend'] },
   { label: 'Closure', tabs: ['Closeout'] },
   { label: 'Audit', tabs: ['Audit'] },
 ];
@@ -276,7 +279,8 @@ const GROUP_LABEL_ID: Record<string, string> = {
   Initiation: 'Inisiasi',
   Schedule: 'Jadwal',
   Cost: 'Biaya',
-  'Risk & Controls': 'Risiko & Kontrol',
+  Risk: 'Risiko',
+  Quality: 'Kualitas',
   Performance: 'Kinerja',
   Closure: 'Penutupan',
   Audit: 'Audit',

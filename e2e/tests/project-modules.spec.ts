@@ -28,8 +28,8 @@ test.describe('Project modules render', () => {
     await expect(page.getByText('Procurement Register')).toBeVisible();
   });
 
-  test('RAID log with Assumptions & Dependencies (Risk & Controls)', async ({ page }) => {
-    await openTab(page, 'Risk & Controls', 'RAID');
+  test('RAID log with Assumptions & Dependencies (Risk)', async ({ page }) => {
+    await openTab(page, 'Risk', 'RAID');
     await expect(page.getByText('RAID Log')).toBeVisible();
     await expect(page.getByRole('button', { name: /Add assumption/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Add dependency/i })).toBeVisible();

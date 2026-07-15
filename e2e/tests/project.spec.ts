@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { login, openFirstProject } from './helpers';
 
-// The tab bar groups tabs by management domain (Initiation/Schedule/Cost/Risk & Controls/
+// The tab bar groups tabs by management domain (Initiation/Schedule/Cost/Risk/Quality/
 // Performance/Closure/Audit); open the group (its stable aria-label) then click the tab.
 // `.first()` guards the case where a group label also exists as a sub-tab pill (e.g. the
 // "Cost" group contains a "Cost" tab). Single-tab groups (Closure/Audit) are plain buttons.
@@ -21,7 +21,7 @@ test.describe('Project workspace', () => {
     await openTab(page, 'Cost', 'Cost');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
 
-    await openTab(page, 'Risk & Controls', 'Risk');
+    await openTab(page, 'Risk', 'Risk');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
 
     await openTab(page, 'Schedule', 'Schedule');
