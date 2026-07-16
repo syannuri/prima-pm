@@ -1754,6 +1754,20 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
     });
   });
 
+  describe('guest report hub (scoped to personal projects)', () => {
+    it('a guest reads the scoped portfolio summary + exports + their own project report, never corporate', async () => {
+      const sum = await request(app).get(api('/portfolio/summary')).set(auth(guestToken));
+      expect(sum.status).toBe(200);
+      expect(sum.body.projects.some((p: { id: string }) => p.id === corpProjectId)).toBe(false); // no corporate leak
+      // the portfolio PDF/Excel exports work for a guest (scoped to their projects)
+      expect((await request(app).get(api('/portfolio/export/pdf')).set(auth(guestToken))).status).toBe(200);
+      expect((await request(app).get(api('/portfolio/export/excel')).set(auth(guestToken))).status).toBe(200);
+      // a per-project report for their OWN project, but not a corporate one
+      expect((await request(app).get(api(`/projects/${personalProjectId}/report?period=weekly`)).set(auth(guestToken))).status).toBe(200);
+      expect((await request(app).get(api(`/projects/${corpProjectId}/report?period=weekly`)).set(auth(guestToken))).status).toBe(403);
+    });
+  });
+
   describe('hard-delete a guest purges the whole sandbox', () => {
     let g3 = '';
     let g3Token = '';

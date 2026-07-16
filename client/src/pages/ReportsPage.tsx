@@ -10,6 +10,7 @@ import ExecutiveReport from '../components/ExecutiveReport';
 import PortfolioReport from '../components/PortfolioReport';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ForecastPanel from './panels/ForecastPanel';
+import { useAuth } from '../context/AuthContext';
 import AgileReports from './panels/AgileReports';
 
 // The Reporting Hub's two-axis model. All four cadences are now wired to the report engine
@@ -39,6 +40,8 @@ const HEALTH: Record<string, { color: string; label: string }> = {
 };
 
 export default function ReportsPage() {
+  const { user } = useAuth();
+  const isGuest = user?.role === 'GUEST';
   const [view, setView] = useState<View>('project');
   const [projectId, setProjectId] = useState('');
   const [cadence, setCadence] = useState<Cadence>('weekly');
@@ -70,9 +73,11 @@ export default function ReportsPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Reports</h1>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{isGuest ? 'My Reports' : 'Reports'}</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Central reporting hub — pick a scope and cadence, view on screen, then export. One place for every report.
+          {isGuest
+            ? 'Reporting hub for your own projects — pick a scope and cadence, view on screen, then export.'
+            : 'Central reporting hub — pick a scope and cadence, view on screen, then export. One place for every report.'}
         </p>
       </div>
 

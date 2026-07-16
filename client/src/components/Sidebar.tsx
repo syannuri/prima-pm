@@ -73,10 +73,11 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
             <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{unread}</span>
           ))}
         </NavLink>
-        {/* Reports — PM status report (weekly/monthly); PMs run them, ADMIN/PMO oversee. */}
-        {!!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role) && (
-          <NavLink to="/reports" onClick={onNavigate} title="Reports" className={({ isActive }) => cx(isActive)}>
-            <Icon path={ICONS.reports} /> {!collapsed && 'Reports'}
+        {/* Reports — PM status report (weekly/monthly); PMs run them, ADMIN/PMO oversee. A guest
+            gets the same hub scoped to their own personal projects. */}
+        {!!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'GUEST'].includes(user.role) && (
+          <NavLink to="/reports" onClick={onNavigate} title={user.role === 'GUEST' ? 'My Reports' : 'Reports'} className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.reports} /> {!collapsed && (user.role === 'GUEST' ? 'My Reports' : 'Reports')}
           </NavLink>
         )}
         {/* Timesheet is for people who do task work — hide it for ADMIN/PMO (portfolio roles). */}
