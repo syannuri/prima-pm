@@ -53,11 +53,11 @@ async function seedRateCards() {
     { roleName: 'Security Analyst', level: 'Senior', unitCostPerManday: 2_800_000 },
   ];
   for (const c of cards) {
-    await prisma.rateCard.upsert({
-      where: { roleName_level: { roleName: c.roleName, level: c.level } },
-      create: c,
-      update: { unitCostPerManday: c.unitCostPerManday },
-    });
+    // (roleName, level) is unique per owner scope (corporate = personalOwnerId NULL) at the app
+    // layer now — there's no compound DB key to upsert on, so find-or-update by hand.
+    const existing = await prisma.rateCard.findFirst({ where: { roleName: c.roleName, level: c.level, personalOwnerId: null } });
+    if (existing) await prisma.rateCard.update({ where: { id: existing.id }, data: { unitCostPerManday: c.unitCostPerManday } });
+    else await prisma.rateCard.create({ data: c });
   }
   console.log(`  ✓ ${cards.length} rate cards`);
 }
