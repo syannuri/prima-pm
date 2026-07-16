@@ -1606,4 +1606,35 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
     expect((await request(app).patch(api(`/projects/${corpProjectId}`)).set(auth(tokens.ADMIN)).send({ name: 'Corp renamed' })).status).toBe(200);
     expect((await request(app).patch(api(`/projects/${corpProjectId}`)).set(auth(tokens.FINANCE)).send({ name: 'nope' })).status).toBe(403);
   });
+
+  // The guest owner must be able to BUILD their personal project, not just rename it: module
+  // writes (WBS/schedule/cost/…) previously used a global requireRole that excluded GUEST, so a
+  // guest could commit a charter but then couldn't add a WBS task or capture a baseline. The
+  // module write guards now use requireProjectGovernance, which the personal owner self-satisfies.
+  it('the guest owner can build the WBS + capture the schedule baseline on their personal project (the reported gap)', async () => {
+    // Charter it (self-governed) — createTask requires a chartered project.
+    expect((await request(app).patch(api(`/projects/${personalProjectId}`)).set(auth(guestToken)).send({ status: 'CHARTERED' })).status).toBe(200);
+    const task = await request(app).post(api(`/projects/${personalProjectId}/schedule/tasks`)).set(auth(guestToken))
+      .send({ name: 'Guest WBS task', planStart: '2026-08-01', planEnd: '2026-08-10' });
+    expect(task.status).toBe(201); // was 403 before the requireProjectGovernance swap
+    const baseline = await request(app).post(api(`/projects/${personalProjectId}/schedule/baseline`)).set(auth(guestToken));
+    expect(baseline.status).toBe(200);
+  });
+
+  it('the guest owner can add a direct cost line on their personal project', async () => {
+    const cost = await request(app).post(api(`/projects/${personalProjectId}/cost/direct`)).set(auth(guestToken))
+      .send({ type: 'HARDWARE_EQUIPMENT', label: 'Laptop', qty: 1, unitCost: 10_000_000 });
+    expect(cost.status).toBe(201);
+  });
+
+  it("a non-owner cannot write to a guest's personal project modules (another guest AND ADMIN → 403)", async () => {
+    const body = { name: 'x', planStart: '2026-08-01', planEnd: '2026-08-05' };
+    expect((await request(app).post(api(`/projects/${personalProjectId}/schedule/tasks`)).set(auth(guest2Token)).send(body)).status).toBe(403);
+    expect((await request(app).post(api(`/projects/${personalProjectId}/schedule/tasks`)).set(auth(tokens.ADMIN)).send(body)).status).toBe(403);
+  });
+
+  it('corporate module writes unchanged: a non-owner FINANCE cannot add a WBS task to a corporate project (403)', async () => {
+    expect((await request(app).post(api(`/projects/${corpProjectId}/schedule/tasks`)).set(auth(tokens.FINANCE))
+      .send({ name: 'x', planStart: '2026-08-01', planEnd: '2026-08-05' })).status).toBe(403);
+  });
 });

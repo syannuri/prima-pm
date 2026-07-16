@@ -6,7 +6,7 @@ import type { AgileBoard, BacklogItem, BacklogStatus, BacklogType, Sprint, User 
 import { Badge, Button, Card, EmptyState, Input, SectionTitle, Select, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { BACKLOG_STATUS_LABEL, BACKLOG_TYPE_BADGE } from '../../lib/labels';
 import EvmHealth from '../../components/EvmHealth';
 import AgileReports from './AgileReports';
@@ -26,8 +26,7 @@ export default function AgilePanel({ projectId, approach, chartered }: { project
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
-  const canEdit = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canEdit = useProjectWrite(projectId);
   const base = `/projects/${projectId}/agile`;
   const [view, setView] = useState<'board' | 'backlog' | 'reports'>('board');
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema, applyTemplateSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
@@ -11,7 +11,7 @@ const canRead = requireProjectAccess({ allowRoles: ['FINANCE', 'RISK_OFFICER'] }
 // TEAM_MEMBER (PIC) may update task progress/actuals; write guard refined per route.
 const canWrite = [
   requireProjectAccess({ write: true }),
-  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER'),
+  requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER'),
 ];
 
 // Flat list (tasks + dependencies).

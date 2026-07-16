@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { createTestCaseSchema, updateTestCaseSchema } from './uat.schemas.js';
 import * as svc from './uat.service.js';
 
@@ -9,7 +9,7 @@ const router = Router({ mergeParams: true });
 // UAT is a delivery artifact: the owning PM + ADMIN/PMO manage it (same as Closeout). Read is
 // the default project access (owner + ADMIN/PMO); write also requires one of those roles.
 const canRead = requireProjectAccess();
-const canWrite = [requireProjectAccess({ write: true }), requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER')];
+const canWrite = [requireProjectAccess({ write: true }), requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER')];
 
 router.get(
   '/',

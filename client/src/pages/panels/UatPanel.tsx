@@ -5,7 +5,7 @@ import type { UatStatus, UatSummary, UatTestCase } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatDate } from '../../lib/format';
 
 const STATUSES: UatStatus[] = ['NOT_RUN', 'PASS', 'FAIL', 'BLOCKED'];
@@ -13,12 +13,11 @@ const STATUS_LABEL: Record<UatStatus, string> = { NOT_RUN: 'Not run', PASS: 'Pas
 const STATUS_COLOR: Record<UatStatus, string> = { NOT_RUN: 'slate', PASS: 'green', FAIL: 'red', BLOCKED: 'amber' };
 
 export default function UatPanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
   const base = `/projects/${projectId}/uat`;
-  const canEdit = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canEdit = useProjectWrite(projectId);
   const [form, setForm] = useState<null | { edit?: UatTestCase }>(null);
 
   const q = useQuery({ queryKey: ['uat', projectId], queryFn: () => api.get<{ items: UatTestCase[]; summary: UatSummary }>(base) });

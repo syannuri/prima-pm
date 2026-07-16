@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { upsertStakeholderSchema } from './stakeholder.schemas.js';
 import * as svc from './stakeholder.service.js';
 
@@ -8,7 +8,7 @@ const router = Router({ mergeParams: true });
 
 // The stakeholder register is cross-functional; FINANCE/RISK_OFFICER may read it too.
 const canRead = requireProjectAccess({ allowRoles: ['RISK_OFFICER', 'FINANCE'] });
-const canWrite = [requireProjectAccess({ write: true }), requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER')];
+const canWrite = [requireProjectAccess({ write: true }), requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER')];
 
 router.get('/', canRead, asyncHandler(async (req, res) => {
   res.json({ stakeholders: await svc.listStakeholders(req.params.projectId) });

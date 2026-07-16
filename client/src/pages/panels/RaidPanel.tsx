@@ -5,7 +5,7 @@ import type { Assumption, AssumptionStatus, ProjectDependency, DependencyDirecti
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatDate } from '../../lib/format';
 
 const IMPACTS: IssueImpact[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -21,8 +21,7 @@ const DIR_LABEL: Record<DependencyDirection, string> = { INBOUND: '⇦ Inbound (
 // The RAID log — Risks · Assumptions · Issues · Dependencies in one place. Risk & Issue are
 // managed in their own tabs (shown here as counts); Assumptions & Dependencies are managed inline.
 export default function RaidPanel({ projectId, onJump }: { projectId: string; onJump?: (tab: string) => void }) {
-  const { user } = useAuth();
-  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canWrite = useProjectWrite(projectId);
   const base = `/projects/${projectId}/raid`;
 
   const aQ = useQuery({ queryKey: ['assumptions', projectId], queryFn: () => api.get<{ assumptions: Assumption[] }>(`${base}/assumptions`) });

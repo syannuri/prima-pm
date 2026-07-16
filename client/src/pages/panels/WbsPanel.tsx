@@ -6,7 +6,7 @@ import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, SectionTitl
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 
 interface Row {
   node: GanttNode;
@@ -187,10 +187,9 @@ function nextTaskStart(rows: Row[], parentId: string | null): Date | null {
 }
 
 export default function WbsPanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
   const qc = useQueryClient();
   const base = `/projects/${projectId}/schedule`;
-  const canEdit = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canEdit = useProjectWrite(projectId);
 
   const ganttQ = useQuery({
     queryKey: ['gantt', projectId],

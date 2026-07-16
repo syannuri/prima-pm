@@ -5,7 +5,7 @@ import type { Procurement, ContractType, ProcurementStatus } from '../../api/typ
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatIdr, formatDate } from '../../lib/format';
 
 const TYPES: ContractType[] = ['FIXED_PRICE', 'TIME_AND_MATERIALS', 'COST_PLUS', 'PURCHASE_ORDER'];
@@ -17,8 +17,7 @@ const STATUS_COLOR: Record<ProcurementStatus, string> = { PLANNED: 'slate', SOLI
 const COMMITTED: ProcurementStatus[] = ['AWARDED', 'IN_PROGRESS', 'DELIVERED'];
 
 export default function ProcurementPanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
-  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canWrite = useProjectWrite(projectId);
   const qc = useQueryClient();
   const base = `/projects/${projectId}/procurements`;
   const [editing, setEditing] = useState<Procurement | null>(null);

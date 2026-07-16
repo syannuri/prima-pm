@@ -7,7 +7,7 @@ import type {
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 
 const CATEGORIES: RequirementCategory[] = ['FUNCTIONAL', 'NON_FUNCTIONAL', 'BUSINESS', 'TECHNICAL', 'REGULATORY', 'OTHER'];
 const PRIORITIES: RequirementPriority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
@@ -27,8 +27,7 @@ const STATUS_COLOR: Record<RequirementStatus, string> = {
 };
 
 export default function RequirementsPanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
-  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canWrite = useProjectWrite(projectId);
   const qc = useQueryClient();
   const base = `/projects/${projectId}/requirements`;
   const [editing, setEditing] = useState<Requirement | null>(null);

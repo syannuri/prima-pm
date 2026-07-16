@@ -4,7 +4,7 @@ import { api, ApiError } from '../../api/client';
 import type { CostSummary } from '../../api/types';
 import { Button, Card, Input, Select, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatNum, formatDateInput, formatIdr } from '../../lib/format';
 
 interface TimesheetLine {
@@ -43,10 +43,9 @@ const remClass = (rem: number) =>
 // against earned man-days (progress × plan). Efficiency = earned ÷ consumed — a
 // labour CPI: < 1 means more effort spent than the delivered work is worth.
 export default function TimesheetPanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
-  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE'].includes(user.role);
+  const canWrite = useProjectWrite(projectId, ['FINANCE']);
 
   const { data, isLoading } = useQuery({
     queryKey: ['timesheet', projectId],

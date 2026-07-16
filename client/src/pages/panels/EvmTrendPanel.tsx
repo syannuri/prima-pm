@@ -5,7 +5,7 @@ import type { EvmSnapshot, EvmTrend } from '../../api/types';
 import { Button, Card, Input, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatIdr, formatDate, formatDateInput, formatNum } from '../../lib/format';
 import EvmTrendChart, { CpiSpiTrend } from '../../components/EvmTrendChart';
 
@@ -18,8 +18,7 @@ const arrow = (d: Dir) => (d === 'up' ? '▲' : d === 'down' ? '▼' : '·');
 // capturing a status snapshot freezes PV/EV/AC/CPI/SPI so the S-curve and the
 // CPI/SPI trend build up over the life of the project (like a CPR/IPMR).
 export default function EvmTrendPanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
-  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canWrite = useProjectWrite(projectId);
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();

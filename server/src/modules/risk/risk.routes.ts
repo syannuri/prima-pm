@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { upsertRiskSchema } from './risk.schemas.js';
 import * as svc from './risk.service.js';
 
@@ -10,7 +10,7 @@ const router = Router({ mergeParams: true });
 const canRead = requireProjectAccess({ allowRoles: ['RISK_OFFICER', 'FINANCE'] });
 const canWrite = [
   requireProjectAccess({ write: true, allowRoles: ['RISK_OFFICER'] }),
-  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER', 'RISK_OFFICER'),
+  requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER', 'RISK_OFFICER'),
 ];
 
 // Risk register.

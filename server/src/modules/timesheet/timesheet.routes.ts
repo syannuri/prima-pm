@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { mandayEntrySchema } from './timesheet.schemas.js';
 import * as svc from './timesheet.service.js';
 
@@ -11,7 +11,7 @@ const router = Router({ mergeParams: true });
 const canRead = requireProjectAccess({ allowRoles: ['FINANCE', 'RISK_OFFICER'] });
 const canWrite = [
   requireProjectAccess({ write: true, allowRoles: ['FINANCE'] }),
-  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE'),
+  requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE'),
 ];
 
 router.get(

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { sprintSchema, sprintUpdateSchema, backlogItemSchema, backlogItemUpdateSchema } from './agile.schemas.js';
 import { evmQuerySchema } from '../schedule/schedule.schemas.js';
 import * as svc from './agile.service.js';
@@ -8,7 +8,7 @@ import * as svc from './agile.service.js';
 const router = Router({ mergeParams: true });
 
 const canRead = requireProjectAccess({ allowRoles: ['FINANCE', 'RISK_OFFICER'] });
-const canWrite = [requireProjectAccess({ write: true }), requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER')];
+const canWrite = [requireProjectAccess({ write: true }), requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER')];
 
 // Board payload: sprints + backlog items.
 router.get('/', canRead, asyncHandler(async (req, res) => {

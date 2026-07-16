@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { upsertAssumptionSchema, upsertDependencySchema } from './raid.schemas.js';
 import * as svc from './raid.service.js';
 
 const router = Router({ mergeParams: true });
 
 const canRead = requireProjectAccess({ allowRoles: ['RISK_OFFICER', 'FINANCE'] });
-const canWrite = [requireProjectAccess({ write: true }), requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER')];
+const canWrite = [requireProjectAccess({ write: true }), requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER')];
 
 // ---------- Assumptions ----------
 router.get('/assumptions', canRead, asyncHandler(async (req, res) => {

@@ -5,14 +5,13 @@ import type { KickoffActionItem, KickoffActionStatus, KickoffAttendee, KickoffDa
 import { Badge, Button, Card, Field, Input, SectionTitle, Spinner, Textarea, Toggle } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatDate, formatDateInput } from '../../lib/format';
 
 export default function KickoffPanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
   const qc = useQueryClient();
   const base = `/projects/${projectId}/kickoff`;
-  const canEdit = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canEdit = useProjectWrite(projectId);
 
   const q = useQuery({ queryKey: ['kickoff', projectId], queryFn: () => api.get<KickoffData>(base) });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['kickoff', projectId] });

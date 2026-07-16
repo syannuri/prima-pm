@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
-import { requireRole, requireProjectAccess } from '../../middleware/rbac.js';
+import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { upsertMeetingSchema, attendeeSchema, attendeePatchSchema, actionItemSchema, actionItemPatchSchema } from './kickoff.schemas.js';
 import * as svc from './kickoff.service.js';
 
@@ -8,7 +8,7 @@ const router = Router({ mergeParams: true });
 
 // Initiating artifact: the owning PM + ADMIN/PMO manage it (same as Charter/Closeout).
 const canRead = requireProjectAccess();
-const canWrite = [requireProjectAccess({ write: true }), requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER')];
+const canWrite = [requireProjectAccess({ write: true }), requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER')];
 
 router.get('/', canRead, asyncHandler(async (req, res) => {
   res.json(await svc.getKickoff(req.params.projectId));

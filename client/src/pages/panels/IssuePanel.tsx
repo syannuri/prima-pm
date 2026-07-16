@@ -5,7 +5,7 @@ import type { Issue, IssueImpact, IssueStatus, User } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatDate } from '../../lib/format';
 
 const IMPACTS: IssueImpact[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -15,8 +15,7 @@ const STATUS_COLOR: Record<IssueStatus, string> = { OPEN: 'amber', IN_PROGRESS: 
 const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function IssuePanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
-  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canWrite = useProjectWrite(projectId);
   const qc = useQueryClient();
   const base = `/projects/${projectId}/issues`;
   const [editing, setEditing] = useState<Issue | null>(null);

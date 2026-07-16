@@ -6,7 +6,7 @@ import { Button, Card, Input, MoneyInput, SectionTitle, Select, Spinner } from '
 import BaselineLock from '../../components/BaselineLock';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
 
 // Sentinel description of the auto-derived "labour from timesheet" AC entry (mirrors the server).
@@ -90,16 +90,15 @@ export default function CostPanel({ projectId }: { projectId: string }) {
 
       <DirectCosts data={data!} base={base} onChange={invalidate} />
       <IndirectCosts data={data!} base={base} onChange={invalidate} />
-      <ActualCosts data={data!} base={base} onChange={invalidate} />
+      <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} />
     </div>
   );
 }
 
-function ActualCosts({ data, base, onChange }: { data: CostSummary; base: string; onChange: () => void }) {
+function ActualCosts({ data, base, projectId, onChange }: { data: CostSummary; base: string; projectId: string; onChange: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
-  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE'].includes(user.role);
+  const canWrite = useProjectWrite(projectId, ['FINANCE']);
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');

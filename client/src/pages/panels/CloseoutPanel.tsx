@@ -5,7 +5,7 @@ import type { AcceptanceDecision, AcceptanceSignoff, LessonCategory, LessonLearn
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatDate } from '../../lib/format';
 
 const LESSON_CATEGORIES: LessonCategory[] = ['WENT_WELL', 'WENT_WRONG', 'RECOMMENDATION'];
@@ -25,8 +25,7 @@ const DECISION_COLOR: Record<AcceptanceDecision, string> = { ACCEPTED: 'green', 
 // closure-readiness checklist. Available throughout the project (lessons accrue as
 // you go; acceptance is recorded near the end).
 export default function CloseoutPanel({ projectId }: { projectId: string }) {
-  const { user } = useAuth();
-  const canWrite = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  const canWrite = useProjectWrite(projectId);
   return (
     <div className="space-y-5">
       <LessonsSection projectId={projectId} canWrite={canWrite} />
