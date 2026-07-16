@@ -9,16 +9,18 @@ const PEOPLE = 'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4
 const CLOCK = 'M12 8v4l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
 
 // iOS-style bottom tab bar (phones only). Three glanceable destinations.
-// The third tab is role-adaptive: portfolio roles get Resources; delivery
-// staff (PM/member) get their Timesheet — /admin/resources would 403 for them.
+// The third tab is role-adaptive: portfolio roles get the corporate Resources pool, a guest
+// gets their OWN private pool, and delivery staff (PM/member) get their Timesheet — each avoids
+// a destination that would 403 for that role.
 export default function MobileTabBar() {
   const loc = useLocation();
   const { user } = useAuth();
   const notifCount = useNotificationCount();
   const cards = loc.search.includes('view=cards');
   const isPortfolio = !!user && ['ADMIN', 'PMO', 'FINANCE'].includes(user.role);
-  const third = isPortfolio
-    ? { to: '/admin/resources', label: 'Resources', icon: PEOPLE, active: loc.pathname.startsWith('/admin/resources') }
+  const isGuest = user?.role === 'GUEST';
+  const third = isPortfolio || isGuest
+    ? { to: '/admin/resources', label: isGuest ? 'My Resources' : 'Resources', icon: PEOPLE, active: loc.pathname.startsWith('/admin/resources') }
     : { to: '/my-timesheet', label: 'Timesheet', icon: CLOCK, active: loc.pathname.startsWith('/my-timesheet') };
   const tabs = [
     // Home carries the notification badge — the dashboard is where you act on alerts.
