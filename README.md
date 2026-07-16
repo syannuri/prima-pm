@@ -63,7 +63,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 **Guided next steps** — a contextual card on every project that tells the PM what to do next for the current lifecycle stage (charter → baseline → activate → monitor → close), jumping straight to the right tab.
 
-![Guided next-steps card showing record-acceptance, capture-lessons and close-project cues for a project in execution](docs/screenshots/next-steps.png)
+![Guided next-steps card showing capture-schedule-baseline and lock-cost-baseline cues for a project in the planning stage](docs/screenshots/next-steps.png)
 
 **Self-service guest workspace** — anyone can create a **guest account** (sign up with email; Google sign-in coming soon) and manage their **own personal projects** end-to-end — charter → baseline → deliver → close — with **no approval matrix** (the guest is their own PMO). Guest projects are **fully sandboxed**: invisible to corporate users and never part of the corporate portfolio.
 
