@@ -221,7 +221,7 @@ export default function ProjectPage() {
         </Card>
       )}
 
-      {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} />}
+      {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} personalOwnerId={project.personalOwnerId ?? null} />}
       {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
       {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
       {activeTab === 'Procurement' && chartered && <ProcurementPanel projectId={projectId} />}

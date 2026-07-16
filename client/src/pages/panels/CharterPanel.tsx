@@ -35,9 +35,11 @@ const empty: Form = {
   hiScheduleStart: '', hiScheduleEnd: '', hiDeliverables: '', pmUserId: '',
 };
 
-export default function CharterPanel({ projectId, approach: initialApproach, sponsor: initialSponsor }: { projectId: string; approach: DeliveryApproach; sponsor: string | null }) {
+export default function CharterPanel({ projectId, approach: initialApproach, sponsor: initialSponsor, personalOwnerId }: { projectId: string; approach: DeliveryApproach; sponsor: string | null; personalOwnerId?: string | null }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState<Form>(empty);
+  // A personal (guest) project is always managed by its owner — default the PM to them and
+  // hide the picker (no corporate directory to choose from).
+  const [form, setForm] = useState<Form>(personalOwnerId ? { ...empty, pmUserId: personalOwnerId } : empty);
   const [approach, setApproach] = useState<DeliveryApproach>(initialApproach);
   const [sponsor, setSponsor] = useState<string>(initialSponsor ?? '');
   const [msg, setMsg] = useState('');
@@ -52,6 +54,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   const usersQ = useQuery({
     queryKey: ['directory'],
     queryFn: () => api.get<{ users: User[] }>('/users/directory'),
+    enabled: !personalOwnerId, // personal projects don't pick a PM from the directory
   });
 
   const charter = charterQ.data?.charter;
@@ -144,14 +147,20 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
             {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
           </Select>
         </Field>
-        <Field label="Project Manager">
-          <Select value={form.pmUserId} onChange={(e) => set('pmUserId', e.target.value)}>
-            <option value="">— select PM —</option>
-            {usersQ.data?.users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-            ))}
-          </Select>
-        </Field>
+        {personalOwnerId ? (
+          <Field label="Project Manager">
+            <Input value="You (personal project)" disabled />
+          </Field>
+        ) : (
+          <Field label="Project Manager">
+            <Select value={form.pmUserId} onChange={(e) => set('pmUserId', e.target.value)}>
+              <option value="">— select PM —</option>
+              {usersQ.data?.users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <Field label="Project Sponsor" hint="The authorizing party who funds & champions the project">
           <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office / CTO" />
         </Field>
