@@ -3,6 +3,7 @@ import { NotFound } from '../../lib/errors.js';
 // Methodology dispatcher (AGILE → points, HYBRID → blend, else → WBS) so the report's EVM
 // matches the Dashboard/Forecast exactly.
 import { getProjectEvm } from '../agile/agile.service.js';
+import { evmPvSeries } from '../schedule/evm.batch.js';
 import { getProjectForecast } from '../forecast/forecast.service.js';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -105,7 +106,9 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
     const end = Math.max(pf, ff ?? pf);
     const dates = sampleDates(ps, end, period, [now, pf, ...(ff ? [ff] : [])]);
     const acAsOf = (d: number) => actuals.reduce((s, e) => s + (+e.date <= d ? Number(e.amount) : 0), 0);
-    const pvs = await Promise.all(dates.map((d) => getProjectEvm(projectId, 0, new Date(d)).then((e) => e.pv)));
+    // PV per date via the batched series (predictive: one row-load reused across all dates;
+    // agile/hybrid: per-date dispatch). Same numbers as getProjectEvm(projectId, 0, d).pv.
+    const pvs = await evmPvSeries(projectId, dates);
     sCurve = dates.map((d, i) => ({
       t: new Date(d).toISOString(),
       pv: r2(pvs[i]),

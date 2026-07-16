@@ -5,6 +5,7 @@ import { NotFound } from '../../lib/errors.js';
 // here made agile/hybrid projects show BAC/EV/CPI/SPI ≈ 0 on Forecast while other surfaces
 // used story-point EVM.
 import { getProjectEvm } from '../agile/agile.service.js';
+import { evmPvSeries } from '../schedule/evm.batch.js';
 
 const DAY = 86_400_000;
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -60,8 +61,9 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
     const marks = new Set<number>([now, plannedFinish, ...(forecastFinish ? [forecastFinish] : [])]);
     for (let i = 0; i <= N; i++) marks.add(Math.round(plannedStart + ((end - plannedStart) * i) / N));
     const dates = [...marks].filter((d) => d >= plannedStart && d <= end).sort((a, b) => a - b);
-    // PV per methodology (points-based for agile); pass actualCost=0 to skip the AC lookup.
-    const pvs = await Promise.all(dates.map((d) => getProjectEvm(projectId, 0, new Date(d)).then((e) => e.pv)));
+    // PV per methodology (points-based for agile); batched (predictive loads WBS/cost rows once
+    // and evaluates each date in memory). Identical to getProjectEvm(projectId, 0, d).pv.
+    const pvs = await evmPvSeries(projectId, dates);
     dates.forEach((d, i) => {
       const forecast = forecastFinish && forecastFinish > now && d >= now
         ? r2(ac + (likely - ac) * ((d - now) / (forecastFinish - now)))

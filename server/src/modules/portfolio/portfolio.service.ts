@@ -1,7 +1,6 @@
 import type { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { getEvm } from '../schedule/schedule.service.js';
-import { getAgileEvm, getHybridEvm } from '../agile/agile.service.js';
+import { computeEvmForProjects } from '../schedule/evm.batch.js';
 import { round2 } from '../../calc/money.js';
 
 // FINANCE oversees cost across the whole portfolio, so it sees all projects (like PMO),
@@ -99,25 +98,16 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
   }
 
   // EVM per project by methodology (agile → story points; hybrid → blended WBS + points;
-  // predictive → WBS schedule). Computed CONCURRENTLY — this was a sequential await-in-loop, so
-  // the dashboard's dominant read cost went from O(projects × ~5 queries) serial to parallel.
-  const evms = await Promise.all(
-    projects.map((p) =>
-      p.status === 'DRAFT'
-        ? Promise.resolve(null)
-        : p.deliveryApproach === 'AGILE'
-          ? getAgileEvm(p.id, undefined, statusDate)
-          : p.deliveryApproach === 'HYBRID'
-            ? getHybridEvm(p.id, undefined, statusDate)
-            : getEvm(p.id, undefined, statusDate),
-    ),
-  );
+  // predictive → WBS schedule). Batched: the many predictive projects share a handful of bulk
+  // queries (was O(projects × ~5) — see computeEvmForProjects); agile/hybrid still dispatch
+  // per-project. DRAFT projects are omitted from the map (no baseline yet).
+  const evmMap = await computeEvmForProjects(projects, statusDate);
 
   const rows: PortfolioRow[] = [];
   // Portfolio physical progress = duration-weighted roll-up across projects.
   const schedAccum = { weighted: 0, weight: 0 };
-  projects.forEach((p, i) => {
-    const evm = evms[i];
+  projects.forEach((p) => {
+    const evm = evmMap.get(p.id) ?? null;
     const pv = evm?.pv ?? 0, ev = evm?.ev ?? 0, ac = evm?.ac ?? 0, spi = evm?.spi ?? 0, cpi = evm?.cpi ?? 0;
     const percentComplete = evm?.percentComplete ?? 0, leafTaskCount = evm?.leafTaskCount ?? 0;
     const scheduleProgress = evm?.scheduleProgress ?? 0, scheduleWeight = evm?.scheduleWeight ?? 0;

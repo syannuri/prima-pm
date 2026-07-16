@@ -427,18 +427,35 @@ export async function getManpowerSync(projectId: string) {
   );
 }
 
+// Raw task columns needed for predictive EVM. Kept minimal so the batched portfolio
+// path (evm.batch.ts) can select exactly these across many projects in one query.
+export interface EvmTaskRow {
+  id: string;
+  parentTaskId: string | null;
+  planStart: Date;
+  planEnd: Date;
+  progressPct: number;
+  baselineStart: Date | null;
+  baselineFinish: Date | null;
+}
+
+export interface EvmRows {
+  tasks: EvmTaskRow[];
+  costByTask: Map<string, number>;
+  actualCost: number;
+  scheduleBaselinedAt: Date | null;
+  costBaselineBAC: number;
+  statusDate: Date;
+}
+
 /**
- * EVM from the schedule: leaf tasks only (avoid double-counting parents),
- * budget per task = Σ linked manpower cost, AC supplied (manual, MVP).
+ * PURE predictive EVM from already-loaded rows: leaf tasks only (avoid double-counting
+ * parents), budget per leaf = Σ linked direct cost (cost-weighted) or duration (fallback).
+ * The single-project loader (getEvm) and the batched portfolio path (computeEvmForProjects)
+ * both funnel through this ONE function, so their EVM numbers are identical by construction.
  */
-export async function getEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
-  const [tasks, costByTask, resolvedAc, project] = await Promise.all([
-    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, baselineStart: true, baselineFinish: true } }),
-    directCostByTask(projectId),
-    // Use the explicit override if provided, else the stored time-phased AC.
-    actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
-    prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true } }),
-  ]);
+export function evmFromRows(r: EvmRows) {
+  const { tasks, costByTask, actualCost, scheduleBaselinedAt, costBaselineBAC, statusDate } = r;
 
   const parentIds = new Set(tasks.filter((t) => t.parentTaskId).map((t) => t.parentTaskId!));
   const leaves = tasks.filter((t) => !parentIds.has(t.id));
@@ -476,16 +493,10 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
   // indirect + contingency reserve. Management reserve is NOT part of the PMB, so
   // it is excluded from BAC (PMI). When absent, computeEvm derives BAC from Σ
   // weights so EV/PV still scale sensibly.
-  const baseline = await prisma.costBaseline.findUnique({
-    where: { projectId },
-    select: { costBaseline: true },
-  });
-  const costBaselineBAC = dec(baseline?.costBaseline);
-
   const evm = computeEvm({
     tasks: evmTasks,
     bac: costBaselineBAC > 0 ? costBaselineBAC : undefined,
-    actualCost: resolvedAc,
+    actualCost,
     statusDate,
   });
 
@@ -499,9 +510,35 @@ export async function getEvm(projectId: string, actualCost: number | undefined, 
     scheduleWeight: totalWeight,
     costBaselineBAC,
     leafTaskCount: leaves.length,
-    scheduleBaselinedAt: project?.scheduleBaselinedAt ?? null,
+    scheduleBaselinedAt,
     baselineFinish: baseFinish ? new Date(baseFinish).toISOString() : null,
     currentFinish: curFinish ? new Date(curFinish).toISOString() : null,
     finishVarianceDays,
   };
+}
+
+export type PredictiveEvm = ReturnType<typeof evmFromRows>;
+
+/**
+ * EVM from the schedule: leaf tasks only (avoid double-counting parents),
+ * budget per task = Σ linked manpower cost, AC supplied (manual, MVP).
+ */
+export async function getEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
+  const [tasks, costByTask, resolvedAc, project, baseline] = await Promise.all([
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, baselineStart: true, baselineFinish: true } }),
+    directCostByTask(projectId),
+    // Use the explicit override if provided, else the stored time-phased AC.
+    actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),
+    prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true } }),
+    prisma.costBaseline.findUnique({ where: { projectId }, select: { costBaseline: true } }),
+  ]);
+
+  return evmFromRows({
+    tasks,
+    costByTask,
+    actualCost: resolvedAc,
+    scheduleBaselinedAt: project?.scheduleBaselinedAt ?? null,
+    costBaselineBAC: dec(baseline?.costBaseline),
+    statusDate,
+  });
 }

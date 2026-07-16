@@ -8,6 +8,9 @@ import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
 import { pruneExpiredRefreshTokens } from '../auth/auth.service.js';
+import { getEvm } from '../schedule/schedule.service.js';
+import { getProjectEvm } from '../agile/agile.service.js';
+import { computeEvmForProjects, evmPvSeries } from '../schedule/evm.batch.js';
 
 const app = createApp();
 const api = (path: string) => `/api/v1${path}`;
@@ -1842,5 +1845,60 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
       // and the deletion itself is recorded (by the admin)
       expect(await prisma.auditLog.count({ where: { entity: 'User', entityId: g3, action: 'DELETE' } })).toBeGreaterThan(0);
     });
+  });
+});
+
+// Regression pass for the batched EVM data-loading path (evm.batch.ts). The batch loaders
+// were reimplemented from scratch (bulk queries + in-memory grouping), so these assert they
+// stay byte-identical to the trusted one-at-a-time getEvm()/getProjectEvm() paths.
+describe('batched EVM equivalence (computeEvmForProjects / evmPvSeries == single-project path)', () => {
+  let pid = '';
+  const statusDate = new Date('2026-08-08');
+  const pvDates = ['2026-08-01', '2026-08-04', '2026-08-08', '2026-08-10'].map((d) => +new Date(d));
+
+  beforeAll(async () => {
+    // A fully cost-loaded predictive project WITH progress, a captured schedule baseline and AC,
+    // so EV/PV/AC/BAC are all non-zero and the two paths have real numbers to disagree on.
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Batch-EVM-Equiv', pmUserId: ownerId });
+    pid = created.body.project.id;
+    await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+
+    const mkTask = async (name: string) => {
+      const r = await request(app).post(api(`/projects/${pid}/schedule/tasks`)).set(auth(tokens.ADMIN)).send({ name, planStart: '2026-08-01', planEnd: '2026-08-10' });
+      return r.body.task.id as string;
+    };
+    const t1 = await mkTask('Design');
+    const t2 = await mkTask('Build');
+    // Every real-duration leaf carries a cost → cost-weighted EVM (the isCostLoaded path).
+    await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN)).send({ type: 'HARDWARE_LICENSE', label: 'Servers', qty: 1, unitCost: 30_000_000, taskId: t1 });
+    await request(app).post(api(`/projects/${pid}/cost/direct`)).set(auth(tokens.ADMIN)).send({ type: 'HARDWARE_LICENSE', label: 'Licenses', qty: 1, unitCost: 10_000_000, taskId: t2 });
+    await request(app).patch(api(`/projects/${pid}/schedule/tasks/${t1}/progress`)).set(auth(tokens.ADMIN)).send({ progressPct: 100 });
+    await request(app).patch(api(`/projects/${pid}/schedule/tasks/${t2}/progress`)).set(auth(tokens.ADMIN)).send({ progressPct: 40 });
+    await request(app).post(api(`/projects/${pid}/schedule/baseline`)).set(auth(tokens.ADMIN));
+    await request(app).post(api(`/projects/${pid}/cost/actuals`)).set(auth(tokens.ADMIN)).send({ description: 'Spend', amount: 22_000_000, date: '2026-08-05', category: 'DIRECT' });
+  });
+
+  it('computeEvmForProjects matches getEvm() field-for-field, on a non-trivial (non-zero) fixture', async () => {
+    const single = await getEvm(pid, undefined, statusDate);
+    const batch = (await computeEvmForProjects([{ id: pid, status: 'CHARTERED', deliveryApproach: 'PREDICTIVE' }], statusDate)).get(pid);
+    expect(batch).toEqual(single);
+    // guard against a vacuous all-zero match
+    expect(single.bac).toBeGreaterThan(0);
+    expect(single.ev).toBeGreaterThan(0);
+    expect(single.pv).toBeGreaterThan(0);
+    expect(single.ac).toBeGreaterThan(0);
+  });
+
+  it('evmPvSeries matches per-date getProjectEvm(...).pv for a predictive project', async () => {
+    const batch = await evmPvSeries(pid, pvDates);
+    const single = await Promise.all(pvDates.map((d) => getProjectEvm(pid, 0, new Date(d)).then((e) => e.pv)));
+    expect(batch).toEqual(single);
+    expect(batch.some((v) => v > 0)).toBe(true);
+  });
+
+  it('DRAFT projects are omitted from the batch map (no baseline yet — mirrors the old per-project skip)', async () => {
+    const draft = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Batch-EVM-Draft', pmUserId: ownerId });
+    const map = await computeEvmForProjects([{ id: draft.body.project.id, status: 'DRAFT', deliveryApproach: 'PREDICTIVE' }], statusDate);
+    expect(map.has(draft.body.project.id)).toBe(false);
   });
 });
