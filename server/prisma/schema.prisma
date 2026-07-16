@@ -440,10 +440,15 @@ model RateCard {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  // When set, this rate card is PRIVATE to a guest's personal workspace (their user id).
+  // NULL = a corporate rate card. Uniqueness of (roleName, level) is enforced per-owner in
+  // the service (a guest may reuse a role/level name that corporate also uses).
+  personalOwnerId String?
+
   directCosts CostItemDirect[]
   resources   Resource[]
 
-  @@unique([roleName, level])
+  @@index([personalOwnerId])
 }
 
 // ---------------------------------------------------------------------------
@@ -473,6 +478,11 @@ model Resource {
 
   department String?
 
+  // When set, this resource is PRIVATE to a guest's personal workspace (their user id).
+  // NULL = a corporate resource. A guest only ever sees/manages their own; corporate roles
+  // never see a guest's; and a resource may only be linked to a project with the same owner.
+  personalOwnerId String?
+
   // Optional link to a system account (for resources who also log in).
   userId String?
   user   User?   @relation("ResourceUser", fields: [userId], references: [id])
@@ -485,6 +495,7 @@ model Resource {
   updatedAt DateTime @updatedAt
 
   @@index([isActive])
+  @@index([personalOwnerId])
 }
 
 // Computed roll-up cache (1:1 with Project)

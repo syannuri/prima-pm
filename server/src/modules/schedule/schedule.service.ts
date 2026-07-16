@@ -176,9 +176,24 @@ export async function applyTemplate(projectId: string, templateId: string, start
   return { created: rows.length, template: template.name };
 }
 
+// A task's Owner (PIC = a Resource) must live in the SAME workspace as the project — a guest's
+// personal resource never owns a corporate task, and a corporate resource never owns a guest's.
+async function assertPicResourceOwner(projectId: string, picResourceId: string | null | undefined): Promise<void> {
+  if (!picResourceId) return;
+  const [project, resource] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { personalOwnerId: true } }),
+    prisma.resource.findUnique({ where: { id: picResourceId }, select: { personalOwnerId: true } }),
+  ]);
+  if (!resource) throw NotFound('Resource not found');
+  if ((resource.personalOwnerId ?? null) !== (project?.personalOwnerId ?? null)) {
+    throw BadRequest('That resource is not in this project’s workspace');
+  }
+}
+
 export async function createTask(projectId: string, input: UpsertTaskInput, actorId: string) {
   await ensureChartered(projectId);
   await assertBaselineUnlocked(projectId);
+  await assertPicResourceOwner(projectId, input.picResourceId);
 
   if (input.parentTaskId) {
     const parent = await prisma.task.findFirst({
@@ -226,6 +241,7 @@ export async function updateTask(
   const existing = await prisma.task.findFirst({ where: { id: taskId, projectId } });
   if (!existing) throw NotFound('Task not found');
   await assertBaselineUnlocked(projectId);
+  await assertPicResourceOwner(projectId, input.picResourceId);
 
   if (input.parentTaskId) {
     if (input.parentTaskId === taskId) throw BadRequest('A task cannot be its own parent');

@@ -90,9 +90,9 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
             <Icon path={ICONS.users} /> {!collapsed && 'Users'}
           </NavLink>
         )}
-        {!!user && ['ADMIN', 'PMO', 'FINANCE'].includes(user.role) && (
-          <NavLink to="/admin/resources" onClick={onNavigate} title="Resource Pool" className={({ isActive }) => cx(isActive)}>
-            <Icon path={ICONS.resources} /> {!collapsed && 'Resource Pool'}
+        {!!user && ['ADMIN', 'PMO', 'FINANCE', 'GUEST'].includes(user.role) && (
+          <NavLink to="/admin/resources" onClick={onNavigate} title={user.role === 'GUEST' ? 'My Resource Pool' : 'Resource Pool'} className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.resources} /> {!collapsed && (user.role === 'GUEST' ? 'My Resources' : 'Resource Pool')}
           </NavLink>
         )}
         {!collapsed && <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Projects</div>}

@@ -21,7 +21,10 @@ const TYPES: { value: ResourceType; label: string }[] = [
 
 export default function AdminResourcesPage() {
   const { user } = useAuth();
-  const allowed = !!user && ['ADMIN', 'PMO', 'FINANCE'].includes(user.role);
+  // A guest manages their OWN private pool (fully editable); corporate roles manage the shared
+  // corporate pool. The server scopes every read/write by owner, so the two never mix.
+  const isGuest = user?.role === 'GUEST';
+  const allowed = !!user && (isGuest || ['ADMIN', 'PMO', 'FINANCE'].includes(user.role));
   if (!allowed) {
     return (
       <Card>
@@ -31,9 +34,13 @@ export default function AdminResourcesPage() {
   }
   return (
     <div className="space-y-5">
-      <SectionTitle sub="Master manpower pool & day-rate catalogue used to load the WBS / Cost module">Resource Pool &amp; rate cards</SectionTitle>
-      <RateCardsSection canEditRates={['ADMIN', 'FINANCE'].includes(user!.role)} />
-      <ResourcesSection canEdit={['ADMIN', 'PMO'].includes(user!.role)} />
+      <SectionTitle sub={isGuest
+        ? 'Your private manpower pool & day-rates — used to load your projects’ WBS / Cost. Not shared with anyone.'
+        : 'Master manpower pool & day-rate catalogue used to load the WBS / Cost module'}>
+        {isGuest ? 'My Resource Pool & rate cards' : 'Resource Pool & rate cards'}
+      </SectionTitle>
+      <RateCardsSection canEditRates={isGuest || ['ADMIN', 'FINANCE'].includes(user!.role)} />
+      <ResourcesSection canEdit={isGuest || ['ADMIN', 'PMO'].includes(user!.role)} />
     </div>
   );
 }
@@ -351,6 +358,8 @@ function ResourceRow({ r, canEdit, onEdit, onChange }: { r: ResourceItem; canEdi
 }
 
 function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem | null; onClose: () => void; onSaved: () => void }) {
+  const { user } = useAuth();
+  const isGuest = user?.role === 'GUEST'; // a guest's private resource never links a login account
   const editing = !!resource;
   const [name, setName] = useState(resource?.name ?? '');
   const [resourceType, setResourceType] = useState<ResourceType>(resource?.resourceType ?? 'NAMED');
@@ -364,7 +373,8 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
   const [err, setErr] = useState('');
 
   const rateCardsQ = useQuery({ queryKey: ['rate-cards'], queryFn: () => api.get<{ rateCards: RateCard[] }>('/ratecards') });
-  const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory') });
+  // The corporate user directory is off-limits to a guest — don't even fetch it.
+  const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory'), enabled: !isGuest });
 
   const body = () => ({
     name,
@@ -424,12 +434,14 @@ function ResourceModal({ resource, onClose, onSaved }: { resource: ResourceItem 
             {!!capacity && !capacityOk && <span className="mt-1 block text-xs text-red-500">Between 0 and 100</span>}
           </Field>
           <Field label="Department (optional)"><Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Engineering" /></Field>
-          <Field label="Link login account (optional)">
-            <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
-              <option value="">— not linked —</option>
-              {usersQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-            </Select>
-          </Field>
+          {!isGuest && (
+            <Field label="Link login account (optional)">
+              <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
+                <option value="">— not linked —</option>
+                {usersQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+              </Select>
+            </Field>
+          )}
         </div>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Tip: pick a rate card to inherit its day-rate, or leave it blank and enter a custom rate.</p>
         {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}

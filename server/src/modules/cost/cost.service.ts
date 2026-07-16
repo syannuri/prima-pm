@@ -94,7 +94,13 @@ export async function recomputeBaseline(projectId: string, db: Db = prisma) {
 // Resolve manpower role & rate, inheriting from the resource pool when a
 // resourceId is given (an explicit value on the input still wins). Also back-fills
 // the legacy resourceUserId and a default label from the resource.
-async function resolveManpower(input: DirectLineInput) {
+// The project's workspace owner (null = corporate, a user id = a guest's personal project).
+async function projectOwner(projectId: string): Promise<string | null> {
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { personalOwnerId: true } });
+  return p?.personalOwnerId ?? null;
+}
+
+async function resolveManpower(input: DirectLineInput, projectOwnerId: string | null) {
   let personnelRole = input.personnelRole ?? null;
   let unitCostPerManday = input.unitCostPerManday ?? null;
   let resourceUserId = input.resourceUserId ?? null;
@@ -102,13 +108,21 @@ async function resolveManpower(input: DirectLineInput) {
   if (input.resourceId) {
     const r = await prisma.resource.findUnique({
       where: { id: input.resourceId },
-      select: { name: true, personnelRole: true, unitCostPerManday: true, userId: true },
+      select: { name: true, personnelRole: true, unitCostPerManday: true, userId: true, personalOwnerId: true },
     });
     if (!r) throw NotFound('Resource not found');
+    // Isolation: a resource may only be loaded onto a project in the SAME workspace — a guest's
+    // personal resource never reaches a corporate project, and vice versa.
+    if ((r.personalOwnerId ?? null) !== projectOwnerId) throw BadRequest('That resource is not in this project’s workspace');
     personnelRole = personnelRole ?? r.personnelRole;
     if (unitCostPerManday == null) unitCostPerManday = Number(r.unitCostPerManday);
     resourceUserId = resourceUserId ?? r.userId ?? null;
     if (!label) label = r.name;
+  }
+  if (input.rateCardId) {
+    const rc = await prisma.rateCard.findUnique({ where: { id: input.rateCardId }, select: { personalOwnerId: true } });
+    if (!rc) throw NotFound('Rate card not found');
+    if ((rc.personalOwnerId ?? null) !== projectOwnerId) throw BadRequest('That rate card is not in this project’s workspace');
   }
   return { personnelRole, unitCostPerManday: unitCostPerManday ?? 0, resourceUserId, label: label ?? '' };
 }
@@ -138,7 +152,7 @@ export async function addDirectLine(projectId: string, input: DirectLineInput, a
   };
 
   if (input.type === 'MANPOWER') {
-    const m = await resolveManpower(input);
+    const m = await resolveManpower(input, await projectOwner(projectId));
     data.label = m.label;
     data.personnelRole = m.personnelRole;
     data.resourceId = input.resourceId ?? null;
@@ -183,7 +197,7 @@ export async function updateDirectLine(
     subCategory: input.type === 'OTHER' ? input.subCategory?.trim() ?? null : null,
   };
   if (input.type === 'MANPOWER') {
-    const m = await resolveManpower(input);
+    const m = await resolveManpower(input, await projectOwner(projectId));
     data.label = m.label;
     data.personnelRole = m.personnelRole;
     data.resourceId = input.resourceId ?? null;

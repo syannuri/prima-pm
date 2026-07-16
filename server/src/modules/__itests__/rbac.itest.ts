@@ -1637,4 +1637,64 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
     expect((await request(app).post(api(`/projects/${corpProjectId}/schedule/tasks`)).set(auth(tokens.FINANCE))
       .send({ name: 'x', planStart: '2026-08-01', planEnd: '2026-08-05' })).status).toBe(403);
   });
+
+  // A guest gets a PRIVATE resource pool & rate cards, never connected to corporate data.
+  describe('private resource pool & rate cards (isolated from corporate)', () => {
+    let guestResourceId = '';
+    let guestRateCardId = '';
+    let corpResourceId = '';
+
+    it('a guest curates their OWN rate card + resource; corporate never sees them', async () => {
+      const rc = await request(app).post(api('/ratecards')).set(auth(guestToken)).send({ roleName: 'Freelance Dev', unitCostPerManday: 1_500_000 });
+      expect(rc.status).toBe(201);
+      guestRateCardId = rc.body.rateCard.id;
+      expect(rc.body.rateCard.personalOwnerId).toBe(guestId);
+
+      const res = await request(app).post(api('/resources')).set(auth(guestToken)).send({ name: 'Me (guest)', rateCardId: guestRateCardId, capacityPerDay: 1 });
+      expect(res.status).toBe(201);
+      guestResourceId = res.body.resource.id;
+      expect(res.body.resource.personalOwnerId).toBe(guestId);
+
+      // guest sees own; corporate ADMIN does NOT see the guest's resource or rate card
+      const gRes = await request(app).get(api('/resources?all=1')).set(auth(guestToken));
+      expect(gRes.body.resources.some((r: { id: string }) => r.id === guestResourceId)).toBe(true);
+      const aRes = await request(app).get(api('/resources?all=1')).set(auth(tokens.ADMIN));
+      expect(aRes.body.resources.some((r: { id: string }) => r.id === guestResourceId)).toBe(false);
+      const gRc = await request(app).get(api('/ratecards?all=1')).set(auth(guestToken));
+      expect(gRc.body.rateCards.some((r: { id: string }) => r.id === guestRateCardId)).toBe(true);
+      const aRc = await request(app).get(api('/ratecards?all=1')).set(auth(tokens.ADMIN));
+      expect(aRc.body.rateCards.some((r: { id: string }) => r.id === guestRateCardId)).toBe(false);
+    });
+
+    it('a corporate resource is invisible to the guest; neither is manageable across the boundary', async () => {
+      const corp = await request(app).post(api('/resources')).set(auth(tokens.ADMIN)).send({ name: 'Corp Engineer', capacityPerDay: 1 });
+      expect(corp.status).toBe(201);
+      corpResourceId = corp.body.resource.id;
+      expect(corp.body.resource.personalOwnerId).toBeNull();
+
+      const gRes = await request(app).get(api('/resources?all=1')).set(auth(guestToken));
+      expect(gRes.body.resources.some((r: { id: string }) => r.id === corpResourceId)).toBe(false);
+      // guest can't deactivate a corporate resource; ADMIN can't touch the guest's (scoped 404)
+      expect((await request(app).patch(api(`/resources/${corpResourceId}/active`)).set(auth(guestToken)).send({ isActive: false })).status).toBe(404);
+      expect((await request(app).patch(api(`/resources/${guestResourceId}/active`)).set(auth(tokens.ADMIN)).send({ isActive: false })).status).toBe(404);
+    });
+
+    it('a guest loads their OWN resource as manpower, but a corporate one is rejected (and vice versa)', async () => {
+      // personalProjectId was chartered by an earlier test; the guest's own resource loads fine.
+      const ok = await request(app).post(api(`/projects/${personalProjectId}/cost/direct`)).set(auth(guestToken)).send({ type: 'MANPOWER', resourceId: guestResourceId, planMandays: 5 });
+      expect(ok.status).toBe(201);
+      // a corporate resource on the guest's project → rejected (not in this workspace)
+      const bad = await request(app).post(api(`/projects/${personalProjectId}/cost/direct`)).set(auth(guestToken)).send({ type: 'MANPOWER', resourceId: corpResourceId, planMandays: 5 });
+      expect(bad.status).toBe(400);
+      // a guest resource on a corporate project → rejected too (charter the corp project first)
+      await request(app).patch(api(`/projects/${corpProjectId}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+      const bad2 = await request(app).post(api(`/projects/${corpProjectId}/cost/direct`)).set(auth(tokens.ADMIN)).send({ type: 'MANPOWER', resourceId: guestResourceId, planMandays: 5 });
+      expect(bad2.status).toBe(400);
+    });
+
+    it('corporate resource/ratecard management is unchanged (ADMIN resource, FINANCE rate card)', async () => {
+      expect((await request(app).post(api('/resources')).set(auth(tokens.ADMIN)).send({ name: 'Corp QA', capacityPerDay: 1 })).status).toBe(201);
+      expect((await request(app).post(api('/ratecards')).set(auth(tokens.FINANCE)).send({ roleName: 'Corp Analyst', unitCostPerManday: 2_000_000 })).status).toBe(201);
+    });
+  });
 });

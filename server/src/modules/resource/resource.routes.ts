@@ -15,6 +15,11 @@ import {
 const router = Router();
 router.use(requireAuth);
 
+// A guest works inside their PRIVATE pool (scoped to their user id); everyone else works on the
+// corporate pool (personalOwnerId = null). This is what keeps the two data sets fully separated.
+const ownerScope = (req: { user?: { id: string; role: string } }): string | null =>
+  req.user?.role === 'GUEST' ? req.user.id : null;
+
 const querySchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
@@ -49,44 +54,44 @@ const resourceSchema = z.object({
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    res.json(await listResources(req.query.all === '1' || req.query.all === 'true'));
+    res.json(await listResources(req.query.all === '1' || req.query.all === 'true', ownerScope(req)));
   }),
 );
 
-// Only ADMIN/PMO curate the resource pool.
+// ADMIN/PMO curate the corporate pool; a GUEST curates their OWN private pool (scoped server-side).
 router.post(
   '/',
-  requireRole('ADMIN', 'PMO'),
+  requireRole('ADMIN', 'PMO', 'GUEST'),
   validateBody(resourceSchema),
   asyncHandler(async (req, res) => {
-    res.status(201).json({ resource: await createResource(req.body, req.user!.id) });
+    res.status(201).json({ resource: await createResource(req.body, req.user!.id, ownerScope(req)) });
   }),
 );
 
 router.put(
   '/:id',
-  requireRole('ADMIN', 'PMO'),
+  requireRole('ADMIN', 'PMO', 'GUEST'),
   validateBody(resourceSchema),
   asyncHandler(async (req, res) => {
-    res.json({ resource: await updateResource(req.params.id, req.body, req.user!.id) });
+    res.json({ resource: await updateResource(req.params.id, req.body, req.user!.id, ownerScope(req)) });
   }),
 );
 
 router.patch(
   '/:id/active',
-  requireRole('ADMIN', 'PMO'),
+  requireRole('ADMIN', 'PMO', 'GUEST'),
   validateBody(z.object({ isActive: z.boolean() })),
   asyncHandler(async (req, res) => {
-    res.json({ resource: await setResourceActive(req.params.id, req.body.isActive, req.user!.id) });
+    res.json({ resource: await setResourceActive(req.params.id, req.body.isActive, req.user!.id, ownerScope(req)) });
   }),
 );
 
 // Adopt the linked rate card's current day-rate.
 router.post(
   '/:id/refresh-rate',
-  requireRole('ADMIN', 'PMO'),
+  requireRole('ADMIN', 'PMO', 'GUEST'),
   asyncHandler(async (req, res) => {
-    res.json({ resource: await refreshResourceRate(req.params.id, req.user!.id) });
+    res.json({ resource: await refreshResourceRate(req.params.id, req.user!.id, ownerScope(req)) });
   }),
 );
 
