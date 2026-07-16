@@ -7,7 +7,11 @@ import { login, openFirstProject } from './helpers';
 // "Cost" group contains a "Cost" tab). Single-tab groups (Closing/Governance & Audit) are plain buttons.
 async function openTab(page: Page, group: string, tab: string) {
   await page.getByRole('button', { name: group, exact: true }).first().click();
-  await page.getByRole('button', { name: tab, exact: true }).first().click();
+  // A group with a single visible tab (e.g. "Schedule & WBS" on a predictive project, where
+  // the Agile tab is hidden) renders no sub-tab pills — the group click already opens the tab.
+  // Only click the sub-pill when it exists.
+  const sub = page.getByRole('button', { name: tab, exact: true });
+  if (await sub.count()) await sub.first().click();
 }
 
 test.describe('Project workspace', () => {

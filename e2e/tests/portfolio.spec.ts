@@ -8,9 +8,10 @@ test.describe('Portfolio dashboard', () => {
 
   test('shows the portfolio health command bar (gauge + KPIs)', async ({ page }) => {
     // Consolidated hero: the gauge readout carries SPI/CPI/% complete; the KPI grid the money.
-    await expect(page.getByText('Total BAC')).toBeVisible();
-    await expect(page.getByText('Earned Value')).toBeVisible();
-    await expect(page.getByText('Actual Cost')).toBeVisible();
+    // exact match — other panels carry lowercase "Earned value"/"Actual cost" labels too.
+    await expect(page.getByText('Total BAC', { exact: true })).toBeVisible();
+    await expect(page.getByText('Earned Value', { exact: true })).toBeVisible();
+    await expect(page.getByText('Actual Cost', { exact: true })).toBeVisible();
     await expect(page.getByText(/SPI \d/).first()).toBeVisible(); // gauge readout "SPI 1.10"
   });
 
@@ -18,7 +19,8 @@ test.describe('Portfolio dashboard', () => {
     const dateInput = page.getByLabel('Status date (EVM)');
     await dateInput.fill('2026-10-01');
     // After a future status date some schedule progress should exist → a real SPI table.
-    await expect(page.getByRole('cell', { name: 'SPI' }).or(page.getByText('Portfolio SPI'))).toBeVisible();
+    // The per-project EVM table's SPI column is a <th> (role columnheader, not cell).
+    await expect(page.getByRole('columnheader', { name: 'SPI' })).toBeVisible();
   });
 
   test('resources view shows capacity heatmap and over-allocation', async ({ page }) => {

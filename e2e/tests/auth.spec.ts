@@ -79,8 +79,9 @@ test.describe('Authentication & RBAC', () => {
     await page.getByRole('link', { name: 'Users' }).click();
     await expect(page.getByRole('heading', { name: 'User management' })).toBeVisible();
     await expect(page.getByText('Create user')).toBeVisible();
-    await expect(page.getByText(ACCOUNTS.Admin.email)).toBeVisible();
-    await expect(page.getByText(ACCOUNTS['Project Manager'].email)).toBeVisible();
+    // The admin's own email also renders in the sidebar profile, so scope to the user table.
+    await expect(page.getByRole('cell', { name: ACCOUNTS.Admin.email })).toBeVisible();
+    await expect(page.getByRole('cell', { name: ACCOUNTS['Project Manager'].email })).toBeVisible();
     await page.screenshot({ path: 'test-results/admin-users.png', fullPage: true });
 
     // Non-admin (a Project Manager): no link, and direct navigation is blocked by a notice.
