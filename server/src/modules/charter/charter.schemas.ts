@@ -7,6 +7,7 @@ export const upsertCharterSchema = z
     description: z.string().min(5).max(4000),
     goals: z.string().min(5).max(4000),
     category: z.enum(PROJECT_CATEGORIES as [string, ...string[]]),
+    categoryOther: z.string().trim().max(120).optional().nullable(),
     hiScope: z.string().min(5).max(4000),
     hiCostIdr: z.coerce.number().positive(),
     hiScheduleStart: z.coerce.date(),
@@ -19,6 +20,10 @@ export const upsertCharterSchema = z
   .refine((d) => d.hiScheduleEnd.getTime() > d.hiScheduleStart.getTime(), {
     message: 'hiScheduleEnd must be after hiScheduleStart',
     path: ['hiScheduleEnd'],
+  })
+  .refine((d) => d.category !== 'OTHER' || !!d.categoryOther?.trim(), {
+    message: 'Describe the category when choosing Other',
+    path: ['categoryOther'],
   });
 
 // The areas a change request may affect. CHARTER / COST / SCHEDULE are the governed,

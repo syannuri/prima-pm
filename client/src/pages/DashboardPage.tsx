@@ -52,6 +52,7 @@ export default function DashboardPage() {
   const [clientName, setClientName] = useState('');
   const [sponsor, setSponsor] = useState('');
   const [category, setCategory] = useState<ProjectCategory | ''>('');
+  const [categoryOther, setCategoryOther] = useState('');
   const [deliveryApproach, setDeliveryApproach] = useState<DeliveryApproach>('PREDICTIVE');
   const [costBaseline, setCostBaseline] = useState('');
   const [revenue, setRevenue] = useState('');
@@ -71,7 +72,7 @@ export default function DashboardPage() {
   // PMO assigns the project to a PM at creation.
   const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory'), enabled: showForm });
 
-  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setDeliveryApproach('PREDICTIVE'); setCostBaseline(''); setRevenue(''); setPmUserId(''); };
+  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setCategoryOther(''); setDeliveryApproach('PREDICTIVE'); setCostBaseline(''); setRevenue(''); setPmUserId(''); };
   const create = useMutation({
     mutationFn: () => api.post<{ project: Project }>('/projects', {
       name,
@@ -79,6 +80,7 @@ export default function DashboardPage() {
       clientName: clientName || undefined,
       sponsor: sponsor || undefined,
       category: category || undefined,
+      categoryOther: category === 'OTHER' ? (categoryOther.trim() || undefined) : undefined,
       deliveryApproach,
       costBaselineIdr: costBaseline ? Number(costBaseline) : undefined,
       totalRevenueIdr: revenue ? Number(revenue) : undefined,
@@ -214,6 +216,9 @@ export default function DashboardPage() {
                     <option value="">— select —</option>
                     {PROJECT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </Select>
+                  {category === 'OTHER' && (
+                    <Input className="mt-2" value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} placeholder="Describe the category" />
+                  )}
                 </Field>
                 <Field label="Delivery approach" hint="Agile/Hybrid unlocks the Backlog & Board">
                   <Select value={deliveryApproach} onChange={(e) => setDeliveryApproach(e.target.value as DeliveryApproach)}>
@@ -245,7 +250,7 @@ export default function DashboardPage() {
               {create.isError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{(create.error as Error).message}</p>}
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</Button>
-                <Button className="flex-1" onClick={() => create.mutate()} disabled={!name || create.isPending}>
+                <Button className="flex-1" onClick={() => create.mutate()} disabled={!name || (category === 'OTHER' && !categoryOther.trim()) || create.isPending}>
                   {create.isPending ? 'Creating…' : 'Create Project'}
                 </Button>
               </div>

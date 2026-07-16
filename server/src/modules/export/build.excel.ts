@@ -37,7 +37,7 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
     const rows: [string, string | number][] = [
       ['Description', c.description],
       ['Goals', c.goals],
-      ['Category', categoryLabel(c.category)],
+      ['Category', categoryLabel(c.category, c.categoryOther)],
       ['High-Level Scope', c.hiScope],
       ['High-Level Cost (IDR)', num(c.hiCostIdr)],
       ['Schedule Start', new Date(c.hiScheduleStart).toISOString().slice(0, 10)],

@@ -30,6 +30,8 @@ export async function upsertCharter(
     description: input.description,
     goals: input.goals,
     category: input.category as never,
+    // Free-text detail only carries meaning for the OTHER category.
+    categoryOther: input.category === 'OTHER' ? (input.categoryOther?.trim() || null) : null,
     hiScope: input.hiScope,
     hiCostIdr: input.hiCostIdr,
     hiScheduleStart: input.hiScheduleStart,

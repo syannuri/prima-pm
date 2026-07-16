@@ -47,9 +47,23 @@ const CATEGORY_LABEL: Record<string, string> = {
   SERVER_INFRA: 'Server Infrastructure',
   CLOUD_INFRA: 'Cloud Infrastructure',
   CYBERSECURITY_INFRA: 'Cyber Security Infrastructure',
+  DATACENTER: 'Data Center Facility',
   APP_DEV: 'Application Development',
+  ENTERPRISE_APP: 'Enterprise Applications (ERP/CRM)',
+  SYSTEM_INTEGRATION: 'System Integration',
+  DATA_ANALYTICS: 'Data Analytics & BI',
+  AI_ML: 'AI / Machine Learning',
+  DIGITAL_TRANSFORMATION: 'Digital Transformation',
+  MANAGED_SERVICES: 'Managed Services & Support',
+  IT_CONSULTING: 'IT Consulting & Advisory',
+  OTHER: 'Other',
 };
-export const categoryLabel = (c?: string | null) => (c ? CATEGORY_LABEL[c] ?? c : '—');
+// For OTHER, append the free-text detail so the export reads e.g. "Other · Bug bounty program".
+export const categoryLabel = (c?: string | null, other?: string | null) => {
+  if (!c) return '—';
+  const base = CATEGORY_LABEL[c] ?? c;
+  return c === 'OTHER' && other?.trim() ? `${base} · ${other.trim()}` : base;
+};
 
 // Flatten the gantt tree into ordered rows with depth for tabular exports.
 export interface FlatTaskRow {

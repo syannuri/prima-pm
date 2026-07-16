@@ -118,6 +118,8 @@ async function createProjectRow(input: CreateProjectInput, year: number, persona
             personalOwnerId: personalOwnerId,
             pmUserId: personalOwnerId ?? input.pmUserId ?? null,
             category: input.category ?? null,
+            // Free-text detail only carries meaning for the OTHER category.
+            categoryOther: input.category === 'OTHER' ? (input.categoryOther?.trim() || null) : null,
             deliveryApproach: input.deliveryApproach ?? 'PREDICTIVE',
             costBaselineIdr: input.costBaselineIdr ?? null,
             totalRevenueIdr: input.totalRevenueIdr ?? null,
@@ -228,6 +230,17 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
     statusData.onHoldReason = null;
   }
 
+  // categoryOther only carries meaning for OTHER. Changing the category to a non-OTHER value
+  // clears any stale detail; leaving the category untouched preserves it unless explicitly sent.
+  const categoryOther =
+    input.category === 'OTHER'
+      ? (input.categoryOther?.trim() || null)
+      : input.category !== undefined
+        ? null
+        : input.categoryOther === undefined
+          ? undefined
+          : (input.categoryOther?.trim() || null);
+
   const project = await prisma.project.update({
     where: { id },
     data: {
@@ -236,6 +249,7 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
       clientName: input.clientName === undefined ? undefined : input.clientName,
       sponsor: input.sponsor === undefined ? undefined : input.sponsor,
       category: input.category === undefined ? undefined : input.category,
+      categoryOther,
       deliveryApproach: input.deliveryApproach ?? undefined,
       costBaselineIdr: input.costBaselineIdr === undefined ? undefined : input.costBaselineIdr,
       totalRevenueIdr: input.totalRevenueIdr === undefined ? undefined : input.totalRevenueIdr,

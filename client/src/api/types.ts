@@ -53,7 +53,16 @@ export type ProjectCategory =
   | 'SERVER_INFRA'
   | 'CLOUD_INFRA'
   | 'CYBERSECURITY_INFRA'
-  | 'APP_DEV';
+  | 'DATACENTER'
+  | 'APP_DEV'
+  | 'ENTERPRISE_APP'
+  | 'SYSTEM_INTEGRATION'
+  | 'DATA_ANALYTICS'
+  | 'AI_ML'
+  | 'DIGITAL_TRANSFORMATION'
+  | 'MANAGED_SERVICES'
+  | 'IT_CONSULTING'
+  | 'OTHER';
 
 export type DeliveryApproach = 'PREDICTIVE' | 'AGILE' | 'HYBRID';
 export type BacklogType = 'EPIC' | 'STORY' | 'TASK' | 'BUG';
@@ -111,6 +120,7 @@ export interface Project {
   clientName: string | null;
   sponsor: string | null;
   category: ProjectCategory | null;
+  categoryOther: string | null;
   deliveryApproach: DeliveryApproach;
   costBaselineIdr: string | null;
   totalRevenueIdr: string | null;
@@ -203,6 +213,7 @@ export interface Charter {
   description: string;
   goals: string;
   category: ProjectCategory;
+  categoryOther: string | null;
   hiScope: string;
   hiCostIdr: string;
   hiScheduleStart: string;

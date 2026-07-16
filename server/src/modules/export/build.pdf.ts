@@ -70,7 +70,7 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
   heading('1. Project Charter');
   const c = data.charter;
   if (c) {
-    kv('Category', categoryLabel(c.category));
+    kv('Category', categoryLabel(c.category, c.categoryOther));
     kv('Description', c.description);
     kv('Goals', c.goals);
     kv('Scope of Work', c.hiScope);

@@ -44,6 +44,15 @@ enum ProjectCategory {
   CLOUD_INFRA
   CYBERSECURITY_INFRA
   APP_DEV
+  DATACENTER
+  ENTERPRISE_APP
+  SYSTEM_INTEGRATION
+  DATA_ANALYTICS
+  AI_ML
+  DIGITAL_TRANSFORMATION
+  MANAGED_SERVICES
+  IT_CONSULTING
+  OTHER
 }
 
 enum ChangeMagnitude {
@@ -242,6 +251,7 @@ model Project {
   clientName String?      // the client/customer the project is delivered for
   sponsor   String?
   category        ProjectCategory?
+  categoryOther   String?  // free-text detail, required only when category = OTHER
   costBaselineIdr Decimal? @db.Decimal(18, 2) // high-level planning cost baseline
   totalRevenueIdr Decimal? @db.Decimal(18, 2) // expected total revenue
   status    ProjectStatus @default(DRAFT)
@@ -325,6 +335,7 @@ model ProjectCharter {
   description     String
   goals           String
   category        ProjectCategory
+  categoryOther   String?         // free-text detail, required only when category = OTHER
   hiScope         String
   hiCostIdr       Decimal         @db.Decimal(18, 2)
   hiScheduleStart DateTime

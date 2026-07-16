@@ -344,6 +344,40 @@ describe('RBAC enforcement (server-side, end-to-end)', () => {
   });
 });
 
+describe('project category: expanded enum + OTHER free-text detail', () => {
+  it('accepts a newly-added category (DATA_ANALYTICS) and leaves categoryOther null', async () => {
+    const res = await request(app).post(api('/projects')).set(auth(tokens.ADMIN))
+      .send({ name: 'Cat-Data', pmUserId: ownerId, category: 'DATA_ANALYTICS' });
+    expect(res.status).toBe(201);
+    expect(res.body.project.category).toBe('DATA_ANALYTICS');
+    expect(res.body.project.categoryOther).toBeNull();
+  });
+
+  it('rejects category=OTHER without a free-text detail (400)', async () => {
+    const res = await request(app).post(api('/projects')).set(auth(tokens.ADMIN))
+      .send({ name: 'Cat-Other-Bad', pmUserId: ownerId, category: 'OTHER' });
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts category=OTHER with a detail and persists both', async () => {
+    const res = await request(app).post(api('/projects')).set(auth(tokens.ADMIN))
+      .send({ name: 'Cat-Other-Ok', pmUserId: ownerId, category: 'OTHER', categoryOther: 'Bug bounty program' });
+    expect(res.status).toBe(201);
+    expect(res.body.project.category).toBe('OTHER');
+    expect(res.body.project.categoryOther).toBe('Bug bounty program');
+  });
+
+  it('clears categoryOther when the category changes away from OTHER (PATCH)', async () => {
+    const created = await request(app).post(api('/projects')).set(auth(tokens.ADMIN))
+      .send({ name: 'Cat-Other-Clear', pmUserId: ownerId, category: 'OTHER', categoryOther: 'Temp detail' });
+    const pid = created.body.project.id;
+    const upd = await request(app).patch(api(`/projects/${pid}`)).set(auth(tokens.ADMIN)).send({ category: 'APP_DEV' });
+    expect(upd.status).toBe(200);
+    expect(upd.body.project.category).toBe('APP_DEV');
+    expect(upd.body.project.categoryOther).toBeNull();
+  });
+});
+
 describe('cost categories: new types + OTHER sub-category', () => {
   let pid = '';
   beforeAll(async () => {

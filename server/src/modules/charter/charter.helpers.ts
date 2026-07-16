@@ -8,7 +8,16 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
   'SERVER_INFRA',
   'CLOUD_INFRA',
   'CYBERSECURITY_INFRA',
+  'DATACENTER',
   'APP_DEV',
+  'ENTERPRISE_APP',
+  'SYSTEM_INTEGRATION',
+  'DATA_ANALYTICS',
+  'AI_ML',
+  'DIGITAL_TRANSFORMATION',
+  'MANAGED_SERVICES',
+  'IT_CONSULTING',
+  'OTHER',
 ];
 
 // The mandatory charter fields (must all be present to Commit).

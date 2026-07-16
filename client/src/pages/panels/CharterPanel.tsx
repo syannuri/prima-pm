@@ -4,19 +4,11 @@ import { api, ApiError } from '../../api/client';
 import type { Charter, DeliveryApproach, ProjectCategory, User } from '../../api/types';
 import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { DELIVERY_APPROACH_LABEL } from '../../lib/labels';
+import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../../lib/labels';
 import { formatDateInput } from '../../lib/format';
 
 const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
 import Attachments from '../../components/Attachments';
-
-const CATEGORIES: { value: ProjectCategory; label: string }[] = [
-  { value: 'NETWORK_INFRA', label: 'Network Infrastructure' },
-  { value: 'SERVER_INFRA', label: 'Server Infrastructure' },
-  { value: 'CLOUD_INFRA', label: 'Cloud Infrastructure' },
-  { value: 'CYBERSECURITY_INFRA', label: 'Cyber Security Infrastructure' },
-  { value: 'APP_DEV', label: 'Application Development' },
-];
 
 type Form = {
   description: string;
@@ -43,6 +35,9 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   const [form, setForm] = useState<Form>({ ...empty, pmUserId: personalOwnerId ?? assignedPmId ?? '' });
   const [approach, setApproach] = useState<DeliveryApproach>(initialApproach);
   const [sponsor, setSponsor] = useState<string>(initialSponsor ?? '');
+  // Free-text detail, required only when category = OTHER. Kept out of `form` so it doesn't
+  // count toward the "all fields filled" gate for the other 13 categories.
+  const [categoryOther, setCategoryOther] = useState('');
   const [msg, setMsg] = useState('');
   const confirm = useConfirm();
   useEffect(() => { setApproach(initialApproach); }, [initialApproach]);
@@ -76,12 +71,13 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         // so keep it in sync rather than reading a possibly-stale charter snapshot.
         pmUserId: personalOwnerId ?? assignedPmId ?? charter.pmUserId,
       });
+      setCategoryOther(charter.categoryOther ?? '');
     }
   }, [charter, personalOwnerId, assignedPmId]);
 
   const save = useMutation({
     mutationFn: () =>
-      api.put(`/projects/${projectId}/charter`, { ...form, hiCostIdr: Number(form.hiCostIdr), deliveryApproach: approach, sponsor: sponsor.trim() || null }),
+      api.put(`/projects/${projectId}/charter`, { ...form, categoryOther: form.category === 'OTHER' ? (categoryOther.trim() || null) : null, hiCostIdr: Number(form.hiCostIdr), deliveryApproach: approach, sponsor: sponsor.trim() || null }),
     onSuccess: () => {
       setMsg('Charter saved (draft).');
       qc.invalidateQueries({ queryKey: ['charter', projectId] });
@@ -101,7 +97,10 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   });
 
   const set = (k: keyof Form, v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const allFilled = Object.values(form).every((v) => String(v).trim() !== '') && Number(form.hiCostIdr) > 0;
+  const allFilled =
+    Object.values(form).every((v) => String(v).trim() !== '') &&
+    Number(form.hiCostIdr) > 0 &&
+    (form.category !== 'OTHER' || categoryOther.trim() !== '');
   const commitCharter = async () => {
     if (await confirm({
       title: 'Commit charter?',
@@ -140,10 +139,13 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         </Field>
         <Field label="Project Category">
           <Select value={form.category} onChange={(e) => set('category', e.target.value)}>
-            {CATEGORIES.map((c) => (
+            {PROJECT_CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </Select>
+          {form.category === 'OTHER' && (
+            <Input className="mt-2" value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} placeholder="Describe the category" />
+          )}
         </Field>
         <Field label="Delivery Approach" hint="Locked at commit — change later via a Change Request">
           <Select value={approach} onChange={(e) => setApproach(e.target.value as DeliveryApproach)}>

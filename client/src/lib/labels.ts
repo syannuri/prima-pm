@@ -27,10 +27,23 @@ export const PROJECT_CATEGORIES: { value: ProjectCategory; label: string }[] = [
   { value: 'SERVER_INFRA', label: 'Server Infrastructure' },
   { value: 'CLOUD_INFRA', label: 'Cloud Infrastructure' },
   { value: 'CYBERSECURITY_INFRA', label: 'Cyber Security Infrastructure' },
+  { value: 'DATACENTER', label: 'Data Center Facility' },
   { value: 'APP_DEV', label: 'Application Development' },
+  { value: 'ENTERPRISE_APP', label: 'Enterprise Applications (ERP/CRM)' },
+  { value: 'SYSTEM_INTEGRATION', label: 'System Integration' },
+  { value: 'DATA_ANALYTICS', label: 'Data Analytics & BI' },
+  { value: 'AI_ML', label: 'AI / Machine Learning' },
+  { value: 'DIGITAL_TRANSFORMATION', label: 'Digital Transformation' },
+  { value: 'MANAGED_SERVICES', label: 'Managed Services & Support' },
+  { value: 'IT_CONSULTING', label: 'IT Consulting & Advisory' },
+  { value: 'OTHER', label: 'Other' },
 ];
-export const categoryLabel = (c?: ProjectCategory | null) =>
-  PROJECT_CATEGORIES.find((x) => x.value === c)?.label ?? null;
+// For OTHER, append the free-text detail so it reads e.g. "Other · Bug bounty program".
+export const categoryLabel = (c?: ProjectCategory | null, other?: string | null) => {
+  const base = PROJECT_CATEGORIES.find((x) => x.value === c)?.label ?? null;
+  if (!base) return null;
+  return c === 'OTHER' && other?.trim() ? `${base} · ${other.trim()}` : base;
+};
 
 // What a change request affects — the governed, baseline-frozen artifacts. Approving a
 // CR opens the selected area(s) for editing: Charter → unlock charter for re-commit;

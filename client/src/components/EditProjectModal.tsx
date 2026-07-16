@@ -26,6 +26,7 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
   const [clientName, setClientName] = useState(project.clientName ?? '');
   const [sponsor, setSponsor] = useState(project.sponsor ?? '');
   const [category, setCategory] = useState<ProjectCategory | ''>(project.category ?? '');
+  const [categoryOther, setCategoryOther] = useState(project.categoryOther ?? '');
   const [deliveryApproach, setDeliveryApproach] = useState<DeliveryApproach>(project.deliveryApproach);
   const [costBaseline, setCostBaseline] = useState(project.costBaselineIdr ?? '');
   const [revenue, setRevenue] = useState(project.totalRevenueIdr ?? '');
@@ -43,6 +44,7 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
     setClientName(project.clientName ?? '');
     setSponsor(project.sponsor ?? '');
     setCategory(project.category ?? '');
+    setCategoryOther(project.categoryOther ?? '');
     setDeliveryApproach(project.deliveryApproach);
     setCostBaseline(project.costBaselineIdr ?? '');
     setRevenue(project.totalRevenueIdr ?? '');
@@ -56,6 +58,7 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
       clientName: clientName || null,
       sponsor: sponsor || null,
       category: category || null,
+      categoryOther: category === 'OTHER' ? (categoryOther.trim() || null) : null,
       deliveryApproach,
       costBaselineIdr: costBaseline === '' ? null : Number(costBaseline),
       totalRevenueIdr: revenue === '' ? null : Number(revenue),
@@ -98,6 +101,9 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
                     <option value="">— select —</option>
                     {PROJECT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </Select>
+                  {category === 'OTHER' && (
+                    <Input className="mt-2" value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} placeholder="Describe the category" />
+                  )}
                 </Field>
                 <Field label="Delivery approach" hint="Agile/Hybrid unlocks the Backlog & Board">
                   <Select value={deliveryApproach} onChange={(e) => setDeliveryApproach(e.target.value as DeliveryApproach)}>
@@ -120,7 +126,7 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
               {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button className="flex-1" disabled={!name || save.isPending} onClick={() => save.mutate()}>
+                <Button className="flex-1" disabled={!name || (category === 'OTHER' && !categoryOther.trim()) || save.isPending} onClick={() => save.mutate()}>
                   {save.isPending ? 'Saving…' : 'Save changes'}
                 </Button>
               </div>

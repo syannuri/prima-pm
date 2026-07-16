@@ -1,19 +1,40 @@
 import { z } from 'zod';
 
-export const PROJECT_CATEGORIES = ['NETWORK_INFRA', 'SERVER_INFRA', 'CLOUD_INFRA', 'CYBERSECURITY_INFRA', 'APP_DEV'] as const;
+export const PROJECT_CATEGORIES = [
+  'NETWORK_INFRA', 'SERVER_INFRA', 'CLOUD_INFRA', 'CYBERSECURITY_INFRA', 'DATACENTER',
+  'APP_DEV', 'ENTERPRISE_APP', 'SYSTEM_INTEGRATION', 'DATA_ANALYTICS', 'AI_ML',
+  'DIGITAL_TRANSFORMATION', 'MANAGED_SERVICES', 'IT_CONSULTING', 'OTHER',
+] as const;
 export const DELIVERY_APPROACHES = ['PREDICTIVE', 'AGILE', 'HYBRID'] as const;
 
-export const createProjectSchema = z.object({
-  name: z.string().min(2).max(160),
-  code: z.string().trim().min(2).max(40).optional(), // override the auto-generated code
-  clientName: z.string().max(160).optional(),
-  sponsor: z.string().max(160).optional(),
-  pmUserId: z.string().uuid().optional(),
-  category: z.enum(PROJECT_CATEGORIES).optional(),
-  deliveryApproach: z.enum(DELIVERY_APPROACHES).optional(),
-  costBaselineIdr: z.coerce.number().nonnegative().optional(),
-  totalRevenueIdr: z.coerce.number().nonnegative().optional(),
-});
+// A free-text detail is required only when the category is OTHER; cleared/ignored otherwise.
+const requireCategoryOther = (
+  d: { category?: string | null; categoryOther?: string | null },
+  ctx: z.RefinementCtx,
+) => {
+  if (d.category === 'OTHER' && !d.categoryOther?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Describe the category when choosing Other',
+      path: ['categoryOther'],
+    });
+  }
+};
+
+export const createProjectSchema = z
+  .object({
+    name: z.string().min(2).max(160),
+    code: z.string().trim().min(2).max(40).optional(), // override the auto-generated code
+    clientName: z.string().max(160).optional(),
+    sponsor: z.string().max(160).optional(),
+    pmUserId: z.string().uuid().optional(),
+    category: z.enum(PROJECT_CATEGORIES).optional(),
+    categoryOther: z.string().trim().max(120).optional(),
+    deliveryApproach: z.enum(DELIVERY_APPROACHES).optional(),
+    costBaselineIdr: z.coerce.number().nonnegative().optional(),
+    totalRevenueIdr: z.coerce.number().nonnegative().optional(),
+  })
+  .superRefine(requireCategoryOther);
 
 export const updateProjectSchema = z.object({
   name: z.string().min(2).max(160).optional(),
@@ -21,6 +42,7 @@ export const updateProjectSchema = z.object({
   clientName: z.string().max(160).nullable().optional(),
   sponsor: z.string().max(160).nullable().optional(),
   category: z.enum(PROJECT_CATEGORIES).nullable().optional(),
+  categoryOther: z.string().trim().max(120).nullable().optional(),
   deliveryApproach: z.enum(DELIVERY_APPROACHES).optional(),
   costBaselineIdr: z.coerce.number().nonnegative().nullable().optional(),
   totalRevenueIdr: z.coerce.number().nonnegative().nullable().optional(),
@@ -39,7 +61,7 @@ export const updateProjectSchema = z.object({
   // lets an ADMIN/PMO override the baseline-readiness gate; activateReason is then mandatory.
   forceActivate: z.boolean().optional(),
   activateReason: z.string().trim().max(500).optional(),
-});
+}).superRefine(requireCategoryOther);
 
 export const reassignPmSchema = z.object({
   pmUserId: z.string().uuid(),
