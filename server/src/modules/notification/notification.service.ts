@@ -101,16 +101,19 @@ export async function getPortfolioAlerts(userId: string, role: string, now: Date
 
   const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
 
+  // Compute each project's alerts CONCURRENTLY (was a sequential await-in-loop on the header bell).
+  const perProject = await Promise.all(projects.map((p) => getProjectAlerts(p.id, now)));
+
   const rows: PortfolioAlertRow[] = [];
   let total = 0;
   let high = 0;
-  for (const p of projects) {
-    const { alerts, counts } = await getProjectAlerts(p.id, now);
-    if (alerts.length === 0) continue;
+  projects.forEach((p, i) => {
+    const { alerts, counts } = perProject[i];
+    if (alerts.length === 0) return;
     rows.push({ projectId: p.id, code: p.code, name: p.name, total: alerts.length, high: counts.HIGH });
     total += alerts.length;
     high += counts.HIGH;
-  }
+  });
   rows.sort((a, b) => b.high - a.high || b.total - a.total);
   return { projects: rows, total, high };
 }
@@ -234,13 +237,15 @@ export async function getAttentionItems(userId: string, role: string, now: Date)
   else where.pmUserId = userId;
   const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
 
+  // Per-project alerts computed CONCURRENTLY (was a sequential await-in-loop on the PM dashboard).
+  const perProject = await Promise.all(projects.map((p) => getProjectAlerts(p.id, now)));
+
   const items: AttentionItem[] = [];
-  for (const p of projects) {
-    const { alerts } = await getProjectAlerts(p.id, now);
-    for (const a of alerts) {
+  projects.forEach((p, i) => {
+    for (const a of perProject[i].alerts) {
       items.push({ projectId: p.id, projectCode: p.code, projectName: p.name, type: a.type, severity: a.severity, tab: a.tab, message: a.message });
     }
-  }
+  });
 
   // Change requests still awaiting a decision.
   const crs = await prisma.changeRequest.findMany({

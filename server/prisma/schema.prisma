@@ -311,6 +311,9 @@ model Project {
 
   @@index([status])
   @@index([pmUserId])
+  // Guest-sandbox scoping filters on personalOwnerId in nearly every list/aggregate query
+  // (portfolio, notifications, resource capacity, EVM trend, audit) — index the hot filter.
+  @@index([personalOwnerId])
 }
 
 // Per-user project bookmark (personal "pin to top" flag). userId is stored FK-less

@@ -58,15 +58,10 @@ export async function captureAllSnapshots(userId: string, role: string, statusDa
   where.status = { not: 'DRAFT' }; // DRAFT projects have no baseline/EVM yet
   const projects = await prisma.project.findMany({ where, select: { id: true } });
 
-  let captured = 0;
-  const failed: string[] = [];
-  for (const p of projects) {
-    try {
-      await captureSnapshot(p.id, { statusDate }, userId);
-      captured++;
-    } catch {
-      failed.push(p.id);
-    }
-  }
-  return { captured, failed: failed.length, total: projects.length };
+  // Capture CONCURRENTLY while isolating per-project failures (one bad project must not abort the
+  // batch) — was a sequential await-in-loop.
+  const results = await Promise.allSettled(projects.map((p) => captureSnapshot(p.id, { statusDate }, userId)));
+  const captured = results.filter((r) => r.status === 'fulfilled').length;
+  const failed = results.length - captured;
+  return { captured, failed, total: projects.length };
 }

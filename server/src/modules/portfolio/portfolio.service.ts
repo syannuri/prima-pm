@@ -98,27 +98,30 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
     mpMap.set(m.projectId, e);
   }
 
+  // EVM per project by methodology (agile → story points; hybrid → blended WBS + points;
+  // predictive → WBS schedule). Computed CONCURRENTLY — this was a sequential await-in-loop, so
+  // the dashboard's dominant read cost went from O(projects × ~5 queries) serial to parallel.
+  const evms = await Promise.all(
+    projects.map((p) =>
+      p.status === 'DRAFT'
+        ? Promise.resolve(null)
+        : p.deliveryApproach === 'AGILE'
+          ? getAgileEvm(p.id, undefined, statusDate)
+          : p.deliveryApproach === 'HYBRID'
+            ? getHybridEvm(p.id, undefined, statusDate)
+            : getEvm(p.id, undefined, statusDate),
+    ),
+  );
+
   const rows: PortfolioRow[] = [];
   // Portfolio physical progress = duration-weighted roll-up across projects.
   const schedAccum = { weighted: 0, weight: 0 };
-  for (const p of projects) {
-    let pv = 0, ev = 0, ac = 0, spi = 0, cpi = 0, percentComplete = 0, leafTaskCount = 0;
-    let scheduleProgress = 0, scheduleWeight = 0;
-    let finishVarianceDays: number | null = null;
-    // Only chartered projects can have a schedule; AC resolved from stored time-phased entries.
-    if (p.status !== 'DRAFT') {
-      // EVM source by methodology: agile → story points; hybrid → blended WBS + points;
-      // predictive → the WBS schedule.
-      const evm = p.deliveryApproach === 'AGILE'
-        ? await getAgileEvm(p.id, undefined, statusDate)
-        : p.deliveryApproach === 'HYBRID'
-          ? await getHybridEvm(p.id, undefined, statusDate)
-          : await getEvm(p.id, undefined, statusDate);
-      pv = evm.pv; ev = evm.ev; ac = evm.ac; spi = evm.spi; cpi = evm.cpi;
-      percentComplete = evm.percentComplete; leafTaskCount = evm.leafTaskCount;
-      scheduleProgress = evm.scheduleProgress; scheduleWeight = evm.scheduleWeight;
-      finishVarianceDays = evm.finishVarianceDays;
-    }
+  projects.forEach((p, i) => {
+    const evm = evms[i];
+    const pv = evm?.pv ?? 0, ev = evm?.ev ?? 0, ac = evm?.ac ?? 0, spi = evm?.spi ?? 0, cpi = evm?.cpi ?? 0;
+    const percentComplete = evm?.percentComplete ?? 0, leafTaskCount = evm?.leafTaskCount ?? 0;
+    const scheduleProgress = evm?.scheduleProgress ?? 0, scheduleWeight = evm?.scheduleWeight ?? 0;
+    const finishVarianceDays = evm?.finishVarianceDays ?? null;
     rows.push({
       id: p.id,
       code: p.code,
@@ -143,7 +146,7 @@ export async function getPortfolioSummary(userId: string, role: string, statusDa
     });
     schedAccum.weighted += scheduleProgress * scheduleWeight;
     schedAccum.weight += scheduleWeight;
-  }
+  });
 
   // Portfolio totals & distributions.
   const totals = rows.reduce(

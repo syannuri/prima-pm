@@ -177,16 +177,20 @@ export async function createChangeRequest(
     prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true } }),
     prisma.user.findMany({ where: { role: { in: ['ADMIN', 'PMO'] }, isActive: true }, select: { id: true } }),
   ]);
-  for (const a of approvers) {
-    if (a.id === actorId) continue;
-    await createNotification({
-      userId: a.id,
-      type: 'CR_SUBMITTED',
-      title: 'Change request awaits your decision',
-      body: `"${input.title}" on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''} needs approval.`,
-      projectId,
-    });
-  }
+  // Notify all approvers concurrently (was serial).
+  await Promise.all(
+    approvers
+      .filter((a) => a.id !== actorId)
+      .map((a) =>
+        createNotification({
+          userId: a.id,
+          type: 'CR_SUBMITTED',
+          title: 'Change request awaits your decision',
+          body: `"${input.title}" on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''} needs approval.`,
+          projectId,
+        }),
+      ),
+  );
   return cr;
 }
 
