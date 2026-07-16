@@ -81,6 +81,16 @@ const DOC: Record<Lang, Doc> = {
           'Panduan "🧭 Next steps" di tiap proyek menuntun langkah berikutnya sesuai tahap lifecycle.',
         ] },
       ] },
+      { id: 'tamu', nav: 'Akun tamu (proyek personal)', heading: '🙋 Akun tamu — kelola proyek personal', blocks: [
+        { type: 'p', text: 'Selain akun korporat yang dibuat Admin, siapa pun bisa membuat AKUN TAMU sendiri untuk mengelola proyek pribadi — tanpa undangan, tanpa matrix approval.' },
+        { type: 'steps', items: [
+          'Daftar — di halaman login klik "Create a guest account", isi nama/email/password, lalu langsung masuk. (Tombol "Sign in with Google" menyusul begitu domain publik & OAuth siap.)',
+          'Buat proyek — klik "+ New Project". Proyek tamu bersifat PERSONAL: hanya Anda yang melihat & mengelolanya; tak muncul di portfolio korporat, dan pengguna korporat (Admin/PMO) pun tak bisa melihat/menyentuhnya.',
+          'Kelola sendiri (tanpa approval) — Anda adalah PMO atas proyek sendiri: isi & Commit Charter, susun WBS/Cost, set & Lock Baseline, Activate/Hold/Close — semua tanpa persetujuan pihak lain. Di charter proyek personal, kolom Project Manager otomatis diri Anda (disembunyikan).',
+          'Modul lengkap — WBS/Jadwal, Cost, Risk, Timesheet, Forecast, dsb. bekerja sama persis seperti proyek biasa, hanya lingkupnya proyek Anda sendiri.',
+        ] },
+        { type: 'p', text: 'Sandbox penuh: data proyek tamu terpisah total dari data korporat — tak ada yang bisa saling melihat.' },
+      ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
         { type: 'p', text: 'Tiga tampilan lewat tombol di kanan atas:' },
         { type: 'bullets', items: [
@@ -213,6 +223,16 @@ const DOC: Record<Lang, Doc> = {
           'Close — on the Closing tab: record the Acceptance Sign-off & Lessons Learned, then Close the project.',
           'The "🧭 Next steps" guide on each project points to the next action for its lifecycle stage.',
         ] },
+      ] },
+      { id: 'tamu', nav: 'Guest accounts (personal projects)', heading: '🙋 Guest accounts — manage personal projects', blocks: [
+        { type: 'p', text: 'Beyond Admin-provisioned corporate accounts, anyone can create their own GUEST account to manage personal projects — no invite, no approval matrix.' },
+        { type: 'steps', items: [
+          'Sign up — on the login page click "Create a guest account", fill in name/email/password, and you are signed in immediately. ("Sign in with Google" is coming once a public domain + OAuth are set up.)',
+          'Create a project — click "+ New Project". A guest project is PERSONAL: only you can see & manage it; it never appears in the corporate portfolio, and corporate users (Admin/PMO) can\'t see or touch it.',
+          'Self-govern (no approval) — you are the PMO of your own project: fill & Commit the Charter, build WBS/Cost, set & Lock the Baseline, Activate/Hold/Close — all with no one else\'s sign-off. On a personal charter the Project Manager field is auto-set to you (and hidden).',
+          'Full modules — WBS/Schedule, Cost, Risk, Timesheet, Forecast, etc. work exactly like a normal project, just scoped to your own projects.',
+        ] },
+        { type: 'p', text: 'Fully sandboxed: guest project data is completely separate from corporate data — neither side can see the other.' },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
         { type: 'p', text: 'Three views via the buttons at the top right:' },
