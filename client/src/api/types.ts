@@ -27,6 +27,8 @@ export interface AuditEntry {
   entityId: string;
   action: string;
   createdAt: string;
+  before: unknown | null;
+  after: unknown | null;
   actor: { name: string; role: Role; email: string } | null;
   project: { code: string; name: string } | null;
   personal: boolean; // guest activity (personal project or a GUEST actor)
