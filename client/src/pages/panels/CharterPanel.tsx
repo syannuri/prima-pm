@@ -35,11 +35,12 @@ const empty: Form = {
   hiScheduleStart: '', hiScheduleEnd: '', hiDeliverables: '', pmUserId: '',
 };
 
-export default function CharterPanel({ projectId, approach: initialApproach, sponsor: initialSponsor, personalOwnerId }: { projectId: string; approach: DeliveryApproach; sponsor: string | null; personalOwnerId?: string | null }) {
+export default function CharterPanel({ projectId, approach: initialApproach, sponsor: initialSponsor, personalOwnerId, assignedPmId, assignedPmName }: { projectId: string; approach: DeliveryApproach; sponsor: string | null; personalOwnerId?: string | null; assignedPmId?: string | null; assignedPmName?: string | null }) {
   const qc = useQueryClient();
-  // A personal (guest) project is always managed by its owner — default the PM to them and
-  // hide the picker (no corporate directory to choose from).
-  const [form, setForm] = useState<Form>(personalOwnerId ? { ...empty, pmUserId: personalOwnerId } : empty);
+  // The PM is set once, upstream: by the guest owner (personal project) or by the PMO when the
+  // project is created/assigned (corporate). Default the charter's PM to that so it isn't
+  // re-entered here, and show it read-only (changing the PM is a separate PMO/assign action).
+  const [form, setForm] = useState<Form>({ ...empty, pmUserId: personalOwnerId ?? assignedPmId ?? '' });
   const [approach, setApproach] = useState<DeliveryApproach>(initialApproach);
   const [sponsor, setSponsor] = useState<string>(initialSponsor ?? '');
   const [msg, setMsg] = useState('');
@@ -54,7 +55,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   const usersQ = useQuery({
     queryKey: ['directory'],
     queryFn: () => api.get<{ users: User[] }>('/users/directory'),
-    enabled: !personalOwnerId, // personal projects don't pick a PM from the directory
+    enabled: !personalOwnerId && !assignedPmId, // directory only needed for the fallback PM picker
   });
 
   const charter = charterQ.data?.charter;
@@ -71,10 +72,12 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         hiScheduleStart: formatDateInput(charter.hiScheduleStart),
         hiScheduleEnd: formatDateInput(charter.hiScheduleEnd),
         hiDeliverables: charter.hiDeliverables,
-        pmUserId: charter.pmUserId,
+        // The assigned PM (personal owner / PMO-assigned) is authoritative and shown read-only,
+        // so keep it in sync rather than reading a possibly-stale charter snapshot.
+        pmUserId: personalOwnerId ?? assignedPmId ?? charter.pmUserId,
       });
     }
-  }, [charter]);
+  }, [charter, personalOwnerId, assignedPmId]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -147,9 +150,13 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
             {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
           </Select>
         </Field>
-        {/* Personal (guest) projects are always managed by their owner — the PM is auto-set
-            (see form init) and the field is hidden entirely. Corporate projects pick a PM. */}
-        {!personalOwnerId && (
+        {/* Personal (guest) → hidden (owner is the PM). Corporate with an assigned PM (from the
+            PMO at create/assign) → read-only, no re-entry. Corporate not yet assigned → pick one. */}
+        {personalOwnerId ? null : assignedPmId ? (
+          <Field label="Project Manager" hint="Set by the PMO when the project was assigned">
+            <Input value={assignedPmName ?? '—'} disabled />
+          </Field>
+        ) : (
           <Field label="Project Manager">
             <Select value={form.pmUserId} onChange={(e) => set('pmUserId', e.target.value)}>
               <option value="">— select PM —</option>
