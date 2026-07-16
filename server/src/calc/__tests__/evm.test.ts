@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { computeEvm, plannedProgress, type EvmTask } from '../evm.js';
+import { computeEvm, plannedProgress, healthFrom, type EvmTask } from '../evm.js';
+
+describe('evm — healthFrom (used by agile EVM to RAG a points-based SPI even when BAC=0)', () => {
+  it('returns NO_DATA when neither cost nor schedule is available', () => {
+    expect(healthFrom(0, 0, false, false)).toBe('NO_DATA');
+  });
+  it('judges a schedule slip from SPI alone (the BAC=0 agile case) — not a false NO_DATA', () => {
+    expect(healthFrom(0, 0.5, false, true)).toBe('RED'); // badly behind on points, no cost yet
+    expect(healthFrom(0, 0.9, false, true)).toBe('AMBER');
+    expect(healthFrom(0, 1.0, false, true)).toBe('GREEN');
+  });
+  it('judges the worst of the available indices', () => {
+    expect(healthFrom(1.2, 0.8, true, true)).toBe('RED'); // cost good, schedule bad → worst wins
+    expect(healthFrom(0.9, 1.1, true, true)).toBe('AMBER');
+  });
+});
 
 const d = (s: string) => new Date(s);
 

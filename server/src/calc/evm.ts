@@ -149,7 +149,7 @@ function round4(n: number): number {
  * Actual Cost; SPI needs a started plan (PV > 0). With neither available we
  * have nothing to judge → NO_DATA (instead of a misleading RED).
  */
-function healthFrom(cpi: number, spi: number, hasCost: boolean, hasSchedule: boolean): EvmHealth {
+export function healthFrom(cpi: number, spi: number, hasCost: boolean, hasSchedule: boolean): EvmHealth {
   const indices: number[] = [];
   if (hasSchedule) indices.push(spi);
   if (hasCost) indices.push(cpi);

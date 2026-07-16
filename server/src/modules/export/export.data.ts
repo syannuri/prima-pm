@@ -3,7 +3,8 @@ import { prisma } from '../../lib/prisma.js';
 import { NotFound } from '../../lib/errors.js';
 import { getCostSummary } from '../cost/cost.service.js';
 import { getRiskAnalysis } from '../risk/risk.service.js';
-import { getGantt, getEvm } from '../schedule/schedule.service.js';
+import { getGantt } from '../schedule/schedule.service.js';
+import { getProjectEvm } from '../agile/agile.service.js';
 import { listSnapshots } from '../evm/evm.service.js';
 
 export interface ExportOptions {
@@ -29,10 +30,10 @@ export async function gatherProjectExport(projectId: string, opts: ExportOptions
     getCostSummary(projectId),
     getRiskAnalysis(projectId),
     getGantt(projectId),
-    // Pass actualCost through as-is: undefined makes getEvm resolve the stored
-    // time-phased AC (same as the live /evm endpoint). Forcing 0 here made every
-    // exported PDF/Excel show CPI=0 / EAC=BAC even when actuals existed.
-    getEvm(projectId, opts.actualCost, opts.statusDate ?? new Date()),
+    // Use the methodology-aware dispatcher (predictive→WBS, agile→points, hybrid→blend) so the
+    // exported EVM matches Dashboard/Forecast/Portfolio/Reports. `undefined` actualCost resolves
+    // the stored time-phased AC (same as the live /evm endpoint).
+    getProjectEvm(projectId, opts.actualCost, opts.statusDate ?? new Date()),
     // Captured EVM status history (oldest → newest) for the trend section.
     listSnapshots(projectId),
   ]);

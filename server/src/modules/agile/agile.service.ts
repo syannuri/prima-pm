@@ -3,7 +3,7 @@ import { writeAudit } from '../../lib/audit.js';
 import { NotFound } from '../../lib/errors.js';
 import { actualCostAsOf } from '../cost/cost.service.js';
 import { round2 } from '../../calc/money.js';
-import { deriveEvm } from '../../calc/evm.js';
+import { deriveEvm, healthFrom } from '../../calc/evm.js';
 import type { BacklogItemInput, SprintInput } from './agile.schemas.js';
 
 // Full agile board payload: sprints + backlog items (with assignee) + burndown snapshots.
@@ -103,6 +103,10 @@ export async function getAgileEvm(projectId: string, actualCost: number | undefi
   const out = evmOut(bac, af.progress * bac, af.plannedProgress * bac, ac, af.progress, af.itemCount, null);
   // SPI is points-based (robust even with BAC=0): progress ÷ plannedProgress.
   out.spi = af.plannedProgress > 0 ? round2(af.progress / af.plannedProgress) : 0;
+  // Re-derive health from the points-based SPI so a BAC=0 agile project's RAG reflects a real
+  // schedule slip (deriveEvm keys "has schedule" on pv>0, which is 0 when BAC=0). For BAC>0 this
+  // is identical to deriveEvm's health.
+  out.health = healthFrom(out.cpi, out.spi, ac > 0, af.plannedProgress > 0);
   return out;
 }
 

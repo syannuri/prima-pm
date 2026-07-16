@@ -124,6 +124,10 @@ async function resolveManpower(input: DirectLineInput, projectOwnerId: string | 
     if (!rc) throw NotFound('Rate card not found');
     if ((rc.personalOwnerId ?? null) !== projectOwnerId) throw BadRequest('That rate card is not in this project’s workspace');
   }
+  // A guest's personal-project line never links a corporate login account (the resourceUserId→User
+  // relation would otherwise leak a corporate identity and surface the guest line in that user's
+  // "My Timesheet"). Guest-owned resources already force userId=null; enforce the raw field too.
+  if (projectOwnerId !== null) resourceUserId = null;
   return { personnelRole, unitCostPerManday: unitCostPerManday ?? 0, resourceUserId, label: label ?? '' };
 }
 

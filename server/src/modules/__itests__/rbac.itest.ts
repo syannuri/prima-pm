@@ -1434,18 +1434,20 @@ describe('project bookmarks', () => {
     expect((await request(app).get(api('/bookmarks'))).status).toBe(401);
   });
 
-  it('add → list → remove, idempotent', async () => {
-    let res = await request(app).get(api('/bookmarks')).set(auth(tokens.PM2));
+  it('add → list → remove, idempotent (bookmarking requires access to the project)', async () => {
+    // ADMIN can access any corporate project; a non-owner (PM2) cannot bookmark it (403).
+    expect((await request(app).put(api(`/bookmarks/${pid}`)).set(auth(tokens.PM2))).status).toBe(403);
+    let res = await request(app).get(api('/bookmarks')).set(auth(tokens.ADMIN));
     expect(res.status).toBe(200);
     expect(res.body.projectIds).toEqual([]);
     // add twice — idempotent (both 204, no duplicate)
-    expect((await request(app).put(api(`/bookmarks/${pid}`)).set(auth(tokens.PM2))).status).toBe(204);
-    expect((await request(app).put(api(`/bookmarks/${pid}`)).set(auth(tokens.PM2))).status).toBe(204);
-    res = await request(app).get(api('/bookmarks')).set(auth(tokens.PM2));
+    expect((await request(app).put(api(`/bookmarks/${pid}`)).set(auth(tokens.ADMIN))).status).toBe(204);
+    expect((await request(app).put(api(`/bookmarks/${pid}`)).set(auth(tokens.ADMIN))).status).toBe(204);
+    res = await request(app).get(api('/bookmarks')).set(auth(tokens.ADMIN));
     expect(res.body.projectIds).toEqual([pid]);
     // remove
-    expect((await request(app).delete(api(`/bookmarks/${pid}`)).set(auth(tokens.PM2))).status).toBe(204);
-    res = await request(app).get(api('/bookmarks')).set(auth(tokens.PM2));
+    expect((await request(app).delete(api(`/bookmarks/${pid}`)).set(auth(tokens.ADMIN))).status).toBe(204);
+    res = await request(app).get(api('/bookmarks')).set(auth(tokens.ADMIN));
     expect(res.body.projectIds).toEqual([]);
   });
 
@@ -1751,6 +1753,28 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
       // non-admins (a guest, a functional role) cannot read the global audit
       expect((await request(app).get(api('/admin/audit')).set(auth(guestToken))).status).toBe(403);
       expect((await request(app).get(api('/admin/audit')).set(auth(tokens.FINANCE))).status).toBe(403);
+    });
+  });
+
+  describe('security-audit fixes: guest activity never leaks into corporate feeds', () => {
+    it('a guest’s personal-project activity stays out of the ADMIN change/attention/bell feeds', async () => {
+      const changes = await request(app).get(api('/notifications/changes')).set(auth(tokens.ADMIN));
+      expect(changes.status).toBe(200);
+      expect(changes.body.changes.every((c: { projectId: string }) => c.projectId !== personalProjectId)).toBe(true);
+      expect(JSON.stringify((await request(app).get(api('/notifications/attention')).set(auth(tokens.ADMIN))).body)).not.toContain(personalProjectId);
+      expect(JSON.stringify((await request(app).get(api('/notifications')).set(auth(tokens.ADMIN))).body)).not.toContain(personalProjectId);
+    });
+
+    it('a guest cannot inject a corporate user id onto a personal-project manpower line (resourceUserId nulled)', async () => {
+      const line = await request(app).post(api(`/projects/${personalProjectId}/cost/direct`)).set(auth(guestToken))
+        .send({ type: 'MANPOWER', resourceUserId: ownerId, planMandays: 3, personnelRole: 'PROJECT_PERSONNEL', unitCostPerManday: 1_000_000, label: 'Freelance work' });
+      expect(line.status).toBe(201);
+      expect(line.body.line.resourceUserId).toBeNull(); // corporate identity stripped on a guest project
+    });
+
+    it('bookmarks are visibility-scoped: neither side can bookmark the other’s project (403)', async () => {
+      expect((await request(app).put(api(`/bookmarks/${corpProjectId}`)).set(auth(guestToken))).status).toBe(403);
+      expect((await request(app).put(api(`/bookmarks/${personalProjectId}`)).set(auth(tokens.ADMIN))).status).toBe(403);
     });
   });
 
