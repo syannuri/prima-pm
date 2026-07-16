@@ -40,6 +40,7 @@ export default function AvatarMenu() {
     settings: id ? 'Pengaturan' : 'Settings',
     manual: id ? 'Panduan & bantuan' : 'Manual & help',
     users: id ? 'Pengguna' : 'Users',
+    myResources: id ? 'Resource Saya' : 'My Resources',
     install: id ? 'Pasang aplikasi' : 'Install app',
     light: id ? 'Mode terang' : 'Light mode',
     darkMode: id ? 'Mode gelap' : 'Dark mode',
@@ -71,6 +72,9 @@ export default function AvatarMenu() {
               <Link to="/settings" onClick={close} className={itemCls}><Ico d={I.gear} /> {t.settings}</Link>
               <Link to="/manual" onClick={close} className={itemCls}><Ico d={I.help} /> {t.manual}</Link>
               {user?.role === 'ADMIN' && <Link to="/admin/users" onClick={close} className={itemCls}><Ico d={I.users} /> {t.users}</Link>}
+              {/* A guest's private Resource Pool — the hamburger drawer is gone on phones, so surface
+                  it here in the reachable account menu (alongside the bottom tab bar + dashboard tile). */}
+              {user?.role === 'GUEST' && <Link to="/admin/resources" onClick={close} className={itemCls}><Ico d={I.users} /> {t.myResources}</Link>}
               {canInstall && (
                 <button onClick={() => { close(); promptInstall(); }} className={`w-full ${itemCls}`}><Ico d={I.install} /> {t.install}</button>
               )}
