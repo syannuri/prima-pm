@@ -1696,5 +1696,33 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
       expect((await request(app).post(api('/resources')).set(auth(tokens.ADMIN)).send({ name: 'Corp QA', capacityPerDay: 1 })).status).toBe(201);
       expect((await request(app).post(api('/ratecards')).set(auth(tokens.FINANCE)).send({ roleName: 'Corp Analyst', unitCostPerManday: 2_000_000 })).status).toBe(201);
     });
+
+    it('a guest edits their rate card role + level (PUT)', async () => {
+      const edited = await request(app).put(api(`/ratecards/${guestRateCardId}`)).set(auth(guestToken))
+        .send({ roleName: 'Senior Freelance Dev', level: 'Senior', unitCostPerManday: 1_800_000 });
+      expect(edited.status).toBe(200);
+      expect(edited.body.rateCard.roleName).toBe('Senior Freelance Dev');
+      expect(edited.body.rateCard.level).toBe('Senior');
+    });
+
+    it('delete is blocked while in use (409) and allowed when unused (204) — guest & corporate', async () => {
+      // guestResourceId is on a manpower line + guestRateCardId is linked to it → in use
+      expect((await request(app).delete(api(`/resources/${guestResourceId}`)).set(auth(guestToken))).status).toBe(409);
+      expect((await request(app).delete(api(`/ratecards/${guestRateCardId}`)).set(auth(guestToken))).status).toBe(409);
+      // fresh, unused ones delete cleanly (204)
+      const gr = await request(app).post(api('/resources')).set(auth(guestToken)).send({ name: 'Temp Guest Res', capacityPerDay: 1 });
+      expect((await request(app).delete(api(`/resources/${gr.body.resource.id}`)).set(auth(guestToken))).status).toBe(204);
+      const grc = await request(app).post(api('/ratecards')).set(auth(guestToken)).send({ roleName: 'Temp Guest Card', unitCostPerManday: 500_000 });
+      expect((await request(app).delete(api(`/ratecards/${grc.body.rateCard.id}`)).set(auth(guestToken))).status).toBe(204);
+      const cr = await request(app).post(api('/resources')).set(auth(tokens.ADMIN)).send({ name: 'Temp Corp Res', capacityPerDay: 1 });
+      expect((await request(app).delete(api(`/resources/${cr.body.resource.id}`)).set(auth(tokens.ADMIN))).status).toBe(204);
+      const crc = await request(app).post(api('/ratecards')).set(auth(tokens.FINANCE)).send({ roleName: 'Temp Corp Card', unitCostPerManday: 500_000 });
+      expect((await request(app).delete(api(`/ratecards/${crc.body.rateCard.id}`)).set(auth(tokens.FINANCE))).status).toBe(204);
+    });
+
+    it('delete is owner-scoped: neither side can delete the other’s (404)', async () => {
+      expect((await request(app).delete(api(`/resources/${corpResourceId}`)).set(auth(guestToken))).status).toBe(404);
+      expect((await request(app).delete(api(`/resources/${guestResourceId}`)).set(auth(tokens.ADMIN))).status).toBe(404);
+    });
   });
 });

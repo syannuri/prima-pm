@@ -107,4 +107,25 @@ router.patch(
   }),
 );
 
+// Hard-delete (owner-scoped). Blocked while the card is still linked to resources or cost lines —
+// those keep a snapshot rate but reference the card, so deactivate instead of orphaning them.
+router.delete(
+  '/:id',
+  requireRole('ADMIN', 'FINANCE', 'GUEST'),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.rateCard.findFirst({ where: { id: req.params.id, personalOwnerId: ownerScope(req) } });
+    if (!existing) throw NotFound('Rate card not found');
+    const [resCount, lineCount] = await Promise.all([
+      prisma.resource.count({ where: { rateCardId: req.params.id } }),
+      prisma.costItemDirect.count({ where: { rateCardId: req.params.id } }),
+    ]);
+    if (resCount + lineCount > 0) {
+      throw Conflict('This rate card is linked to resources or cost lines — deactivate it instead of deleting.');
+    }
+    await prisma.rateCard.delete({ where: { id: req.params.id } });
+    await writeAudit({ userId: req.user!.id, entity: 'RateCard', entityId: req.params.id, action: 'DELETE', before: existing });
+    res.status(204).send();
+  }),
+);
+
 export default router;

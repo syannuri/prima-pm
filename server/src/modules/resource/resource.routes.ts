@@ -10,6 +10,7 @@ import {
   updateResource,
   setResourceActive,
   refreshResourceRate,
+  deleteResource,
 } from './resourceMaster.service.js';
 
 const router = Router();
@@ -92,6 +93,16 @@ router.post(
   requireRole('ADMIN', 'PMO', 'GUEST'),
   asyncHandler(async (req, res) => {
     res.json({ resource: await refreshResourceRate(req.params.id, req.user!.id, ownerScope(req)) });
+  }),
+);
+
+// Hard-delete (owner-scoped). 409 if the resource is still in use.
+router.delete(
+  '/:id',
+  requireRole('ADMIN', 'PMO', 'GUEST'),
+  asyncHandler(async (req, res) => {
+    await deleteResource(req.params.id, req.user!.id, ownerScope(req));
+    res.status(204).send();
   }),
 );
 

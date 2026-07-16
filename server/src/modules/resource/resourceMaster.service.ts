@@ -1,7 +1,7 @@
 import type { PersonnelRole, ResourceType } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
-import { NotFound, BadRequest } from '../../lib/errors.js';
+import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { effectiveDayRate } from './resource.helpers.js';
 
 export interface ResourceInput {
@@ -120,4 +120,20 @@ export async function setResourceActive(id: string, isActive: boolean, actorId: 
   const resource = await prisma.resource.update({ where: { id }, data: { isActive } });
   await writeAudit({ userId: actorId, entity: 'Resource', entityId: id, action: 'UPDATE', before: existing, after: resource });
   return resource;
+}
+
+// Hard-delete a resource. Blocked when it is still referenced by a cost line or a task owner —
+// those are baked into a project's plan/baseline, so deactivate instead of orphaning them.
+export async function deleteResource(id: string, actorId: string, ownerId: string | null = null) {
+  const existing = await prisma.resource.findFirst({ where: { id, personalOwnerId: ownerId } });
+  if (!existing) throw NotFound('Resource not found');
+  const [lineCount, taskCount] = await Promise.all([
+    prisma.costItemDirect.count({ where: { resourceId: id } }),
+    prisma.task.count({ where: { picResourceId: id } }),
+  ]);
+  if (lineCount + taskCount > 0) {
+    throw Conflict('This resource is used by cost lines or task owners — deactivate it instead of deleting.');
+  }
+  await prisma.resource.delete({ where: { id } });
+  await writeAudit({ userId: actorId, entity: 'Resource', entityId: id, action: 'DELETE', before: existing });
 }
