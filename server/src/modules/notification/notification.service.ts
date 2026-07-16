@@ -1,6 +1,5 @@
 import type { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { getCostSummary } from '../cost/cost.service.js';
 
 const GLOBAL_ROLES: Role[] = ['ADMIN', 'PMO'];
 const dec = (v: Prisma.Decimal | number | null | undefined): number => (v == null ? 0 : Number(v));
@@ -16,14 +15,65 @@ export interface Alert {
   message: string;
 }
 
-// Compute live alerts for one project from its current state.
-export async function getProjectAlerts(projectId: string, now: Date): Promise<{ alerts: Alert[]; counts: Record<AlertSeverity, number> }> {
-  const [tasks, risks, cost] = await Promise.all([
-    prisma.task.findMany({ where: { projectId }, select: { id: true, name: true, parentTaskId: true, planEnd: true, progressPct: true } }),
-    prisma.risk.findMany({ where: { projectId }, select: { code: true, title: true, severity: true, status: true } }),
-    getCostSummary(projectId),
+// Raw inputs the alert rules need, per project. Loaded in bulk (loadAlertInputs) so many
+// projects share a FIXED number of queries instead of ~9 per project via getCostSummary.
+interface AlertInput {
+  tasks: { id: string; name: string; parentTaskId: string | null; planEnd: Date; progressPct: number }[];
+  risks: { code: string; title: string; severity: string; status: string }[];
+  bac: number;            // cost baseline (PMB) = costBaseline.costBaseline
+  charterCost: number;    // charter high-level estimate (hiCostIdr)
+  actualCostTotal: number; // Σ ActualCostEntry.amount — same value getCostSummary sums
+}
+
+// Batch-load alert inputs for many projects in a FIXED 5 bulk queries (was 3 queries — one of
+// them a full getCostSummary ≈ 7 more — PER project). The per-project cost fields read here
+// (costBaseline.costBaseline, charter.hiCostIdr, Σ actualCost.amount) are exactly the three
+// values getProjectAlerts used from getCostSummary, so alerts are unchanged.
+async function loadAlertInputs(ids: string[]): Promise<Map<string, AlertInput>> {
+  const out = new Map<string, AlertInput>();
+  if (ids.length === 0) return out;
+
+  const [taskRows, riskRows, baselines, charters, acAgg] = await Promise.all([
+    prisma.task.findMany({ where: { projectId: { in: ids } }, select: { id: true, projectId: true, name: true, parentTaskId: true, planEnd: true, progressPct: true } }),
+    prisma.risk.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, code: true, title: true, severity: true, status: true } }),
+    prisma.costBaseline.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, costBaseline: true } }),
+    prisma.projectCharter.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, hiCostIdr: true } }),
+    prisma.actualCostEntry.groupBy({ by: ['projectId'], where: { projectId: { in: ids } }, _sum: { amount: true } }),
   ]);
 
+  const tasksBy = new Map<string, AlertInput['tasks']>();
+  for (const t of taskRows) {
+    let arr = tasksBy.get(t.projectId);
+    if (!arr) tasksBy.set(t.projectId, (arr = []));
+    arr.push({ id: t.id, name: t.name, parentTaskId: t.parentTaskId, planEnd: t.planEnd, progressPct: t.progressPct });
+  }
+  const risksBy = new Map<string, AlertInput['risks']>();
+  for (const r of riskRows) {
+    let arr = risksBy.get(r.projectId);
+    if (!arr) risksBy.set(r.projectId, (arr = []));
+    arr.push({ code: r.code, title: r.title, severity: r.severity, status: r.status });
+  }
+  const bacBy = new Map(baselines.map((b) => [b.projectId, dec(b.costBaseline)] as const));
+  const charterBy = new Map(charters.map((c) => [c.projectId, dec(c.hiCostIdr)] as const));
+  const acBy = new Map(acAgg.map((a) => [a.projectId, dec(a._sum.amount)] as const));
+
+  for (const id of ids) {
+    out.set(id, {
+      tasks: tasksBy.get(id) ?? [],
+      risks: risksBy.get(id) ?? [],
+      bac: bacBy.get(id) ?? 0,
+      charterCost: charterBy.get(id) ?? 0,
+      actualCostTotal: acBy.get(id) ?? 0,
+    });
+  }
+  return out;
+}
+
+// PURE alert rules from already-loaded inputs. The single-project (getProjectAlerts) and the
+// batched (portfolio bell / attention feed) paths both funnel through this ONE function, so
+// their alerts are identical by construction.
+function computeAlerts(input: AlertInput, now: Date): { alerts: Alert[]; counts: Record<AlertSeverity, number> } {
+  const { tasks, risks, bac, charterCost, actualCostTotal } = input;
   const alerts: Alert[] = [];
 
   // 1) Overdue leaf tasks (planned end passed, not complete).
@@ -57,9 +107,6 @@ export async function getProjectAlerts(projectId: string, now: Date): Promise<{ 
   }
 
   // 3) Budget signals. BAC = PMB (cost baseline, excl. management reserve).
-  const bac = dec(cost.baseline?.costBaseline);
-  const charterCost = cost.highLevelCharterCost ?? 0;
-  const actual = cost.actualCostTotal ?? 0;
   if (charterCost > 0 && bac > charterCost) {
     alerts.push({
       type: 'BUDGET_OVERRUN',
@@ -68,18 +115,25 @@ export async function getProjectAlerts(projectId: string, now: Date): Promise<{ 
       message: `Detailed budget (BAC) exceeds the charter estimate by Rp ${Math.round(bac - charterCost).toLocaleString('id-ID')}`,
     });
   }
-  if (bac > 0 && actual > bac) {
+  if (bac > 0 && actualCostTotal > bac) {
     alerts.push({
       type: 'OVERSPEND',
       severity: 'HIGH',
       tab: 'Cost',
-      message: `Actual cost has exceeded BAC by Rp ${Math.round(actual - bac).toLocaleString('id-ID')}`,
+      message: `Actual cost has exceeded BAC by Rp ${Math.round(actualCostTotal - bac).toLocaleString('id-ID')}`,
     });
   }
 
   const counts: Record<AlertSeverity, number> = { HIGH: 0, MEDIUM: 0, LOW: 0 };
   for (const a of alerts) counts[a.severity] += 1;
   return { alerts, counts };
+}
+
+// Compute live alerts for ONE project (per-project route). Thin wrapper over the batched loader.
+export async function getProjectAlerts(projectId: string, now: Date): Promise<{ alerts: Alert[]; counts: Record<AlertSeverity, number> }> {
+  const input = (await loadAlertInputs([projectId])).get(projectId);
+  if (!input) return { alerts: [], counts: { HIGH: 0, MEDIUM: 0, LOW: 0 } };
+  return computeAlerts(input, now);
 }
 
 export interface PortfolioAlertRow {
@@ -101,14 +155,15 @@ export async function getPortfolioAlerts(userId: string, role: string, now: Date
 
   const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
 
-  // Compute each project's alerts CONCURRENTLY (was a sequential await-in-loop on the header bell).
-  const perProject = await Promise.all(projects.map((p) => getProjectAlerts(p.id, now)));
+  // Alert inputs for ALL visible projects in one batch (5 bulk queries) instead of ~9 per
+  // project; alerts derived in memory. Replaces the per-project Promise.all on the header bell.
+  const inputs = await loadAlertInputs(projects.map((p) => p.id));
 
   const rows: PortfolioAlertRow[] = [];
   let total = 0;
   let high = 0;
-  projects.forEach((p, i) => {
-    const { alerts, counts } = perProject[i];
+  projects.forEach((p) => {
+    const { alerts, counts } = computeAlerts(inputs.get(p.id)!, now);
     if (alerts.length === 0) return;
     rows.push({ projectId: p.id, code: p.code, name: p.name, total: alerts.length, high: counts.HIGH });
     total += alerts.length;
@@ -237,12 +292,13 @@ export async function getAttentionItems(userId: string, role: string, now: Date)
   else where.pmUserId = userId;
   const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
 
-  // Per-project alerts computed CONCURRENTLY (was a sequential await-in-loop on the PM dashboard).
-  const perProject = await Promise.all(projects.map((p) => getProjectAlerts(p.id, now)));
+  // Alert inputs for ALL managed projects in one batch (5 bulk queries), derived in memory.
+  // Replaces the per-project Promise.all on the PM dashboard's attention feed.
+  const inputs = await loadAlertInputs(projects.map((p) => p.id));
 
   const items: AttentionItem[] = [];
-  projects.forEach((p, i) => {
-    for (const a of perProject[i].alerts) {
+  projects.forEach((p) => {
+    for (const a of computeAlerts(inputs.get(p.id)!, now).alerts) {
       items.push({ projectId: p.id, projectCode: p.code, projectName: p.name, type: a.type, severity: a.severity, tab: a.tab, message: a.message });
     }
   });

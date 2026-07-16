@@ -11,6 +11,7 @@ import { pruneExpiredRefreshTokens } from '../auth/auth.service.js';
 import { getEvm } from '../schedule/schedule.service.js';
 import { getProjectEvm } from '../agile/agile.service.js';
 import { computeEvmForProjects, evmPvSeries } from '../schedule/evm.batch.js';
+import { getProjectAlerts, getPortfolioAlerts, getAttentionItems } from '../notification/notification.service.js';
 
 const app = createApp();
 const api = (path: string) => `/api/v1${path}`;
@@ -1900,5 +1901,60 @@ describe('batched EVM equivalence (computeEvmForProjects / evmPvSeries == single
     const draft = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'Batch-EVM-Draft', pmUserId: ownerId });
     const map = await computeEvmForProjects([{ id: draft.body.project.id, status: 'DRAFT', deliveryApproach: 'PREDICTIVE' }], statusDate);
     expect(map.has(draft.body.project.id)).toBe(false);
+  });
+});
+
+// Regression for the batched alert loader (notification.service loadAlertInputs). Two projects
+// with different alert data prove the batch grouping keeps projects separate and matches the
+// per-project getProjectAlerts path (bell + attention feed).
+describe('batched alerts (portfolio bell / attention == per-project getProjectAlerts)', () => {
+  let a = '', b = '';
+  const now = new Date('2026-09-01');
+
+  beforeAll(async () => {
+    const mk = async (name: string) => {
+      const r = await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name, pmUserId: ownerId });
+      const id = r.body.project.id as string;
+      await request(app).patch(api(`/projects/${id}`)).set(auth(tokens.ADMIN)).send({ status: 'CHARTERED' });
+      return id;
+    };
+    a = await mk('Alerts-A');
+    b = await mk('Alerts-B');
+
+    // A: overdue >14d (HIGH) + CRITICAL open risk (HIGH) + actual > BAC (OVERSPEND HIGH).
+    await prisma.task.create({ data: { projectId: a, wbsCode: '1', name: 'Late A', planStart: new Date('2026-07-01'), planEnd: new Date('2026-08-01'), progressPct: 20 } });
+    await prisma.risk.create({ data: { projectId: a, code: 'R-A1', title: 'Server melts', severity: 'CRITICAL', probabilityScore: 5, impactScore: 5, riskScore: 25, probabilityPct: 0.9, impactCostIdr: 5_000_000, emv: 4_500_000 } });
+    await prisma.costBaseline.upsert({ where: { projectId: a }, create: { projectId: a, costBaseline: 1_000_000 }, update: { costBaseline: 1_000_000 } });
+    await prisma.actualCostEntry.create({ data: { projectId: a, date: new Date('2026-08-20'), amount: 1_500_000 } });
+
+    // B: a single overdue task 5d late (MEDIUM), no cost alerts (bac = 0).
+    await prisma.task.create({ data: { projectId: b, wbsCode: '1', name: 'Late B', planStart: new Date('2026-08-01'), planEnd: new Date('2026-08-27'), progressPct: 0 } });
+  });
+
+  it('per-project alerts are correct', async () => {
+    const ra = await getProjectAlerts(a, now);
+    expect(ra.alerts.map((x) => x.type).sort()).toEqual(expect.arrayContaining(['HIGH_RISK', 'OVERDUE_TASK', 'OVERSPEND']));
+    expect(ra.counts.HIGH).toBe(3); // the three HIGH signals (an auto-charter BUDGET_OVERRUN would be MEDIUM)
+
+    const rb = await getProjectAlerts(b, now);
+    expect(rb.alerts).toHaveLength(1);
+    expect(rb.alerts[0]).toMatchObject({ type: 'OVERDUE_TASK', severity: 'MEDIUM' });
+  });
+
+  it('portfolio bell batches to the SAME per-project counts', async () => {
+    const bell = await getPortfolioAlerts(ownerId, 'PROJECT_MANAGER', now);
+    const rowA = bell.projects.find((p) => p.projectId === a);
+    const rowB = bell.projects.find((p) => p.projectId === b);
+    const [ra, rb] = [await getProjectAlerts(a, now), await getProjectAlerts(b, now)];
+    // batched row == single-project result (grouping stays separate)
+    expect(rowA).toMatchObject({ total: ra.alerts.length, high: 3 });
+    expect(rowB).toMatchObject({ total: rb.alerts.length, high: 0 });
+  });
+
+  it('attention feed batches both projects’ alerts separately', async () => {
+    const att = await getAttentionItems(ownerId, 'PROJECT_MANAGER', now);
+    const [ra, rb] = [await getProjectAlerts(a, now), await getProjectAlerts(b, now)];
+    expect(att.items.filter((i) => i.projectId === a)).toHaveLength(ra.alerts.length);
+    expect(att.items.filter((i) => i.projectId === b)).toHaveLength(rb.alerts.length);
   });
 });
