@@ -1769,11 +1769,25 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
       g3Resource = (await request(app).post(api('/resources')).set(auth(g3Token)).send({ name: 'Zoe Res', capacityPerDay: 1 })).body.resource.id;
     });
 
-    it('a non-guest (corporate) account cannot be hard-deleted (400)', async () => {
-      expect((await request(app).delete(api(`/users/${ownerId}`)).set(auth(tokens.ADMIN))).status).toBe(400);
+    it('a corporate user still managing projects is blocked (409); an unreferenced one deletes (204)', async () => {
+      // ownerId is the PM of projects across this suite → blocked, reassign/deactivate first.
+      expect((await request(app).delete(api(`/users/${ownerId}`)).set(auth(tokens.ADMIN))).status).toBe(409);
+      // A freshly-created corporate account with no assignments deletes cleanly.
+      const created = await request(app).post(api('/users')).set(auth(tokens.ADMIN))
+        .send({ name: 'Temp Viewer', email: 'temp.viewer@example.com', password: 'ViewerPass123', role: 'VIEWER' });
+      expect(created.status).toBe(201);
+      const uid = created.body.user.id;
+      expect((await request(app).delete(api(`/users/${uid}`)).set(auth(tokens.ADMIN))).status).toBe(204);
+      expect(await prisma.user.count({ where: { id: uid } })).toBe(0);
     });
 
-    it('only an ADMIN can delete a guest (a functional role and the guest itself are 403)', async () => {
+    it('an admin cannot delete their own account (400)', async () => {
+      // tokens.ADMIN belongs to admin@test.local — deleting self is refused.
+      const me = await prisma.user.findUnique({ where: { email: 'admin@test.local' }, select: { id: true } });
+      expect((await request(app).delete(api(`/users/${me!.id}`)).set(auth(tokens.ADMIN))).status).toBe(400);
+    });
+
+    it('only an ADMIN can delete a user (a functional role and a guest are 403)', async () => {
       expect((await request(app).delete(api(`/users/${g3}`)).set(auth(tokens.FINANCE))).status).toBe(403);
       expect((await request(app).delete(api(`/users/${g3}`)).set(auth(g3Token))).status).toBe(403);
     });

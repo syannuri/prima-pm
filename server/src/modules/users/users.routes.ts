@@ -190,34 +190,57 @@ router.patch(
   }),
 );
 
-// Hard-delete a GUEST account and PURGE its entire self-service sandbox (personal projects with
-// all nested data, private resource pool & rate cards, notifications, bookmarks, sessions). The
-// audit trail is preserved but ANONYMISED (its userId is nulled) so the record of what happened
-// survives. Corporate accounts are never hard-deletable here — deactivate them instead.
+// Hard-delete an account. GUEST → PURGE the whole self-service sandbox (personal projects with all
+// nested data, private resource pool & rate cards, notifications, bookmarks, sessions). CORPORATE →
+// remove the account only: corporate projects/data are SHARED and kept; the account is deletable
+// ONLY when it isn't still managing work (blocked if it manages a project/charter or raised change
+// requests — reassign or deactivate first). Either way the audit trail is preserved but ANONYMISED
+// (AuditLog.userId is SET NULL by the DB) and the deletion is itself audited by the admin.
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
     const target = await prisma.user.findUnique({
       where: { id: req.params.id },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, role: true, isActive: true },
     });
     if (!target) throw NotFound('User not found');
-    if (target.role !== 'GUEST') throw BadRequest('Only guest accounts can be deleted. Deactivate other users instead.');
     if (target.id === req.user!.id) throw BadRequest('You cannot delete your own account');
 
-    await prisma.$transaction(async (tx) => {
-      // Personal projects cascade all their nested data (charter, WBS, cost, risk, CRs, timesheets…).
-      await tx.project.deleteMany({ where: { personalOwnerId: target.id } });
-      // Then the guest's private pool (now unreferenced — their cost lines went with the projects).
-      await tx.resource.deleteMany({ where: { personalOwnerId: target.id } });
-      await tx.rateCard.deleteMany({ where: { personalOwnerId: target.id } });
-      // Account-scoped rows that reference the user directly.
-      await tx.notification.deleteMany({ where: { userId: target.id } });
-      await tx.projectBookmark.deleteMany({ where: { userId: target.id } });
-      // Preserve the audit trail but detach the deleted actor.
-      await tx.auditLog.updateMany({ where: { userId: target.id }, data: { userId: null } });
-      await tx.user.delete({ where: { id: target.id } }); // cascades refresh tokens
-    });
+    if (target.role === 'GUEST') {
+      await prisma.$transaction(async (tx) => {
+        // Personal projects cascade all nested data (charter, WBS, cost, risk, CRs, timesheets…).
+        await tx.project.deleteMany({ where: { personalOwnerId: target.id } });
+        await tx.resource.deleteMany({ where: { personalOwnerId: target.id } });
+        await tx.rateCard.deleteMany({ where: { personalOwnerId: target.id } });
+        await tx.notification.deleteMany({ where: { userId: target.id } });
+        await tx.projectBookmark.deleteMany({ where: { userId: target.id } });
+        await tx.user.delete({ where: { id: target.id } }); // cascades refresh tokens; audit SET NULL
+      });
+    } else {
+      // Never lock the org out: keep at least one active admin.
+      if (target.role === 'ADMIN' && target.isActive) {
+        const activeAdmins = await prisma.user.count({ where: { role: 'ADMIN', isActive: true } });
+        if (activeAdmins <= 1) throw BadRequest('Cannot delete the last active admin.');
+      }
+      // Block while the account still manages work — those references represent real ownership
+      // (and two of them are hard FK constraints). Reassign / deactivate first.
+      const [pmActive, charterPm, crs] = await Promise.all([
+        prisma.project.count({ where: { pmUserId: target.id, deletedAt: null } }),
+        prisma.projectCharter.count({ where: { pmUserId: target.id } }),
+        prisma.changeRequest.count({ where: { requestedBy: target.id } }),
+      ]);
+      if (pmActive + charterPm + crs > 0) {
+        throw Conflict('This account still manages projects (as a project or charter manager) or raised change requests. Reassign their projects and/or deactivate the account instead.');
+      }
+      await prisma.$transaction(async (tx) => {
+        // Notifications hard-block the delete (RESTRICT); clear them + bookmarks. Everything else
+        // referencing the user (project PM of soft-deleted, task PIC, risk/issue owners, audit,
+        // resource link, refresh tokens) is SET NULL / CASCADE by the DB on delete.
+        await tx.notification.deleteMany({ where: { userId: target.id } });
+        await tx.projectBookmark.deleteMany({ where: { userId: target.id } });
+        await tx.user.delete({ where: { id: target.id } });
+      });
+    }
 
     await writeAudit({
       userId: req.user!.id,

@@ -102,12 +102,13 @@ function useUserActions(u: AdminUser, onChange: () => void) {
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed to delete'),
   });
   const askDelete = async () => {
-    if (await confirm({
-      title: 'Delete guest account?',
-      message: <>Permanently delete <strong>{u.name}</strong> and <strong>all their data</strong> — personal projects (with everything inside), private resource pool & rate cards, and sessions. This <strong>cannot be undone</strong>. The audit trail is kept (anonymised).</>,
-      confirmLabel: 'Delete permanently',
-      danger: true,
-    })) del.mutate();
+    const isGuest = u.role === 'GUEST';
+    const message = isGuest ? (
+      <>Permanently delete <strong>{u.name}</strong> and <strong>all their data</strong> — personal projects (with everything inside), private resource pool & rate cards, and sessions. This <strong>cannot be undone</strong>. The audit trail is kept (anonymised).</>
+    ) : (
+      <>Permanently delete the account <strong>{u.name}</strong>? Their task/assignment references are cleared and their audit is anonymised — <strong>corporate projects &amp; data are kept</strong>. Blocked if they still manage a project or raised change requests (reassign or deactivate first). This <strong>cannot be undone</strong>.</>
+    );
+    if (await confirm({ title: isGuest ? 'Delete guest account?' : 'Delete user account?', message, confirmLabel: 'Delete permanently', danger: true })) del.mutate();
   };
   return { err, setRole, setActive, toggleActive, del, askDelete };
 }
@@ -151,7 +152,7 @@ function UserCard({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSe
             {u.isActive ? 'Deactivate' : 'Activate'}
           </button>
         )}
-        {isGuest && !isSelf && (
+        {!isSelf && (
           <button onClick={askDelete} disabled={del.isPending} className="text-xs font-medium text-red-500 hover:underline disabled:opacity-40">Delete</button>
         )}
       </div>
@@ -195,7 +196,7 @@ function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSel
             {u.isActive ? 'Deactivate' : 'Activate'}
           </button>
         )}
-        {isGuest && !isSelf && (
+        {!isSelf && (
           <button onClick={askDelete} disabled={del.isPending} className="ml-3 text-xs text-red-500 hover:underline disabled:opacity-40">Delete</button>
         )}
       </td>
