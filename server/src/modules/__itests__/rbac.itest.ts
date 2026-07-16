@@ -1725,4 +1725,32 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
       expect((await request(app).delete(api(`/resources/${guestResourceId}`)).set(auth(tokens.ADMIN))).status).toBe(404);
     });
   });
+
+  describe('guest identity isolation + admin global audit', () => {
+    it('a guest is excluded from the corporate directory and cannot call it', async () => {
+      const dir = await request(app).get(api('/users/directory')).set(auth(tokens.ADMIN));
+      expect(dir.status).toBe(200);
+      expect(dir.body.users.some((u: { id: string }) => u.id === guestId)).toBe(false);
+      expect(dir.body.users.some((u: { role: string }) => u.role === 'GUEST')).toBe(false);
+      expect((await request(app).get(api('/users/directory')).set(auth(guestToken))).status).toBe(403);
+    });
+
+    it('a guest cannot be assigned as PM of a corporate project (create + reassign → 400)', async () => {
+      expect((await request(app).post(api('/projects')).set(auth(tokens.ADMIN)).send({ name: 'GuestPM-Attempt', pmUserId: guestId })).status).toBe(400);
+      expect((await request(app).patch(api(`/projects/${corpProjectId}/pm`)).set(auth(tokens.ADMIN)).send({ pmUserId: guestId })).status).toBe(400);
+    });
+
+    it('ADMIN sees guest activity in the global audit; scope=personal isolates it; non-admins are blocked', async () => {
+      const all = await request(app).get(api('/admin/audit?limit=200')).set(auth(tokens.ADMIN));
+      expect(all.status).toBe(200);
+      expect(Array.isArray(all.body.entries)).toBe(true);
+      const personal = await request(app).get(api('/admin/audit?scope=personal&limit=200')).set(auth(tokens.ADMIN));
+      expect(personal.status).toBe(200);
+      expect(personal.body.entries.length).toBeGreaterThan(0); // the guest created projects/WBS/resources earlier
+      expect(personal.body.entries.every((e: { personal: boolean }) => e.personal === true)).toBe(true);
+      // non-admins (a guest, a functional role) cannot read the global audit
+      expect((await request(app).get(api('/admin/audit')).set(auth(guestToken))).status).toBe(403);
+      expect((await request(app).get(api('/admin/audit')).set(auth(tokens.FINANCE))).status).toBe(403);
+    });
+  });
 });

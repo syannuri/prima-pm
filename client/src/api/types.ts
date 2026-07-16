@@ -20,6 +20,18 @@ export interface AdminUser extends User {
   createdAt: string;
 }
 
+// Admin-only global audit trail (GET /admin/audit).
+export interface AuditEntry {
+  id: string;
+  entity: string;
+  entityId: string;
+  action: string;
+  createdAt: string;
+  actor: { name: string; role: Role; email: string } | null;
+  project: { code: string; name: string } | null;
+  personal: boolean; // guest activity (personal project or a GUEST actor)
+}
+
 export type PersonnelRole = 'PM' | 'PROJECT_PERSONNEL';
 export type ResourceType = 'NAMED' | 'GENERIC';
 

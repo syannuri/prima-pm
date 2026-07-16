@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import ProjectPage from './pages/ProjectPage';
 import AdminUsersPage from './pages/AdminUsersPage';
 import AdminResourcesPage from './pages/AdminResourcesPage';
+import AdminAuditPage from './pages/AdminAuditPage';
 import SettingsPage from './pages/SettingsPage';
 import ManualPage from './pages/ManualPage';
 import MyTimesheetPage from './pages/MyTimesheetPage';
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/projects/:projectId/*" element={<ProjectPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/resources" element={<AdminResourcesPage />} />
+        <Route path="/admin/audit" element={<AdminAuditPage />} />
         <Route path="/my-timesheet" element={<MyTimesheetPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/manual" element={<ManualPage />} />

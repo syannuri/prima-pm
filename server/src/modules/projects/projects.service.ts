@@ -134,11 +134,20 @@ async function createProjectRow(input: CreateProjectInput, year: number, persona
   }
 }
 
+// A GUEST is a sandboxed self-service account — it must never own or manage a CORPORATE project.
+// The assignment pickers already exclude guests, but guard the service too (defence in depth).
+async function assertNotGuestPm(pmUserId: string | null | undefined): Promise<void> {
+  if (!pmUserId) return;
+  const u = await prisma.user.findUnique({ where: { id: pmUserId }, select: { role: true } });
+  if (u?.role === 'GUEST') throw BadRequest('A guest account cannot be assigned to a corporate project');
+}
+
 export async function createProject(input: CreateProjectInput, actorId: string, actorRole?: Role) {
   // Year is derived from the actor's request time; passed explicitly to keep code testable.
   const year = new Date().getFullYear();
   // A GUEST can only ever create a personal project owned by themselves — never a corporate one.
   const personalOwnerId = actorRole === 'GUEST' ? actorId : null;
+  if (!personalOwnerId) await assertNotGuestPm(input.pmUserId); // corporate project: reject a guest PM
   const project = await createProjectRow(input, year, personalOwnerId);
 
   await writeAudit({ projectId: project.id, userId: actorId, entity: 'Project', entityId: project.id, action: 'CREATE', after: project });
@@ -149,6 +158,8 @@ export async function createProject(input: CreateProjectInput, actorId: string, 
 export async function updateProject(id: string, input: UpdateProjectInput, actorId: string) {
   const before = await prisma.project.findFirst({ where: { id, deletedAt: null } });
   if (!before) throw NotFound('Project not found');
+  // A corporate project may never be handed to a guest account (personal projects keep their owner).
+  if (input.pmUserId && !before.personalOwnerId) await assertNotGuestPm(input.pmUserId);
 
   // Project code is unique — block a clash with another project.
   const newCode = input.code?.trim();
@@ -288,6 +299,7 @@ export async function reassignPm(projectId: string, pmUserId: string, actorId: s
 
   const pm = await prisma.user.findFirst({ where: { id: pmUserId, isActive: true } });
   if (!pm) throw BadRequest('Selected user not found or inactive');
+  if (pm.role === 'GUEST') throw BadRequest('A guest account cannot be assigned to a corporate project');
 
   await prisma.$transaction([
     prisma.project.update({ where: { id: projectId }, data: { pmUserId } }),

@@ -43,12 +43,15 @@ const PUBLIC_USER = { id: true, name: true, email: true, role: true, isActive: t
 
 router.use(requireAuth);
 
-// Lightweight directory for assignment pickers (PM, PIC, risk owner) — any auth user.
+// Lightweight directory for assignment pickers (PM, PIC, risk owner). GUESTS are excluded from
+// the results (their identities never surface in corporate pickers) AND a GUEST may not call it
+// (they self-govern personal projects and never assign corporate people).
 router.get(
   '/directory',
+  requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER'),
   asyncHandler(async (_req, res) => {
     const users = await prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, role: { not: 'GUEST' } },
       select: { id: true, name: true, email: true, role: true },
       orderBy: { name: 'asc' },
     });
