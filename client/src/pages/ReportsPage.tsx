@@ -219,18 +219,21 @@ function ReportBody({ r }: { r: ProjectReportData }) {
     <div className="space-y-5">
       {/* Report header */}
       <Card>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">Project Status Report · {r.period.charAt(0).toUpperCase() + r.period.slice(1)}</div>
-            <h2 className="mt-0.5 text-xl font-bold text-slate-800 dark:text-slate-100">{r.project.code} — {r.project.name}</h2>
+            <h2 className="mt-0.5 break-words text-lg font-bold text-slate-800 dark:text-slate-100 sm:text-xl">{r.project.code} — {r.project.name}</h2>
             <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               PM {r.project.pmName} · {r.periodLabel} · as of {formatDate(r.asOf)}
             </div>
           </div>
-          <div className="text-right">
+          {/* Mobile: health + % complete sit on one compact row; desktop: stacked, right-aligned. */}
+          <div className="flex shrink-0 items-center gap-3 border-t border-slate-100 pt-3 dark:border-slate-800 sm:block sm:border-0 sm:pt-0 sm:text-right">
             <Badge color={h.color}>● {h.label}</Badge>
-            <div className="mt-1 text-3xl font-extrabold tabular-nums text-slate-800 dark:text-white">{r.tasks.weightedPct}%</div>
-            <div className="text-[11px] uppercase tracking-wide text-slate-400">complete</div>
+            <div className="ml-auto flex items-baseline gap-1.5 sm:mt-1 sm:block">
+              <div className="text-3xl font-extrabold tabular-nums text-slate-800 dark:text-white">{r.tasks.weightedPct}%</div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-400">complete</div>
+            </div>
           </div>
         </div>
         {/* KPI strip */}
@@ -250,9 +253,9 @@ function ReportBody({ r }: { r: ProjectReportData }) {
         {/* Task completion */}
         <Card>
           <SectionHead title="Task completion" sub="Completed vs uncompleted work packages" />
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
             {slices.length > 0 ? <DonutChart title="" slices={slices} unit="tasks" /> : <p className="text-sm text-slate-500">No work packages.</p>}
-            <div className="space-y-1.5 text-sm">
+            <div className="flex-1 space-y-1.5 text-sm">
               <Legend color="#16a34a" label="Completed" value={r.tasks.completed} />
               <Legend color="#f59e0b" label="In progress" value={r.tasks.inProgress} />
               <Legend color="#94a3b8" label="Not started" value={r.tasks.notStarted} />
@@ -290,7 +293,7 @@ function ReportBody({ r }: { r: ProjectReportData }) {
       {/* Forecast */}
       <Card>
         <SectionHead title="Forecast" sub="Estimate at completion, schedule projection & margin" />
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Kpi label="EAC — optimistic" value={formatIdrShort(f.eac.optimistic)} sub="remaining to plan" />
           <Kpi label="EAC — likely" value={formatIdrShort(f.eac.likely)} sub="BAC ÷ CPI" warn={f.eac.likely > e.bac} />
           <Kpi label="EAC — pessimistic" value={formatIdrShort(f.eac.pessimistic)} sub="cost + schedule drag" />
@@ -310,10 +313,10 @@ function ReportBody({ r }: { r: ProjectReportData }) {
 
 function Kpi({ label, value, sub, warn, good }: { label: string; value: string; sub?: string; warn?: boolean; good?: boolean }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-2.5 dark:border-slate-800">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`text-lg font-bold tabular-nums ${warn ? 'text-red-600 dark:text-red-400' : good ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-100'}`}>{value}</div>
-      {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
+    <div className="min-w-0 rounded-lg border border-slate-200 p-2.5 dark:border-slate-800">
+      <div className="truncate text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400" title={label}>{label}</div>
+      <div title={value} className={`truncate text-base font-bold tabular-nums sm:text-lg ${warn ? 'text-red-600 dark:text-red-400' : good ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-100'}`}>{value}</div>
+      {sub && <div className="truncate text-[10px] text-slate-400" title={sub}>{sub}</div>}
     </div>
   );
 }
