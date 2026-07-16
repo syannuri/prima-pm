@@ -190,4 +190,44 @@ router.patch(
   }),
 );
 
+// Hard-delete a GUEST account and PURGE its entire self-service sandbox (personal projects with
+// all nested data, private resource pool & rate cards, notifications, bookmarks, sessions). The
+// audit trail is preserved but ANONYMISED (its userId is nulled) so the record of what happened
+// survives. Corporate accounts are never hard-deletable here — deactivate them instead.
+router.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true, email: true, role: true },
+    });
+    if (!target) throw NotFound('User not found');
+    if (target.role !== 'GUEST') throw BadRequest('Only guest accounts can be deleted. Deactivate other users instead.');
+    if (target.id === req.user!.id) throw BadRequest('You cannot delete your own account');
+
+    await prisma.$transaction(async (tx) => {
+      // Personal projects cascade all their nested data (charter, WBS, cost, risk, CRs, timesheets…).
+      await tx.project.deleteMany({ where: { personalOwnerId: target.id } });
+      // Then the guest's private pool (now unreferenced — their cost lines went with the projects).
+      await tx.resource.deleteMany({ where: { personalOwnerId: target.id } });
+      await tx.rateCard.deleteMany({ where: { personalOwnerId: target.id } });
+      // Account-scoped rows that reference the user directly.
+      await tx.notification.deleteMany({ where: { userId: target.id } });
+      await tx.projectBookmark.deleteMany({ where: { userId: target.id } });
+      // Preserve the audit trail but detach the deleted actor.
+      await tx.auditLog.updateMany({ where: { userId: target.id }, data: { userId: null } });
+      await tx.user.delete({ where: { id: target.id } }); // cascades refresh tokens
+    });
+
+    await writeAudit({
+      userId: req.user!.id,
+      entity: 'User',
+      entityId: target.id,
+      action: 'DELETE',
+      before: { name: target.name, email: target.email, role: target.role },
+    });
+    res.status(204).send();
+  }),
+);
+
 export default router;

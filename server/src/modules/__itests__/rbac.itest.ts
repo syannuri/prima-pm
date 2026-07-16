@@ -1753,4 +1753,42 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
       expect((await request(app).get(api('/admin/audit')).set(auth(tokens.FINANCE))).status).toBe(403);
     });
   });
+
+  describe('hard-delete a guest purges the whole sandbox', () => {
+    let g3 = '';
+    let g3Token = '';
+    let g3Project = '';
+    let g3Resource = '';
+    let g3Rate = '';
+
+    beforeAll(async () => {
+      const reg = await request(app).post(api('/auth/guest/register')).send({ name: 'Zoe Guest', email: 'zoe.guest@example.com', password: 'GuestPass123' });
+      g3 = reg.body.user.id; g3Token = reg.body.accessToken;
+      g3Project = (await request(app).post(api('/projects')).set(auth(g3Token)).send({ name: 'Zoe Personal' })).body.project.id;
+      g3Rate = (await request(app).post(api('/ratecards')).set(auth(g3Token)).send({ roleName: 'Zoe Card', unitCostPerManday: 1_000_000 })).body.rateCard.id;
+      g3Resource = (await request(app).post(api('/resources')).set(auth(g3Token)).send({ name: 'Zoe Res', capacityPerDay: 1 })).body.resource.id;
+    });
+
+    it('a non-guest (corporate) account cannot be hard-deleted (400)', async () => {
+      expect((await request(app).delete(api(`/users/${ownerId}`)).set(auth(tokens.ADMIN))).status).toBe(400);
+    });
+
+    it('only an ADMIN can delete a guest (a functional role and the guest itself are 403)', async () => {
+      expect((await request(app).delete(api(`/users/${g3}`)).set(auth(tokens.FINANCE))).status).toBe(403);
+      expect((await request(app).delete(api(`/users/${g3}`)).set(auth(g3Token))).status).toBe(403);
+    });
+
+    it('ADMIN deletes the guest and purges projects + resource pool + rate cards; audit is preserved but anonymised', async () => {
+      const del = await request(app).delete(api(`/users/${g3}`)).set(auth(tokens.ADMIN));
+      expect(del.status).toBe(204);
+      expect(await prisma.user.count({ where: { id: g3 } })).toBe(0);
+      expect(await prisma.project.count({ where: { id: g3Project } })).toBe(0);
+      expect(await prisma.resource.count({ where: { id: g3Resource } })).toBe(0);
+      expect(await prisma.rateCard.count({ where: { id: g3Rate } })).toBe(0);
+      // the guest's old audit rows are kept but detached (userId nulled), none still point at the deleted id
+      expect(await prisma.auditLog.count({ where: { userId: g3 } })).toBe(0);
+      // and the deletion itself is recorded (by the admin)
+      expect(await prisma.auditLog.count({ where: { entity: 'User', entityId: g3, action: 'DELETE' } })).toBeGreaterThan(0);
+    });
+  });
 });

@@ -95,11 +95,26 @@ function useUserActions(u: AdminUser, onChange: () => void) {
     }
     setActive.mutate(!u.isActive);
   };
-  return { err, setRole, setActive, toggleActive };
+  // Hard-delete is GUEST-only (see server): it purges their whole personal sandbox.
+  const del = useMutation({
+    mutationFn: () => api.del(`/users/${u.id}`),
+    onSuccess: () => { setErr(''); onChange(); toast.success(`${u.name} deleted`); },
+    onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed to delete'),
+  });
+  const askDelete = async () => {
+    if (await confirm({
+      title: 'Delete guest account?',
+      message: <>Permanently delete <strong>{u.name}</strong> and <strong>all their data</strong> — personal projects (with everything inside), private resource pool & rate cards, and sessions. This <strong>cannot be undone</strong>. The audit trail is kept (anonymised).</>,
+      confirmLabel: 'Delete permanently',
+      danger: true,
+    })) del.mutate();
+  };
+  return { err, setRole, setActive, toggleActive, del, askDelete };
 }
 
 function UserCard({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSelf: boolean; onChange: () => void; onReset: () => void; onEdit: () => void }) {
-  const { err, setRole, setActive, toggleActive } = useUserActions(u, onChange);
+  const { err, setRole, setActive, toggleActive, del, askDelete } = useUserActions(u, onChange);
+  const isGuest = u.role === 'GUEST';
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
       <div className="flex items-start justify-between gap-2">
@@ -114,12 +129,12 @@ function UserCard({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSe
           <span className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Role</span>
           <Select
             value={u.role}
-            disabled={isSelf || setRole.isPending}
-            title={isSelf ? 'You cannot change your own role' : 'Change role'}
+            disabled={isSelf || isGuest || setRole.isPending}
+            title={isSelf ? 'You cannot change your own role' : isGuest ? 'Guest accounts keep the GUEST role' : 'Change role'}
             onChange={(e) => setRole.mutate(e.target.value as Role)}
             className="mt-0.5 !py-1 text-xs"
           >
-            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            {(isGuest ? [...ROLES, 'GUEST' as Role] : ROLES).map((r) => <option key={r} value={r}>{r}</option>)}
           </Select>
           {err && <span className="mt-1 block text-xs text-red-600">{err}</span>}
         </div>
@@ -132,9 +147,12 @@ function UserCard({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSe
         <button onClick={onEdit} className="text-xs font-medium text-brand-600 hover:underline">Edit</button>
         <button onClick={onReset} className="text-xs font-medium text-brand-600 hover:underline">Reset password</button>
         {!isSelf && (
-          <button onClick={toggleActive} disabled={setActive.isPending} className={`text-xs font-medium hover:underline ${u.isActive ? 'text-red-500' : 'text-green-600'}`}>
+          <button onClick={toggleActive} disabled={setActive.isPending} className={`text-xs font-medium hover:underline ${u.isActive ? 'text-amber-600' : 'text-green-600'}`}>
             {u.isActive ? 'Deactivate' : 'Activate'}
           </button>
+        )}
+        {isGuest && !isSelf && (
+          <button onClick={askDelete} disabled={del.isPending} className="text-xs font-medium text-red-500 hover:underline disabled:opacity-40">Delete</button>
         )}
       </div>
     </div>
@@ -142,7 +160,8 @@ function UserCard({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSe
 }
 
 function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSelf: boolean; onChange: () => void; onReset: () => void; onEdit: () => void }) {
-  const { err, setRole, setActive, toggleActive } = useUserActions(u, onChange);
+  const { err, setRole, setActive, toggleActive, del, askDelete } = useUserActions(u, onChange);
+  const isGuest = u.role === 'GUEST';
 
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 align-middle">
@@ -151,12 +170,12 @@ function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSel
       <td>
         <Select
           value={u.role}
-          disabled={isSelf || setRole.isPending}
-          title={isSelf ? 'You cannot change your own role' : 'Change role'}
+          disabled={isSelf || isGuest || setRole.isPending}
+          title={isSelf ? 'You cannot change your own role' : isGuest ? 'Guest accounts keep the GUEST role' : 'Change role'}
           onChange={(e) => setRole.mutate(e.target.value as Role)}
           className="!py-1 text-xs"
         >
-          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          {(isGuest ? [...ROLES, 'GUEST' as Role] : ROLES).map((r) => <option key={r} value={r}>{r}</option>)}
         </Select>
         {err && <span className="ml-2 text-xs text-red-600">{err}</span>}
       </td>
@@ -171,10 +190,13 @@ function UserRow({ u, isSelf, onChange, onReset, onEdit }: { u: AdminUser; isSel
           <button
             onClick={toggleActive}
             disabled={setActive.isPending}
-            className={`ml-3 text-xs hover:underline ${u.isActive ? 'text-red-500' : 'text-green-600'}`}
+            className={`ml-3 text-xs hover:underline ${u.isActive ? 'text-amber-600' : 'text-green-600'}`}
           >
             {u.isActive ? 'Deactivate' : 'Activate'}
           </button>
+        )}
+        {isGuest && !isSelf && (
+          <button onClick={askDelete} disabled={del.isPending} className="ml-3 text-xs text-red-500 hover:underline disabled:opacity-40">Delete</button>
         )}
       </td>
     </tr>
