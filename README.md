@@ -65,6 +65,10 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ![Guided next-steps card showing record-acceptance, capture-lessons and close-project cues for a project in execution](docs/screenshots/next-steps.png)
 
+**Self-service guest workspace** — anyone can create a **guest account** (sign up with email; Google sign-in coming soon) and manage their **own personal projects** end-to-end — charter → baseline → deliver → close — with **no approval matrix** (the guest is their own PMO). Guest projects are **fully sandboxed**: invisible to corporate users and never part of the corporate portfolio.
+
+![Guest workspace — a self-service guest managing their own personal "Home Renovation" project (CHARTERED), self-governing with Activate / Put-on-hold / Close controls and no PMO approval](docs/screenshots/guest-workspace.png)
+
 ## 🧱 Tech stack
 
 | Layer | Tech |
