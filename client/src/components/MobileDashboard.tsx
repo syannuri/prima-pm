@@ -46,6 +46,7 @@ const ICON = {
 export default function MobileDashboard() {
   const { user } = useAuth();
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  const isGuest = user?.role === 'GUEST';
   const [statusDate] = useState(formatDateInput(new Date()));
   const { data, isLoading } = useQuery({
     queryKey: ['portfolio', statusDate],
@@ -78,15 +79,20 @@ export default function MobileDashboard() {
   };
   const projects = sorted.filter((p) => filter === 'all' || (filter === 'active' ? p.status !== 'CLOSED' : p.status === 'CLOSED'));
 
-  // Quick actions — route shortcuts most useful for PM/PMO on the go.
+  // Quick actions — route shortcuts most useful for the role, on the go.
   // ("New project" lives on the floating action button, not here.)
-  const actions: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }[] = [
-    { label: 'Reports', icon: ICON.reports, grad: 'from-sky-400 to-blue-600', glow: 'shadow-blue-500/40', halo: 'bg-sky-400', tint: 'from-sky-500/25 to-blue-600/10', to: '/reports' },
-    isPmo
-      ? { label: 'Resources', icon: ICON.resources, grad: 'from-violet-400 to-indigo-600', glow: 'shadow-indigo-500/40', halo: 'bg-violet-400', tint: 'from-violet-500/25 to-indigo-600/10', to: '/admin/resources' }
-      : { label: 'Timesheet', icon: ICON.clock, grad: 'from-amber-400 to-orange-500', glow: 'shadow-orange-500/40', halo: 'bg-amber-400', tint: 'from-amber-500/25 to-orange-600/10', to: '/my-timesheet' },
-  ];
-  const actionCols = actions.length >= 3 ? 'grid-cols-3' : 'grid-cols-2';
+  const resourcesAction = { label: isGuest ? 'My Resources' : 'Resources', icon: ICON.resources, grad: 'from-violet-400 to-indigo-600', glow: 'shadow-indigo-500/40', halo: 'bg-violet-400', tint: 'from-violet-500/25 to-indigo-600/10', to: '/admin/resources' };
+  const actions: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }[] = isGuest
+    ? // A guest works in their own sandbox — their private Resource Pool is the key shortcut
+      // (Reports/Timesheet are corporate and don't apply). New project = the FAB.
+      [resourcesAction]
+    : [
+        { label: 'Reports', icon: ICON.reports, grad: 'from-sky-400 to-blue-600', glow: 'shadow-blue-500/40', halo: 'bg-sky-400', tint: 'from-sky-500/25 to-blue-600/10', to: '/reports' },
+        isPmo
+          ? resourcesAction
+          : { label: 'Timesheet', icon: ICON.clock, grad: 'from-amber-400 to-orange-500', glow: 'shadow-orange-500/40', halo: 'bg-amber-400', tint: 'from-amber-500/25 to-orange-600/10', to: '/my-timesheet' },
+      ];
+  const actionCols = actions.length >= 3 ? 'grid-cols-3' : actions.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
 
   return (
     <div className="space-y-4">
