@@ -147,11 +147,9 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
             {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
           </Select>
         </Field>
-        {personalOwnerId ? (
-          <Field label="Project Manager">
-            <Input value="You (personal project)" disabled />
-          </Field>
-        ) : (
+        {/* Personal (guest) projects are always managed by their owner — the PM is auto-set
+            (see form init) and the field is hidden entirely. Corporate projects pick a PM. */}
+        {!personalOwnerId && (
           <Field label="Project Manager">
             <Select value={form.pmUserId} onChange={(e) => set('pmUserId', e.target.value)}>
               <option value="">— select PM —</option>
