@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { DeliveryApproach, Project, ProjectCategory, PortfolioSummary as Summary, User } from '../api/types';
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, MoneyInput, Select, Skeleton } from '../components/ui';
+import type { InputState } from '../components/ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
 
@@ -57,6 +58,11 @@ export default function DashboardPage() {
   const [costBaseline, setCostBaseline] = useState('');
   const [revenue, setRevenue] = useState('');
   const [pmUserId, setPmUserId] = useState('');
+  // Per-field validation surfacing (same pattern as the Charter form): a required field warns
+  // once touched, and every missing one is revealed at once on a Create attempt.
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [showAllErrors, setShowAllErrors] = useState(false);
+  const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
 
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -72,7 +78,7 @@ export default function DashboardPage() {
   // PMO assigns the project to a PM at creation.
   const usersQ = useQuery({ queryKey: ['directory'], queryFn: () => api.get<{ users: User[] }>('/users/directory'), enabled: showForm });
 
-  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setCategoryOther(''); setDeliveryApproach('PREDICTIVE'); setCostBaseline(''); setRevenue(''); setPmUserId(''); };
+  const resetForm = () => { setName(''); setCode(''); setClientName(''); setSponsor(''); setCategory(''); setCategoryOther(''); setDeliveryApproach('PREDICTIVE'); setCostBaseline(''); setRevenue(''); setPmUserId(''); setTouched({}); setShowAllErrors(false); };
   const create = useMutation({
     mutationFn: () => api.post<{ project: Project }>('/projects', {
       name,
@@ -92,6 +98,22 @@ export default function DashboardPage() {
       resetForm();
     },
   });
+
+  // Only `name` (min 2 chars) and — when category is Other — its free-text detail are
+  // mandatory here; the rest of the shell is completed later in the Charter.
+  const missing: Record<string, boolean> = {
+    name: name.trim().length < 2,
+    categoryOther: category === 'OTHER' && categoryOther.trim() === '',
+  };
+  const showErr = (k: string) => missing[k] && (showAllErrors || !!touched[k]);
+  const errState = (k: string): InputState => (showErr(k) ? 'invalid' : 'none');
+  const nameError = showErr('name') ? (name.trim() ? 'Nama minimal 2 karakter' : 'Field ini wajib diisi') : undefined;
+  const categoryOtherError = showErr('categoryOther') ? 'Jelaskan kategori "Other"' : undefined;
+  const canSubmit = !missing.name && !missing.categoryOther;
+  const submit = () => {
+    if (!canSubmit) { setShowAllErrors(true); touch('name'); return; }
+    create.mutate();
+  };
 
   // PMO/Admin get the portfolio-wide framing; PMs see a "my projects" view.
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
@@ -197,8 +219,8 @@ export default function DashboardPage() {
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Create a project shell, then build its Charter, WBS, Cost & Risk.</p>
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Project name">
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SOC Modernization" />
+                <Field label="Project name" required error={nameError}>
+                  <Input state={errState('name')} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => touch('name')} placeholder="e.g. SOC Modernization" />
                 </Field>
                 <Field label="Project code">
                   <Input value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} placeholder="auto-generated if blank" />
@@ -211,13 +233,13 @@ export default function DashboardPage() {
                 <Field label="Sponsor">
                   <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office" />
                 </Field>
-                <Field label="Project category">
+                <Field label="Project category" error={categoryOtherError}>
                   <Select value={category} onChange={(e) => setCategory(e.target.value as ProjectCategory | '')}>
                     <option value="">— select —</option>
                     {PROJECT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </Select>
                   {category === 'OTHER' && (
-                    <Input className="mt-2" value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} placeholder="Describe the category" />
+                    <Input className="mt-2" state={errState('categoryOther')} value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} onBlur={() => touch('categoryOther')} placeholder="Describe the category" />
                   )}
                 </Field>
                 <Field label="Delivery approach" hint="Agile/Hybrid unlocks the Backlog & Board">
@@ -250,7 +272,7 @@ export default function DashboardPage() {
               {create.isError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{(create.error as Error).message}</p>}
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</Button>
-                <Button className="flex-1" onClick={() => create.mutate()} disabled={!name || (category === 'OTHER' && !categoryOther.trim()) || create.isPending}>
+                <Button className="flex-1" onClick={submit} disabled={create.isPending}>
                   {create.isPending ? 'Creating…' : 'Create Project'}
                 </Button>
               </div>
