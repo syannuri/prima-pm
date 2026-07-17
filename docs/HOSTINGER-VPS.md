@@ -10,6 +10,26 @@ steps here, following the referenced `DEPLOYMENT.md` sections for the full comma
 
 ---
 
+## Two ways to do this
+
+- **Fast path — one-shot script** ([`deploy/hostinger-kvm1.sh`](../deploy/hostinger-kvm1.sh)):
+  automates §3–§6 (base install → HTTPS → first admin → backup cron). Still do **§0** (provision)
+  and **§2** (DNS) yourself first. Steps:
+  1. Provision the VPS (§0) and point your domain at it (§2), then `ssh root@YOUR_VPS_IP`.
+  2. Get the script onto the box. **The repo is private, so `raw.githubusercontent.com` 404s** —
+     instead either paste it into `nano hostinger-kvm1.sh` (copy the file from the GitHub web UI
+     while logged in), **or** from your own machine `scp deploy/hostinger-kvm1.sh root@YOUR_VPS_IP:~`.
+  3. Edit the **CONFIG block** at the top — `DOMAIN`, `LE_EMAIL`, the `ADMIN_*` fields, and
+     **`GIT_URL`** (a token/deploy-key URL, since the repo is private — see §3 below).
+  4. `bash hostinger-kvm1.sh`  → open **https://your-domain** and log in. Done (~5–10 min).
+- **Manual path — the checklist below** (§0–§6): every step spelled out, following the referenced
+  `DEPLOYMENT.md` sections. Use this if you want to understand/customise each part, or if the
+  script fails partway.
+
+Both use **Part 2A (public domain + Let's Encrypt)**.
+
+---
+
 ## 0. Provision the VPS (hPanel → VPS → Create)
 - [ ] Plan **KVM 1**.
 - [ ] OS template **Ubuntu 24.04 LTS** (plain — no control-panel template).
