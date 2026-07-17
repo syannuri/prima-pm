@@ -19,8 +19,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '👋',
     title: { id: 'Selamat datang di Prismatix', en: 'Welcome to Prismatix' },
     body: {
-      id: 'Panduan singkat ini menuntun Anda memulai proyek pertama — dari Charter hingga baseline dan pemantauan kinerja. Sekitar satu menit; bisa dilewati kapan saja.',
-      en: 'This quick tour walks you through starting your first project — from Charter to baseline and performance tracking. About a minute; you can skip anytime.',
+      id: 'Panduan singkat memulai proyek pertama — dari Charter hingga baseline. ±1 menit, bisa dilewati.',
+      en: 'A quick guide to starting your first project — Charter to baseline. ~1 min, skippable.',
     },
   },
   {
@@ -29,8 +29,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '➕',
     title: { id: 'Buat proyek pertama', en: 'Create your first project' },
     body: {
-      id: 'Klik “+ New Project”, beri nama proyek, lalu tekan Create Project. Proyek ini sepenuhnya milik Anda.',
-      en: 'Click “+ New Project”, give it a name, then press Create Project. This project is entirely yours.',
+      id: 'Klik “+ New Project”, beri nama, lalu Create. Proyek ini milik Anda.',
+      en: 'Click “+ New Project”, name it, then Create. It’s entirely yours.',
     },
   },
   {
@@ -39,8 +39,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '📋',
     title: { id: 'Isi Project Charter', en: 'Fill in the Project Charter' },
     body: {
-      id: 'Charter adalah fondasi proyek: deskripsi, tujuan, ruang lingkup, biaya, dan jadwal tingkat tinggi. Field bertanda * wajib diisi.',
-      en: 'The Charter is your project’s foundation: description, goals, scope, cost, and high-level schedule. Fields marked * are required.',
+      id: 'Fondasi proyek: deskripsi, tujuan, lingkup, biaya & jadwal. Field bertanda * wajib.',
+      en: 'The project’s foundation: description, goals, scope, cost & schedule. * fields are required.',
     },
   },
   {
@@ -49,8 +49,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '🔒',
     title: { id: 'Commit Charter', en: 'Commit the Charter' },
     body: {
-      id: 'Setelah lengkap, tekan Commit Charter untuk mengunci baseline dan membuka modul Jadwal, Biaya, dan Risiko.',
-      en: 'Once complete, press Commit Charter to lock the baseline and unlock the Schedule, Cost, and Risk modules.',
+      id: 'Tekan Commit Charter untuk mengunci baseline & membuka modul Jadwal, Biaya, Risiko.',
+      en: 'Press Commit Charter to lock the baseline & unlock the Schedule, Cost, and Risk modules.',
     },
   },
   {
@@ -59,8 +59,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '🗂️',
     title: { id: 'Susun WBS & jadwal', en: 'Build the WBS & schedule' },
     body: {
-      id: 'Buka “Schedule & WBS” untuk memecah pekerjaan menjadi tugas beserta tanggal rencananya.',
-      en: 'Open “Schedule & WBS” to break the work into tasks with their planned dates.',
+      id: 'Buka “Schedule & WBS”, pecah pekerjaan jadi tugas bertanggal.',
+      en: 'Open “Schedule & WBS”, break the work into dated tasks.',
     },
   },
   {
@@ -69,8 +69,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '📌',
     title: { id: 'Tangkap baseline jadwal', en: 'Capture the schedule baseline' },
     body: {
-      id: 'Tekan “Set Baseline” untuk menyimpan tanggal rencana sebagai acuan — dasar pengukuran varian jadwal.',
-      en: 'Press “Set Baseline” to save the plan dates as your reference — the basis for measuring schedule variance.',
+      id: 'Tekan “Set Baseline” untuk menyimpan tanggal rencana sebagai acuan varian jadwal.',
+      en: 'Press “Set Baseline” to save the plan dates as your schedule-variance reference.',
     },
   },
   {
@@ -79,8 +79,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '🧊',
     title: { id: 'Kunci baseline biaya', en: 'Lock the cost baseline' },
     body: {
-      id: 'Di tab Cost, tekan “Lock baseline” untuk membekukan PMB/BAC. Setelah ini, perubahan lewat Change Request.',
-      en: 'On the Cost tab, press “Lock baseline” to freeze the PMB/BAC. After this, changes go through a Change Request.',
+      id: 'Di tab Cost, “Lock baseline” untuk membekukan PMB/BAC. Setelahnya lewat Change Request.',
+      en: 'On the Cost tab, “Lock baseline” to freeze the PMB/BAC. Changes then go via a Change Request.',
     },
   },
   {
@@ -89,8 +89,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '📈',
     title: { id: 'Pantau kinerja (EVM)', en: 'Track performance (EVM)' },
     body: {
-      id: 'Di “Monitoring” buka EVM Trend untuk melihat CPI/SPI, kurva-S, dan prakiraan penyelesaian.',
-      en: 'Under “Monitoring”, open EVM Trend to see CPI/SPI, the S-curve, and the completion forecast.',
+      id: 'Di “Monitoring”, buka EVM Trend: CPI/SPI, kurva-S & prakiraan.',
+      en: 'Under “Monitoring”, open EVM Trend: CPI/SPI, S-curve & forecast.',
     },
   },
   {
@@ -98,8 +98,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '🎉',
     title: { id: 'Anda siap!', en: 'You’re all set!' },
     body: {
-      id: 'Itulah alur lengkap memulai proyek. Ulangi panduan ini kapan saja lewat ikon “?” di header.',
-      en: 'That’s the full flow for starting a project. Replay this tour anytime from the “?” icon in the header.',
+      id: 'Itulah alur lengkapnya. Ulangi kapan saja lewat ikon kompas 🧭 di header.',
+      en: 'That’s the whole flow. Replay anytime from the compass icon 🧭 in the header.',
     },
   },
 ];
