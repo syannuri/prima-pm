@@ -1,5 +1,12 @@
 import { Badge, Card } from '../components/ui';
 import { useLang, type Lang } from '../context/LanguageContext';
+import { TOUR_STEPS } from '../lib/onboarding';
+
+// Mirror the interactive tour's copy into the manual so the two never drift — the step text is
+// sourced from the same TOUR_STEPS the on-screen tour renders. Rendered via the `steps` block, so
+// the "emoji Title — body" split is bolded like a glossary lead.
+const tourItems = (lang: Lang): string[] =>
+  TOUR_STEPS.map((s) => `${s.emoji} ${s.title[lang]} — ${s.body[lang]}`);
 
 // Bilingual in-app user manual (ID/EN). Content is data-driven so both languages
 // share one render tree. Follows the global language (Settings / browser) and has
@@ -90,6 +97,11 @@ const DOC: Record<Lang, Doc> = {
           'Modul lengkap — WBS/Jadwal, Cost, Risk, Timesheet, Forecast, dsb. bekerja sama persis seperti proyek biasa, hanya lingkupnya proyek Anda sendiri.',
         ] },
         { type: 'p', text: 'Sandbox penuh: data proyek tamu terpisah total dari data korporat — tak ada yang bisa saling melihat.' },
+      ] },
+      { id: 'tur', nav: 'Panduan interaktif', heading: '🧭 Panduan interaktif', blocks: [
+        { type: 'p', text: 'Saat pertama kali masuk sebagai tamu, panduan interaktif otomatis menyorot elemen di layar dan menuntun Anda memulai proyek — langkah demi langkah. Anda bisa mengulanginya kapan saja lewat ikon kompas 🧭 di header. Ringkasan langkahnya:' },
+        { type: 'steps', items: tourItems('id') },
+        { type: 'p', text: 'Tip: tekan Esc untuk keluar, atau tombol panah ←/→ untuk berpindah langkah. Panduan mengikuti bahasa aplikasi dan sekali tampil per perangkat.' },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
         { type: 'p', text: 'Tiga tampilan lewat tombol di kanan atas:' },
@@ -233,6 +245,11 @@ const DOC: Record<Lang, Doc> = {
           'Full modules — WBS/Schedule, Cost, Risk, Timesheet, Forecast, etc. work exactly like a normal project, just scoped to your own projects.',
         ] },
         { type: 'p', text: 'Fully sandboxed: guest project data is completely separate from corporate data — neither side can see the other.' },
+      ] },
+      { id: 'tur', nav: 'Interactive tour', heading: '🧭 Interactive tour', blocks: [
+        { type: 'p', text: 'On your first sign-in as a guest, an interactive tour automatically spotlights on-screen elements and walks you through starting a project — step by step. You can replay it anytime from the compass icon 🧭 in the header. Step overview:' },
+        { type: 'steps', items: tourItems('en') },
+        { type: 'p', text: 'Tip: press Esc to exit, or the ←/→ arrows to move between steps. The tour follows the app language and shows once per device.' },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
         { type: 'p', text: 'Three views via the buttons at the top right:' },
