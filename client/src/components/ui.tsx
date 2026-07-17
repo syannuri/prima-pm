@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { createPortal } from 'react-dom';
+import { useLang } from '../context/LanguageContext';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
@@ -41,12 +42,13 @@ export function Button({
 }
 
 export function Field({ label, children, hint, required, error }: { label: string; children: ReactNode; hint?: string; required?: boolean; error?: string }) {
+  const { lang } = useLang();
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-300">
         {label}
         {required && <span className="ml-0.5 text-red-500" aria-hidden> *</span>}
-        {required && <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">(wajib diisi)</span>}
+        {required && <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">{lang === 'id' ? '(wajib diisi)' : '(required)'}</span>}
       </span>
       {children}
       {/* A validation warning replaces the neutral hint when present. */}

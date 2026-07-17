@@ -9,6 +9,7 @@ import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../lib/labels';
 const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
 import { formatIdr } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 
 // Edit a project's high-level details. Backend enforces write access (owning PM,
 // or any ADMIN/PMO); we also gate the trigger by role.
@@ -17,6 +18,8 @@ import { useAuth } from '../context/AuthContext';
 // "Edit details" button as before.
 export default function EditProjectModal({ project, open: openProp, onOpenChange }: { project: Project; open?: boolean; onOpenChange?: (v: boolean) => void }) {
   const { user } = useAuth();
+  const { lang } = useLang();
+  const t = (id: string, en: string) => (lang === 'id' ? id : en);
   const qc = useQueryClient();
   const controlled = onOpenChange !== undefined;
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
@@ -66,8 +69,8 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
   };
   const showErr = (k: string) => missing[k] && (showAllErrors || !!touched[k]);
   const errState = (k: string): InputState => (showErr(k) ? 'invalid' : 'none');
-  const nameError = showErr('name') ? (name.trim() ? 'Nama minimal 2 karakter' : 'Field ini wajib diisi') : undefined;
-  const categoryOtherError = showErr('categoryOther') ? 'Jelaskan kategori "Other"' : undefined;
+  const nameError = showErr('name') ? (name.trim() ? t('Nama minimal 2 karakter', 'Name must be at least 2 characters') : t('Field ini wajib diisi', 'This field is required')) : undefined;
+  const categoryOtherError = showErr('categoryOther') ? t('Jelaskan kategori "Other"', 'Describe the "Other" category') : undefined;
   const canSubmit = !missing.name && !missing.categoryOther;
   const submit = () => {
     if (!canSubmit) { setShowAllErrors(true); touch('name'); return; }

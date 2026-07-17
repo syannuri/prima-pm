@@ -107,8 +107,9 @@ export default function DashboardPage() {
   };
   const showErr = (k: string) => missing[k] && (showAllErrors || !!touched[k]);
   const errState = (k: string): InputState => (showErr(k) ? 'invalid' : 'none');
-  const nameError = showErr('name') ? (name.trim() ? 'Nama minimal 2 karakter' : 'Field ini wajib diisi') : undefined;
-  const categoryOtherError = showErr('categoryOther') ? 'Jelaskan kategori "Other"' : undefined;
+  const t = (id: string, en: string) => (lang === 'id' ? id : en);
+  const nameError = showErr('name') ? (name.trim() ? t('Nama minimal 2 karakter', 'Name must be at least 2 characters') : t('Field ini wajib diisi', 'This field is required')) : undefined;
+  const categoryOtherError = showErr('categoryOther') ? t('Jelaskan kategori "Other"', 'Describe the "Other" category') : undefined;
   const canSubmit = !missing.name && !missing.categoryOther;
   const submit = () => {
     if (!canSubmit) { setShowAllErrors(true); touch('name'); return; }
