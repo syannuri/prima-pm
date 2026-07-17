@@ -19,7 +19,11 @@ export default function OnboardingTour() {
 
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [confirmSkip, setConfirmSkip] = useState(false);
   const lastEl = useRef<Element | null>(null);
+
+  // Never carry a stale "skip?" prompt into a fresh run (e.g. a replay via the header).
+  useEffect(() => { if (active) setConfirmSkip(false); }, [active]);
 
   // Track the target element's position (it may appear late, move, or vanish across pages).
   useLayoutEffect(() => {
@@ -56,15 +60,42 @@ export default function OnboardingTour() {
   useEffect(() => {
     if (!active) return;
     const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') skip();
-      else if (e.key === 'ArrowRight') next();
+      if (e.key === 'Escape') { setConfirmSkip((c) => !c); return; } // open the skip prompt, or cancel it
+      if (confirmSkip) return; // arrows are inert while confirming
+      if (e.key === 'ArrowRight') next();
       else if (e.key === 'ArrowLeft') back();
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [active, next, back, skip]);
+  }, [active, next, back, confirmSkip]);
 
   if (!step) return null;
+
+  // "Skip the whole tour?" confirmation — a clear centered takeover so the guest doesn't dismiss
+  // the tour by accident. Reassures them it can be reopened from the header.
+  if (confirmSkip) {
+    return createPortal(
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+        <div className="prima-rise w-[340px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-label="Skip tour">
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">{lang === 'id' ? 'Lewati panduan?' : 'Skip the tour?'}</h3>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            {lang === 'id'
+              ? 'Anda bisa membukanya lagi kapan saja lewat ikon kompas 🧭 di header.'
+              : 'You can reopen it anytime from the compass icon 🧭 in the header.'}
+          </p>
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button onClick={() => setConfirmSkip(false)} className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700">
+              {lang === 'id' ? 'Lanjutkan panduan' : 'Keep touring'}
+            </button>
+            <button onClick={skip} className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+              {lang === 'id' ? 'Ya, lewati' : 'Yes, skip'}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
 
   const isLast = index === total - 1;
   const spotlight = !!rect && !modalOpen;
@@ -99,7 +130,7 @@ export default function OnboardingTour() {
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2">
-        <button onClick={skip} className="text-xs font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+        <button onClick={() => setConfirmSkip(true)} className="text-xs font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
           {lang === 'id' ? 'Lewati' : 'Skip'}
         </button>
         <div className="flex items-center gap-2">
