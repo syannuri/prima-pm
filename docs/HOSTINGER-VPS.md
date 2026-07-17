@@ -56,15 +56,16 @@ adduser deploy && usermod -aG sudo deploy      # a non-root admin to work as
 - [ ] **1.1** System packages (Node 20 + PostgreSQL 16 + nginx + ufw).
 - [ ] **1.2** Create DB + role — **save the generated DB password**.
 - [ ] **1.3** Get the code — ⚠️ **the repo is PRIVATE**, so a plain `git clone https://…` fails.
-      Pick one:
-  - **GitHub token (simplest):** create a fine-grained/classic PAT with `repo` (read) scope, then
+      You need a credential. **Full click-by-click steps are in the [Appendix](#appendix--clone-the-private-repo) below.** In short, pick one:
+  - **Fine-grained PAT (recommended):** a read-only, repo-scoped token, then
     ```bash
     sudo git clone https://YOUR_GH_USER:YOUR_TOKEN@github.com/syannuri/prima-pm.git /opt/prismatix
     ```
-  - **Deploy key:** `ssh-keygen` on the VPS → add the pubkey as a read-only *Deploy key* in the
-    repo settings → `sudo git clone git@github.com:syannuri/prima-pm.git /opt/prismatix`.
+  - **SSH deploy key (most locked-down):** an `ed25519` key on the VPS, added read-only to the repo,
+    then `sudo git clone git@github.com:syannuri/prima-pm.git /opt/prismatix`.
   - **Tarball (no GitHub on the VPS):** on a machine that has the repo,
     `git archive --format=tar.gz -o prismatix.tgz HEAD`, `scp` it over, extract to `/opt/prismatix`.
+  - For the one-shot script, put the chosen URL in its `GIT_URL` variable.
 - [ ] **1.4** `server/.env`: `DATABASE_URL` (with the 1.2 password), two `openssl rand -hex 32`
       secrets, `CORS_ORIGIN=https://pm.yourdomain.com`, `SECURE=true`, `TRUST_PROXY=1`,
       `HOST=127.0.0.1`.
@@ -103,3 +104,78 @@ adduser deploy && usermod -aG sudo deploy      # a non-root admin to work as
   that's what bloats disk. `disk-check.sh` warns at 80/90 %.
 - **Sizing:** KVM 1 fits an internal/departmental tool. Step up to **KVM 2** (2 vCPU / 8 GB) only if
   you expect high concurrency (100+ simultaneous users) or many parallel PDF/Excel exports.
+
+---
+
+## Appendix — clone the private repo
+
+The repo is **private**, so the VPS needs a credential to `git clone`/`git pull`. Pick **one** of
+the three below. **Fine-grained PAT** is the quickest; a **deploy key** is the most locked-down.
+
+Set the result as the script's `GIT_URL` (or use it directly in your `git clone` in §3).
+
+### Option A — Fine-grained PAT (recommended, read-only)
+
+1. GitHub → top-right avatar → **Settings** → (bottom of the left menu) **Developer settings** →
+   **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
+2. **Token name:** `prismatix-vps`. **Expiration:** e.g. 90 days (or a custom date). **Resource
+   owner:** your account (`syannuri`).
+3. **Repository access:** *Only select repositories* → pick **`syannuri/prima-pm`**.
+4. **Permissions** → *Repository permissions* → **Contents: Read-only** (Metadata is auto-set to
+   Read-only; leave everything else *No access*).
+5. **Generate token** → **copy it now** (shown once; starts with `github_pat_…`).
+6. Use it (username can be your GitHub login):
+   ```bash
+   GIT_URL="https://syannuri:github_pat_XXXXXXXX@github.com/syannuri/prima-pm.git"
+   # or clone directly:
+   sudo git clone "$GIT_URL" /opt/prismatix
+   ```
+
+### Option B — Classic PAT (fallback)
+
+1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** →
+   **Tokens (classic)** → **Generate new token (classic)**.
+2. **Note:** `prismatix-vps`. Set an **expiration**. **Scope:** tick **`repo`**.
+   > A classic token can't be read-only — `repo` grants read **and** write to your private repos.
+   > Prefer Option A unless fine-grained tokens are unavailable to you.
+3. **Generate token** → copy it (starts with `ghp_…`) → use the same URL form as Option A.
+
+### Option C — SSH deploy key (most locked-down, per-repo)
+
+A key that works for **this one repo only**, with **no token in the git URL**. If you'll run the
+one-shot script **as root**, do this as root first (so the key lands in `/root/.ssh`).
+
+1. On the VPS, generate a key (no passphrase, so `git pull` is non-interactive):
+   ```bash
+   ssh-keygen -t ed25519 -C "prismatix-vps" -f ~/.ssh/prismatix_deploy -N ""
+   cat ~/.ssh/prismatix_deploy.pub          # copy this whole line
+   ```
+2. GitHub → the **`prima-pm`** repo → **Settings** → **Deploy keys** → **Add deploy key**.
+   **Title:** `prismatix-vps`; **Key:** paste the `.pub` line; leave **Allow write access
+   UNCHECKED** (read-only). **Add key.**
+3. Tell SSH to use that key for github.com:
+   ```bash
+   cat >> ~/.ssh/config <<'CFG'
+   Host github.com
+     IdentityFile ~/.ssh/prismatix_deploy
+     IdentitiesOnly yes
+   CFG
+   chmod 600 ~/.ssh/config
+   ssh -T git@github.com     # type "yes" to trust the host; expect a "successfully authenticated" line
+   ```
+4. Use the SSH URL:
+   ```bash
+   GIT_URL="git@github.com:syannuri/prima-pm.git"
+   sudo git clone "$GIT_URL" /opt/prismatix
+   ```
+
+### Security notes
+
+- **A PAT in the git URL is stored in plaintext** at `/opt/prismatix/.git/config`. Keep it
+  **read-only** (Option A), give it an **expiry**, and **revoke** it when you no longer need to
+  `git pull` (GitHub → token settings → *Revoke*). A **deploy key** avoids a token-in-URL entirely
+  and is scoped to just this repo.
+- **Updates (`git pull`) reuse whatever you set up here** — the stored token, or the deploy key.
+  If a PAT expires, `git pull` starts failing with an auth error; issue a new token and update the
+  remote: `git -C /opt/prismatix remote set-url origin "https://syannuri:NEW_TOKEN@github.com/syannuri/prima-pm.git"`.
+- **Never commit a token.** These live only on the VPS (in `.git/config` or `~/.ssh`), never in the repo.
