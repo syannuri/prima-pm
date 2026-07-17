@@ -212,7 +212,7 @@ export default function DashboardPage() {
 
       {/* Phones: floating "+" to create a project (portfolio & cards views). */}
       {isMobile && canCreate && !showForm && (view === 'portfolio' || view === 'cards') && (
-        <Fab label="Proyek baru" onClick={() => setShowForm(true)} />
+        <Fab label={lang === 'id' ? 'Proyek baru' : 'New Project'} onClick={() => setShowForm(true)} />
       )}
 
       {showForm && (

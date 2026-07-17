@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
 import { Card } from './ui';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 import MobileDashboardSkeleton from './MobileDashboardSkeleton';
 import { formatIdrShort, formatDateInput } from '../lib/format';
 import { haptic } from '../lib/haptics';
@@ -45,6 +46,7 @@ const ICON = {
 
 export default function MobileDashboard() {
   const { user } = useAuth();
+  const { lang } = useLang();
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const isGuest = user?.role === 'GUEST';
   const [statusDate] = useState(formatDateInput(new Date()));
@@ -173,7 +175,7 @@ export default function MobileDashboard() {
                   <button
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); haptic(); togglePin(p.id); }}
-                    aria-label={pinned.has(p.id) ? 'Hapus bookmark' : 'Bookmark proyek'}
+                    aria-label={pinned.has(p.id) ? (lang === 'id' ? 'Hapus bookmark' : 'Remove bookmark') : (lang === 'id' ? 'Bookmark proyek' : 'Bookmark project')}
                     className={`-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-lg transition ${pinned.has(p.id) ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500 dark:text-slate-600 dark:hover:text-amber-400'}`}
                   >
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill={pinned.has(p.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

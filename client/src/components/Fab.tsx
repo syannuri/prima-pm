@@ -3,7 +3,7 @@ import { haptic } from '../lib/haptics';
 // Floating action button (phones only). A round, thumb-reachable primary
 // "add" control that floats above the bottom tab bar. Desktop keeps its inline
 // "+ New Project" button, so this is md:hidden.
-export default function Fab({ onClick, label = 'Tambah', icon }: { onClick: () => void; label?: string; icon?: string }) {
+export default function Fab({ onClick, label = 'Add', icon }: { onClick: () => void; label?: string; icon?: string }) {
   const PLUS = 'M12 5v14M5 12h14';
   return (
     <button

@@ -8,6 +8,7 @@ import { Badge, Card, Skeleton } from './ui';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 import { useBookmarks } from '../hooks/useBookmarks';
 import PieChart, { type Slice } from './PieChart';
 import ProgressChart from './ProgressChart';
@@ -574,12 +575,16 @@ export default function PortfolioSummary() {
 
 // Amber bookmark star toggle. Sits outside the project Link, so a tap only pins/unpins.
 function BookmarkStar({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  const { lang } = useLang();
+  const label = on
+    ? (lang === 'id' ? 'Hapus bookmark' : 'Remove bookmark')
+    : (lang === 'id' ? 'Bookmark proyek' : 'Bookmark project');
   return (
     <button
       type="button"
       onClick={onToggle}
-      aria-label={on ? 'Hapus bookmark' : 'Bookmark proyek'}
-      title={on ? 'Hapus bookmark' : 'Bookmark'}
+      aria-label={label}
+      title={label}
       className={`shrink-0 rounded p-0.5 transition ${on ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500 dark:text-slate-600 dark:hover:text-amber-400'}`}
     >
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
