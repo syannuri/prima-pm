@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { DeliveryApproach, Project, ProjectCategory } from '../api/types';
 import { Button, Field, Input, Modal, MoneyInput, Select } from './ui';
+import type { InputState } from './ui';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../lib/labels';
 
 const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
@@ -31,6 +32,10 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
   const [costBaseline, setCostBaseline] = useState(project.costBaselineIdr ?? '');
   const [revenue, setRevenue] = useState(project.totalRevenueIdr ?? '');
   const [err, setErr] = useState('');
+  // Per-field validation surfacing (same pattern as the Charter / New Project forms).
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [showAllErrors, setShowAllErrors] = useState(false);
+  const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
 
   // Editing top-level project details is a PMO/portfolio governance action.
   const canEdit = !!user && ['ADMIN', 'PMO'].includes(user.role);
@@ -49,7 +54,25 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
     setCostBaseline(project.costBaselineIdr ?? '');
     setRevenue(project.totalRevenueIdr ?? '');
     setErr('');
+    setTouched({});
+    setShowAllErrors(false);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Only `name` (min 2 chars) and — when category is Other — its free-text detail are mandatory;
+  // everything else is nullable in the update schema.
+  const missing: Record<string, boolean> = {
+    name: name.trim().length < 2,
+    categoryOther: category === 'OTHER' && categoryOther.trim() === '',
+  };
+  const showErr = (k: string) => missing[k] && (showAllErrors || !!touched[k]);
+  const errState = (k: string): InputState => (showErr(k) ? 'invalid' : 'none');
+  const nameError = showErr('name') ? (name.trim() ? 'Nama minimal 2 karakter' : 'Field ini wajib diisi') : undefined;
+  const categoryOtherError = showErr('categoryOther') ? 'Jelaskan kategori "Other"' : undefined;
+  const canSubmit = !missing.name && !missing.categoryOther;
+  const submit = () => {
+    if (!canSubmit) { setShowAllErrors(true); touch('name'); return; }
+    save.mutate();
+  };
 
   const save = useMutation({
     mutationFn: () => api.patch(`/projects/${project.id}`, {
@@ -82,8 +105,8 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
         <Modal onClose={() => setOpen(false)} title="Edit Project Details" size="lg">
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Project name">
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                <Field label="Project name" required error={nameError}>
+                  <Input state={errState('name')} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => touch('name')} />
                 </Field>
                 <Field label="Project code">
                   <Input value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} placeholder="e.g. PRJ-2026-0001" />
@@ -96,13 +119,13 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
                 <Field label="Sponsor">
                   <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office" />
                 </Field>
-                <Field label="Project category">
+                <Field label="Project category" error={categoryOtherError}>
                   <Select value={category} onChange={(e) => setCategory(e.target.value as ProjectCategory | '')}>
                     <option value="">— select —</option>
                     {PROJECT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </Select>
                   {category === 'OTHER' && (
-                    <Input className="mt-2" value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} placeholder="Describe the category" />
+                    <Input className="mt-2" state={errState('categoryOther')} value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} onBlur={() => touch('categoryOther')} placeholder="Describe the category" />
                   )}
                 </Field>
                 <Field label="Delivery approach" hint="Agile/Hybrid unlocks the Backlog & Board">
@@ -126,7 +149,7 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
               {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button className="flex-1" disabled={!name || (category === 'OTHER' && !categoryOther.trim()) || save.isPending} onClick={() => save.mutate()}>
+                <Button className="flex-1" disabled={save.isPending} onClick={submit}>
                   {save.isPending ? 'Saving…' : 'Save changes'}
                 </Button>
               </div>
