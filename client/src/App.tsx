@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import AppShellSkeleton from './components/AppShellSkeleton';
+import { OnboardingProvider } from './context/OnboardingContext';
+import OnboardingTour from './components/OnboardingTour';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -32,19 +34,22 @@ export default function App() {
   }
 
   return (
-    <Layout>
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/projects/:projectId/*" element={<ProjectPage />} />
-        <Route path="/admin/users" element={<AdminUsersPage />} />
-        <Route path="/admin/resources" element={<AdminResourcesPage />} />
-        <Route path="/admin/audit" element={<AdminAuditPage />} />
-        <Route path="/my-timesheet" element={<MyTimesheetPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/manual" element={<ManualPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+    <OnboardingProvider>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/projects/:projectId/*" element={<ProjectPage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/resources" element={<AdminResourcesPage />} />
+          <Route path="/admin/audit" element={<AdminAuditPage />} />
+          <Route path="/my-timesheet" element={<MyTimesheetPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/manual" element={<ManualPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+      <OnboardingTour />
+    </OnboardingProvider>
   );
 }

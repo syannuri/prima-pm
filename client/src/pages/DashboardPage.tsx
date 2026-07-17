@@ -185,7 +185,7 @@ export default function DashboardPage() {
               Project Cards
             </button>
           </div>
-          {canCreate && <Button onClick={() => setShowForm((s) => !s)}>+ New Project</Button>}
+          {canCreate && <Button data-tour="new-project" onClick={() => setShowForm((s) => !s)}>+ New Project</Button>}
         </div>
       </div>
 

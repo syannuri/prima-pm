@@ -24,7 +24,7 @@ export function Button({
   variant = 'primary',
   className = '',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; 'data-tour'?: string }) {
   const styles: Record<BtnVariant, string> = {
     primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-slate-300 dark:disabled:bg-slate-700',
     secondary:

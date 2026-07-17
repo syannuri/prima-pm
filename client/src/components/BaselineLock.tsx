@@ -68,6 +68,7 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
       {canManage && (
         <span title={!locked && needScheduleBaseline ? 'Capture the schedule baseline (Schedule tab) first — it can’t be set once the baseline is locked.' : undefined}>
           <Button
+            data-tour="baseline-lock"
             variant="secondary"
             className="!py-1 text-xs"
             disabled={toggle.isPending || (!locked && needScheduleBaseline)}

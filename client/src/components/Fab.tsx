@@ -7,6 +7,7 @@ export default function Fab({ onClick, label = 'Tambah', icon }: { onClick: () =
   const PLUS = 'M12 5v14M5 12h14';
   return (
     <button
+      data-tour="new-project"
       onClick={() => { haptic(); onClick(); }}
       aria-label={label}
       title={label}

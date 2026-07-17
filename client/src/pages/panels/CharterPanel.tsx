@@ -154,7 +154,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         )}
       </div>
 
-      <fieldset disabled={locked} className="grid gap-4 md:grid-cols-2">
+      <fieldset data-tour="charter-form" disabled={locked} className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <Field label="Project Description" required error={errText('description')}>
             <Textarea state={errState('description')} value={form.description} onChange={(e) => set('description', e.target.value)} onBlur={() => touch('description')} />
@@ -226,7 +226,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
             <Button variant="secondary" onClick={saveDraft} disabled={save.isPending}>
               Save draft
             </Button>
-            <Button onClick={commitCharter} disabled={!charter || !allFilled || commit.isPending}>
+            <Button data-tour="charter-commit" onClick={commitCharter} disabled={!charter || !allFilled || commit.isPending}>
               {commit.isPending ? 'Committing…' : 'Commit Charter'}
             </Button>
             {!charter && <span className="text-xs text-slate-500 dark:text-slate-400">Simpan draft dulu, lalu Commit.</span>}

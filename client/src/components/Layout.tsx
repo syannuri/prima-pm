@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet } from '../context/LanguageContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import { Button } from './ui';
 import NotificationBell from './NotificationBell';
 import Sidebar from './Sidebar';
@@ -14,6 +15,7 @@ import PageTransition from './PageTransition';
 export default function Layout({ children }: { children: ReactNode }) {
   const { logout, user } = useAuth();
   const { lang } = useLang();
+  const { start: startTour } = useOnboarding();
   const navigate = useNavigate();
   const location = useLocation();
   const onHome = location.pathname === '/';
@@ -114,6 +116,20 @@ export default function Layout({ children }: { children: ReactNode }) {
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
           </button>
           <NotificationBell />
+          {/* Guests can replay the getting-started tour anytime. */}
+          {user?.role === 'GUEST' && (
+            <button
+              onClick={startTour}
+              title={lang === 'id' ? 'Panduan penggunaan' : 'Getting-started tour'}
+              aria-label={lang === 'id' ? 'Panduan penggunaan' : 'Getting-started tour'}
+              className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-brand-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-brand-400"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+              </svg>
+            </button>
+          )}
           <Link
             to="/manual"
             title="Manual / Help"
