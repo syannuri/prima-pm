@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Charter, DeliveryApproach, ProjectCategory, User } from '../../api/types';
 import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import type { InputState } from '../../components/ui';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../../lib/labels';
 import { formatDateInput } from '../../lib/format';
@@ -39,6 +40,11 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   // count toward the "all fields filled" gate for the other 13 categories.
   const [categoryOther, setCategoryOther] = useState('');
   const [msg, setMsg] = useState('');
+  // Per-field validation surfacing: a required field warns once it's been touched (blurred),
+  // and every missing field is revealed at once when the user tries to Save/Commit.
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [showAllErrors, setShowAllErrors] = useState(false);
+  const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
   const confirm = useConfirm();
   useEffect(() => { setApproach(initialApproach); }, [initialApproach]);
   useEffect(() => { setSponsor(initialSponsor ?? ''); }, [initialSponsor]);
@@ -97,10 +103,33 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   });
 
   const set = (k: keyof Form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Which required fields are currently empty/invalid. `category` always has a value; only its
+  // OTHER free-text detail can be missing. `sponsor` & attachments are optional (nullable server-side).
+  const missing: Record<string, boolean> = {
+    description: form.description.trim() === '',
+    goals: form.goals.trim() === '',
+    hiScope: form.hiScope.trim() === '',
+    categoryOther: form.category === 'OTHER' && categoryOther.trim() === '',
+    pmUserId: form.pmUserId.trim() === '',
+    hiCostIdr: !(Number(form.hiCostIdr) > 0),
+    hiScheduleStart: form.hiScheduleStart.trim() === '',
+    hiScheduleEnd: form.hiScheduleEnd.trim() === '',
+    hiDeliverables: form.hiDeliverables.trim() === '',
+  };
+  const showErr = (k: string) => missing[k] && (showAllErrors || !!touched[k]);
+  const errText = (k: string, text = 'Field ini wajib diisi') => (showErr(k) ? text : undefined);
+  const errState = (k: string): InputState => (showErr(k) ? 'invalid' : 'none');
+
   const allFilled =
     Object.values(form).every((v) => String(v).trim() !== '') &&
     Number(form.hiCostIdr) > 0 &&
     (form.category !== 'OTHER' || categoryOther.trim() !== '');
+
+  const saveDraft = () => {
+    setShowAllErrors(true); // reveal every missing required field on a save attempt
+    save.mutate();
+  };
   const commitCharter = async () => {
     if (await confirm({
       title: 'Commit charter?',
@@ -115,7 +144,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
     <div className="space-y-5">
     <Card>
       <div className="mb-4 flex items-center justify-between">
-        <SectionTitle sub="All fields are mandatory. Commit locks the baseline and unlocks Cost, Risk & Schedule.">
+        <SectionTitle sub="Field bertanda * wajib diisi. Commit mengunci baseline dan membuka Cost, Risk & Schedule.">
           Project Charter
         </SectionTitle>
         {charter && (
@@ -127,24 +156,24 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
 
       <fieldset disabled={locked} className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
-          <Field label="Project Description">
-            <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} />
+          <Field label="Project Description" required error={errText('description')}>
+            <Textarea state={errState('description')} value={form.description} onChange={(e) => set('description', e.target.value)} onBlur={() => touch('description')} />
           </Field>
         </div>
-        <Field label="Project Goals">
-          <Textarea value={form.goals} onChange={(e) => set('goals', e.target.value)} />
+        <Field label="Project Goals" required error={errText('goals')}>
+          <Textarea state={errState('goals')} value={form.goals} onChange={(e) => set('goals', e.target.value)} onBlur={() => touch('goals')} />
         </Field>
-        <Field label="High-Level Scope of Work">
-          <Textarea value={form.hiScope} onChange={(e) => set('hiScope', e.target.value)} />
+        <Field label="High-Level Scope of Work" required error={errText('hiScope')}>
+          <Textarea state={errState('hiScope')} value={form.hiScope} onChange={(e) => set('hiScope', e.target.value)} onBlur={() => touch('hiScope')} />
         </Field>
-        <Field label="Project Category">
+        <Field label="Project Category" required error={errText('categoryOther', 'Jelaskan kategori "Other"')}>
           <Select value={form.category} onChange={(e) => set('category', e.target.value)}>
             {PROJECT_CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </Select>
           {form.category === 'OTHER' && (
-            <Input className="mt-2" value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} placeholder="Describe the category" />
+            <Input className="mt-2" state={errState('categoryOther')} value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} onBlur={() => touch('categoryOther')} placeholder="Describe the category" />
           )}
         </Field>
         <Field label="Delivery Approach" hint="Locked at commit — change later via a Change Request">
@@ -159,8 +188,8 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
             <Input value={assignedPmName ?? '—'} disabled />
           </Field>
         ) : (
-          <Field label="Project Manager">
-            <Select value={form.pmUserId} onChange={(e) => set('pmUserId', e.target.value)}>
+          <Field label="Project Manager" required error={errText('pmUserId', 'Pilih Project Manager')}>
+            <Select state={errState('pmUserId')} value={form.pmUserId} onChange={(e) => set('pmUserId', e.target.value)} onBlur={() => touch('pmUserId')}>
               <option value="">— select PM —</option>
               {usersQ.data?.users.map((u) => (
                 <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
@@ -171,20 +200,20 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         <Field label="Project Sponsor" hint="The authorizing party who funds & champions the project">
           <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office / CTO" />
         </Field>
-        <Field label="High-Level Project Cost (IDR)">
-          <MoneyInput value={form.hiCostIdr} onValueChange={(v) => set('hiCostIdr', v)} placeholder="e.g. 1.000.000.000" />
+        <Field label="High-Level Project Cost (IDR)" required error={errText('hiCostIdr', 'Masukkan nilai biaya lebih dari 0')}>
+          <MoneyInput state={errState('hiCostIdr')} value={form.hiCostIdr} onValueChange={(v) => set('hiCostIdr', v)} onBlur={() => touch('hiCostIdr')} placeholder="e.g. 1.000.000.000" />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Schedule Start">
-            <Input type="date" value={form.hiScheduleStart} onChange={(e) => set('hiScheduleStart', e.target.value)} />
+          <Field label="Schedule Start" required error={errText('hiScheduleStart')}>
+            <Input type="date" state={errState('hiScheduleStart')} value={form.hiScheduleStart} onChange={(e) => set('hiScheduleStart', e.target.value)} onBlur={() => touch('hiScheduleStart')} />
           </Field>
-          <Field label="Schedule End">
-            <Input type="date" value={form.hiScheduleEnd} onChange={(e) => set('hiScheduleEnd', e.target.value)} />
+          <Field label="Schedule End" required error={errText('hiScheduleEnd')}>
+            <Input type="date" state={errState('hiScheduleEnd')} value={form.hiScheduleEnd} onChange={(e) => set('hiScheduleEnd', e.target.value)} onBlur={() => touch('hiScheduleEnd')} />
           </Field>
         </div>
         <div className="md:col-span-2">
-          <Field label="High-Level Deliverables / Expected Outcome">
-            <Textarea value={form.hiDeliverables} onChange={(e) => set('hiDeliverables', e.target.value)} />
+          <Field label="High-Level Deliverables / Expected Outcome" required error={errText('hiDeliverables')}>
+            <Textarea state={errState('hiDeliverables')} value={form.hiDeliverables} onChange={(e) => set('hiDeliverables', e.target.value)} onBlur={() => touch('hiDeliverables')} />
           </Field>
         </div>
       </fieldset>
@@ -194,14 +223,14 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
       <div className="mt-5 flex items-center gap-2">
         {!locked && (
           <>
-            <Button variant="secondary" onClick={() => save.mutate()} disabled={save.isPending}>
+            <Button variant="secondary" onClick={saveDraft} disabled={save.isPending}>
               Save draft
             </Button>
             <Button onClick={commitCharter} disabled={!charter || !allFilled || commit.isPending}>
               {commit.isPending ? 'Committing…' : 'Commit Charter'}
             </Button>
-            {!charter && <span className="text-xs text-slate-500 dark:text-slate-400">Save the draft first, then Commit.</span>}
-            {charter && !allFilled && <span className="text-xs text-amber-500">Fill all fields to enable Commit.</span>}
+            {!charter && <span className="text-xs text-slate-500 dark:text-slate-400">Simpan draft dulu, lalu Commit.</span>}
+            {charter && !allFilled && <span className="text-xs text-amber-500">Lengkapi semua field wajib untuk mengaktifkan Commit.</span>}
           </>
         )}
         {locked && (

@@ -40,12 +40,21 @@ export function Button({
   );
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Field({ label, children, hint, required, error }: { label: string; children: ReactNode; hint?: string; required?: boolean; error?: string }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-300">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-300">
+        {label}
+        {required && <span className="ml-0.5 text-red-500" aria-hidden> *</span>}
+        {required && <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">(wajib diisi)</span>}
+      </span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{hint}</span>}
+      {/* A validation warning replaces the neutral hint when present. */}
+      {error ? (
+        <span className="mt-1 block text-xs font-medium text-red-500">⚠ {error}</span>
+      ) : (
+        hint && <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{hint}</span>
+      )}
     </label>
   );
 }
@@ -62,9 +71,6 @@ const inputBorder = {
 
 export type InputState = keyof typeof inputBorder;
 
-// Neutral variant reused by Textarea/Select (no per-field validation state).
-const inputCls = `${inputBase} ${inputBorder.none}`;
-
 export function Input({ state = 'none', className, ...props }: InputHTMLAttributes<HTMLInputElement> & { state?: InputState }) {
   // Native browser spellcheck on by default (English prose fields get red-underline
   // suggestions). Callers pass spellCheck={false} for codes/emails/numeric fields.
@@ -79,7 +85,7 @@ export function MoneyInput({
   value,
   onValueChange,
   ...rest
-}: { value: string; onValueChange: (raw: string) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+}: { value: string; onValueChange: (raw: string) => void; state?: InputState } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
   const digits = String(value ?? '').split('.')[0].replace(/\D/g, '');
   const display = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return (
@@ -93,17 +99,17 @@ export function MoneyInput({
     />
   );
 }
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={inputCls} rows={3} spellCheck {...props} />;
+export function Textarea({ state = 'none', className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { state?: InputState }) {
+  return <textarea className={`${inputBase} ${inputBorder[state]} ${className ?? ''}`} rows={3} spellCheck {...props} />;
 }
 // Native <select>s render inconsistently across platforms (a grey OS control on mobile
 // that ignores the dark theme). appearance-none forces our own styled box; a custom chevron
 // replaces the native arrow. The caller's className goes on the wrapper so responsive width
 // (e.g. w-full sm:w-auto) still works; the <select> fills it.
-export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({ state = 'none', className, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { state?: InputState }) {
   return (
     <div className={`relative ${className ?? ''}`}>
-      <select className={`${inputCls} cursor-pointer appearance-none pr-9`} {...props} />
+      <select className={`${inputBase} ${inputBorder[state]} cursor-pointer appearance-none pr-9`} {...props} />
       <svg aria-hidden viewBox="0 0 24 24" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="m6 9 6 6 6-6" />
       </svg>
