@@ -1,5 +1,7 @@
 # Prismatix — Project Management Web App
 
+[![CI](https://github.com/syannuri/prima-pm/actions/workflows/ci.yml/badge.svg)](https://github.com/syannuri/prima-pm/actions/workflows/ci.yml)
+
 > Multi-project, multi-user project-management platform covering the full delivery lifecycle:
 > **Charter → WBS/Schedule → Cost → Risk → Change Control → EVM/Forecast → Closure**, aligned to PMBOK.
 > Each project's modules are organized under the **five PMBOK process groups** — Initiating · Planning · Executing · Monitoring & Controlling · Closing.
