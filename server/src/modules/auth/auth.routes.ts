@@ -41,7 +41,7 @@ const guestLimiter = authRateLimit({
 // Corporate self-registration stays disabled (accounts are ADMIN-provisioned via POST /users).
 // The ONLY open signup is the sandboxed GUEST path below, itself gated by GUEST_SIGNUP_ENABLED.
 // Public: which sign-in providers this deployment offers (Google client ID, guest signup).
-router.get('/providers', ctrl.providersHandler);
+router.get('/providers', asyncHandler(ctrl.providersHandler));
 router.post('/guest/register', guestLimiter, validateBody(guestRegisterSchema), asyncHandler(ctrl.guestRegisterHandler));
 router.post('/login', loginLimiter, validateBody(loginSchema), asyncHandler(ctrl.loginHandler));
 // Sign in with Google → matches/creates a sandboxed GUEST (gated by GOOGLE_CLIENT_ID).

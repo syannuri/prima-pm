@@ -3,13 +3,16 @@ import * as authService from './auth.service.js';
 import { setAuthCookies, clearAuthCookies, RT_COOKIE } from '../../lib/cookies.js';
 import { Unauthorized } from '../../lib/errors.js';
 import { env } from '../../config/env.js';
+import { getAppSettings, isGoogleConfigured } from '../settings/settings.service.js';
 
 // Public auth config so the SPA can render provider buttons without a rebuild. The Google
-// client ID is not a secret (it ships in the browser); the guest flag mirrors the same.
-export function providersHandler(_req: Request, res: Response): void {
+// client ID is not a secret (it ships in the browser). Reflects the EFFECTIVE (admin-toggled)
+// state: Google is on only when a client ID is configured AND the admin has enabled it.
+export async function providersHandler(_req: Request, res: Response): Promise<void> {
+  const s = await getAppSettings();
   res.json({
-    google: { enabled: Boolean(env.googleClientId), clientId: env.googleClientId },
-    guestSignup: env.guestSignupEnabled,
+    google: { enabled: isGoogleConfigured() && s.googleLoginEnabled, clientId: env.googleClientId },
+    guestSignup: s.guestSignupEnabled,
   });
 }
 

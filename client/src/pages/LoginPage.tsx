@@ -43,13 +43,19 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [googleClientId, setGoogleClientId] = useState('');
+  const [guestEnabled, setGuestEnabled] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  // Ask the server which providers are on. Google's client ID is public, so it's safe to send.
+  // Ask the server which sign-up paths are enabled (admin-toggleable). Google's client ID is
+  // public, so it's safe to send. Hides the guest option entirely when disabled.
   useEffect(() => {
     api
-      .get<{ google?: { enabled: boolean; clientId: string } }>('/auth/providers')
-      .then((p) => { if (p.google?.enabled && p.google.clientId) setGoogleClientId(p.google.clientId); })
+      .get<{ google?: { enabled: boolean; clientId: string }; guestSignup?: boolean }>('/auth/providers')
+      .then((p) => {
+        if (p.google?.enabled && p.google.clientId) setGoogleClientId(p.google.clientId);
+        setGuestEnabled(Boolean(p.guestSignup));
+        if (!p.guestSignup) setMode('signin');
+      })
       .catch(() => {});
   }, []);
 
@@ -234,11 +240,13 @@ export default function LoginPage() {
                 </>
               )}
 
-              <div className="mt-6 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
-                <button type="button" onClick={() => { setMode(isGuest ? 'signin' : 'guest'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
-                  {isGuest ? 'Have an account? Sign in' : 'New here? Try Prismatix free'}
-                </button>
-              </div>
+              {(guestEnabled || isGuest) && (
+                <div className="mt-6 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
+                  <button type="button" onClick={() => { setMode(isGuest ? 'signin' : 'guest'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+                    {isGuest ? 'Have an account? Sign in' : 'New here? Try Prismatix free'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

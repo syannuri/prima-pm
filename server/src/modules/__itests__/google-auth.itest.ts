@@ -4,6 +4,7 @@ import { createApp } from '../../app.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { env } from '../../config/env.js';
+import { __resetSettingsCache } from '../settings/settings.service.js';
 
 // Stub Google token verification: the test "credential" is a JSON identity, so each test
 // controls the sub / email / emailVerified without a real Google token. 'invalid' throws.
@@ -41,7 +42,10 @@ beforeAll(async () => {
     );
   }
   // Enable the feature for this file (env is a plain object; test:integration leaves it unset).
+  // Settings seed googleLoginEnabled from Boolean(env.googleClientId) on first read, so set the
+  // client ID BEFORE resetting the cache (truncation dropped the AppSetting row → it re-seeds).
   (env as { googleClientId: string }).googleClientId = CLIENT_ID;
+  __resetSettingsCache();
   // A staff (non-guest) account whose email Google must NOT be allowed to authenticate into.
   await prisma.user.create({
     data: { name: 'Staff PM', email: 'staff-pm@corp.test', role: 'PROJECT_MANAGER', passwordHash: await hashPassword('Staff-Pass-1'), isActive: true },
@@ -54,6 +58,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   (env as { googleClientId: string }).googleClientId = '';
+  __resetSettingsCache();
 });
 
 describe('Sign in with Google', () => {

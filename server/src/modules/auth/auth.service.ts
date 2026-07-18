@@ -5,8 +5,8 @@ import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js';
 import { Unauthorized, Forbidden, Conflict } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
-import { env } from '../../config/env.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
+import { isGuestSignupEnabled, isGoogleLoginEnabled } from '../settings/settings.service.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput } from './auth.schemas.js';
 
 interface AuthResult {
@@ -71,7 +71,7 @@ export async function login(input: LoginInput): Promise<AuthResult> {
 // is sandboxed to their own personal projects) and is gated behind GUEST_SIGNUP_ENABLED so a
 // deployment must opt in. Auto-logs in on success (returns a token pair like login).
 export async function guestRegister(input: GuestRegisterInput): Promise<AuthResult> {
-  if (!env.guestSignupEnabled) throw Forbidden('Guest signup is not enabled');
+  if (!(await isGuestSignupEnabled())) throw Forbidden('Guest signup is not enabled');
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
   if (existing) throw Conflict('That email is already registered');
   const user = await prisma.user.create({
@@ -93,7 +93,7 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
 // tell them to use their password. Existing accounts match by the stable Google `sub` first,
 // then (first link) by email. Gated by GOOGLE_CLIENT_ID.
 export async function loginWithGoogle(credential: string): Promise<AuthResult> {
-  if (!env.googleClientId) throw Forbidden('Google sign-in is not enabled');
+  if (!(await isGoogleLoginEnabled())) throw Forbidden('Google sign-in is not enabled');
 
   let identity;
   try {

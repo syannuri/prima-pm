@@ -170,10 +170,12 @@ export function Toggle({
   checked,
   onChange,
   label,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (value: boolean) => void;
   label?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -181,10 +183,11 @@ export function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      onClick={() => onChange(!checked)}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
-        checked ? 'bg-brand-600' : 'bg-slate-300 dark:bg-slate-700'
-      }`}
+        disabled ? 'cursor-not-allowed opacity-50' : ''
+      } ${checked ? 'bg-brand-600' : 'bg-slate-300 dark:bg-slate-700'}`}
     >
       <span
         className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${

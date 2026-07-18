@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { AdminUser, Role } from '../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Toggle } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,74 @@ import { formatDate } from '../lib/format';
 import { fieldState, isEmailValid, isNameValid, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 const ROLES: Role[] = ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER'];
+
+interface AppSettings {
+  guestSignupEnabled: boolean;
+  googleLoginEnabled: boolean;
+  googleConfigured: boolean;
+}
+
+// ADMIN-only card to enable/disable the open sign-up paths at runtime (no env change / restart).
+function AccessSettings() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-settings'],
+    queryFn: () => api.get<AppSettings>('/admin/settings'),
+  });
+  const save = useMutation({
+    mutationFn: (patch: Partial<Omit<AppSettings, 'googleConfigured'>>) => api.patch<AppSettings>('/admin/settings', patch),
+    onSuccess: (s) => {
+      qc.setQueryData(['admin-settings'], s);
+      qc.invalidateQueries({ queryKey: ['auth-providers'] });
+      toast.success('Access settings updated');
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not update settings'),
+  });
+
+  return (
+    <Card>
+      <SectionTitle sub="Open sign-up paths — changes apply immediately, no restart">Access &amp; sign-up</SectionTitle>
+      {isLoading || !data ? (
+        <div className="flex justify-center py-6"><Spinner /></div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <SettingRow
+            title="Guest sign-up"
+            desc="Anyone can self-register with an email + password (any email works). Creates a sandboxed guest who only ever sees their own personal projects."
+            checked={data.guestSignupEnabled}
+            onChange={(v) => save.mutate({ guestSignupEnabled: v })}
+            busy={save.isPending}
+          />
+          <SettingRow
+            title="Google sign-in"
+            desc={data.googleConfigured
+              ? 'Show the “Continue with Google” button. Google users get the same sandboxed guest account.'
+              : 'Disabled — set GOOGLE_CLIENT_ID on the server first, then this can be turned on.'}
+            checked={data.googleLoginEnabled && data.googleConfigured}
+            onChange={(v) => save.mutate({ googleLoginEnabled: v })}
+            busy={save.isPending}
+            disabled={!data.googleConfigured}
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function SettingRow({ title, desc, checked, onChange, busy, disabled }: { title: string; desc: string; checked: boolean; onChange: (v: boolean) => void; busy?: boolean; disabled?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{title}</p>
+        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{desc}</p>
+      </div>
+      <div className="shrink-0 pt-0.5">
+        <Toggle checked={checked} onChange={onChange} disabled={disabled || busy} label={title} />
+      </div>
+    </div>
+  );
+}
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
@@ -36,6 +104,8 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-5">
       <SectionTitle sub="Create accounts, set roles, reset passwords, activate/deactivate">User management</SectionTitle>
+
+      <AccessSettings />
 
       <CreateUser onChange={invalidate} />
 

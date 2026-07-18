@@ -1263,3 +1263,14 @@ model RequirementTaskLink {
   @@index([requirementId])
   @@index([taskId])
 }
+
+// Runtime-toggleable app settings — a single row (id="singleton"). Lets an ADMIN enable/disable
+// the open sign-up paths (guest email+password signup, Google sign-in) from the UI without an
+// env change + restart. Seeded from the env flags on first read so a deploy preserves behaviour.
+model AppSetting {
+  id                 String   @id @default("singleton")
+  guestSignupEnabled Boolean  @default(false)
+  googleLoginEnabled Boolean  @default(false)
+  updatedById        String?
+  updatedAt          DateTime @updatedAt
+}
