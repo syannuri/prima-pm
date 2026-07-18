@@ -48,6 +48,10 @@ deploy() {
 
 PREV="$(git rev-parse HEAD)"
 echo "==> Current commit: $PREV"
+# A past build-prod.sh ran `npm install`, which can rewrite package-lock.json and leave the
+# deploy tree dirty enough to abort `git pull`. That drift is never intentional here, so discard
+# it before pulling. (build-prod.sh now uses `npm ci`, so new runs won't dirty the tree.)
+git checkout -- server/package-lock.json client/package-lock.json 2>/dev/null || true
 echo "==> Pulling origin/$BRANCH"
 git pull --ff-only origin "$BRANCH"
 NEW="$(git rev-parse HEAD)"

@@ -7,8 +7,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> Installing dependencies"
-npm --prefix server install
-npm --prefix client install
+# `npm ci` (not install): a clean, deterministic install straight from package-lock.json that
+# NEVER rewrites the lockfile — so a deploy checkout stays clean and `git pull` won't abort on
+# "local changes to package-lock.json". Requires the lockfile to be in sync with package.json
+# (it is; both are committed together). Falls back to `npm install` if no lockfile is present.
+[ -f server/package-lock.json ] && npm --prefix server ci || npm --prefix server install
+[ -f client/package-lock.json ] && npm --prefix client ci || npm --prefix client install
 
 echo "==> Building client (Vite → client/dist)"
 # Same-origin production build: the browser calls the serving Express origin. Default to a
