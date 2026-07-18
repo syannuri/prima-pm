@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
@@ -44,8 +44,13 @@ type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
   const { user } = useAuth();
+  // Deep-link support: an external link (e.g. the dashboard "Ready to close" panel) can open a
+  // specific tab via ?tab=<TabId>. It seeds the initial tab; once the user clicks a tab, that
+  // local choice takes over. Validated against the project's actual tab list below.
+  const requestedTab = searchParams.get('tab') as Tab | null;
   const [tab, setTab] = useState<Tab | null>(null);
   // "Jump to" (More menu) — switch tab and optionally deep-link to a section anchor within it.
   const [jump, setJump] = useState<string | null>(null);
@@ -114,7 +119,8 @@ export default function ProjectPage() {
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
   // chartered, land on the first working tab (Schedule/Agile); Charter stays
   // available near the end but is no longer the default landing tab.
-  const activeTab: Tab = tab ?? (chartered ? tabs[0] : 'Charter');
+  const activeTab: Tab =
+    tab ?? (requestedTab && tabs.includes(requestedTab) ? requestedTab : chartered ? tabs[0] : 'Charter');
 
   // Shared pill style for the compact header meta chips (add the display util per use so
   // the conditionally-hidden chips can toggle with `hidden sm:inline-flex`).
