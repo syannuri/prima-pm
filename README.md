@@ -100,7 +100,7 @@ Every push and pull request runs the full pipeline (GitHub Actions, [`.github/wo
 
 The status badge at the top of this README links straight to the latest run:
 
-![README header showing the green “CI passing” status badge](docs/screenshots/ci-badge.png)
+![The green “CI passing” status badge](docs/screenshots/ci-badge.png)
 
 ## 🏛️ Architecture
 
