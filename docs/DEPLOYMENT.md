@@ -257,8 +257,12 @@ cd /opt/prismatix/server
 HASH="$(node -e "console.log(require('bcryptjs').hashSync(process.argv[1],12))" 'YourStrongPass1')"
 sudo -u postgres psql -d prima_pm -c \
   "INSERT INTO \"User\" (id,name,email,\"passwordHash\",role,\"isActive\",\"tokenVersion\",\"createdAt\",\"updatedAt\")
-   VALUES (gen_random_uuid(),'Administrator','admin@yourco.com','${HASH}','ADMIN',true,0,now(),now());"
+   VALUES (gen_random_uuid(),'Administrator',lower('admin@yourco.com'),'${HASH}','ADMIN',true,0,now(),now());"
 ```
+
+> The `lower(...)` matters: the app lowercases email on login, so an email stored with
+> any uppercase letter can never sign in. If you already inserted a mixed-case email, fix
+> it with `UPDATE "User" SET email = lower(email);`.
 
 Then sign in and manage the rest from **Admin → Users**.
 

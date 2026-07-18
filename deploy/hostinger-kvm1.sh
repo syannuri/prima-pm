@@ -10,7 +10,7 @@
 #      (verify: `dig +short YOUR.DOMAIN` returns the VPS IP).
 #   3. SSH in as root, fill the CONFIG block below, then paste/run this file.
 #
-# See docs/HOSTINGER-KVM1.md for the guided walk-through.
+# See docs/HOSTINGER-VPS.md for the guided walk-through.
 set -euo pipefail
 
 ############################  FILL THIS IN  ############################
@@ -108,6 +108,9 @@ certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "${LE_EMAIL}" --
 systemctl restart prima-pm
 
 echo "=====  PART 3 — First admin account  ====="
+# The app lowercases email on login (auth.schemas.ts), so store it lowercased —
+# otherwise an ADMIN_EMAIL with any uppercase letter can never log in.
+ADMIN_EMAIL="$(printf '%s' "$ADMIN_EMAIL" | tr '[:upper:]' '[:lower:]')"
 HASH="$(cd "$REPO/server" && node -e "console.log(require('bcryptjs').hashSync(process.argv[1],12))" "$ADMIN_PASS")"
 sudo -u postgres psql -d prima_pm -c \
   "INSERT INTO \"User\" (id,name,email,\"passwordHash\",role,\"isActive\",\"tokenVersion\",\"createdAt\",\"updatedAt\")
