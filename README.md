@@ -73,6 +73,10 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ![Closure readiness gate for an Agile project — required blocks for backlog scope (2/5 in-scope done, 3 still open) and formal acceptance, advisory warnings for actual cost and lessons, with a force-close reason box](docs/screenshots/closeout-gate.png)
 
+**Built-in user manual** — a bilingual (Indonesia / English) in-app guide at `/manual` explains every workflow, including the methodology-aware closure gate and the Defer / Restore ("Deferred · out of scope") flow.
+
+![In-app Manual — Closing section documenting the methodology-aware closure gate (predictive WBS 100%; agile/hybrid backlog Done-or-Deferred plus acceptance) and the Defer/Restore flow](docs/screenshots/manual-closing.png)
+
 ## 🧱 Tech stack
 
 | Layer | Tech |
