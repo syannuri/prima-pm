@@ -109,10 +109,20 @@ export default function NotificationBell() {
     });
   }
 
+  // Keyboard dismissal: Escape closes the open dropdown.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
   return (
     <div className="relative">
       <button
         onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
         className="relative grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         title="Notifications"
         aria-label={`Notifications${total > 0 ? ` (${total})` : ''}`}

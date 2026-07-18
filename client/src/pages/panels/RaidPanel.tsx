@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Assumption, AssumptionStatus, ProjectDependency, DependencyDirection, DependencyStatus, IssueImpact, Issue, Risk, User } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -29,7 +29,7 @@ export default function RaidPanel({ projectId, onJump }: { projectId: string; on
   const riskQ = useQuery({ queryKey: ['risks', projectId], queryFn: () => api.get<{ risks: Risk[] }>(`/projects/${projectId}/risk`) });
   const issueQ = useQuery({ queryKey: ['issues', projectId], queryFn: () => api.get<{ issues: Issue[] }>(`/projects/${projectId}/issues`) });
 
-  if (aQ.isLoading || dQ.isLoading) return <Spinner />;
+  if (aQ.isLoading || dQ.isLoading) return <PanelLoading />;
   const assumptions = aQ.data?.assumptions ?? [];
   const dependencies = dQ.data?.dependencies ?? [];
   const riskCount = riskQ.data?.risks.length ?? 0;

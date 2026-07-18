@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Issue, IssueImpact, IssueStatus, User } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -24,7 +24,7 @@ export default function IssuePanel({ projectId }: { projectId: string }) {
   const issuesQ = useQuery({ queryKey: ['issues', projectId], queryFn: () => api.get<{ issues: Issue[] }>(base) });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['issues', projectId] });
 
-  if (issuesQ.isLoading) return <Spinner />;
+  if (issuesQ.isLoading) return <PanelLoading />;
   const issues = issuesQ.data?.issues ?? [];
   const openCount = issues.filter((i) => i.status === 'OPEN' || i.status === 'IN_PROGRESS').length;
 

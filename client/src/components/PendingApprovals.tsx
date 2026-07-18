@@ -54,7 +54,8 @@ export default function PendingApprovals() {
       if (await confirm({ title: 'Approve chargeable change?', message: <>This chargeable change is <strong>{formatIdr(amt)}</strong>. Approving will add it to <strong>{cr.project.code}</strong>&rsquo;s Total Revenue.</>, confirmLabel: 'Approve & add to revenue' }))
         decide.mutate({ cr, decision: 'APPROVED', applyToRevenue: true });
     } else {
-      decide.mutate({ cr, decision: 'APPROVED' });
+      if (await confirm({ title: 'Approve change request?', message: <>Approve <strong>{cr.title}</strong> on {cr.project.code}?</>, confirmLabel: 'Approve' }))
+        decide.mutate({ cr, decision: 'APPROVED' });
     }
   };
 

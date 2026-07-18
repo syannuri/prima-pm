@@ -4,7 +4,7 @@ import { api, ApiError } from '../../api/client';
 import type {
   Requirement, RequirementCategory, RequirementPriority, RequirementStatus, RequirementCoverage, Task,
 } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -37,7 +37,7 @@ export default function RequirementsPanel({ projectId }: { projectId: string }) 
   const q = useQuery({ queryKey: ['requirements', projectId], queryFn: () => api.get<{ requirements: Requirement[]; coverage: RequirementCoverage }>(base) });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['requirements', projectId] });
 
-  if (q.isLoading) return <Spinner />;
+  if (q.isLoading) return <PanelLoading />;
   const list = q.data?.requirements ?? [];
   const cov = q.data?.coverage;
 
@@ -254,7 +254,7 @@ function TraceModal({ projectId, base, requirement, onClose, onDone }: { project
       <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
         Tick the tasks that deliver <strong className="text-slate-700 dark:text-slate-200">{requirement.title}</strong>. A requirement with no linked task is a scope gap.
       </p>
-      {sched.isLoading ? <Spinner /> : tasks.length === 0 ? (
+      {sched.isLoading ? <PanelLoading /> : tasks.length === 0 ? (
         <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">This project has no WBS tasks to trace to yet.</p>
       ) : (
         <div className="max-h-[24rem] space-y-1 overflow-y-auto">

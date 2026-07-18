@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { AcceptanceDecision, AcceptanceSignoff, LessonCategory, LessonLearned } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -49,7 +49,7 @@ function LessonsSection({ projectId, canWrite }: { projectId: string; canWrite: 
     qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
   };
 
-  if (q.isLoading) return <Card><Spinner /></Card>;
+  if (q.isLoading) return <Card><PanelLoading /></Card>;
   const lessons = q.data?.lessons ?? [];
 
   return (
@@ -150,7 +150,7 @@ function AcceptanceSection({ projectId, canWrite }: { projectId: string; canWrit
     qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
   };
 
-  if (q.isLoading) return <Card><Spinner /></Card>;
+  if (q.isLoading) return <Card><PanelLoading /></Card>;
   const acceptances = q.data?.acceptances ?? [];
   const accepted = acceptances.filter((a) => a.decision !== 'REJECTED').length;
 

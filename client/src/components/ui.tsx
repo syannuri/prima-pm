@@ -146,6 +146,26 @@ export function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-slate-200/70 dark:bg-slate-700/40 ${className}`} />;
 }
 
+// Centered panel/tab loading state — a Spinner in a padded, centered box so it doesn't
+// jump to the top-left when a project tab switches between loading panels.
+export function PanelLoading({ className = 'py-10' }: { className?: string }) {
+  return (
+    <div className={`flex justify-center ${className}`}>
+      <Spinner />
+    </div>
+  );
+}
+
+// Consistent submit/form error banner (with dark-mode colours). Renders nothing when empty.
+export function FormError({ children, className = '' }: { children?: ReactNode; className?: string }) {
+  if (!children) return null;
+  return (
+    <p role="alert" className={`rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300 ${className}`}>
+      {children}
+    </p>
+  );
+}
+
 // Friendly empty state: an icon bubble, a title, an optional hint and an optional action.
 // Default glyph (an inbox) so every empty state has a warm visual anchor even when no icon is passed.
 const EMPTY_ICON = 'M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661z';

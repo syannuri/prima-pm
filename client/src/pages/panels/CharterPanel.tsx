@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Charter, DeliveryApproach, ProjectCategory, User } from '../../api/types';
-import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
 import type { InputState } from '../../components/ui';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useLang } from '../../context/LanguageContext';
@@ -141,7 +141,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
     })) commit.mutate();
   };
 
-  if (charterQ.isLoading) return <Spinner />;
+  if (charterQ.isLoading) return <PanelLoading />;
 
   return (
     <div className="space-y-5">

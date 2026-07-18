@@ -3,12 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { User } from '../api/types';
 import { Button, Field, Modal, Select } from './ui';
+import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
 
 // Inline "Change PM" control for a project header. Visible to ADMIN/PMO only.
 export default function ReassignPm({ projectId, currentPmId }: { projectId: string; currentPmId: string | null }) {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [pmUserId, setPmUserId] = useState(currentPmId ?? '');
   const [err, setErr] = useState('');
@@ -26,6 +28,7 @@ export default function ReassignPm({ projectId, currentPmId }: { projectId: stri
       qc.invalidateQueries({ queryKey: ['projects'] });
       setOpen(false);
       setErr('');
+      toast.success('Project manager reassigned');
     },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed to reassign PM'),
   });

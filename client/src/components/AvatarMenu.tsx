@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -35,6 +35,13 @@ export default function AvatarMenu() {
   const { canInstall, promptInstall } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+  // Keyboard dismissal: Escape closes the open menu.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
   // Labels follow the selected language (like the dashboard) so the account
   // menu isn't a half-English/half-Indonesian mix when the toggle is flipped.
   const t = {
@@ -57,6 +64,8 @@ export default function AvatarMenu() {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={t.account}
+        aria-haspopup="menu"
+        aria-expanded={open}
         className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-xs font-bold text-white shadow-sm ring-1 ring-black/5 transition active:scale-95"
       >
         {initials(user?.name)}

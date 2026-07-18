@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import type { DeliveryApproach, Project, ProjectCategory, PortfolioSummary as Summary, User } from '../api/types';
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, MoneyInput, Select, Skeleton } from '../components/ui';
 import type { InputState } from '../components/ui';
+import { useToast } from '../components/Toast';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
 
@@ -38,6 +39,7 @@ const STATUS_COLOR = PROJECT_STATUS_BADGE;
 
 export default function DashboardPage() {
   const qc = useQueryClient();
+  const toast = useToast();
   const { user } = useAuth();
   const { lang } = useLang();
   const [showForm, setShowForm] = useState(false);
@@ -96,7 +98,9 @@ export default function DashboardPage() {
       qc.invalidateQueries({ queryKey: ['projects'] });
       setShowForm(false);
       resetForm();
+      toast.success('Project created');
     },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not create project'),
   });
 
   // Only `name` (min 2 chars) and — when category is Other — its free-text detail are
@@ -324,8 +328,8 @@ export default function DashboardPage() {
                     <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
                     <Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge>
                   </div>
-                  <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">{p.name}</h3>
-                  <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                  <h3 className="mb-1 truncate font-semibold text-slate-800 dark:text-slate-100" title={p.name}>{p.name}</h3>
+                  <p className="mb-3 truncate text-sm text-slate-500 dark:text-slate-400">
                     {p.clientName ? `Client: ${p.clientName}` : (p.sponsor ?? 'No client')}
                   </p>
 

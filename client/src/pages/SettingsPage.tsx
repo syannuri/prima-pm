@@ -15,7 +15,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Settings</h1>
         {user && (
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 break-words text-sm text-slate-500 dark:text-slate-400">
             Signed in as {user.name} · {user.email}
           </p>
         )}

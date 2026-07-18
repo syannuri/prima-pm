@@ -91,8 +91,9 @@ function Attendees({ base, rows, canEdit, onChange }: { base: string; rows: Kick
   const toggle = useMutation({
     mutationFn: (a: KickoffAttendee) => api.patch(`${base}/attendees/${a.id}`, { present: !a.present }),
     onSuccess: onChange,
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Something went wrong'),
   });
-  const del = useMutation({ mutationFn: (id: string) => api.del(`${base}/attendees/${id}`), onSuccess: onChange });
+  const del = useMutation({ mutationFn: (id: string) => api.del(`${base}/attendees/${id}`), onSuccess: onChange, onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Something went wrong') });
 
   const present = rows.filter((a) => a.present).length;
   return (
@@ -146,8 +147,9 @@ function ActionItems({ base, rows, canEdit, onChange }: { base: string; rows: Ki
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: KickoffActionStatus }) => api.patch(`${base}/actions/${id}`, { status }),
     onSuccess: onChange,
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Something went wrong'),
   });
-  const del = useMutation({ mutationFn: (id: string) => api.del(`${base}/actions/${id}`), onSuccess: onChange });
+  const del = useMutation({ mutationFn: (id: string) => api.del(`${base}/actions/${id}`), onSuccess: onChange, onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Something went wrong') });
 
   const open = rows.filter((a) => a.status === 'OPEN').length;
   return (

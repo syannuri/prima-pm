@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
-import { Button, Card, Input, MoneyInput, Select, Spinner } from '../../components/ui';
+import { Button, Card, FormError, Input, MoneyInput, Select, PanelLoading } from '../../components/ui';
 import BaselineLock from '../../components/BaselineLock';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -83,7 +83,7 @@ export default function CostPanel({ projectId }: { projectId: string }) {
     qc.invalidateQueries({ queryKey: ['gantt', projectId] }); // WBS mandays/budget + Owner prefilled from a manpower resource
   };
 
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <PanelLoading />;
   const b = data?.baseline;
 
   return (
@@ -698,7 +698,7 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
         <span className="text-slate-300 dark:text-slate-600">·</span>
         <span className="text-slate-500 dark:text-slate-400" title="Recorded direct total + this new line">New Direct total: <span className="font-bold tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal + addAmount)}</span></span>
       </div>
-      {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+      <FormError className="mt-2">{err}</FormError>
       </div>)}
     </Card>
   );

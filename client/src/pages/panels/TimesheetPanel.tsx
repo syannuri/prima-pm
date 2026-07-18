@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api/client';
 import type { CostSummary } from '../../api/types';
 import { Button, Card, Input, Select, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
 import { formatNum, formatDateInput, formatIdr } from '../../lib/format';
 
@@ -45,6 +46,7 @@ const remClass = (rem: number) =>
 export default function TimesheetPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const canWrite = useProjectWrite(projectId, ['FINANCE']);
 
   const { data, isLoading } = useQuery({
@@ -236,7 +238,7 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
                 <span className="w-24 shrink-0 text-slate-500 dark:text-slate-400">{new Date(e.date).toLocaleDateString()}</span>
                 <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{e.lineLabel}{e.note ? <span className="text-slate-400"> — {e.note}</span> : null}</span>
                 <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{formatNum(e.mandays, 1)} md</span>
-                {canWrite && <button onClick={() => del.mutate(e.id)} className="text-xs text-red-500 hover:underline">delete</button>}
+                {canWrite && <button disabled={del.isPending} onClick={async () => { if (await confirm({ title: 'Delete entry?', message: <>Delete this <strong>{formatNum(e.mandays, 1)} md</strong> log for {new Date(e.date).toLocaleDateString()}?</>, confirmLabel: 'Delete', danger: true })) del.mutate(e.id); }} className="text-xs text-red-500 hover:underline disabled:opacity-40">delete</button>}
               </div>
             ))}
           </div>

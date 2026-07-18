@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Risk, RiskAnalysis } from '../../api/types';
-import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, PanelLoading } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatIdr } from '../../lib/format';
@@ -24,7 +24,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
     qc.invalidateQueries({ queryKey: ['project', projectId] });
   };
 
-  if (risksQ.isLoading) return <Spinner />;
+  if (risksQ.isLoading) return <PanelLoading />;
   const a = analysisQ.data;
 
   return (

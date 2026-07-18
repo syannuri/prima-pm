@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Stakeholder, StakeholderCategory, InfluenceLevel, EngagementLevel } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -33,7 +33,7 @@ export default function StakeholderPanel({ projectId }: { projectId: string }) {
   const q = useQuery({ queryKey: ['stakeholders', projectId], queryFn: () => api.get<{ stakeholders: Stakeholder[] }>(base) });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['stakeholders', projectId] });
 
-  if (q.isLoading) return <Spinner />;
+  if (q.isLoading) return <PanelLoading />;
   const list = q.data?.stakeholders ?? [];
   const gaps = list.filter((s) => ENG_RANK[s.currentEngagement] < ENG_RANK[s.desiredEngagement]).length;
 
@@ -100,7 +100,7 @@ export default function StakeholderPanel({ projectId }: { projectId: string }) {
                   <div className="min-w-0">
                     <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{s.code}</span>
                     <p className="font-medium text-slate-700 dark:text-slate-200">{s.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{[s.role, s.organization].filter(Boolean).join(' · ') || '—'}{s.email ? ` · ${s.email}` : ''}</p>
+                    <p className="break-words text-xs text-slate-500 dark:text-slate-400">{[s.role, s.organization].filter(Boolean).join(' · ') || '—'}{s.email ? ` · ${s.email}` : ''}</p>
                   </div>
                   <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{CAT_LABEL[s.category]}</span>
                 </div>

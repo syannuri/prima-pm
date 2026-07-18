@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Procurement, ContractType, ProcurementStatus } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, FormError, Input, Modal, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -26,7 +26,7 @@ export default function ProcurementPanel({ projectId }: { projectId: string }) {
   const q = useQuery({ queryKey: ['procurements', projectId], queryFn: () => api.get<{ procurements: Procurement[] }>(base) });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['procurements', projectId] });
 
-  if (q.isLoading) return <Spinner />;
+  if (q.isLoading) return <PanelLoading />;
   const list = q.data?.procurements ?? [];
   const active = list.filter((p) => p.status !== 'CANCELLED');
   const plannedValue = active.reduce((s, p) => s + (p.amount ?? 0), 0);
@@ -212,7 +212,7 @@ function ProcurementForm({ base, procurement, onClose, onDone }: { base: string;
         </div>
         <Field label="Scope / SOW"><Textarea rows={2} value={f.scope} onChange={(e) => set('scope', e.target.value)} placeholder="What the contract covers…" /></Field>
         <Field label="Notes"><Textarea rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Terms, risks, dependencies…" /></Field>
-        {err && <p className="text-sm text-red-600">{err}</p>}
+        <FormError>{err}</FormError>
         <div className="flex justify-end gap-2 border-t border-slate-200/70 pt-3 dark:border-slate-800/70">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button onClick={() => save.mutate()} disabled={!f.title.trim() || save.isPending}>{procurement ? 'Save' : 'Add'}</Button>

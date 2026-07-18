@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import { Button } from './ui';
+import { Button, FormError } from './ui';
 import { useToast } from './Toast';
 import { useConfirm } from './ConfirmDialog';
 import { formatDate } from '../lib/format';
@@ -95,7 +95,7 @@ export default function Attachments({
         )}
       </div>
 
-      {err && <p className="mb-2 text-sm text-red-600">{err}</p>}
+      <FormError className="mb-2">{err}</FormError>
 
       {!items.length ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">No files attached.</p>
@@ -113,7 +113,7 @@ export default function Attachments({
               <span className="ml-2 flex shrink-0 items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 {humanSize(a.sizeBytes)} · {formatDate(a.createdAt)}
                 {!readOnly && (
-                  <button onClick={() => confirmDelete(a)} className="text-red-500 hover:underline">delete</button>
+                  <button disabled={del.isPending} onClick={() => confirmDelete(a)} className="text-red-500 hover:underline disabled:opacity-40">delete</button>
                 )}
               </span>
             </li>
