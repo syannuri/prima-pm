@@ -324,14 +324,15 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
       {/* Level 1 — domain groups. Scrolls horizontally on narrow screens; a right-edge fade
           hints there are more groups to swipe to (hidden on md+ where they all fit). */}
       <div className="relative">
-        <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
+        <div role="tablist" aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
           {groups.map((g) => {
             const active = g.tabs.includes(activeTab);
             const single = g.tabs.length === 1;
             return (
               // Every group shows its domain label (e.g. "Schedule"); the stable
-              // aria-label lets tests/AT target the group by that label.
-              <button key={g.label} aria-label={g.label} data-tour={g.label === 'Schedule & WBS' ? 'tab-schedule' : g.label === 'Monitoring' ? 'tab-monitoring' : undefined} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
+              // aria-label lets tests/AT target the group by that label. role="tab" +
+              // aria-selected expose the active section to assistive tech (not colour alone).
+              <button key={g.label} role="tab" aria-selected={active} aria-label={g.label} data-tour={g.label === 'Schedule & WBS' ? 'tab-schedule' : g.label === 'Monitoring' ? 'tab-monitoring' : undefined} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
                 {g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
               </button>
             );
@@ -341,9 +342,9 @@ function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; 
       </div>
       {/* Level 2 — sub-tabs of the active group (only when the group has more than one) */}
       {activeGroup.tabs.length > 1 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div role="tablist" aria-label={`${activeGroup.label} views`} className="mt-2 flex flex-wrap items-center gap-1.5">
           {activeGroup.tabs.map((t) => (
-            <button key={t} onClick={() => onSelect(t)} className={subBtn(activeTab === t)}>
+            <button key={t} role="tab" aria-selected={activeTab === t} onClick={() => onSelect(t)} className={subBtn(activeTab === t)}>
               {t}{t === 'Audit' && <AuditBadge />}
             </button>
           ))}

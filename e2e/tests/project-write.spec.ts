@@ -3,8 +3,8 @@ import { login, openFirstProject } from './helpers';
 
 // Two-level tab bar: open the domain group (its aria-label) then the sub-tab.
 async function openTab(page: Page, phase: string, tab: string) {
-  await page.getByRole('button', { name: phase, exact: true }).first().click();
-  await page.getByRole('button', { name: tab, exact: true }).first().click();
+  await page.getByRole('tab', { name: phase, exact: true }).first().click();
+  await page.getByRole('tab', { name: tab, exact: true }).first().click();
 }
 
 // Write-path smoke: the render suite (project-modules.spec) only asserts panels

@@ -6,11 +6,11 @@ import { login, openFirstProject } from './helpers';
 // `.first()` guards the case where a group label also exists as a sub-tab pill (e.g. the
 // "Cost" group contains a "Cost" tab). Single-tab groups (Closing/Governance & Audit) are plain buttons.
 async function openTab(page: Page, group: string, tab: string) {
-  await page.getByRole('button', { name: group, exact: true }).first().click();
+  await page.getByRole('tab', { name: group, exact: true }).first().click();
   // A group with a single visible tab (e.g. "Schedule & WBS" on a predictive project, where
   // the Agile tab is hidden) renders no sub-tab pills — the group click already opens the tab.
   // Only click the sub-pill when it exists.
-  const sub = page.getByRole('button', { name: tab, exact: true });
+  const sub = page.getByRole('tab', { name: tab, exact: true });
   if (await sub.count()) await sub.first().click();
 }
 
@@ -70,7 +70,7 @@ test.describe('Project workspace', () => {
   });
 
   test('audit tab lists committed history', async ({ page }) => {
-    await page.getByRole('button', { name: /Governance & Audit/ }).click(); // single-tab group; carries a change-count badge
+    await page.getByRole('tab', { name: /Governance & Audit/ }).click(); // single-tab group; carries a change-count badge
     // Seed data produces audit entries; expect at least one action badge in the table
     // (scoped to <table> to avoid matching the hidden filter <option> elements).
     await expect(page.locator('table').getByText(/COMMIT|CREATE|UPDATE/).first()).toBeVisible();
