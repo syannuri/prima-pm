@@ -296,6 +296,16 @@ Add:
 
 ## Part 5 — Updating / redeploying
 
+**One command** — pull + build + migrate + fix-ownership + restart + health-check, with
+automatic rollback to the previous commit if the new build fails to come up healthy:
+
+```bash
+cd /opt/prismatix
+sudo ./scripts/update-prod.sh
+```
+
+<details><summary>…or the equivalent manual steps</summary>
+
 ```bash
 cd /opt/prismatix
 sudo git pull
@@ -306,6 +316,7 @@ sudo systemctl restart prima-pm               # picks up server changes
 sudo chown -R prima:prima server/uploads
 sudo chown root:prima server/.env && sudo chmod 640 server/.env
 ```
+</details>
 
 > A **client-only** change goes live the moment `build-prod.sh` finishes (nginx→node serves
 > `client/dist` directly) — no restart needed. **Server** changes need the `systemctl restart`.
