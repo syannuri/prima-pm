@@ -246,8 +246,9 @@ prima-pm`, then open **https://192.168.1.50** — no browser warning on trusted 
 
 ## Part 3 — Create the first admin account
 
-Accounts are admin-provisioned (no open registration). If you seeded demo data, log in as
-`admin@prismatix.id` / `Password123!` and **create real accounts, then deactivate the demos**.
+Accounts are admin-provisioned (no open registration). If you seeded demo data, log in with the
+seeded ADMIN account (defined in `server/prisma/seed.ts`) and **create real accounts, then
+deactivate the demos**. Seeding is for dev only — production should start from a clean DB (below).
 
 For a **clean (unseeded) DB**, create the first ADMIN directly:
 

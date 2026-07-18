@@ -160,20 +160,9 @@ cp .env.example .env            # VITE_API_URL=/api/v1 (proxied to :4000)
 npm install
 npm run dev
 ```
-Open **http://localhost:5173** and sign in with a demo account.
+Open **http://localhost:5173** and sign in.
 
-### Demo logins (seed only — password `Password123!`)
-| Role | Email |
-|------|-------|
-| Admin | admin@prismatix.id |
-| PMO | pmo@prismatix.id |
-| Project Manager | pm@prismatix.id |
-| Finance | finance@prismatix.id |
-| Risk Officer | risk@prismatix.id |
-| Team Member | pic@prismatix.id |
-| Viewer | viewer@prismatix.id |
-
-> Demo accounts exist only in the seed/dev DB. In a real deployment, create proper accounts and disable the demos.
+`npm run db:seed` creates one account per role for local development — the accounts (emails/roles) and their dev password are defined in [`server/prisma/seed.ts`](server/prisma/seed.ts). These exist **only in a seeded dev database**; a real deployment provisions its own accounts via the admin UI (there is no open self-registration), so the seed accounts are never present in production.
 
 ---
 
