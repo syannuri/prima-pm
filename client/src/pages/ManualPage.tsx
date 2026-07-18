@@ -149,7 +149,8 @@ const DOC: Record<Lang, Doc> = {
         { type: 'bullets', items: [
           'Acceptance Sign-off — persetujuan formal deliverable dari sponsor/customer (pihak, keputusan Accepted / Accepted-with-conditions / Rejected, nama penandatangan, tanggal).',
           'Lessons Learned — catatan Went-well / Went-wrong / Rekomendasi untuk proyek berikutnya.',
-          'Keduanya muncul sebagai checklist (advisory) saat menutup proyek, dan masuk ke laporan.',
+          'Syarat penutupan (per metodologi): Predictive — jadwal WBS 100%. Agile/Hybrid — SEMUA backlog item DONE atau di-Defer (dinilai per item, BUKAN per story point) DAN ada minimal satu Acceptance Sign-off. Selebihnya (Change Request/risk/issue/biaya/lessons) hanya peringatan yang tak menghalangi. ADMIN/PMO tetap bisa force-close disertai alasan.',
+          'Defer (out of scope) — untuk backlog yang sengaja tak jadi dikerjakan: tandai lewat ⏸ di papan Kanban atau tautan “defer” di daftar backlog (tab Jadwal & WBS → Agile). Item ter-Defer pindah ke bagian “Deferred · out of scope”, tidak menghalangi penutupan, dan dikeluarkan dari EVM/velocity; klik Restore untuk mengembalikannya ke scope.',
         ] },
       ] },
       { id: 'reports', nav: 'Reports', heading: '📈 Reports', blocks: [
@@ -158,7 +159,7 @@ const DOC: Record<Lang, Doc> = {
       { id: 'more2', nav: 'Issues · Agile · Timesheet', heading: '🧩 Issues, Agile & Timesheet', blocks: [
         { type: 'bullets', items: [
           'Issues — log masalah aktif (kategori, dampak, owner, status, resolusi).',
-          'Agile/Sprint — untuk proyek Agile/Hybrid: backlog & sprint; EVM berbasis story point.',
+          'Agile/Sprint — untuk proyek Agile/Hybrid: backlog & sprint; EVM berbasis story point. Tandai item yang batal dikerjakan dengan Defer (⏸) agar tidak menghalangi penutupan (lihat Closing).',
           'Timesheet — catat man-day aktual per baris manpower (efisiensi = earned ÷ consumed); "My Timesheet" (semua peran) untuk mencatat effort sendiri lintas proyek.',
           'Lifecycle & Baseline Lock (PMO/Admin) — Activate / Put on hold / Resume / Close; kunci-buka baseline mengatur kapan cost/WBS boleh diubah (perubahan resmi lewat Change Request).',
         ] },
@@ -297,7 +298,8 @@ const DOC: Record<Lang, Doc> = {
         { type: 'bullets', items: [
           'Acceptance Sign-off — formal deliverable acceptance from the sponsor/customer (party, decision Accepted / Accepted-with-conditions / Rejected, signer name, date).',
           'Lessons Learned — Went-well / Went-wrong / Recommendation notes for future projects.',
-          'Both appear as an (advisory) checklist when closing the project, and flow into the reports.',
+          'Closure gate (by methodology): Predictive — WBS schedule 100%. Agile/Hybrid — EVERY backlog item DONE or Deferred (judged per item, NOT by story points) AND at least one Acceptance Sign-off. Everything else (Change Requests/risks/issues/cost/lessons) is an advisory warning that does not block. ADMIN/PMO can still force-close with a reason.',
+          'Defer (out of scope) — for backlog you consciously won\'t build: mark it via ⏸ on the Kanban board or the “defer” link in the backlog list (Schedule & WBS → Agile). Deferred items move to the “Deferred · out of scope” section, don\'t block closeout, and are excluded from EVM/velocity; click Restore to bring one back into scope.',
         ] },
       ] },
       { id: 'reports', nav: 'Reports', heading: '📈 Reports', blocks: [
@@ -306,7 +308,7 @@ const DOC: Record<Lang, Doc> = {
       { id: 'more2', nav: 'Issues · Agile · Timesheet', heading: '🧩 Issues, Agile & Timesheet', blocks: [
         { type: 'bullets', items: [
           'Issues — log active problems (category, impact, owner, status, resolution).',
-          'Agile/Sprint — for Agile/Hybrid projects: backlog & sprints; story-point-based EVM.',
+          'Agile/Sprint — for Agile/Hybrid projects: backlog & sprints; story-point-based EVM. Mark abandoned items as Deferred (⏸) so they don\'t block closeout (see Closing).',
           'Timesheet — record actual man-days per manpower line (efficiency = earned ÷ consumed); "My Timesheet" (all roles) to log your own effort across projects.',
           'Lifecycle & Baseline Lock (PMO/Admin) — Activate / Put on hold / Resume / Close; locking-unlocking the baseline governs when cost/WBS can change (formal changes via a Change Request).',
         ] },
