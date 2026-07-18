@@ -10,7 +10,7 @@
  * Bump CACHE when the caching strategy itself changes; old caches are pruned
  * on activate.
  */
-const CACHE = 'prima-v1';
+const CACHE = 'prima-v2';
 const SHELL = '/index.html';
 
 self.addEventListener('install', (event) => {
