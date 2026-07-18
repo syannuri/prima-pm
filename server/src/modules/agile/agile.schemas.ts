@@ -16,7 +16,7 @@ export const backlogItemSchema = z.object({
   acceptanceCriteria: z.string().trim().max(5000).optional().nullable(),
   storyPoints: z.number().int().min(0).max(999).optional().nullable(),
   priority: z.number().int().min(0).max(9999).optional(),
-  status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
+  status: z.enum(['TODO', 'IN_PROGRESS', 'DONE', 'DEFERRED']).optional(),
   assigneeUserId: z.string().uuid().optional().nullable(),
   sprintId: z.string().uuid().optional().nullable(),
 });

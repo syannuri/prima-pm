@@ -1,7 +1,14 @@
 // Pure closure-readiness policy — no I/O, so it stays unit-testable without a DB.
-// Per the agreed PMO policy: the ONLY hard blocker is schedule completeness
-// (100% — judged by the project's methodology: WBS %, agile points, or a hybrid
-// blend); everything else is an advisory warning that does not stop closure.
+//
+// Hard blockers are methodology-aware:
+//  - PREDICTIVE: WBS schedule 100% complete.
+//  - AGILE: (1) scope complete — every backlog item is DONE or DEFERRED (item-based, NOT
+//    story points — points are a relative estimation tool, not a "done" gauge); and
+//    (2) a formal acceptance sign-off is on record. Story points still drive EVM/velocity,
+//    but never gate closure.
+//  - HYBRID: the WBS schedule gate AND the agile scope + acceptance gates.
+// Everything else (open CRs / HIGH risks / issues, actual cost, lessons) is an advisory
+// warning that does not stop closure. Force-close (ADMIN/PMO + reason) overrides blockers.
 
 export type ClosureSeverity = 'block' | 'warn';
 
@@ -21,44 +28,94 @@ export interface ClosureReadiness {
 }
 
 export interface ClosureInputs {
-  leafTaskCount: number; // schedule "leaves" per methodology: WBS leaves, agile backlog items, or both (hybrid)
-  scheduleProgress: number; // 0..1 (methodology-weighted % complete: WBS / agile points / hybrid blend)
+  deliveryApproach: string; // PREDICTIVE | AGILE | HYBRID
+  // WBS schedule (predictive + hybrid). Pure agile has no WBS → wbsLeafCount 0.
+  wbsLeafCount: number; // WBS leaf tasks
+  wbsProgress: number; // 0..1 WBS %complete (duration/cost-weighted)
+  // Agile/Hybrid backlog — scope is judged by ITEM completion, not story points (points are a
+  // relative estimation/velocity tool, not a "done" gauge). DEFERRED items are out of scope.
+  backlogTotal: number; // all backlog items (any status)
+  backlogOpen: number; // TODO + IN_PROGRESS — the items that block closure
+  backlogDone: number; // DONE
+  backlogDeferred: number; // DEFERRED (consciously descoped)
+  // Shared advisory inputs.
   openChangeRequests: number; // SUBMITTED / UNDER_REVIEW
   openHighRisks: number; // HIGH|CRITICAL and still open
   openIssues: number; // OPEN | IN_PROGRESS
   actualCost: number; // recorded AC total
-  deliveryApproach: string; // PREDICTIVE | AGILE | HYBRID
-  openBacklogItems: number; // backlog items not DONE (agile/hybrid only)
   lessonsCount: number; // lessons-learned register entries
   hasAcceptance: boolean; // at least one formal acceptance sign-off recorded
 }
 
 export function assessClosureReadiness(i: ClosureInputs): ClosureReadiness {
   const items: ClosureItem[] = [];
+  const isAgile = i.deliveryApproach === 'AGILE';
+  const isHybrid = i.deliveryApproach === 'HYBRID';
+  const usesBacklog = isAgile || isHybrid;
+  const usesWbs = !isAgile; // PREDICTIVE + HYBRID carry a WBS schedule
 
-  // Hard block: schedule 100% — but only when the project actually has a plan to judge
-  // (WBS tasks and/or agile backlog items). A project with neither can't be judged on
-  // schedule, so we don't block it; we surface a warning instead so it's not silently skipped.
-  if (i.leafTaskCount > 0) {
-    const pct = Math.round(i.scheduleProgress * 100);
-    items.push({
-      key: 'schedule',
-      label: 'Schedule 100% complete',
-      severity: 'block',
-      ok: i.scheduleProgress >= 1,
-      detail: `${pct}% complete`,
-    });
-  } else {
-    items.push({
-      key: 'schedule',
-      label: 'Schedule or backlog present',
-      severity: 'warn',
-      ok: false,
-      detail: 'No schedule or backlog to verify completion',
-    });
+  // ── Hard block: WBS schedule 100% (predictive + hybrid) ──
+  if (usesWbs) {
+    if (i.wbsLeafCount > 0) {
+      const pct = Math.round(i.wbsProgress * 100);
+      items.push({
+        key: 'schedule',
+        label: 'Schedule 100% complete',
+        severity: 'block',
+        ok: i.wbsProgress >= 1,
+        detail: `${pct}% complete`,
+      });
+    } else if (!usesBacklog) {
+      // Pure predictive with no WBS → nothing to judge; warn so it isn't silently skipped.
+      items.push({
+        key: 'schedule',
+        label: 'Schedule present',
+        severity: 'warn',
+        ok: false,
+        detail: 'No schedule to verify completion',
+      });
+    }
   }
 
-  // Advisory warnings (do not block closure).
+  // ── Hard block: Agile scope complete — ITEM-based, not story points (agile + hybrid) ──
+  // Every backlog item must be DONE or consciously DEFERRED (descoped). Unestimated items
+  // therefore can't hide: they count as open until closed or deferred.
+  if (usesBacklog) {
+    if (i.backlogTotal > 0) {
+      const inScope = i.backlogTotal - i.backlogDeferred;
+      const pct = inScope > 0 ? Math.round((i.backlogDone / inScope) * 100) : 100;
+      const parts = [`${i.backlogDone}/${inScope} in-scope done`];
+      if (i.backlogDeferred) parts.push(`${i.backlogDeferred} deferred`);
+      if (i.backlogOpen) parts.push(`${i.backlogOpen} still open`);
+      items.push({
+        key: 'scope',
+        label: 'All backlog items done or deferred',
+        severity: 'block',
+        ok: i.backlogOpen === 0,
+        detail: `${parts.join(' · ')} (${pct}%)`,
+      });
+    } else if (isAgile) {
+      items.push({
+        key: 'scope',
+        label: 'Backlog present',
+        severity: 'warn',
+        ok: false,
+        detail: 'No backlog to verify completion',
+      });
+    }
+  }
+
+  // ── Formal acceptance — a HARD block for agile/hybrid (an increment lives or dies on
+  // acceptance); advisory for predictive. ──
+  items.push({
+    key: 'acceptance',
+    label: 'Formal acceptance recorded',
+    severity: usesBacklog ? 'block' : 'warn',
+    ok: i.hasAcceptance,
+    detail: i.hasAcceptance ? undefined : 'No deliverable acceptance sign-off (Closeout tab)',
+  });
+
+  // ── Advisory warnings (do not block closure) ──
   items.push({
     key: 'changeRequests',
     label: 'No undecided change requests',
@@ -87,31 +144,12 @@ export function assessClosureReadiness(i: ClosureInputs): ClosureReadiness {
     ok: i.actualCost > 0,
     detail: i.actualCost > 0 ? undefined : 'No actual cost entered',
   });
-  if (i.deliveryApproach === 'AGILE' || i.deliveryApproach === 'HYBRID') {
-    items.push({
-      key: 'backlog',
-      label: 'All backlog items done',
-      severity: 'warn',
-      ok: i.openBacklogItems === 0,
-      detail: i.openBacklogItems ? `${i.openBacklogItems} not done` : undefined,
-    });
-  }
-
-  // Closing artifacts (PMBOK Close-Project): a lessons-learned register and formal
-  // deliverable acceptance. Advisory — captured at closeout, they don't block closure.
   items.push({
     key: 'lessons',
     label: 'Lessons learned captured',
     severity: 'warn',
     ok: i.lessonsCount > 0,
     detail: i.lessonsCount > 0 ? undefined : 'No lessons recorded (Closeout tab)',
-  });
-  items.push({
-    key: 'acceptance',
-    label: 'Formal acceptance recorded',
-    severity: 'warn',
-    ok: i.hasAcceptance,
-    detail: i.hasAcceptance ? undefined : 'No deliverable acceptance sign-off (Closeout tab)',
   });
 
   const blockers = items.filter((x) => x.severity === 'block' && !x.ok);

@@ -20,6 +20,7 @@ export const BACKLOG_STATUS_LABEL: Record<BacklogStatus, string> = {
   TODO: 'To Do',
   IN_PROGRESS: 'In Progress',
   DONE: 'Done',
+  DEFERRED: 'Deferred',
 };
 
 export const PROJECT_CATEGORIES: { value: ProjectCategory; label: string }[] = [

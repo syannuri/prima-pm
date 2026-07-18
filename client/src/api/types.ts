@@ -80,7 +80,7 @@ export type ProjectCategory =
 
 export type DeliveryApproach = 'PREDICTIVE' | 'AGILE' | 'HYBRID';
 export type BacklogType = 'EPIC' | 'STORY' | 'TASK' | 'BUG';
-export type BacklogStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
+export type BacklogStatus = 'TODO' | 'IN_PROGRESS' | 'DONE' | 'DEFERRED';
 export type SprintStatus = 'PLANNED' | 'ACTIVE' | 'CLOSED';
 
 export interface Sprint {

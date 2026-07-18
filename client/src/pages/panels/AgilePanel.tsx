@@ -18,6 +18,7 @@ const STATUS_ACCENT: Record<BacklogStatus, string> = {
   TODO: 'border-t-slate-400',
   IN_PROGRESS: 'border-t-sky-500',
   DONE: 'border-t-green-500',
+  DEFERRED: 'border-t-amber-500', // not shown as a board column, but keeps the map total
 };
 const SPRINT_STATUSES = ['PLANNED', 'ACTIVE', 'CLOSED'] as const;
 const sumPoints = (arr: BacklogItem[]) => arr.reduce((s, i) => s + (i.storyPoints ?? 0), 0);
@@ -150,7 +151,8 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, us
   const [overCol, setOverCol] = useState<BacklogStatus | null>(null);
 
   if (!sprints.length) return <Card><EmptyState icon="M3 3h18v18H3z M3 9h18 M9 21V9" title="No sprints yet" hint="Create a sprint in the Backlog view, then assign items into it to plan work." /></Card>;
-  const sprintItems = items.filter((i) => i.sprintId === activeSprintId);
+  // DEFERRED (descoped) items drop off the active board — they're managed in the Backlog view.
+  const sprintItems = items.filter((i) => i.sprintId === activeSprintId && i.status !== 'DEFERRED');
   const dragged = dragId ? sprintItems.find((i) => i.id === dragId) : null;
 
   const move = (it: BacklogItem, dir: -1 | 1) => {
@@ -232,6 +234,7 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, us
                         <span className="flex gap-1">
                           <button onClick={() => move(it, -1)} disabled={it.status === 'TODO'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to previous column">◀</button>
                           <button onClick={() => move(it, 1)} disabled={it.status === 'DONE'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to next column">▶</button>
+                          <button onClick={() => onMove(it.id, 'DEFERRED')} className="rounded px-1 text-xs text-slate-400 hover:text-amber-600 dark:hover:text-amber-400" title="Defer — mark out of scope (won't block closeout)">⏸</button>
                         </span>
                       )}
                     </div>
@@ -301,13 +304,20 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
       ) : (
         <span className="w-24 truncate text-xs text-slate-500 dark:text-slate-400">{it.assignee ? it.assignee.name : '—'}</span>
       )}
+      {canEdit && it.status !== 'DEFERRED' && <button onClick={() => onPatchItem(it.id, { status: 'DEFERRED' })} className="text-xs text-amber-600 hover:underline dark:text-amber-400" title="Mark out of scope — descoped items don't block closeout">defer</button>}
+      {canEdit && it.status === 'DEFERRED' && <button onClick={() => onPatchItem(it.id, { status: 'TODO' })} className="text-xs text-sky-600 hover:underline dark:text-sky-400" title="Bring back into scope">restore</button>}
       {canEdit && <button onClick={() => onDeleteItem(it)} className="text-xs text-red-500 hover:underline">delete</button>}
     </div>
   );
 
+  // Descoped items — listed apart (any sprint) so scope decisions are explicit and reversible.
+  const deferred = items.filter((i) => i.status === 'DEFERRED');
+  const activeBacklog = backlog.filter((i) => i.status !== 'DEFERRED');
+
   return (
-    // Side by side on large screens to save vertical space: the product backlog is the
-    // primary (wider) column, sprints sit alongside as a narrower sidebar. Stacks on small.
+   <div className="space-y-4">
+    {/* Side by side on large screens to save vertical space: the product backlog is the
+        primary (wider) column, sprints sit alongside as a narrower sidebar. Stacks on small. */}
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
       <Card className="lg:min-w-0 lg:flex-1">
         <SectionTitle sub="Add stories, tasks and bugs here, then assign them to a sprint (or drag them across the Board).">Product Backlog</SectionTitle>
@@ -325,7 +335,7 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
           </div>
         )}
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-          {backlog.length ? backlog.map((it) => <ItemRow key={it.id} it={it} />) : <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">Backlog is empty — add your first item above.</p>}
+          {activeBacklog.length ? activeBacklog.map((it) => <ItemRow key={it.id} it={it} />) : <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">Backlog is empty — add your first item above.</p>}
         </div>
       </Card>
 
@@ -358,5 +368,15 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
         )}
       </Card>
     </div>
+
+    {deferred.length > 0 && (
+      <Card>
+        <SectionTitle sub="Consciously descoped items — kept for the record but out of scope, so they don't block closeout. Restore any to bring it back into scope.">Deferred · out of scope <span className="text-slate-400">({deferred.length})</span></SectionTitle>
+        <div className="divide-y divide-slate-100 opacity-80 dark:divide-slate-800">
+          {deferred.map((it) => <ItemRow key={it.id} it={it} />)}
+        </div>
+      </Card>
+    )}
+   </div>
   );
 }

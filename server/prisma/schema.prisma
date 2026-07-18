@@ -170,6 +170,7 @@ enum BacklogStatus {
   TODO
   IN_PROGRESS
   DONE
+  DEFERRED // consciously descoped at/near closeout — out of scope, not counted as open
 }
 
 enum SprintStatus {

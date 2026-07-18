@@ -1,10 +1,8 @@
 import { prisma } from '../../lib/prisma.js';
 import { NotFound } from '../../lib/errors.js';
-// Methodology dispatcher (AGILE → points, HYBRID → blended, else → WBS) so the closure
-// schedule check reflects the project's ACTUAL delivery approach — matching the Dashboard/
-// Portfolio/Forecast. Using WBS-only getEvm made an agile project's schedule read as "no
-// WBS" and a hybrid project's read ignore its agile stream.
-import { getProjectEvm } from '../agile/agile.service.js';
+// The WBS schedule gate (predictive + hybrid) uses the WBS engine directly; the agile scope
+// gate is ITEM-based (counted per status below), NOT story points — see closure.helpers.ts.
+import { getEvm } from '../schedule/schedule.service.js';
 import { actualCostAsOf } from '../cost/cost.service.js';
 import { assessClosureReadiness, type ClosureReadiness } from './closure.helpers.js';
 
@@ -20,31 +18,44 @@ export async function getClosureReadiness(projectId: string): Promise<ClosureRea
   });
   if (!project) throw NotFound('Project not found');
 
+  const usesWbs = project.deliveryApproach !== 'AGILE'; // predictive + hybrid have a WBS
+  const usesBacklog = project.deliveryApproach === 'AGILE' || project.deliveryApproach === 'HYBRID';
+
   const now = new Date();
-  const [evm, openChangeRequests, openHighRisks, openIssues, actualCost, openBacklogItems, lessonsCount, acceptedCount] =
+  const [wbsEvm, backlogGroups, openChangeRequests, openHighRisks, openIssues, actualCost, lessonsCount, acceptedCount] =
     await Promise.all([
-      getProjectEvm(projectId, undefined, now),
+      usesWbs ? getEvm(projectId, undefined, now) : Promise.resolve(null),
+      usesBacklog
+        ? prisma.backlogItem.groupBy({ by: ['status'], where: { projectId }, _count: { _all: true } })
+        : Promise.resolve([] as { status: string; _count: { _all: number } }[]),
       prisma.changeRequest.count({ where: { projectId, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } } }),
       prisma.risk.count({
         where: { projectId, severity: { in: ['HIGH', 'CRITICAL'] }, status: { in: ['IDENTIFIED', 'ANALYZING', 'PLANNED', 'OPEN'] } },
       }),
       prisma.issue.count({ where: { projectId, status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
       actualCostAsOf(projectId, now),
-      prisma.backlogItem.count({ where: { projectId, status: { not: 'DONE' } } }),
       prisma.lessonLearned.count({ where: { projectId } }),
       // A rejection isn't an acceptance — only ACCEPTED / ACCEPTED_WITH_CONDITIONS counts.
       prisma.acceptanceSignoff.count({ where: { projectId, decision: { in: ['ACCEPTED', 'ACCEPTED_WITH_CONDITIONS'] } } }),
     ]);
 
+  const countBy = (s: string) => backlogGroups.find((g) => g.status === s)?._count._all ?? 0;
+  const backlogDone = countBy('DONE');
+  const backlogDeferred = countBy('DEFERRED');
+  const backlogOpen = countBy('TODO') + countBy('IN_PROGRESS');
+
   return assessClosureReadiness({
-    leafTaskCount: evm.leafTaskCount,
-    scheduleProgress: evm.scheduleProgress,
+    deliveryApproach: project.deliveryApproach,
+    wbsLeafCount: wbsEvm?.leafTaskCount ?? 0,
+    wbsProgress: wbsEvm?.scheduleProgress ?? 0,
+    backlogTotal: backlogDone + backlogDeferred + backlogOpen,
+    backlogOpen,
+    backlogDone,
+    backlogDeferred,
     openChangeRequests,
     openHighRisks,
     openIssues,
     actualCost,
-    deliveryApproach: project.deliveryApproach,
-    openBacklogItems,
     lessonsCount,
     hasAcceptance: acceptedCount > 0,
   });

@@ -47,8 +47,11 @@ async function agileFractions(projectId: string, statusDate: Date) {
     prisma.backlogItem.findMany({ where: { projectId }, select: { storyPoints: true, status: true, sprintId: true } }),
     prisma.sprint.findMany({ where: { projectId }, select: { id: true, startDate: true, endDate: true } }),
   ]);
-  const totalPts = points(items);
-  const donePts = points(items.filter((i) => i.status === 'DONE'));
+  // DEFERRED items are consciously descoped — out of the plan, so they don't count toward
+  // EVM points, velocity or the item count.
+  const scoped = items.filter((i) => i.status !== 'DEFERRED');
+  const totalPts = points(scoped);
+  const donePts = points(scoped.filter((i) => i.status === 'DONE'));
   const progress = totalPts > 0 ? donePts / totalPts : 0;
   let plannedPts = 0;
   const now = statusDate.getTime();
@@ -57,12 +60,12 @@ async function agileFractions(projectId: string, statusDate: Date) {
     const start = sp.startDate.getTime();
     const end = sp.endDate.getTime();
     if (end <= start) continue;
-    const sprintPts = points(items.filter((i) => i.sprintId === sp.id));
+    const sprintPts = points(scoped.filter((i) => i.sprintId === sp.id));
     if (now >= end) plannedPts += sprintPts;
     else if (now > start) plannedPts += sprintPts * ((now - start) / (end - start));
   }
   const plannedProgress = totalPts > 0 ? plannedPts / totalPts : 0;
-  return { progress, plannedProgress, itemCount: items.length, totalPts };
+  return { progress, plannedProgress, itemCount: scoped.length, totalPts };
 }
 
 async function bacOf(projectId: string): Promise<number> {
