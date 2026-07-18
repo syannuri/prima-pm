@@ -25,7 +25,17 @@ export async function getAgile(projectId: string) {
     where: { sprint: { projectId } },
     orderBy: { date: 'asc' },
   });
-  return { sprints, items, snapshots };
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { mandaysPerPoint: true } });
+  return { sprints, items, snapshots, mandaysPerPoint: Number(project?.mandaysPerPoint ?? 1) };
+}
+
+// The story-point → man-days factor that drives agile capacity load. Guarded by the same
+// canWrite as the rest of the agile module; audited.
+export async function setMandaysPerPoint(projectId: string, value: number, userId: string) {
+  const before = await prisma.project.findUnique({ where: { id: projectId }, select: { mandaysPerPoint: true } });
+  await prisma.project.update({ where: { id: projectId }, data: { mandaysPerPoint: value } });
+  await writeAudit({ userId, projectId, entity: 'Project', entityId: projectId, action: 'UPDATE', before: { mandaysPerPoint: Number(before?.mandaysPerPoint ?? 1) }, after: { mandaysPerPoint: value } });
+  return { mandaysPerPoint: value };
 }
 
 const points = (arr: { storyPoints: number | null }[]) => arr.reduce((s, i) => s + (i.storyPoints ?? 0), 0);

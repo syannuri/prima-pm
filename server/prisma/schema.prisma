@@ -261,6 +261,9 @@ model Project {
   totalRevenueIdr Decimal? @db.Decimal(18, 2) // expected total revenue
   status    ProjectStatus @default(DRAFT)
   deliveryApproach DeliveryApproach @default(PREDICTIVE)
+  // Story-point → effort conversion for agile capacity: man-days a resource is loaded per
+  // assigned story point (spread over the item's sprint). Tune to the team's point scale.
+  mandaysPerPoint Decimal @default(1) @db.Decimal(6, 2)
   pmUserId  String?
   pm        User?         @relation("ProjectManager", fields: [pmUserId], references: [id])
   // When set, this is a personal (guest) project owned by that user. Only the owner can see

@@ -22,5 +22,10 @@ export const backlogItemSchema = z.object({
 });
 export const backlogItemUpdateSchema = backlogItemSchema.partial();
 
+// Story-point → man-days conversion factor used by the capacity/utilization view.
+export const agileSettingsSchema = z.object({
+  mandaysPerPoint: z.coerce.number().positive().max(100),
+});
+
 export type SprintInput = z.infer<typeof sprintSchema>;
 export type BacklogItemInput = z.infer<typeof backlogItemSchema>;

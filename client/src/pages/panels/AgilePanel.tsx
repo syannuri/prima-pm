@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { DragEvent as ReactDragEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
@@ -41,6 +41,19 @@ export default function AgilePanel({ projectId, approach, chartered }: { project
   const createSprint = useMutation({ mutationFn: (body: Record<string, unknown>) => api.post(`${base}/sprints`, body), onSuccess: () => { invalidate(); toast.success('Sprint created'); }, onError: onErr });
   const patchSprint = useMutation({ mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) => api.patch(`${base}/sprints/${id}`, body), onSuccess: invalidate, onError: onErr });
   const delSprint = useMutation({ mutationFn: (id: string) => api.del(`${base}/sprints/${id}`), onSuccess: () => { invalidate(); toast.success('Sprint deleted'); }, onError: onErr });
+  // Story-point → man-days factor for capacity. Local input state synced from the loaded value;
+  // saved on blur so the Resources/Utilization view loads assignees by (points × factor).
+  const [factor, setFactor] = useState('');
+  useEffect(() => { if (data) setFactor(String(data.mandaysPerPoint ?? 1)); }, [data]);
+  const setFactorMut = useMutation({
+    mutationFn: (v: number) => api.patch(`${base}/settings`, { mandaysPerPoint: v }),
+    onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ['resource-capacity'] }); toast.success('Capacity factor updated'); },
+    onError: onErr,
+  });
+  const saveFactor = () => {
+    const v = Number(factor);
+    if (data && v > 0 && v !== Number(data.mandaysPerPoint)) setFactorMut.mutate(v);
+  };
 
   const sprints = data?.sprints ?? [];
   const items = data?.items ?? [];
@@ -70,6 +83,20 @@ export default function AgilePanel({ projectId, approach, chartered }: { project
           ))}
         </div>
       </div>
+      {/* Capacity conversion: assigned story points × this factor load the assignee's resource
+          in the Resources → Utilization view (spread over the item's sprint). */}
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <span title="Turns assigned story points into resource capacity load in the Utilization view">Capacity load:</span>
+          <input
+            type="number" min={0.1} step={0.1} value={factor}
+            onChange={(e) => setFactor(e.target.value)} onBlur={saveFactor}
+            className="w-16 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+            aria-label="Man-days per story point"
+          />
+          <span>man-days per story point → feeds Resources → Utilization</span>
+        </div>
+      )}
 
       {view === 'reports' ? (
         <AgileReports sprints={sprints} items={items} snapshots={data?.snapshots ?? []} />

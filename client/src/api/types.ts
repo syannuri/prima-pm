@@ -115,7 +115,7 @@ export interface SprintSnapshot {
   committedPoints: number;
   remainingPoints: number;
 }
-export interface AgileBoard { sprints: Sprint[]; items: BacklogItem[]; snapshots: SprintSnapshot[] }
+export interface AgileBoard { sprints: Sprint[]; items: BacklogItem[]; snapshots: SprintSnapshot[]; mandaysPerPoint: number }
 
 export interface AppNotification {
   id: string;

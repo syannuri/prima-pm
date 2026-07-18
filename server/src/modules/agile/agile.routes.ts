@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
-import { sprintSchema, sprintUpdateSchema, backlogItemSchema, backlogItemUpdateSchema } from './agile.schemas.js';
+import { sprintSchema, sprintUpdateSchema, backlogItemSchema, backlogItemUpdateSchema, agileSettingsSchema } from './agile.schemas.js';
 import { evmQuerySchema } from '../schedule/schedule.schemas.js';
 import * as svc from './agile.service.js';
 
@@ -44,6 +44,11 @@ router.patch('/items/:itemId', canWrite, validateBody(backlogItemUpdateSchema), 
 router.delete('/items/:itemId', canWrite, asyncHandler(async (req, res) => {
   await svc.deleteItem(req.params.projectId, req.params.itemId, req.user!.id);
   res.status(204).end();
+}));
+
+// Story-point → man-days factor for agile capacity load.
+router.patch('/settings', canWrite, validateBody(agileSettingsSchema), asyncHandler(async (req, res) => {
+  res.json(await svc.setMandaysPerPoint(req.params.projectId, req.body.mandaysPerPoint, req.user!.id));
 }));
 
 export default router;

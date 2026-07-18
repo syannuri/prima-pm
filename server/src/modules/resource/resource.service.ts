@@ -75,5 +75,56 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
     consumedMandays: consumedByLine.get(i.id) ?? 0,
   }));
 
+  // Agile assignments → capacity: an assigned backlog item on an AGILE/HYBRID project, sitting
+  // in a DATED sprint, loads its assignee for (storyPoints × the project's mandaysPerPoint),
+  // spread over the sprint window. Resolved to the assignee's linked Resource where one exists
+  // (so agile + manpower load combine under one resource), else keyed by the user.
+  const agileItems = await prisma.backlogItem.findMany({
+    where: {
+      projectId: { in: projectIds },
+      assigneeUserId: { not: null },
+      storyPoints: { gt: 0 },
+      sprint: { is: { startDate: { not: null }, endDate: { not: null } } },
+      project: { deliveryApproach: { in: ['AGILE', 'HYBRID'] } },
+    },
+    select: {
+      storyPoints: true,
+      status: true,
+      assigneeUserId: true,
+      assignee: { select: { name: true } },
+      sprint: { select: { startDate: true, endDate: true } },
+      project: { select: { id: true, code: true, name: true, mandaysPerPoint: true } },
+    },
+  });
+  if (agileItems.length) {
+    const assigneeIds = [...new Set(agileItems.map((i) => i.assigneeUserId).filter((x): x is string => !!x))];
+    const resByUser = new Map<string, { id: string; name: string; capacityPerDay: number }>();
+    const resources = await prisma.resource.findMany({
+      where: { userId: { in: assigneeIds }, personalOwnerId: null },
+      select: { id: true, name: true, capacityPerDay: true, userId: true },
+    });
+    for (const r of resources) if (r.userId) resByUser.set(r.userId, { id: r.id, name: r.name, capacityPerDay: Number(r.capacityPerDay) });
+
+    const statusProgress = (s: string) => (s === 'DONE' ? 100 : s === 'IN_PROGRESS' ? 50 : 0);
+    for (const i of agileItems) {
+      const uid = i.assigneeUserId!;
+      const res = resByUser.get(uid);
+      inputs.push({
+        resourceKey: res ? `R:${res.id}` : `U:${uid}`,
+        resourceName: res?.name ?? i.assignee?.name ?? 'Unknown',
+        capacityPerDay: res?.capacityPerDay ?? 1,
+        personnelRole: null,
+        projectId: i.project.id,
+        projectCode: i.project.code,
+        projectName: i.project.name,
+        planMandays: (i.storyPoints ?? 0) * Number(i.project.mandaysPerPoint),
+        taskStart: i.sprint?.startDate ?? null,
+        taskEnd: i.sprint?.endDate ?? null,
+        progressPct: statusProgress(i.status),
+        consumedMandays: 0,
+      });
+    }
+  }
+
   return buildCapacityReport(inputs, granularity, q.from, q.to);
 }
