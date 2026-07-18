@@ -99,7 +99,7 @@ export default function LoginPage() {
       if (isGuest) await guestRegister(name.trim(), email, password);
       else await login(email, password);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : isGuest ? 'Could not create your account' : 'Login failed');
+      setError(err instanceof ApiError ? err.message : isGuest ? "Couldn't set up your workspace" : 'Login failed');
     } finally {
       setBusy(false);
     }
@@ -195,8 +195,8 @@ export default function LoginPage() {
               </div>
 
               <div className="mb-7 text-center">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{isGuest ? 'Create a guest account' : 'Welcome back'}</h1>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{isGuest ? 'Manage your own projects — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{isGuest ? 'Try Prismatix free' : 'Welcome back'}</h1>
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
               </div>
 
               <form onSubmit={submit} className="space-y-4">
@@ -219,7 +219,7 @@ export default function LoginPage() {
                   disabled={!canSubmit}
                   className="w-full bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 text-white shadow-lg shadow-brand-500/30 hover:from-brand-600 hover:to-brand-700"
                 >
-                  {busy ? (isGuest ? 'Creating…' : 'Signing in…') : isGuest ? 'Create account' : 'Sign in'}
+                  {busy ? (isGuest ? 'Setting up…' : 'Signing in…') : isGuest ? 'Start exploring' : 'Sign in'}
                 </Button>
               </form>
 
@@ -230,13 +230,13 @@ export default function LoginPage() {
                   </div>
                   {/* Google Identity Services renders its own button into this container. */}
                   <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />
-                  <p className="mt-2 text-center text-[11px] text-slate-400">Google sign-in creates a sandboxed guest account.</p>
+                  <p className="mt-2 text-center text-[11px] text-slate-400">Explore Prismatix in your own sandbox.</p>
                 </>
               )}
 
               <div className="mt-6 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
                 <button type="button" onClick={() => { setMode(isGuest ? 'signin' : 'guest'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
-                  {isGuest ? 'Have an account? Sign in' : 'New here? Create a guest account'}
+                  {isGuest ? 'Have an account? Sign in' : 'New here? Try Prismatix free'}
                 </button>
               </div>
             </div>
