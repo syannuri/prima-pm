@@ -84,6 +84,19 @@ export function createApp() {
         : undefined,
     ),
   );
+  // Permissions-Policy: deny powerful browser features the app never uses (helmet doesn't set
+  // this one). Belt-and-suspenders alongside the CSP.
+  app.use((_req, res, next) => {
+    res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=(), usb=()');
+    next();
+  });
+  // Defence-in-depth: never serve dot-paths (/.git, /.env, …). The SPA fallback would otherwise
+  // return index.html (200) for them — harmless (no real file is exposed) but noisy to scanners.
+  // Return a clean 404 instead. ACME's /.well-known is served by nginx, never reaches the app.
+  app.use((req, res, next) => {
+    if (/\/\./.test(req.path)) return res.status(404).type('txt').send('Not found');
+    next();
+  });
   app.use(cors({ origin: env.corsOrigin, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
   // Populate req.cookies so cookie-based auth (prima_at) and the CSRF double-submit check
