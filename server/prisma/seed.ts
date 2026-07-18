@@ -21,15 +21,19 @@ import { upsertRiskSchema } from '../src/modules/risk/risk.schemas.js';
 import { upsertTaskSchema } from '../src/modules/schedule/schedule.schemas.js';
 
 async function seedUsers() {
-  const password = await hashPassword('Password123!');
+  // Dev-only seed accounts. Password is configurable via SEED_PASSWORD so nothing weak is
+  // baked into the repo; emails use the reserved example.com domain so they're never mistaken
+  // for (or tried against) a real deployment. These exist only in a seeded dev/CI database.
+  const rawPassword = process.env.SEED_PASSWORD ?? 'DevSeed-2026!';
+  const password = await hashPassword(rawPassword);
   const defs: Array<{ name: string; email: string; role: any }> = [
-    { name: 'Alice Admin', email: 'admin@prismatix.id', role: 'ADMIN' },
-    { name: 'Pita PMO', email: 'pmo@prismatix.id', role: 'PMO' },
-    { name: 'Budi Project Manager', email: 'pm@prismatix.id', role: 'PROJECT_MANAGER' },
-    { name: 'Fani Finance', email: 'finance@prismatix.id', role: 'FINANCE' },
-    { name: 'Rudi Risk Officer', email: 'risk@prismatix.id', role: 'RISK_OFFICER' },
-    { name: 'Andi Team Member', email: 'pic@prismatix.id', role: 'TEAM_MEMBER' },
-    { name: 'Vera Viewer', email: 'viewer@prismatix.id', role: 'VIEWER' },
+    { name: 'Alice Admin', email: 'admin@example.com', role: 'ADMIN' },
+    { name: 'Pita PMO', email: 'pmo@example.com', role: 'PMO' },
+    { name: 'Budi Project Manager', email: 'pm@example.com', role: 'PROJECT_MANAGER' },
+    { name: 'Fani Finance', email: 'finance@example.com', role: 'FINANCE' },
+    { name: 'Rudi Risk Officer', email: 'risk@example.com', role: 'RISK_OFFICER' },
+    { name: 'Andi Team Member', email: 'pic@example.com', role: 'TEAM_MEMBER' },
+    { name: 'Vera Viewer', email: 'viewer@example.com', role: 'VIEWER' },
   ];
   const users: Record<string, { id: string }> = {};
   for (const d of defs) {
@@ -40,7 +44,7 @@ async function seedUsers() {
     });
     users[d.role] = u;
   }
-  console.log(`  ✓ ${defs.length} users (password for all: "Password123!")`);
+  console.log(`  ✓ ${defs.length} users (password: "${rawPassword}" — override with SEED_PASSWORD)`);
   return users;
 }
 

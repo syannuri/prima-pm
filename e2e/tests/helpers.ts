@@ -1,20 +1,17 @@
 import { Page, expect } from '@playwright/test';
 
-// Real accounts (demo accounts were deactivated). Passwords default to the values set
-// at account creation but are overridable via env so the suite survives password
-// rotation: E2E_ADMIN_PASSWORD / E2E_PM_PASSWORD / E2E_FINANCE_PASSWORD.
 export type Role = 'Admin' | 'Project Manager' | 'Finance';
 
-// Emails + passwords are env-overridable so the suite runs against the live prod DB
-// (real accounts) OR a freshly-seeded CI DB (seed accounts): set
-// E2E_{ADMIN,PM,FINANCE}_{EMAIL,PASSWORD}.
-// NO passwords are hard-coded here (this repo is public). CI sets E2E_*_PASSWORD for the
-// seed accounts (all Password123!); for a local run against the live DB, first export your
-// own E2E_ADMIN_PASSWORD / E2E_PM_PASSWORD / E2E_FINANCE_PASSWORD.
+// Emails + passwords are env-overridable so the suite runs against a freshly-seeded DB
+// (the dev-only example.com seed accounts, the defaults below) OR any other DB (e.g. the
+// live prod DB with its real accounts): set E2E_{ADMIN,PM,FINANCE}_{EMAIL,PASSWORD}.
+// NO password is hard-coded here (this repo is public): the default is empty, so a local
+// run must export E2E_*_PASSWORD (the seed password — SEED_PASSWORD, see server/prisma/seed.ts).
+// CI sets both the seed's SEED_PASSWORD and these E2E_*_PASSWORD to the same value.
 export const ACCOUNTS: Record<Role, { email: string; password: string }> = {
-  Admin: { email: process.env.E2E_ADMIN_EMAIL ?? 'mamed@prismatix.id', password: process.env.E2E_ADMIN_PASSWORD ?? '' },
-  'Project Manager': { email: process.env.E2E_PM_EMAIL ?? 'budi@prismatix.id', password: process.env.E2E_PM_PASSWORD ?? '' },
-  Finance: { email: process.env.E2E_FINANCE_EMAIL ?? 'sari-fina@prismatix.id', password: process.env.E2E_FINANCE_PASSWORD ?? '' },
+  Admin: { email: process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com', password: process.env.E2E_ADMIN_PASSWORD ?? '' },
+  'Project Manager': { email: process.env.E2E_PM_EMAIL ?? 'pm@example.com', password: process.env.E2E_PM_PASSWORD ?? '' },
+  Finance: { email: process.env.E2E_FINANCE_EMAIL ?? 'finance@example.com', password: process.env.E2E_FINANCE_PASSWORD ?? '' },
 };
 
 /** Log in by typing the real account's email + password. */

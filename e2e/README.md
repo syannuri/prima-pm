@@ -21,22 +21,24 @@ so a running stack is reused) and waits for `/health` before the suite begins.
 
 ## Accounts
 
-The suite logs in with the real accounts (the demo accounts were deactivated).
-Passwords default to the values set at account creation but are overridable via env
-so the suite survives password rotation:
+The suite logs in with the seeded **dev** accounts (`server/prisma/seed.ts`, on the
+reserved `example.com` domain). Emails and passwords are env-overridable, so you can also
+point the suite at any other DB (e.g. a live one with real accounts). No password is
+hard-coded — set the seed password via `SEED_PASSWORD` when seeding, and the same value in
+`E2E_*_PASSWORD` when running:
 
 ```bash
+SEED_PASSWORD=… npm --prefix ../server run db:seed
 E2E_ADMIN_PASSWORD=…   E2E_PM_PASSWORD=…   E2E_FINANCE_PASSWORD=…   npm test
 ```
 
-| Helper role        | Email           | Default env var        |
-|--------------------|-----------------|------------------------|
-| `Admin`            | mamed@prismatix.id     | `E2E_ADMIN_PASSWORD`   |
-| `Project Manager`  | budi@prismatix.id      | `E2E_PM_PASSWORD`      |
-| `Finance`          | sari-fina@prismatix.id | `E2E_FINANCE_PASSWORD` |
+| Helper role        | Default email       | Env overrides                          |
+|--------------------|---------------------|----------------------------------------|
+| `Admin`            | admin@example.com   | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`   |
+| `Project Manager`  | pm@example.com      | `E2E_PM_EMAIL` / `E2E_PM_PASSWORD`         |
+| `Finance`          | finance@example.com | `E2E_FINANCE_EMAIL` / `E2E_FINANCE_PASSWORD` |
 
-If a teammate changes their password via the app, set the matching env var (or update
-the default in `tests/helpers.ts`) before running.
+To run against a different DB/account, export the matching `E2E_*_EMAIL` / `E2E_*_PASSWORD`.
 
 ## Specs
 

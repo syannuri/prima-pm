@@ -94,6 +94,9 @@ jobs:
       # they must be present (any value; the seed only creates users, it never signs a token).
       JWT_ACCESS_SECRET: ci-e2e-access
       JWT_REFRESH_SECRET: ci-e2e-refresh
+      # Password for the dev seed accounts (server/prisma/seed.ts reads SEED_PASSWORD); the
+      # e2e step below logs in with the same value. Throwaway CI DB — not a real credential.
+      SEED_PASSWORD: Ci-Seed-Pass-2026
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -116,14 +119,14 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run full e2e suite (auth + portfolio + project)
         working-directory: e2e
-        # Point the suite at the SEED accounts (all Password123!) instead of the live-DB defaults.
+        # Point the suite at the seeded dev accounts (example.com) with the CI seed password.
         env:
-          E2E_ADMIN_EMAIL: admin@prismatix.id
-          E2E_PM_EMAIL: pm@prismatix.id
-          E2E_FINANCE_EMAIL: finance@prismatix.id
-          E2E_ADMIN_PASSWORD: Password123!
-          E2E_PM_PASSWORD: Password123!
-          E2E_FINANCE_PASSWORD: Password123!
+          E2E_ADMIN_EMAIL: admin@example.com
+          E2E_PM_EMAIL: pm@example.com
+          E2E_FINANCE_EMAIL: finance@example.com
+          E2E_ADMIN_PASSWORD: Ci-Seed-Pass-2026
+          E2E_PM_PASSWORD: Ci-Seed-Pass-2026
+          E2E_FINANCE_PASSWORD: Ci-Seed-Pass-2026
         run: npx playwright test --reporter=list
       - name: Upload Playwright artifacts on failure
         if: failure()
