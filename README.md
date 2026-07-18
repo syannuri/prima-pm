@@ -90,6 +90,18 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 | Reports | PDFKit (PDF) · ExcelJS (Excel) |
 | Tests | Vitest (unit) · Supertest (HTTP integration) · Playwright (E2E) |
 
+## 🧪 Continuous Integration
+
+Every push and pull request runs the full pipeline (GitHub Actions, [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — three jobs must go green:
+
+- **Server** — build + unit tests (Vitest) + HTTP integration tests (Supertest against a real PostgreSQL service), plus a production-dependency `npm audit` gate (fails on high/critical).
+- **Client** — TypeScript type-check + component tests (Vitest) + production build, with the same `npm audit` gate.
+- **E2E** — the full Playwright suite (Chromium) against a freshly migrated + seeded database, covering login / RBAC and the core project workflows.
+
+The status badge at the top of this README links straight to the latest run:
+
+![README header showing the green “CI passing” status badge](docs/screenshots/ci-badge.png)
+
 ## 🏛️ Architecture
 
 - **Pure calc core** (`server/src/calc/*`): money, cost rollup, risk EMV, EVM — all pure & unit-tested. Money is `Decimal`.
