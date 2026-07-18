@@ -80,7 +80,9 @@ export default function AgilePanel({ projectId, approach, chartered }: { project
           activeSprintId={activeSprintId}
           setBoardSprint={setBoardSprint}
           canEdit={canEdit}
+          users={users}
           onMove={(id, status) => patchItem.mutate({ id, body: { status } })}
+          onAssign={(id, assigneeUserId) => patchItem.mutate({ id, body: { assigneeUserId } })}
         />
       ) : (
         <BacklogView
@@ -110,9 +112,11 @@ function Points({ n }: { n: number | null }) {
 }
 
 // ---------- Board (Kanban) ----------
-function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, onMove }: {
+function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, users, onMove, onAssign }: {
   sprints: Sprint[]; items: BacklogItem[]; activeSprintId: string; setBoardSprint: (id: string) => void; canEdit: boolean;
+  users: User[];
   onMove: (id: string, status: BacklogStatus) => void;
+  onAssign: (id: string, assigneeUserId: string | null) => void;
 }) {
   // Drag state: which card is being dragged, and which column is hovered.
   const [dragId, setDragId] = useState<string | null>(null);
@@ -182,8 +186,21 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, on
                       <Points n={it.storyPoints} />
                     </div>
                     <div className="text-sm text-slate-700 dark:text-slate-200">{it.title}</div>
-                    <div className="mt-1.5 flex items-center justify-between">
-                      <span className="truncate text-xs text-slate-500 dark:text-slate-400">{it.assignee ? `👤 ${it.assignee.name}` : 'Unassigned'}</span>
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      {canEdit ? (
+                        <select
+                          value={it.assignee?.id ?? ''}
+                          onChange={(e) => onAssign(it.id, e.target.value || null)}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          title="Assign to a person"
+                          className="min-w-0 flex-1 truncate rounded border border-slate-200 bg-white px-1 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+                        >
+                          <option value="">👤 Unassigned</option>
+                          {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                      ) : (
+                        <span className="truncate text-xs text-slate-500 dark:text-slate-400">{it.assignee ? `👤 ${it.assignee.name}` : 'Unassigned'}</span>
+                      )}
                       {canEdit && (
                         <span className="flex gap-1">
                           <button onClick={() => move(it, -1)} disabled={it.status === 'TODO'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to previous column">◀</button>
@@ -244,7 +261,19 @@ function BacklogView({ sprints, backlog, items, users, canEdit, onCreateItem, on
           {sprints.map((s) => <option key={s.id} value={s.id}>🏃 {s.name}</option>)}
         </select>
       ) : it.sprintId ? <span className="text-xs text-slate-400">in sprint</span> : null}
-      <span className="w-24 truncate text-xs text-slate-500 dark:text-slate-400">{it.assignee ? it.assignee.name : '—'}</span>
+      {canEdit ? (
+        <select
+          value={it.assignee?.id ?? ''}
+          onChange={(e) => onPatchItem(it.id, { assigneeUserId: e.target.value || null })}
+          title="Assign to a person"
+          className="w-28 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+        >
+          <option value="">👤 Unassigned</option>
+          {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+      ) : (
+        <span className="w-24 truncate text-xs text-slate-500 dark:text-slate-400">{it.assignee ? it.assignee.name : '—'}</span>
+      )}
       {canEdit && <button onClick={() => onDeleteItem(it)} className="text-xs text-red-500 hover:underline">delete</button>}
     </div>
   );
