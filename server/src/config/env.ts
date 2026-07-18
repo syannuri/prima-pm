@@ -34,6 +34,11 @@ export const env = {
   // to personal projects). OFF by default — this is the one open-registration path, so it
   // must be explicitly enabled per deployment. The endpoint 403s while disabled.
   guestSignupEnabled: process.env.GUEST_SIGNUP_ENABLED === 'true',
+  // Google "Sign in with Google" is enabled by setting GOOGLE_CLIENT_ID to the OAuth 2.0
+  // Web client ID. When empty the endpoint 403s and the client hides the button. The Client
+  // ID is not a secret (it ships in the browser), but gating on it keeps the feature opt-in
+  // per deployment. New Google users are created as sandboxed GUESTs (like guest signup).
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
 } as const;
 
 export const isProd = env.nodeEnv === 'production';

@@ -6,6 +6,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib
 import { Unauthorized, Forbidden, Conflict } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
 import { env } from '../../config/env.js';
+import { verifyGoogleIdToken } from '../../lib/google.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput } from './auth.schemas.js';
 
 interface AuthResult {
@@ -83,6 +84,50 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
   });
   await writeAudit({ userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
   return issueTokenPair(user);
+}
+
+// "Sign in with Google" — the open, sandboxed jalur: any Google account may sign in, and a
+// first-time user is auto-provisioned as a GUEST (same sandbox as guest signup). SECURITY: to
+// stop a Google-email collision from hijacking a staff account, Google only ever manages GUEST
+// accounts — if the verified email already belongs to a NON-guest (staff) user, we refuse and
+// tell them to use their password. Existing accounts match by the stable Google `sub` first,
+// then (first link) by email. Gated by GOOGLE_CLIENT_ID.
+export async function loginWithGoogle(credential: string): Promise<AuthResult> {
+  if (!env.googleClientId) throw Forbidden('Google sign-in is not enabled');
+
+  let identity;
+  try {
+    identity = await verifyGoogleIdToken(credential);
+  } catch {
+    throw Unauthorized('Invalid Google token');
+  }
+  if (!identity.emailVerified) throw Unauthorized('Your Google account email is not verified');
+
+  // 1) Already linked to this Google identity → that account.
+  const bySub = await prisma.user.findUnique({ where: { googleSub: identity.sub } });
+  if (bySub) {
+    if (!bySub.isActive) throw Unauthorized('This account is deactivated');
+    await writeAudit({ userId: bySub.id, entity: 'User', entityId: bySub.id, action: 'LOGIN', after: { via: 'google' } });
+    return issueTokenPair(bySub);
+  }
+
+  // 2) An account with this email exists but isn't linked yet.
+  const byEmail = await prisma.user.findUnique({ where: { email: identity.email } });
+  if (byEmail) {
+    // Google manages only GUEST accounts — never let it authenticate into a staff account.
+    if (byEmail.role !== 'GUEST') throw Forbidden('This email belongs to a staff account — sign in with your password.');
+    if (!byEmail.isActive) throw Unauthorized('This account is deactivated');
+    const linked = await prisma.user.update({ where: { id: byEmail.id }, data: { googleSub: identity.sub } });
+    await writeAudit({ userId: linked.id, entity: 'User', entityId: linked.id, action: 'LOGIN', after: { via: 'google', linked: true } });
+    return issueTokenPair(linked);
+  }
+
+  // 3) First-time Google user → provision a sandboxed GUEST (no local password).
+  const created = await prisma.user.create({
+    data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST' },
+  });
+  await writeAudit({ userId: created.id, entity: 'User', entityId: created.id, action: 'CREATE', after: { email: created.email, role: 'GUEST', via: 'google', self: true } });
+  return issueTokenPair(created);
 }
 
 // Rotating refresh: verify the presented token, then swap it for a brand-new pair. The old

@@ -55,10 +55,16 @@ export function createApp() {
                 // client/index.html (anti-FOUC) WITHOUT opening up 'unsafe-inline'.
                 // If that <script> body changes, regenerate the hash (the browser
                 // console reports the expected sha256 when it blocks it).
-                scriptSrc: ["'self'", "'sha256-gJ9Qv9VU/346gdpDRI3qPE9+6RkSI+W4FxyEcgZFlyY='"],
-                styleSrc: ["'self'", "'unsafe-inline'"],
+                scriptSrc: ["'self'", "'sha256-gJ9Qv9VU/346gdpDRI3qPE9+6RkSI+W4FxyEcgZFlyY='",
+                  // Google Identity Services (the "Sign in with Google" button) — only when enabled.
+                  ...(env.googleClientId ? ['https://accounts.google.com/gsi/client'] : [])],
+                styleSrc: ["'self'", "'unsafe-inline'",
+                  ...(env.googleClientId ? ['https://accounts.google.com/gsi/style'] : [])],
                 imgSrc: ["'self'", 'data:'],
-                connectSrc: ["'self'"],
+                connectSrc: ["'self'",
+                  ...(env.googleClientId ? ['https://accounts.google.com/gsi/'] : [])],
+                // GIS renders its button/one-tap prompt in an iframe from this origin.
+                ...(env.googleClientId ? { frameSrc: ['https://accounts.google.com/gsi/'] } : {}),
                 objectSrc: ["'none'"],
                 baseUri: ["'self'"],
                 // Force sub-resources to HTTPS only when we're actually on HTTPS —

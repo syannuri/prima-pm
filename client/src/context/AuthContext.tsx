@@ -7,6 +7,7 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   guestRegister: (name: string, email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -48,6 +49,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   };
 
+  // Sign in with Google — post the ID token (credential) from Google Identity Services; the
+  // server verifies it and matches/creates a sandboxed GUEST, setting the same cookie session.
+  const loginWithGoogle = async (credential: string) => {
+    const res = await api.post<{ user: User }>('/auth/google', { credential });
+    tokenStore.clear();
+    setUser(res.user);
+  };
+
   const logout = () => {
     // Best-effort server-side revocation (bumps tokenVersion so the tokens can't be
     // reused elsewhere); clear locally regardless of the network result.
@@ -56,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, loading, login, guestRegister, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, login, guestRegister, loginWithGoogle, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {

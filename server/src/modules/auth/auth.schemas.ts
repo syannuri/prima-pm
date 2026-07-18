@@ -40,6 +40,12 @@ export const guestRegisterSchema = z.object({
 
 // refreshToken is optional in the body: the browser sends it as an httpOnly cookie instead
 // (the controller reads cookie-or-body). Legacy/automation clients may still post it here.
+// Google sign-in: the client posts the ID token (JWT credential) returned by Google Identity
+// Services. The server verifies it against Google and derives the account from its claims.
+export const googleLoginSchema = z.object({
+  credential: z.string().min(20),
+});
+
 export const refreshSchema = z.object({
   refreshToken: z.string().min(10).optional(),
 });
@@ -56,5 +62,6 @@ export const changePasswordSchema = z
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type GuestRegisterInput = z.infer<typeof guestRegisterSchema>;
+export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Button, Field, Input } from '../components/ui';
-import { ApiError } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { isEmailValid } from '../lib/formValidation';
 
 const HIGHLIGHTS = [
@@ -10,14 +10,81 @@ const HIGHLIGHTS = [
   'Keep schedules, budgets and people in sync',
 ];
 
+// Google Identity Services is injected at runtime (not bundled) — the button only appears when
+// the deployment enables Google sign-in (GOOGLE_CLIENT_ID set), fetched from /auth/providers.
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    google?: any;
+  }
+}
+let gisPromise: Promise<void> | null = null;
+function loadGoogleIdentityServices(): Promise<void> {
+  if (gisPromise) return gisPromise;
+  gisPromise = new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) return resolve();
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+    document.head.appendChild(s);
+  });
+  return gisPromise;
+}
+
 export default function LoginPage() {
-  const { login, guestRegister } = useAuth();
+  const { login, guestRegister, loginWithGoogle } = useAuth();
   const [mode, setMode] = useState<'signin' | 'guest'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState('');
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+
+  // Ask the server which providers are on. Google's client ID is public, so it's safe to send.
+  useEffect(() => {
+    api
+      .get<{ google?: { enabled: boolean; clientId: string } }>('/auth/providers')
+      .then((p) => { if (p.google?.enabled && p.google.clientId) setGoogleClientId(p.google.clientId); })
+      .catch(() => {});
+  }, []);
+
+  // Render Google's official button once we have a client ID + the GIS script.
+  useEffect(() => {
+    if (!googleClientId) return;
+    let cancelled = false;
+    loadGoogleIdentityServices()
+      .then(() => {
+        if (cancelled || !window.google?.accounts?.id || !googleBtnRef.current) return;
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: async (resp: { credential?: string }) => {
+            if (!resp?.credential) return;
+            setError('');
+            setBusy(true);
+            try {
+              await loginWithGoogle(resp.credential);
+            } catch (err) {
+              setError(err instanceof ApiError ? err.message : 'Google sign-in failed');
+            } finally {
+              setBusy(false);
+            }
+          },
+        });
+        googleBtnRef.current.innerHTML = '';
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          type: 'standard', theme: 'filled_black', size: 'large', text: 'continue_with', shape: 'rectangular', width: 320,
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // loginWithGoogle is stable across this page's lifetime (auth state doesn't change here).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleClientId]);
 
   const emailOk = isEmailValid(email);
   const isGuest = mode === 'guest';
@@ -156,17 +223,14 @@ export default function LoginPage() {
                 </Button>
               </form>
 
-              {isGuest && (
+              {googleClientId && (
                 <>
                   <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-slate-400">
                     <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" /> or <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" />
                   </div>
-                  {/* Google sign-in — arrives once a public domain + OAuth client ID are set up. */}
-                  <button type="button" disabled title="Coming soon — needs a public domain + Google OAuth setup" className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-400 dark:border-slate-700">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4 opacity-60" aria-hidden><path fill="#4285F4" d="M22.5 12.2c0-.7-.06-1.4-.18-2.06H12v3.9h5.9a5 5 0 0 1-2.19 3.3v2.74h3.54c2.07-1.9 3.25-4.71 3.25-7.88Z"/><path fill="#34A853" d="M12 23c2.94 0 5.42-.97 7.22-2.64l-3.54-2.74c-.98.66-2.24 1.05-3.68 1.05-2.83 0-5.23-1.91-6.08-4.48H2.27v2.82A11 11 0 0 0 12 23Z"/><path fill="#FBBC05" d="M5.92 14.19a6.6 6.6 0 0 1 0-4.38V6.99H2.27a11 11 0 0 0 0 9.82l3.65-2.62Z"/><path fill="#EA4335" d="M12 5.34c1.6 0 3.03.55 4.16 1.62l3.12-3.12A11 11 0 0 0 2.27 6.99l3.65 2.82C6.77 7.25 9.17 5.34 12 5.34Z"/></svg>
-                    Sign in with Google
-                    <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-700 dark:text-slate-300">soon</span>
-                  </button>
+                  {/* Google Identity Services renders its own button into this container. */}
+                  <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />
+                  <p className="mt-2 text-center text-[11px] text-slate-400">Google sign-in creates a sandboxed guest account.</p>
                 </>
               )}
 

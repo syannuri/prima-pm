@@ -6,6 +6,9 @@ export function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, ROUNDS);
 }
 
-export function verifyPassword(plain: string, hash: string): Promise<boolean> {
+// hash may be null for OAuth-only accounts (Google sign-in) that never set a local password —
+// such an account can never authenticate via the password path, so return false.
+export function verifyPassword(plain: string, hash: string | null | undefined): Promise<boolean> {
+  if (!hash) return Promise.resolve(false);
   return bcrypt.compare(plain, hash);
 }

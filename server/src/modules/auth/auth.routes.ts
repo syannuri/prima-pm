@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authRateLimit } from '../../middleware/rateLimit.js';
-import { changePasswordSchema, guestRegisterSchema, loginSchema, refreshSchema } from './auth.schemas.js';
+import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, refreshSchema } from './auth.schemas.js';
 import * as ctrl from './auth.controller.js';
 
 const router = Router();
@@ -23,6 +23,9 @@ const loginLimiter = authRateLimit({
   },
 });
 const refreshLimiter = authRateLimit({ windowMs: FIFTEEN_MIN, max: 30, name: 'refresh' });
+// Throttle Google sign-in per IP (the email isn't in the request body — it's inside the signed
+// token — so IP is the only pre-verification dimension available).
+const googleLimiter = authRateLimit({ windowMs: FIFTEEN_MIN, max: 20, name: 'google' });
 // Throttle guest signups per IP AND per target email (mirrors login) to blunt bulk abuse of
 // the one open-registration path.
 const guestLimiter = authRateLimit({
@@ -37,8 +40,12 @@ const guestLimiter = authRateLimit({
 
 // Corporate self-registration stays disabled (accounts are ADMIN-provisioned via POST /users).
 // The ONLY open signup is the sandboxed GUEST path below, itself gated by GUEST_SIGNUP_ENABLED.
+// Public: which sign-in providers this deployment offers (Google client ID, guest signup).
+router.get('/providers', ctrl.providersHandler);
 router.post('/guest/register', guestLimiter, validateBody(guestRegisterSchema), asyncHandler(ctrl.guestRegisterHandler));
 router.post('/login', loginLimiter, validateBody(loginSchema), asyncHandler(ctrl.loginHandler));
+// Sign in with Google → matches/creates a sandboxed GUEST (gated by GOOGLE_CLIENT_ID).
+router.post('/google', googleLimiter, validateBody(googleLoginSchema), asyncHandler(ctrl.googleHandler));
 router.post('/refresh', refreshLimiter, validateBody(refreshSchema), asyncHandler(ctrl.refreshHandler));
 router.get('/me', requireAuth, asyncHandler(ctrl.meHandler));
 router.post('/change-password', requireAuth, validateBody(changePasswordSchema), asyncHandler(ctrl.changePasswordHandler));

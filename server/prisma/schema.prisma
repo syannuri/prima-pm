@@ -193,7 +193,12 @@ model User {
   id           String   @id @default(uuid())
   name         String
   email        String   @unique
-  passwordHash String
+  // Nullable: accounts created via Google sign-in (role GUEST) have no local password —
+  // they authenticate only through the OAuth provider. Password login rejects a null hash.
+  passwordHash String?
+  // Google account subject (the stable per-user `sub` claim). Set when a user signs in with
+  // Google; unique so an account binds to exactly one Google identity. Null for password users.
+  googleSub    String?  @unique
   role         Role     @default(VIEWER)
   isActive     Boolean  @default(true)
   // Bumped to revoke every outstanding token for this user (logout, password change/reset,
