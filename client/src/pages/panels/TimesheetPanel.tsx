@@ -100,38 +100,19 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Pre-entry context: remaining budget (Direct/Indirect) + man-day headroom, shown BEFORE
-          you log time (logging updates AC via "Fill AC from timesheet" on the Cost tab). */}
+      {/* Pre-entry context as a compact strip (was a full card): remaining budget + man-day headroom. */}
       {lines.length > 0 && (
-        <Card>
-          <SectionTitle sub="Where the budget and effort stand before you log — so you can see the remaining headroom.">
-            Remaining budget &amp; man-days
-          </SectionTitle>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {hasBudget ? (
-              <>
-                <RemainingCost title="Direct" budget={directBudget} actual={directActual} actualHint="labour + direct spend" />
-                <RemainingCost title="Indirect" budget={indirectBudget} actual={indirectActual} actualHint="indirect spend" />
-              </>
-            ) : (
-              <div className="rounded-lg border border-dashed border-slate-200 p-3 text-sm text-slate-500 sm:col-span-2 dark:border-slate-700 dark:text-slate-400">
-                No cost baseline yet — set Direct/Indirect budgets in the Cost tab to see remaining budget here.
-              </div>
-            )}
-            {/* Man-day headroom across all teams (per-team detail is in the effort table below). */}
-            <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Man-days (all teams)</div>
-              <div className="mt-1 flex items-baseline justify-between">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Remaining</span>
-                <span className={`text-lg font-semibold tabular-nums ${remClass(remainingMandays)}`}>{formatNum(remainingMandays, 1)}</span>
-              </div>
-              <div className="mt-1 flex justify-between text-xs text-slate-400">
-                <span>Plan {formatNum(totals.planMandays, 0)}</span>
-                <span>Logged {formatNum(totals.consumedMandays, 1)}</span>
-              </div>
-            </div>
-          </div>
-        </Card>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900">
+          {hasBudget ? (
+            <>
+              <StripStat label="Direct left" value={formatIdr(directBudget - directActual)} tone={remClass(directBudget - directActual)} />
+              <StripStat label="Indirect left" value={formatIdr(indirectBudget - indirectActual)} tone={remClass(indirectBudget - indirectActual)} />
+            </>
+          ) : (
+            <span className="text-sm text-slate-500 dark:text-slate-400">No cost baseline yet — set Direct/Indirect budgets in the Cost tab.</span>
+          )}
+          <StripStat label="Man-days left" value={formatNum(remainingMandays, 1)} tone={remClass(remainingMandays)} sub={`plan ${formatNum(totals.planMandays, 0)} · logged ${formatNum(totals.consumedMandays, 1)}`} />
+        </div>
       )}
 
       {/* Log form first — the primary action (matches My Timesheet). */}
@@ -265,21 +246,15 @@ export default function TimesheetPanel({ projectId }: { projectId: string }) {
   );
 }
 
-// One budget line: Direct or Indirect — budget, actual so far, and the remaining headroom
-// (red once actual exceeds budget). Money is IDR-formatted.
-function RemainingCost({ title, budget, actual, actualHint }: { title: string; budget: number; actual: number; actualHint: string }) {
-  const remaining = budget - actual;
+// Compact header stat for the timesheet strip: label + value, optional red tone + sub-note.
+function StripStat({ label, value, tone, sub }: { label: string; value: string; tone?: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{title}</div>
-      <div className="mt-1 flex items-baseline justify-between">
-        <span className="text-sm text-slate-500 dark:text-slate-400">Remaining</span>
-        <span className={`text-lg font-semibold tabular-nums ${remClass(remaining)}`}>{formatIdr(remaining)}</span>
-      </div>
-      <div className="mt-1 space-y-0.5 text-xs text-slate-400">
-        <div className="flex justify-between"><span>Budget</span><span className="tabular-nums">{formatIdr(budget)}</span></div>
-        <div className="flex justify-between"><span>Actual <span className="text-slate-300 dark:text-slate-600">({actualHint})</span></span><span className="tabular-nums">{formatIdr(actual)}</span></div>
-      </div>
+    <div className="flex flex-col">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</span>
+      <span className={`text-sm font-semibold tabular-nums ${tone || 'text-slate-800 dark:text-slate-100'}`}>
+        {value}
+        {sub && <span className="ml-1.5 text-xs font-normal normal-case text-slate-400">{sub}</span>}
+      </span>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
-import { Button, Card, Input, MoneyInput, SectionTitle, Select, Spinner } from '../../components/ui';
+import { Button, Card, Input, MoneyInput, Select, Spinner } from '../../components/ui';
 import BaselineLock from '../../components/BaselineLock';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -50,8 +50,25 @@ function flattenLeaves(nodes: GanttNode[]): GanttNode[] {
   return nodes.flatMap((n) => (n.children?.length ? flattenLeaves(n.children) : [n]));
 }
 
+// Accordion section header: chevron + title + line count on the left, total on the right.
+// Always visible; clicking it expands/collapses the section body.
+function AccordionHeader({ title, count, total, open, onToggle }: { title: string; count: number; total: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button onClick={onToggle} aria-expanded={open} className="-m-1 flex w-full items-center justify-between gap-3 rounded-lg p-1 text-left">
+      <span className="flex min-w-0 items-center gap-2">
+        <svg viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+        <span className="font-semibold text-slate-800 dark:text-slate-100">{title}</span>
+        <span className="text-xs text-slate-400">{count} {count === 1 ? 'line' : 'lines'}</span>
+      </span>
+      <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900 dark:text-white">{total}</span>
+    </button>
+  );
+}
+
 export default function CostPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
+  const [open, setOpen] = useState({ direct: true, indirect: false, actual: false });
+  const toggle = (k: 'direct' | 'indirect' | 'actual') => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const base = `/projects/${projectId}/cost`;
   const { data, isLoading } = useQuery({
     queryKey: ['cost', projectId],
@@ -88,14 +105,15 @@ export default function CostPanel({ projectId }: { projectId: string }) {
         <CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} />
       )}
 
-      <DirectCosts data={data!} base={base} onChange={invalidate} />
-      <IndirectCosts data={data!} base={base} onChange={invalidate} />
-      <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} />
+      {/* Cost lines as collapsible accordion sections (header + total always visible). */}
+      <DirectCosts data={data!} base={base} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} />
+      <IndirectCosts data={data!} base={base} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} />
+      <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.actual} onToggle={() => toggle('actual')} />
     </div>
   );
 }
 
-function ActualCosts({ data, base, projectId, onChange }: { data: CostSummary; base: string; projectId: string; onChange: () => void }) {
+function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const canWrite = useProjectWrite(projectId, ['FINANCE']);
@@ -155,9 +173,9 @@ function ActualCosts({ data, base, projectId, onChange }: { data: CostSummary; b
 
   return (
     <Card>
-      <SectionTitle sub="Real money spent — recorded here manually. It is NOT taken from % progress (that drives Earned Value). CPI = EV ÷ AC.">
-        Actual Cost (AC) — {formatIdr(data.actualCostTotal)} total
-      </SectionTitle>
+      <AccordionHeader title="Actual cost (AC)" count={data.actualCosts.length} total={formatIdr(data.actualCostTotal)} open={open} onToggle={onToggle} />
+      {open && (<div className="mt-3">
+      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Real money spent — recorded here manually. It is NOT taken from % progress (that drives Earned Value). CPI = EV ÷ AC.</p>
 
       {/* How AC relates to progress / Earned Value, so AC = 0 isn't mistaken for a bug. */}
       {e && (
@@ -264,6 +282,7 @@ function ActualCosts({ data, base, projectId, onChange }: { data: CostSummary; b
         <Input className="col-span-2 md:col-span-1" aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
         <Button className="col-span-2 md:col-span-1" onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
       </div>
+      </div>)}
     </Card>
   );
 }
@@ -305,7 +324,7 @@ function CharterVariance({ charter, bac }: { charter: number; bac: number }) {
   );
 }
 
-function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string; onChange: () => void }) {
+function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSummary; base: string; onChange: () => void; open: boolean; onToggle: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [type, setType] = useState('TECHNOLOGY_CLOUD');
@@ -421,7 +440,9 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
 
   return (
     <Card>
-      <SectionTitle sub="Material (qty × unit cost) and Manpower (rate × mandays)">Direct Cost</SectionTitle>
+      <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} />
+      {open && (<div className="mt-3">
+      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Material (qty × unit cost) and Manpower (rate × mandays)</p>
       {/* Desktop: table. Mobile (< sm): a card list below (same handlers/state). */}
       <div className="hidden overflow-x-auto sm:block">
         <table className="prima-rows w-full text-sm">
@@ -678,11 +699,12 @@ function DirectCosts({ data, base, onChange }: { data: CostSummary; base: string
         <span className="text-slate-500 dark:text-slate-400" title="Recorded direct total + this new line">New Direct total: <span className="font-bold tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal + addAmount)}</span></span>
       </div>
       {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+      </div>)}
     </Card>
   );
 }
 
-function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: string; onChange: () => void }) {
+function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSummary; base: string; onChange: () => void; open: boolean; onToggle: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [type, setType] = useState('TRANSPORTATION');
@@ -722,7 +744,9 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
 
   return (
     <Card>
-      <SectionTitle sub="Overhead: transport, accommodation, meals, communication, supplies, venue…">Indirect Cost</SectionTitle>
+      <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} />
+      {open && (<div className="mt-3">
+      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Overhead: transport, accommodation, meals, communication, supplies, venue…</p>
       {/* Desktop: table. Mobile (< sm): card list below (same edit/delete handlers). */}
       <div className="hidden overflow-x-auto sm:block">
         <table className="prima-rows w-full text-sm">
@@ -842,6 +866,7 @@ function IndirectCosts({ data, base, onChange }: { data: CostSummary; base: stri
         <span className="text-slate-300 dark:text-slate-600">·</span>
         <span className="text-slate-500 dark:text-slate-400" title="Recorded indirect total + this new line">New Indirect total: <span className="font-bold tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal + addAmount)}</span></span>
       </div>
+      </div>)}
     </Card>
   );
 }
