@@ -234,7 +234,7 @@ function CreateUser({ onChange }: { onChange: () => void }) {
           {!!name && !nameOk && <span className="mt-1 block text-xs text-red-500">At least 2 characters</span>}
         </Field>
         <Field label="Email">
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prismatix.id" state={fieldState(email, emailOk)} />
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="User email" state={fieldState(email, emailOk)} />
           {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">Enter a valid email address</span>}
         </Field>
         <Field label="Role">
@@ -290,7 +290,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: (
             {!!name && !nameOk && <span className="mt-1 block text-xs text-red-500">At least 2 characters</span>}
           </Field>
           <Field label="Email">
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@prismatix.id" state={fieldState(email, emailOk)} />
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="User email" state={fieldState(email, emailOk)} />
             {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">Enter a valid email address</span>}
           </Field>
           {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
