@@ -11,7 +11,10 @@ npm --prefix server install
 npm --prefix client install
 
 echo "==> Building client (Vite → client/dist)"
-npm --prefix client run build
+# Same-origin production build: the browser calls the serving Express origin. Default to a
+# relative API path so a fresh VPS build (which has no client/.env — it's gitignored) does
+# NOT bake in the localhost fallback. Override by exporting VITE_API_URL for split-origin.
+VITE_API_URL="${VITE_API_URL:-/api/v1}" npm --prefix client run build
 
 echo "==> Building server (Prisma generate + tsc → server/dist)"
 npm --prefix server run build

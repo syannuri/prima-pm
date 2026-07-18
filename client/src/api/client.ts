@@ -1,5 +1,10 @@
 // Thin fetch wrapper: injects the bearer token, auto-refreshes on 401, parses JSON.
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/v1';
+// Relative by default so a production build (served by the Express origin) and dev (Vite
+// proxies /api → backend) both work WITHOUT a build-time VITE_API_URL. The old absolute
+// localhost default silently broke VPS builds that lacked client/.env (the browser called
+// the user's own machine, blocked by CSP connect-src 'self'). Override VITE_API_URL only
+// for split-origin setups.
+const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1';
 
 const TOKEN_KEY = 'prima_token';
 const REFRESH_KEY = 'prima_refresh';
