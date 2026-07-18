@@ -10,6 +10,18 @@
   html.dark {
     color-scheme: dark;
   }
+  /* iOS Safari zooms in on any focused form control whose font-size is < 16px and never
+     zooms back out, so the page ends up "not fitting the screen". Force a 16px minimum on
+     phones for ANY form control (incl. raw date/search inputs that don't use our <Input>).
+     Element-selector specificity is below Tailwind utilities, so desktop text-sm still wins;
+     this only lifts controls that would otherwise be under 16px. */
+  @media (max-width: 639px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
   /* Default border colour in dark mode for elements using bare `border`/`border-b`
      utilities (explicit dark:border-* classes still override this). */
   html.dark *,

@@ -61,8 +61,11 @@ export function Field({ label, children, hint, required, error }: { label: strin
   );
 }
 
+// text-base (16px) on mobile prevents iOS Safari from auto-zooming when a field is focused
+// (it zooms any control whose font-size is < 16px and never zooms back — the page then reads
+// as "not fitting the screen"). Desktop keeps the tighter text-sm (14px) at sm: and up.
 const inputBase =
-  'w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-1 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500';
+  'w-full rounded-lg border bg-white px-3 py-2 text-base sm:text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-1 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500';
 // Border/ring colour reflects live validation: neutral until touched, green when the
 // value matches its required format, red when it's present but malformed.
 const inputBorder = {
