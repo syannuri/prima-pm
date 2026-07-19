@@ -339,10 +339,12 @@ const GROUP_LABEL_ID: Record<string, string> = {
 // Domain groups hidden from the phone tab bar (still reachable on desktop) — keeps the
 // mobile strip focused on the core delivery domains.
 const MOBILE_HIDDEN_GROUPS = new Set(['Quality', 'Closing', 'Governance & Audit']);
+// Individual sub-tabs hidden on phones (kept on desktop).
+const MOBILE_HIDDEN_TABS = new Set<Tab>(['Kick-Off']);
 
 function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tabs: Tab[]; activeTab: Tab; changeCount: number; isMobile: boolean; onSelect: (t: Tab) => void }) {
   const groups = TAB_GROUPS
-    .map((g) => ({ label: g.label, tabs: g.tabs.filter((t) => tabs.includes(t)) }))
+    .map((g) => ({ label: g.label, tabs: g.tabs.filter((t) => tabs.includes(t) && !(isMobile && MOBILE_HIDDEN_TABS.has(t))) }))
     .filter((g) => g.tabs.length > 0 && !(isMobile && MOBILE_HIDDEN_GROUPS.has(g.label)));
   // The active group is whichever contains the active tab — its sub-tabs get the second row.
   const activeGroup = groups.find((g) => g.tabs.includes(activeTab)) ?? groups[0];

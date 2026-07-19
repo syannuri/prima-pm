@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { Evm, EvmTrend, Forecast } from '../api/types';
+import type { Evm, EvmTrend, Forecast, GanttNode } from '../api/types';
 import { Card, Spinner } from './ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { formatNum } from '../lib/format';
@@ -19,6 +19,37 @@ type Health = 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
 // Health → progress-bar fill (single source of truth for the one progress bar).
 const barColor = (h: Health) =>
   h === 'RED' ? 'bg-red-500' : h === 'AMBER' ? 'bg-amber-500' : h === 'GREEN' ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500';
+
+// Count leaf work-packages as completed (100%) vs remaining, walking the WBS/Gantt tree.
+function countTasks(nodes: GanttNode[]): { completed: number; remaining: number } {
+  let completed = 0, remaining = 0;
+  const walk = (n: GanttNode) => {
+    if (!n.children || n.children.length === 0) {
+      if ((n.progressPct ?? 0) >= 100) completed++; else remaining++;
+    } else n.children.forEach(walk);
+  };
+  nodes.forEach(walk);
+  return { completed, remaining };
+}
+
+// Donut of completed (emerald) vs remaining (slate), total in the centre.
+function TaskDonut({ completed, remaining }: { completed: number; remaining: number }) {
+  const total = completed + remaining;
+  const R = 34, C = 2 * Math.PI * R;
+  const frac = total > 0 ? completed / total : 0;
+  return (
+    <div className="relative h-24 w-24 shrink-0">
+      <svg viewBox="0 0 80 80" className="h-24 w-24 -rotate-90">
+        <circle cx="40" cy="40" r={R} fill="none" strokeWidth="8" className="stroke-slate-200 dark:stroke-slate-700" />
+        <circle cx="40" cy="40" r={R} fill="none" strokeWidth="8" strokeLinecap="round" className="stroke-emerald-500 transition-[stroke-dasharray] duration-700" strokeDasharray={`${frac * C} ${C}`} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-xl font-bold tabular-nums leading-none text-slate-800 dark:text-slate-100">{total}</span>
+        <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">task</span>
+      </div>
+    </div>
+  );
+}
 
 // One labelled horizontal bar scaled against a shared maximum (so EV/AC/PV are comparable).
 function Bar({ label, value, max, color, sub }: { label: string; value: number; max: number; color: string; sub?: string }) {
@@ -78,6 +109,11 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     queryKey: ['forecast', projectId, 'overview'],
     queryFn: () => api.get<Forecast>(`/projects/${projectId}/forecast`),
   });
+  // WBS/Gantt tree → completed-vs-remaining task counts for the task donut.
+  const ganttQ = useQuery({
+    queryKey: ['gantt', projectId, 'overview'],
+    queryFn: () => api.get<{ tree: GanttNode[] }>(`/projects/${projectId}/schedule/gantt`),
+  });
 
   if (evmQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
   const e = evmQ.data;
@@ -94,6 +130,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const marginLine = m && m.revenue > 0
     ? { text: `Margin ${formatIdrShort(m.projected)} · ${((m.projected / m.revenue) * 100).toFixed(0)}%`, warn: m.projected < 0 }
     : null;
+
+  const tasks = ganttQ.data ? countTasks(ganttQ.data.tree) : null;
+  const taskTotal = tasks ? tasks.completed + tasks.remaining : 0;
 
   return (
     <div className="space-y-4">
@@ -130,6 +169,32 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           </div>
         </div>
       </Panel>
+
+      {/* Completed vs remaining tasks */}
+      {tasks && taskTotal > 0 && (
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined}>
+          <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}</h3>
+          <div className="flex items-center gap-5">
+            <TaskDonut completed={tasks.completed} remaining={tasks.remaining} />
+            <div className="min-w-0 flex-1 space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" />
+                <span className="text-slate-600 dark:text-slate-300">{id ? 'Selesai' : 'Completed'}</span>
+                <span className="ml-auto font-semibold tabular-nums text-slate-800 dark:text-slate-100">{tasks.completed}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300 dark:bg-slate-600" />
+                <span className="text-slate-600 dark:text-slate-300">{id ? 'Tersisa' : 'Remaining'}</span>
+                <span className="ml-auto font-semibold tabular-nums text-slate-800 dark:text-slate-100">{tasks.remaining}</span>
+              </div>
+              <div className="flex items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <span className="text-slate-500 dark:text-slate-400">{id ? 'Total' : 'Total'}</span>
+                <span className="ml-auto font-semibold tabular-nums text-slate-700 dark:text-slate-200">{taskTotal}</span>
+              </div>
+            </div>
+          </div>
+        </Panel>
+      )}
 
       {/* S-curve trend (PV / EV / AC over time) */}
       <Panel onClick={onJump ? () => onJump('EVM Trend') : undefined}>
