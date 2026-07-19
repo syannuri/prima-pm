@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Evm, EvmTrend } from '../api/types';
@@ -11,47 +11,14 @@ import { useLang } from '../context/LanguageContext';
 
 // Graphic-first, mobile-friendly project summary — the default landing on phones.
 // Reuses the existing SVG charts (HealthGauge speedometer + EvmTrendChart S-curve) and
-// adds a progress ring, an EV/AC/PV cost-bar comparison, and colour-coded metric tiles,
-// so a PM sees where the project stands at a glance without swiping through 19 tabs.
+// adds a single physical-% progress bar, an EV/AC/BAC cost-bar comparison, and
+// colour-coded metric tiles, so a PM sees where the project stands at a glance.
 
-const RING = {
-  GREEN: ['#34d399', '#10b981'],
-  AMBER: ['#fbbf24', '#f59e0b'],
-  RED: ['#fb7185', '#ef4444'],
-  NO_DATA: ['#cbd5e1', '#94a3b8'],
-} as const;
+type Health = 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
 
-type Health = keyof typeof RING;
-
-function ProgressRing({ pct, health }: { pct: number; health: Health }) {
-  const gid = useId().replace(/:/g, '');
-  const R = 34;
-  const C = 2 * Math.PI * R;
-  const clamped = Math.max(0, Math.min(100, pct));
-  const [from, to] = RING[health] ?? RING.NO_DATA;
-  return (
-    <div className="relative h-24 w-24 shrink-0">
-      <svg viewBox="0 0 80 80" className="h-24 w-24 -rotate-90">
-        <defs>
-          <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={from} />
-            <stop offset="100%" stopColor={to} />
-          </linearGradient>
-        </defs>
-        <circle cx="40" cy="40" r={R} fill="none" strokeWidth="7" className="stroke-slate-100 dark:stroke-slate-800" />
-        <circle
-          cx="40" cy="40" r={R} fill="none" strokeWidth="7" strokeLinecap="round"
-          stroke={`url(#${gid})`}
-          className="transition-[stroke-dasharray] duration-700"
-          strokeDasharray={`${(clamped / 100) * C} ${C}`}
-        />
-      </svg>
-      <span className="absolute inset-0 grid place-items-center text-lg font-bold tabular-nums text-slate-700 dark:text-slate-100">
-        {Math.round(clamped)}%
-      </span>
-    </div>
-  );
-}
+// Health → progress-bar fill (single source of truth for the one progress bar).
+const barColor = (h: Health) =>
+  h === 'RED' ? 'bg-red-500' : h === 'AMBER' ? 'bg-amber-500' : h === 'GREEN' ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500';
 
 // One labelled horizontal bar scaled against a shared maximum (so EV/AC/PV are comparable).
 function Bar({ label, value, max, color, sub }: { label: string; value: number; max: number; color: string; sub?: string }) {
@@ -119,31 +86,37 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
   return (
     <div className="space-y-4">
-      {/* Health & progress at a glance */}
-      <Card className="flex flex-col items-center gap-4 sm:flex-row sm:justify-around">
-        <div className="flex items-center gap-4">
-          <ProgressRing pct={pct} health={health} />
-          <div>
-            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{id ? 'Progres' : 'Complete'}</div>
-            <div className="text-2xl font-bold tabular-nums text-slate-800 dark:text-slate-100">{pct}%</div>
-            <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${health === 'GREEN' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : health === 'AMBER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : health === 'RED' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>{ragLabel}</span>
+      {/* Health gauge + a SINGLE physical-% progress bar + the EVM cost bars, stacked in one
+          card (the gauge shows SPI/CPI; the lone bar shows % complete; cost bars sit under it). */}
+      <Panel onClick={onJump ? () => onJump('Cost') : undefined}>
+        <div className="flex flex-col items-center">
+          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} />
+        </div>
+
+        {/* the one and only progress bar — physical % complete (scheduleProgress) */}
+        <div className="mt-1">
+          <div className="mb-1 flex items-baseline justify-between text-xs">
+            <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres (selesai)' : 'Progress (complete)'}</span>
+            <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <div className={`h-full rounded-full ${barColor(health)} transition-[width] duration-700`} style={{ width: `${pct}%` }} />
           </div>
         </div>
-        <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} />
-      </Card>
 
-      {/* Cost picture — EV vs AC vs PV against the budget */}
-      <Panel onClick={onJump ? () => onJump('Cost') : undefined}>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Biaya (EVM)' : 'Cost (EVM)'}</h3>
-          <span className={`text-xs font-medium ${overBudget ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-            CPI {e.ac > 0 ? formatNum(e.cpi, 2) : '—'}
-          </span>
-        </div>
-        <div className="space-y-2.5">
-          <Bar label={id ? 'Anggaran (BAC)' : 'Budget (BAC)'} value={e.bac} max={costMax} color="bg-slate-400 dark:bg-slate-500" />
-          <Bar label={id ? 'Nilai diperoleh (EV)' : 'Earned (EV)'} value={e.ev} max={costMax} color="bg-emerald-500" />
-          <Bar label={id ? 'Biaya aktual (AC)' : 'Actual (AC)'} value={e.ac} max={costMax} color={overBudget ? 'bg-red-500' : 'bg-brand-500'} />
+        {/* EVM cost bars stacked under the gauge */}
+        <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Biaya (EVM)' : 'Cost (EVM)'}</h3>
+            <span className={`text-xs font-medium ${overBudget ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              CPI {e.ac > 0 ? formatNum(e.cpi, 2) : '—'}
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            <Bar label={id ? 'Anggaran (BAC)' : 'Budget (BAC)'} value={e.bac} max={costMax} color="bg-slate-400 dark:bg-slate-500" />
+            <Bar label={id ? 'Nilai diperoleh (EV)' : 'Earned (EV)'} value={e.ev} max={costMax} color="bg-emerald-500" />
+            <Bar label={id ? 'Biaya aktual (AC)' : 'Actual (AC)'} value={e.ac} max={costMax} color={overBudget ? 'bg-red-500' : 'bg-brand-500'} />
+          </div>
         </div>
       </Panel>
 

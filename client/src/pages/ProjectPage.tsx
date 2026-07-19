@@ -196,10 +196,10 @@ export default function ProjectPage() {
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
-        {/* Compact meta chips — one light row replacing the old PM/Client/Sponsor + financials
-            lines. Cost Baseline & Revenue aren't duplicated here (they live in the Cost tab);
-            only the exec-level Margin is surfaced. Client/Sponsor hide on phones to stay tight. */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+        {/* Compact meta chips (PM · Client · Sponsor · Margin · Category). Hidden entirely on
+            phones — the mobile Overview tab carries the health/financials, so the header stays
+            tight; the full chip row returns on sm+ (desktop/tablet). */}
+        <div className="mt-2 hidden flex-wrap items-center gap-1.5 text-xs sm:flex">
           <span className={`inline-flex ${chipCls}`}>
             <span aria-hidden>👤</span>
             <span className="font-medium text-slate-700 dark:text-slate-200">{project.pm?.name ?? '—'}</span>
