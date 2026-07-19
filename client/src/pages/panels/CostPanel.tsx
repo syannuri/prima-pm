@@ -640,14 +640,15 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
         )}
       </div>
 
-      <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-7">
+      <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-8">
         <Select aria-label="Direct cost type" value={type} onChange={(e) => setType(e.target.value)}>
           {DIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </Select>
         <Input aria-label="Cost line label" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
         {isManpower ? (
           <>
-            <Select aria-label="Pick resource from pool" value={resourceId} onChange={(e) => setResourceId(e.target.value)} title="Pick from the resource pool">
+            {/* Wider (2 cols) so the "<name> · <role> · <rate>" option shows without truncating. */}
+            <Select className="md:col-span-2" aria-label="Pick resource from pool" value={resourceId} onChange={(e) => setResourceId(e.target.value)} title="Pick from the resource pool">
               <option value="">Resource…</option>
               {resourcesQ.data?.resources.map((r) => (
                 <option key={r.id} value={r.id}>{r.name} · {r.roleTitle || (r.personnelRole === 'PM' ? 'Project Manager' : 'Project Personnel')} · {formatIdr(Number(r.unitCostPerManday))}/md</option>
@@ -682,6 +683,7 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
             {isOther ? (
               <Input aria-label="Sub-category" placeholder="Specify category *" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} title="Name the kind of cost (e.g. Insurance, Legal)" />
             ) : <div />}
+            <div />
             <div />
           </>
         )}
