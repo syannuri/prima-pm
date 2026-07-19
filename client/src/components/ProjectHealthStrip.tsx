@@ -17,8 +17,8 @@ export default function ProjectHealthStrip({ projectId, onOpen }: { projectId: s
   const ragColor = e.health === 'GREEN' ? 'green' : e.health === 'AMBER' ? 'amber' : e.health === 'NO_DATA' ? 'slate' : 'red';
   const ragLabel = e.health === 'NO_DATA' ? 'No data' : e.health.charAt(0) + e.health.slice(1).toLowerCase();
 
-  const Metric = ({ label, value, warn }: { label: string; value: string; warn?: boolean }) => (
-    <span className="flex items-baseline gap-1 whitespace-nowrap">
+  const Metric = ({ label, value, warn, className = '' }: { label: string; value: string; warn?: boolean; className?: string }) => (
+    <span className={`flex items-baseline gap-1 whitespace-nowrap ${className}`}>
       <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</span>
       <span className={`text-sm font-semibold tabular-nums ${warn ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{value}</span>
     </span>
@@ -35,8 +35,9 @@ export default function ProjectHealthStrip({ projectId, onOpen }: { projectId: s
         <Badge color={ragColor}>{ragLabel}</Badge>
         <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">health</span>
       </span>
-      <Metric label="CPI" value={e.ac > 0 ? formatNum(e.cpi, 2) : '—'} warn={e.ac > 0 && e.cpi < 1} />
-      <Metric label="SPI" value={e.pv > 0 ? formatNum(e.spi, 2) : '—'} warn={e.pv > 0 && e.spi < 1} />
+      {/* CPI & SPI are hidden on phones (they live in the Overview gauge); Health + Complete stay. */}
+      <Metric className="hidden sm:flex" label="CPI" value={e.ac > 0 ? formatNum(e.cpi, 2) : '—'} warn={e.ac > 0 && e.cpi < 1} />
+      <Metric className="hidden sm:flex" label="SPI" value={e.pv > 0 ? formatNum(e.spi, 2) : '—'} warn={e.pv > 0 && e.spi < 1} />
       <Metric label="Complete" value={`${formatNum(e.scheduleProgress * 100, 0)}%`} />
       <span aria-hidden className="ml-auto hidden text-xs text-brand-600 dark:text-brand-400 sm:inline">Details →</span>
     </button>
