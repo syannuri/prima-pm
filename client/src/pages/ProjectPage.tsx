@@ -37,6 +37,7 @@ import ActivationReviewModal from '../components/ActivationReviewModal';
 import ActivationReviewBanner from '../components/ActivationReviewBanner';
 import EvmHealth from '../components/EvmHealth';
 import ProjectHealthStrip from '../components/ProjectHealthStrip';
+import ProjectOverview from '../components/ProjectOverview';
 import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
@@ -44,7 +45,7 @@ import { canGovernProject } from '../lib/perms';
 import { useLang } from '../context/LanguageContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Health' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
+type Tab = 'Overview' | 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Health' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -122,16 +123,21 @@ export default function ProjectPage() {
   // Agile (its scheduling lives in sprints/board) but kept for predictive & hybrid.
   const showSchedule = project.deliveryApproach !== 'AGILE';
   const tabs: Tab[] = [
+    // Graphic Overview leads for chartered projects — a visual EVM/health summary so the
+    // phone lands on charts, not a wall of tabs. DRAFT projects have no EVM yet, so skip it.
+    ...(chartered ? (['Overview'] as Tab[]) : []),
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
     'Cost', 'Procurement', 'Timesheet', 'Health', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
     'Charter', 'Kick-Off', 'Stakeholders', 'Requirements', 'UAT', 'Closeout', 'Audit',
   ];
-  // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
-  // chartered, land on the first working tab (Schedule/Agile); Charter stays
-  // available near the end but is no longer the default landing tab.
+  // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once chartered,
+  // phones land on the graphic Overview; desktop keeps the first working tab (Schedule/Agile/Cost).
+  const landingTab: Tab = chartered ? (showSchedule ? 'Schedule' : isAgile ? 'Agile' : 'Cost') : 'Charter';
   const activeTab: Tab =
-    tab ?? (requestedTab && tabs.includes(requestedTab) ? requestedTab : chartered ? tabs[0] : 'Charter');
+    tab ?? (requestedTab && tabs.includes(requestedTab) ? requestedTab
+      : chartered && isMobile ? 'Overview'
+      : landingTab);
 
   // Shared pill style for the compact header meta chips (add the display util per use so
   // the conditionally-hidden chips can toggle with `hidden sm:inline-flex`).
@@ -248,6 +254,7 @@ export default function ProjectPage() {
         </Card>
       )}
 
+      {activeTab === 'Overview' && chartered && <ProjectOverview projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
       {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} personalOwnerId={project.personalOwnerId ?? null} assignedPmId={project.pmUserId} assignedPmName={project.pm?.name ?? null} />}
       {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
       {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} />}
@@ -287,6 +294,7 @@ export default function ProjectPage() {
 // kept stable (e.g. 'Charter', 'Closeout') so deep-links and server-emitted next-step cues
 // still resolve. A single-tab group renders as a plain tab; a multi-tab group shows a sub-row.
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
+  { label: 'Overview', tabs: ['Overview'] },
   { label: 'Initiating', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
   { label: 'Schedule & WBS', tabs: ['Schedule', 'Agile'] },
   { label: 'Cost', tabs: ['Cost', 'Procurement'] },
@@ -303,6 +311,7 @@ const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
 // Emoji glyphs for the "Jump to" list — quick visual anchors, consistent with the app's
 // existing emoji usage (no icon-lib dependency).
 const TAB_ICONS: Record<Tab, string> = {
+  Overview: '📊',
   Charter: '📋', 'Kick-Off': '🎯', Stakeholders: '👥', Requirements: '📑',
   Schedule: '📆', Agile: '🏃', Cost: '💰', Procurement: '🛒', Risk: '⚠️',
   Timesheet: '⏱️', RAID: '🗂️', Issues: '🐞', UAT: '✅', 'Change Req': '🔁',
@@ -312,6 +321,7 @@ const TAB_ICONS: Record<Tab, string> = {
 // Indonesian names for the domain-group headers (menu follows the language toggle;
 // the English `label` above stays the id used by the level-1 tab bar).
 const GROUP_LABEL_ID: Record<string, string> = {
+  Overview: 'Ringkasan',
   Initiating: 'Inisiasi',
   'Schedule & WBS': 'Jadwal & WBS',
   Cost: 'Biaya',

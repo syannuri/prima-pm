@@ -320,49 +320,37 @@ export default function DashboardPage() {
             const pill = meta && HEALTH_PILL[meta.health];
             const bacFull = p.costBaseline ? formatIdr(p.costBaseline.budgetAtCompletion) : undefined;
             return (
-              <Link key={p.id} to={`/projects/${p.id}`}>
-                <Card className="relative h-full overflow-hidden transition duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg dark:hover:border-brand-700">
+              <Link key={p.id} to={`/projects/${p.id}`} className="block">
+                {/* Compact card (~4 fit a phone): code + status, name, a health-coloured progress
+                    bar, and one muted meta line. Verbose labels and the "N changes" row were
+                    dropped — that detail lives on the project page. */}
+                <div className="relative h-full overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg dark:border-slate-700/60 dark:bg-slate-900 dark:hover:border-brand-700">
                   {/* status accent bar (calm palette) */}
                   <span className={`absolute inset-x-0 top-0 h-1 ${PROJECT_STATUS_DOT[p.status] ?? 'bg-slate-400'}`} />
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-mono text-[11px] text-slate-400 dark:text-slate-500">{p.code}</span>
                     <Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge>
                   </div>
-                  <h3 className="mb-1 truncate font-semibold text-slate-800 dark:text-slate-100" title={p.name}>{p.name}</h3>
-                  <p className="mb-3 truncate text-sm text-slate-500 dark:text-slate-400">
-                    {p.clientName ? `Client: ${p.clientName}` : (p.sponsor ?? 'No client')}
-                  </p>
+                  <h3 className="mt-1 truncate font-semibold text-slate-800 dark:text-slate-100" title={p.name}>{p.name}</h3>
 
-                  {/* progress + health */}
-                  {pct != null && (
-                    <div className="mb-3">
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                          Progress
-                          {pill && <Badge color={pill[0]}>{pill[1]}</Badge>}
-                        </span>
-                        <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                        {/* Green while active, calm grey once closed/inactive — matches the mobile dashboard bar (no coral on a neutral metric). */}
-                        <div className={`h-full rounded-full transition-[width] duration-500 ${p.status === 'IN_PROGRESS' ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`} style={{ width: `${pct}%` }} />
-                      </div>
+                  {/* health-coloured progress bar + % */}
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div
+                        className={`h-full rounded-full transition-[width] duration-500 ${meta ? (meta.health === 'RED' ? 'bg-red-500' : meta.health === 'AMBER' ? 'bg-amber-500' : 'bg-emerald-500') : p.status === 'IN_PROGRESS' ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`}
+                        style={{ width: `${pct ?? 0}%` }}
+                      />
                     </div>
-                  )}
-
-                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 text-sm">
-                    <span className="truncate text-slate-500 dark:text-slate-400">PM: {p.pm?.name ?? '—'}</span>
-                    <span title={bacFull} className="shrink-0 font-medium text-slate-700 dark:text-slate-200">
-                      {p.costBaseline ? formatIdrShort(p.costBaseline.budgetAtCompletion) : '—'}
-                    </span>
+                    <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{pct != null ? `${pct}%` : '—'}</span>
                   </div>
-                  {!!p.changeCount && (
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      <span>🕓</span>
-                      <span><span className="font-medium text-slate-600 dark:text-slate-300">{p.changeCount}</span> changes</span>
-                    </div>
-                  )}
-                </Card>
+
+                  {/* one muted meta line: client · PM · budget (+ a health word when at-risk) */}
+                  <p className="mt-2 truncate text-xs text-slate-400 dark:text-slate-500" title={bacFull}>
+                    {[p.clientName, p.pm?.name, p.costBaseline ? formatIdrShort(p.costBaseline.budgetAtCompletion) : null]
+                      .filter(Boolean).join(' · ') || '—'}
+                    {pill && pill[0] !== 'green' && <span className={`ml-1 font-medium ${pill[0] === 'red' ? 'text-red-500' : 'text-amber-500'}`}>· {pill[1]}</span>}
+                  </p>
+                </div>
               </Link>
             );
           })}
