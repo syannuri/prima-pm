@@ -30,17 +30,72 @@ export async function getActivationReadiness(projectId: string): Promise<Activat
 }
 
 /**
+ * Rich activation-review summary for the PMO decision card: the project's Scope (Charter),
+ * Budget (Cost Baseline) and Schedule (WBS), plus the baseline-readiness checklist and any
+ * current review state. Composes existing data (charter / cost baseline / task aggregates) in
+ * one call so the review popup needs a single request. Read-only.
+ */
+export async function getActivationReview(projectId: string) {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, deletedAt: null },
+    select: {
+      id: true, code: true, name: true, status: true, deliveryApproach: true, scheduleBaselinedAt: true,
+      activationReviewStatus: true, activationReviewNote: true, activationReviewAt: true, activationReviewById: true,
+    },
+  });
+  if (!project) throw NotFound('Project not found');
+
+  const [readiness, charter, costBaseline, taskCount, milestoneCount, dateAgg, reviewer, sprintCount, backlogCount] = await Promise.all([
+    getActivationReadiness(projectId),
+    prisma.projectCharter.findUnique({ where: { projectId }, select: { hiScope: true, hiDeliverables: true, goals: true, description: true, hiCostIdr: true, hiScheduleStart: true, hiScheduleEnd: true, committedAt: true } }),
+    prisma.costBaseline.findUnique({ where: { projectId }, select: { directTotal: true, indirectTotal: true, contingencyReserve: true, managementReserve: true, costBaseline: true, budgetAtCompletion: true } }),
+    prisma.task.count({ where: { projectId } }),
+    prisma.task.count({ where: { projectId, isMilestone: true } }),
+    prisma.task.aggregate({ where: { projectId }, _min: { planStart: true }, _max: { planEnd: true } }),
+    project.activationReviewById ? prisma.user.findUnique({ where: { id: project.activationReviewById }, select: { name: true } }) : Promise.resolve(null),
+    prisma.sprint.count({ where: { projectId } }),
+    prisma.backlogItem.count({ where: { projectId } }),
+  ]);
+
+  const start = dateAgg._min.planStart ?? null;
+  const end = dateAgg._max.planEnd ?? null;
+  const durationDays = start && end ? Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1) : null;
+
+  return {
+    project: { id: project.id, code: project.code, name: project.name, status: project.status, deliveryApproach: project.deliveryApproach },
+    readiness,
+    review: { status: project.activationReviewStatus, note: project.activationReviewNote, at: project.activationReviewAt, by: reviewer?.name ?? null },
+    charter: charter && {
+      scope: charter.hiScope, deliverables: charter.hiDeliverables, goals: charter.goals, description: charter.description,
+      hiCostIdr: Number(charter.hiCostIdr), start: charter.hiScheduleStart, end: charter.hiScheduleEnd, committedAt: charter.committedAt,
+    },
+    budget: costBaseline && {
+      direct: Number(costBaseline.directTotal), indirect: Number(costBaseline.indirectTotal),
+      contingency: Number(costBaseline.contingencyReserve), managementReserve: Number(costBaseline.managementReserve),
+      bac: Number(costBaseline.costBaseline), totalBudget: Number(costBaseline.budgetAtCompletion),
+    },
+    schedule: {
+      deliveryApproach: project.deliveryApproach, hasWbs: taskCount > 0,
+      taskCount, milestoneCount, start, end, durationDays,
+      scheduleBaselinedAt: project.scheduleBaselinedAt, sprintCount, backlogCount,
+    },
+  };
+}
+
+/**
  * PMO governance queue for the dashboard: chartered projects whose baselines are set
  * (activation-ready), so ADMIN/PMO can see what's waiting for them to activate. Unlike
  * the one-time bell notification, this is derived from live state — it stays listed until
  * the project is actually activated. ADMIN/PMO only (they hold the activation gate).
+ * Projects sent back to the PM (activationReviewStatus set) leave the queue until resubmitted.
  */
 export async function getAwaitingActivation(role: string) {
   if (role !== 'ADMIN' && role !== 'PMO') return { items: [], count: 0 };
 
   const projects = await prisma.project.findMany({
     // personalOwnerId: null → this corporate ADMIN/PMO queue never lists guest projects.
-    where: { status: 'CHARTERED', deletedAt: null, personalOwnerId: null },
+    // activationReviewStatus: null → rejected / needs-revision projects drop out until resubmitted.
+    where: { status: 'CHARTERED', deletedAt: null, personalOwnerId: null, activationReviewStatus: null },
     select: { id: true, code: true, name: true, deliveryApproach: true, baselineLockedAt: true, scheduleBaselinedAt: true, pm: { select: { name: true } } },
     orderBy: { code: 'asc' },
   });

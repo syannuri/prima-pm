@@ -178,7 +178,7 @@ export default function NotificationBell() {
                     );
                     return (
                       <li key={n.id}>
-                        {n.projectId ? <Link to={`/projects/${n.projectId}`} onClick={() => setOpen(false)} className="block">{inner}</Link> : inner}
+                        {n.projectId ? <Link to={`/projects/${n.projectId}${n.type === 'ACTIVATION_READY' ? '?review=activation' : ''}`} onClick={() => setOpen(false)} className="block">{inner}</Link> : inner}
                       </li>
                     );
                   })}

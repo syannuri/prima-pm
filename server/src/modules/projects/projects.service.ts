@@ -291,6 +291,85 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   return project;
 }
 
+// PMO activation-review decision. APPROVE runs the existing gated activation (CHARTERED →
+// IN_PROGRESS, with force+reason when the baseline isn't set); REJECT / NEEDS_REVISION send the
+// project back to the owning PM with a mandatory note — it stays CHARTERED and leaves the PMO
+// activation queue (activationReviewStatus) until the PM resubmits. ADMIN/PMO only (route-gated).
+export async function decideActivation(
+  id: string,
+  decision: 'APPROVE' | 'REJECT' | 'NEEDS_REVISION',
+  actorId: string,
+  opts: { reason?: string; force?: boolean },
+) {
+  const project = await prisma.project.findFirst({
+    where: { id, deletedAt: null },
+    select: { id: true, code: true, name: true, status: true, pmUserId: true },
+  });
+  if (!project) throw NotFound('Project not found');
+  if (project.status !== 'CHARTERED') throw BadRequest('Only a chartered project can be reviewed for activation');
+
+  if (decision === 'APPROVE') {
+    // Reuse the gated activation path (readiness check, force+reason, ACTIVATE audit).
+    const updated = await updateProject(
+      id,
+      { status: 'IN_PROGRESS', forceActivate: opts.force || undefined, activateReason: opts.reason?.trim() || undefined },
+      actorId,
+    );
+    // Now active — clear any prior review state.
+    await prisma.project.update({ where: { id }, data: { activationReviewStatus: null, activationReviewNote: null, activationReviewAt: null, activationReviewById: null } });
+    return updated;
+  }
+
+  const reason = opts.reason?.trim();
+  if (!reason) throw BadRequest('A reason is required to reject or request a revision');
+  const reviewStatus = decision === 'REJECT' ? 'REJECTED' : 'NEEDS_REVISION';
+  const updated = await prisma.project.update({
+    where: { id },
+    data: { activationReviewStatus: reviewStatus, activationReviewNote: reason, activationReviewAt: new Date(), activationReviewById: actorId },
+  });
+  await writeAudit({
+    userId: actorId, projectId: id, entity: 'Project', entityId: id,
+    action: decision === 'REJECT' ? 'REJECT_ACTIVATION' : 'REQUEST_ACTIVATION_REVISION',
+    after: { activationReviewStatus: reviewStatus, note: reason },
+  });
+  // Notify the owning PM (best-effort; skip if the actor is the PM).
+  if (project.pmUserId && project.pmUserId !== actorId) {
+    await createNotification({
+      userId: project.pmUserId,
+      type: decision === 'REJECT' ? 'ACTIVATION_REJECTED' : 'ACTIVATION_REVISION',
+      title: decision === 'REJECT' ? 'Activation rejected' : 'Activation — revision requested',
+      body: `${project.name} (${project.code}): ${reason}`,
+      projectId: id,
+    });
+  }
+  return updated;
+}
+
+// PM (or ADMIN/PMO) resubmits a returned project for activation review — clears the review
+// state so it re-enters the PMO queue and re-notifies ADMIN/PMO. Route-gated by write access
+// (the owning PM passes).
+export async function resubmitActivation(id: string, actorId: string) {
+  const project = await prisma.project.findFirst({
+    where: { id, deletedAt: null },
+    select: { id: true, code: true, name: true, activationReviewStatus: true },
+  });
+  if (!project) throw NotFound('Project not found');
+  if (!project.activationReviewStatus) throw BadRequest('This project is not awaiting revision');
+
+  const updated = await prisma.project.update({
+    where: { id },
+    data: { activationReviewStatus: null, activationReviewNote: null, activationReviewAt: null, activationReviewById: null, activationReadyNotifiedAt: null },
+  });
+  await writeAudit({ userId: actorId, projectId: id, entity: 'Project', entityId: id, action: 'RESUBMIT_ACTIVATION' });
+  const recipients = await prisma.user.findMany({ where: { role: { in: ['ADMIN', 'PMO'] }, isActive: true, NOT: { id: actorId } }, select: { id: true } });
+  await Promise.all(recipients.map((r) => createNotification({
+    userId: r.id, type: 'ACTIVATION_READY', title: 'Project resubmitted for activation',
+    body: `"${project.name}" (${project.code}) was revised and resubmitted for activation review.`,
+    projectId: id,
+  })));
+  return updated;
+}
+
 // Reassign a project's PM. Updates both Project.pmUserId (drives RBAC ownership) and
 // the committed charter's pmUserId (drives the charter display) so they stay consistent.
 export async function reassignPm(projectId: string, pmUserId: string, actorId: string) {

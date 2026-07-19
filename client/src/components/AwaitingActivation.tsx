@@ -36,8 +36,8 @@ export default function AwaitingActivation() {
               <Link to={`/projects/${p.id}`} className="text-sm font-medium text-slate-800 hover:text-brand-600 dark:text-slate-100 dark:hover:text-brand-400">{p.name}</Link>
               <div className="text-xs text-slate-500 dark:text-slate-400">{p.code} · PM {p.pm}</div>
             </div>
-            <Link to={`/projects/${p.id}`} className="shrink-0 rounded-lg border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 transition hover:bg-brand-100 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-900/30">
-              Open →
+            <Link to={`/projects/${p.id}?review=activation`} className="shrink-0 rounded-lg border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 transition hover:bg-brand-100 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-900/30">
+              Review →
             </Link>
           </li>
         ))}

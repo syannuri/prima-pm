@@ -287,6 +287,13 @@ model Project {
   // Stamped once when the project first becomes activation-ready (all baselines set) and
   // ADMIN/PMO have been notified — so the "ready to activate" alert fires only once.
   activationReadyNotifiedAt DateTime?
+  // PMO activation-review outcome. NULL = in the activation queue (awaiting review or approved
+  // via activation). NEEDS_REVISION / REJECTED = sent back to the PM with a note; the project
+  // leaves the PMO queue until the PM resubmits (clears these back to NULL). History = AuditLog.
+  activationReviewStatus String?   // null | 'NEEDS_REVISION' | 'REJECTED'
+  activationReviewNote   String?   // the PMO's reason, shown to the PM
+  activationReviewAt     DateTime?
+  activationReviewById   String?
   // When true, logging/editing/deleting a man-day auto-refreshes the single labour Actual
   // Cost entry (Σ consumed md × day-rate) so AC stays in sync with timesheets without a
   // manual "Fill AC" click. Default off — labour AC stays manual (one-click fill).

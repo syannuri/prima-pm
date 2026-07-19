@@ -13,7 +13,10 @@ type AuditAction =
   | 'FORCE_CLOSE'
   | 'REOPEN'
   | 'ACTIVATE'
-  | 'FORCE_ACTIVATE';
+  | 'FORCE_ACTIVATE'
+  | 'REJECT_ACTIVATION'
+  | 'REQUEST_ACTIVATION_REVISION'
+  | 'RESUBMIT_ACTIVATION';
 
 interface AuditInput {
   userId?: string | null;

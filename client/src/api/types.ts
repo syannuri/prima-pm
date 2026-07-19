@@ -146,6 +146,10 @@ export interface Project {
   closureNote?: string | null;
   onHoldReason?: string | null;
   baselineLockedAt?: string | null;
+  // PMO activation-review outcome: null (in queue / approved) | 'NEEDS_REVISION' | 'REJECTED'.
+  activationReviewStatus?: string | null;
+  activationReviewNote?: string | null;
+  activationReviewAt?: string | null;
   pm?: { id: string; name: string; email: string } | null;
   charter?: { id: string; locked: boolean; version: number; category: ProjectCategory } | null;
   costBaseline?: { budgetAtCompletion: string } | null;
@@ -175,6 +179,26 @@ export interface ActivationReadiness {
   blockers: ActivationItem[];
   warnings: ActivationItem[];
   canActivate: boolean;
+}
+
+// Rich activation-review summary for the PMO decision card (Scope / Budget / Schedule).
+export interface ActivationReview {
+  project: { id: string; code: string; name: string; status: ProjectStatus; deliveryApproach: DeliveryApproach };
+  readiness: ActivationReadiness;
+  review: { status: string | null; note: string | null; at: string | null; by: string | null };
+  charter: {
+    scope: string; deliverables: string; goals: string; description: string;
+    hiCostIdr: number; start: string; end: string; committedAt: string | null;
+  } | null;
+  budget: {
+    direct: number; indirect: number; contingency: number; managementReserve: number;
+    bac: number; totalBudget: number;
+  } | null;
+  schedule: {
+    deliveryApproach: DeliveryApproach; hasWbs: boolean;
+    taskCount: number; milestoneCount: number; start: string | null; end: string | null; durationDays: number | null;
+    scheduleBaselinedAt: string | null; sprintCount: number; backlogCount: number;
+  };
 }
 
 // Guided next-step cues for a project's current lifecycle stage.

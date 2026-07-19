@@ -12,7 +12,7 @@ import ActivateModal from './ActivateModal';
 // (→ON_HOLD, reason required), Resume (→IN_PROGRESS). DRAFT→CHARTERED happens via
 // charter commit; CLOSED is handled by CloseProjectModal. The backend state-machine
 // (STATUS_TRANSITIONS) is the source of truth — this just exposes the legal moves.
-export default function LifecycleActions({ project }: { project: Project }) {
+export default function LifecycleActions({ project, onReview }: { project: Project; onReview?: () => void }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
@@ -59,11 +59,12 @@ export default function LifecycleActions({ project }: { project: Project }) {
   return (
     <>
       {canActivate && (
-        <Button variant="secondary" onClick={() => setActivating(true)}>
+        <Button variant="secondary" onClick={onReview ?? (() => setActivating(true))}>
           ▶ Activate
         </Button>
       )}
-      {activating && <ActivateModal project={project} onClose={() => setActivating(false)} />}
+      {/* Fallback plain activate modal when no review handler is wired (kept for safety). */}
+      {activating && !onReview && <ActivateModal project={project} onClose={() => setActivating(false)} />}
       {canResume && (
         <Button variant="secondary" disabled={change.isPending} onClick={() => change.mutate({ status: 'IN_PROGRESS' })}>
           ▶ Resume

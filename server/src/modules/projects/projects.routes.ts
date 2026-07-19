@@ -7,7 +7,7 @@ import { z } from 'zod';
 import * as svc from './projects.service.js';
 import { setBaselineLock } from './baseline.service.js';
 import { getClosureReadiness } from './closure.js';
-import { getActivationReadiness, notifyActivationReady } from './activation.js';
+import { getActivationReadiness, getActivationReview, notifyActivationReady } from './activation.js';
 import { getNextSteps } from './nextsteps.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
@@ -83,6 +83,45 @@ router.get(
   asyncHandler(async (req, res) => {
     const readiness = await getActivationReadiness(req.params.id);
     res.json({ readiness });
+  }),
+);
+
+// Rich activation-review summary (Scope / Budget / Schedule + readiness + review state) for
+// the PMO decision card. Any project member may view it.
+router.get(
+  '/:id/activation-review',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    const review = await getActivationReview(req.params.id);
+    res.json({ review });
+  }),
+);
+
+// PMO activation decision: APPROVE activates; REJECT / NEEDS_REVISION send the project back to
+// the PM with a mandatory reason. ADMIN/PMO only (matches the activation gate).
+const activationDecisionSchema = z.object({
+  decision: z.enum(['APPROVE', 'REJECT', 'NEEDS_REVISION']),
+  reason: z.string().trim().max(1000).optional(),
+  force: z.boolean().optional(),
+});
+router.post(
+  '/:id/activation/decide',
+  requireProjectAccess(),
+  requireRole('ADMIN', 'PMO'),
+  validateBody(activationDecisionSchema),
+  asyncHandler(async (req, res) => {
+    const project = await svc.decideActivation(req.params.id, req.body.decision, req.user!.id, { reason: req.body.reason, force: req.body.force });
+    res.json({ project });
+  }),
+);
+
+// PM (or ADMIN/PMO) resubmits a returned project for activation review.
+router.post(
+  '/:id/activation/resubmit',
+  requireProjectAccess({ write: true }),
+  asyncHandler(async (req, res) => {
+    const project = await svc.resubmitActivation(req.params.id, req.user!.id);
+    res.json({ project });
   }),
 );
 

@@ -33,6 +33,8 @@ import ProjectDetailsPopover from '../components/ProjectDetailsPopover';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
 import LifecycleActions from '../components/LifecycleActions';
+import ActivationReviewModal from '../components/ActivationReviewModal';
+import ActivationReviewBanner from '../components/ActivationReviewBanner';
 import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
@@ -44,7 +46,14 @@ type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Deep-link from the ACTIVATION_READY notification / PMO queue: ?review=activation opens the
+  // activation review card (governors only). Read once on mount.
+  const [reviewOpen, setReviewOpen] = useState(searchParams.get('review') === 'activation');
+  const closeReview = () => {
+    setReviewOpen(false);
+    if (searchParams.get('review')) { searchParams.delete('review'); setSearchParams(searchParams, { replace: true }); }
+  };
   const toast = useToast();
   const { user } = useAuth();
   // Deep-link support: an external link (e.g. the dashboard "Ready to close" panel) can open a
@@ -141,7 +150,7 @@ export default function ProjectPage() {
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* Primary stage action stays prominent; secondary actions tuck into "⋯ More". */}
-            <LifecycleActions project={project} />
+            <LifecycleActions project={project} onReview={() => setReviewOpen(true)} />
             <CloseProjectModal project={project} />
             <MoreMenu title={project.name}>
               {canEdit && <MenuHeader>{lang === 'id' ? 'Aksi' : 'Actions'}</MenuHeader>}
@@ -212,6 +221,9 @@ export default function ProjectPage() {
       </div>
 
       <CrDecisionBanner projectId={projectId} onJump={(t) => setTab(t as Tab)} />
+
+      <ActivationReviewBanner project={project} />
+      {reviewOpen && canEdit && <ActivationReviewModal projectId={projectId} onClose={closeReview} />}
 
       <ProjectAlerts projectId={projectId} onJump={(t) => setTab(t as Tab)} />
 
