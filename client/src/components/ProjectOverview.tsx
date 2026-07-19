@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { Evm, EvmTrend } from '../api/types';
+import type { Evm, EvmTrend, Forecast } from '../api/types';
 import { Card, Spinner } from './ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { formatNum } from '../lib/format';
@@ -73,6 +73,11 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     queryKey: ['evm-trend', projectId, 'overview'],
     queryFn: () => api.get<EvmTrend>(`/projects/${projectId}/evm/trend`),
   });
+  // Forecast carries the projected margin (revenue − likely EAC) — the "live" margin.
+  const fcQ = useQuery({
+    queryKey: ['forecast', projectId, 'overview'],
+    queryFn: () => api.get<Forecast>(`/projects/${projectId}/forecast`),
+  });
 
   if (evmQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
   const e = evmQ.data;
@@ -84,13 +89,19 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const costMax = Math.max(e.bac, e.ac, e.ev, e.pv, 1);
   const overBudget = e.ac > 0 && e.cpi < 1;
 
+  // Projected margin (updated for current performance) + its % of revenue, shown inside the gauge.
+  const m = fcQ.data?.margin;
+  const marginLine = m && m.revenue > 0
+    ? { text: `Margin ${formatIdrShort(m.projected)} · ${((m.projected / m.revenue) * 100).toFixed(0)}%`, warn: m.projected < 0 }
+    : null;
+
   return (
     <div className="space-y-4">
       {/* Health gauge + a SINGLE physical-% progress bar + the EVM cost bars, stacked in one
           card (the gauge shows SPI/CPI; the lone bar shows % complete; cost bars sit under it). */}
       <Panel onClick={onJump ? () => onJump('Cost') : undefined}>
         <div className="flex flex-col items-center">
-          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} />
+          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={marginLine} />
         </div>
 
         {/* the one and only progress bar — physical % complete (scheduleProgress) */}

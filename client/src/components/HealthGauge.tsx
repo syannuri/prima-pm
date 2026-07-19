@@ -31,8 +31,10 @@ function arc(f0: number, f1: number, radius = R) {
   return `M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`;
 }
 
-export default function HealthGauge({ spi, cpi, pct, status, statusLabel }: {
+export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin }: {
   spi: number; cpi: number; pct: number; status: PortfolioHealth; statusLabel: string;
+  // Optional projected-margin read-out shown inside the dial (project Overview only).
+  margin?: { text: string; warn: boolean } | null;
 }) {
   const noData = status === 'NO_DATA';
   const f = noData ? 0.5 : spiToF(spi);
@@ -163,6 +165,11 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel }: {
         <span className="mt-1 text-[11px] tabular-nums text-white/70">
           CPI {cpi > 0 ? cpi.toFixed(2) : '—'} · {pct}% complete
         </span>
+        {margin && (
+          <span className={`mt-0.5 text-[11px] font-semibold tabular-nums ${margin.warn ? 'text-rose-300' : 'text-emerald-300'}`}>
+            {margin.text}
+          </span>
+        )}
       </div>
     </div>
   );

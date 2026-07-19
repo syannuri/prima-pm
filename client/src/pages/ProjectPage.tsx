@@ -242,7 +242,8 @@ export default function ProjectPage() {
 
       <ProjectAlerts projectId={projectId} onJump={(t) => setTab(t as Tab)} />
 
-      <NextStepsGuide projectId={projectId} onJump={(t) => setTab(t as Tab)} />
+      {/* Next-steps guide is desktop-only — phones lead with the graphic Overview tab. */}
+      {!isMobile && <NextStepsGuide projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
 
       <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} onSelect={(t) => setTab(t)} />
 
