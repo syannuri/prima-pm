@@ -320,15 +320,17 @@ export default function DashboardPage() {
             const pill = meta && HEALTH_PILL[meta.health];
             const bacFull = p.costBaseline ? formatIdr(p.costBaseline.budgetAtCompletion) : undefined;
             return (
-              <Link key={p.id} to={`/projects/${p.id}`} className="block">
+              <Link key={p.id} to={`/projects/${p.id}`} className="block min-w-0">
                 {/* Compact card (~4 fit a phone): code + status, name, a health-coloured progress
                     bar, and one muted meta line. Verbose labels and the "N changes" row were
-                    dropped — that detail lives on the project page. */}
+                    dropped — that detail lives on the project page. min-w-0 on the grid item (Link)
+                    is essential: without it, the truncated (nowrap) title/meta force the card wider
+                    than the viewport on long real-world names → horizontal overflow. */}
                 <div className="relative h-full overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg dark:border-slate-700/60 dark:bg-slate-900 dark:hover:border-brand-700">
                   {/* status accent bar (calm palette) */}
                   <span className={`absolute inset-x-0 top-0 h-1 ${PROJECT_STATUS_DOT[p.status] ?? 'bg-slate-400'}`} />
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-mono text-[11px] text-slate-400 dark:text-slate-500">{p.code}</span>
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-mono text-[11px] text-slate-400 dark:text-slate-500">{p.code}</span>
                     <Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge>
                   </div>
                   <h3 className="mt-1 truncate font-semibold text-slate-800 dark:text-slate-100" title={p.name}>{p.name}</h3>
