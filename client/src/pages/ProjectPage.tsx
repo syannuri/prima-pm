@@ -35,6 +35,8 @@ import CloseProjectModal from '../components/CloseProjectModal';
 import LifecycleActions from '../components/LifecycleActions';
 import ActivationReviewModal from '../components/ActivationReviewModal';
 import ActivationReviewBanner from '../components/ActivationReviewBanner';
+import EvmHealth from '../components/EvmHealth';
+import ProjectHealthStrip from '../components/ProjectHealthStrip';
 import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
@@ -42,7 +44,7 @@ import { canGovernProject } from '../lib/perms';
 import { useLang } from '../context/LanguageContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
+type Tab = 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Health' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -122,7 +124,7 @@ export default function ProjectPage() {
   const tabs: Tab[] = [
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
-    'Cost', 'Procurement', 'Timesheet', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
+    'Cost', 'Procurement', 'Timesheet', 'Health', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
     'Charter', 'Kick-Off', 'Stakeholders', 'Requirements', 'UAT', 'Closeout', 'Audit',
   ];
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once
@@ -207,6 +209,13 @@ export default function ProjectPage() {
           <ProjectDetailsPopover project={project} />
           {project.category && <Badge color="slate">{categoryLabel(project.category, project.categoryOther)}</Badge>}
         </div>
+        {/* Always-visible project-health summary (EVM RAG + CPI/SPI/%complete). Full detail
+            lives in the Monitoring → Health tab; clicking here jumps there. */}
+        {chartered && (
+          <div className="mt-2">
+            <ProjectHealthStrip projectId={projectId} onOpen={() => setTab('Health')} />
+          </div>
+        )}
         {project.status === 'ON_HOLD' && (
           <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
             ⏸ On hold{project.onHoldReason && <> · <span className="italic">“{project.onHoldReason}”</span></>}
@@ -246,6 +255,14 @@ export default function ProjectPage() {
       {activeTab === 'Stakeholders' && <StakeholderPanel projectId={projectId} />}
       {activeTab === 'Requirements' && <RequirementsPanel projectId={projectId} />}
       {activeTab === 'Timesheet' && chartered && <TimesheetPanel projectId={projectId} />}
+      {activeTab === 'Health' && chartered && (
+        <EvmHealth
+          base={`/projects/${projectId}`}
+          sub={project.deliveryApproach === 'HYBRID' ? 'Blended EVM — WBS schedule + agile story points' : project.deliveryApproach === 'AGILE' ? 'Agile EVM — earned value from story points' : 'Earned Value Management — schedule + cost + progress'}
+          countLabel={project.deliveryApproach === 'AGILE' ? 'backlog items' : project.deliveryApproach === 'HYBRID' ? 'work items' : 'leaf tasks'}
+          progressHint={project.deliveryApproach === 'PREDICTIVE' ? 'Physical % complete — WBS-weighted roll-up (budget- or duration-weighted)' : 'Physical % complete — methodology roll-up'}
+        />
+      )}
       {activeTab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
       {activeTab === 'EVM Trend' && chartered && <EvmTrendPanel projectId={projectId} />}
       {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
@@ -277,7 +294,7 @@ const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: 'Quality', tabs: ['UAT'] },
   // Change Req = Integrated Change Control, a Monitoring & Controlling activity → grouped
   // with the monitoring/control views (Forecast, EVM Trend) rather than with Quality.
-  { label: 'Monitoring', tabs: ['Timesheet', 'Change Req', 'Forecast', 'EVM Trend'] },
+  { label: 'Monitoring', tabs: ['Health', 'Timesheet', 'Change Req', 'Forecast', 'EVM Trend'] },
   { label: 'Closing', tabs: ['Closeout'] },
   // Label only; the Tab id stays 'Audit' so the change-count badge (keyed on g.tabs[0]) works.
   { label: 'Governance & Audit', tabs: ['Audit'] },
@@ -289,7 +306,7 @@ const TAB_ICONS: Record<Tab, string> = {
   Charter: '📋', 'Kick-Off': '🎯', Stakeholders: '👥', Requirements: '📑',
   Schedule: '📆', Agile: '🏃', Cost: '💰', Procurement: '🛒', Risk: '⚠️',
   Timesheet: '⏱️', RAID: '🗂️', Issues: '🐞', UAT: '✅', 'Change Req': '🔁',
-  Forecast: '📈', 'EVM Trend': '📊', Closeout: '🏁', Audit: '🔎',
+  Health: '🩺', Forecast: '📈', 'EVM Trend': '📊', Closeout: '🏁', Audit: '🔎',
 };
 
 // Indonesian names for the domain-group headers (menu follows the language toggle;

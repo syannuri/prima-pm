@@ -8,7 +8,6 @@ import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
 import { BACKLOG_STATUS_LABEL, BACKLOG_TYPE_BADGE } from '../../lib/labels';
-import EvmHealth from '../../components/EvmHealth';
 import AgileReports from './AgileReports';
 
 const TYPES: BacklogType[] = ['STORY', 'TASK', 'BUG', 'EPIC'];
@@ -23,7 +22,7 @@ const STATUS_ACCENT: Record<BacklogStatus, string> = {
 const SPRINT_STATUSES = ['PLANNED', 'ACTIVE', 'CLOSED'] as const;
 const sumPoints = (arr: BacklogItem[]) => arr.reduce((s, i) => s + (i.storyPoints ?? 0), 0);
 
-export default function AgilePanel({ projectId, approach, chartered }: { projectId: string; approach?: string; chartered?: boolean }) {
+export default function AgilePanel({ projectId }: { projectId: string; approach?: string; chartered?: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -65,17 +64,9 @@ export default function AgilePanel({ projectId, approach, chartered }: { project
 
   if (isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
-  const isHybrid = approach === 'HYBRID';
   return (
     <div className="space-y-4">
-      {chartered && (
-        <EvmHealth
-          base={base}
-          sub={isHybrid ? 'Blended EVM — WBS schedule + agile story points' : 'Agile EVM — earned value from story points'}
-          countLabel={isHybrid ? 'work items' : 'backlog items'}
-          progressHint={isHybrid ? 'Physical % complete — blended WBS + story-point roll-up' : 'Physical % complete — story-point roll-up'}
-        />
-      )}
+      {/* Project Health (EVM) moved to the Monitoring → Health tab + the header strip. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SectionTitle sub="Agile delivery — product backlog, sprints and a Kanban board.">Agile</SectionTitle>
         <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm dark:bg-slate-800">

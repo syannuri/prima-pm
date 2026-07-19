@@ -4,6 +4,8 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import { captureSnapshotSchema } from './evm.schemas.js';
 import * as svc from './evm.service.js';
+import { getProjectEvm } from '../agile/agile.service.js';
+import { evmQuerySchema } from '../schedule/schedule.schemas.js';
 
 const router = Router({ mergeParams: true });
 
@@ -14,6 +16,18 @@ const canWrite = [requireProjectAccess({ write: true }), requireProjectGovernanc
 
 // Coerce ?statusDate= like the schedule /evm + forecast routes (bad string → 400, not NaN).
 const statusDateQuery = z.object({ statusDate: z.coerce.date().optional() });
+
+// Current EVM snapshot, dispatched by methodology (predictive WBS / agile story-points /
+// hybrid blend) — the single authoritative "Project Health" figure for the header strip and
+// the Health tab, so hybrid no longer shows two different EVM boxes.
+router.get(
+  '/',
+  canRead,
+  asyncHandler(async (req, res) => {
+    const q = evmQuerySchema.parse(req.query);
+    res.json(await getProjectEvm(req.params.projectId, q.actualCost, q.statusDate ?? new Date()));
+  }),
+);
 
 router.get(
   '/trend',
