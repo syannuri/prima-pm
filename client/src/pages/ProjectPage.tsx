@@ -160,6 +160,8 @@ export default function ProjectPage() {
             {/* Primary stage action stays prominent; secondary actions tuck into "⋯ More". */}
             <LifecycleActions project={project} onReview={() => setReviewOpen(true)} />
             <CloseProjectModal project={project} />
+            {/* "⋯ More" (edit + exports + jump-to) is desktop-only; phones keep the header lean. */}
+            {!isMobile && (
             <MoreMenu title={project.name}>
               {canEdit && <MenuHeader>{lang === 'id' ? 'Aksi' : 'Actions'}</MenuHeader>}
               {canEdit && <MenuItem icon="✏️" onClick={() => setEditOpen(true)}>{lang === 'id' ? 'Ubah detail' : 'Edit details'}</MenuItem>}
@@ -192,6 +194,7 @@ export default function ProjectPage() {
                 );
               })}
             </MoreMenu>
+            )}
           </div>
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
@@ -245,7 +248,7 @@ export default function ProjectPage() {
       {/* Next-steps guide is desktop-only — phones lead with the graphic Overview tab. */}
       {!isMobile && <NextStepsGuide projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
 
-      <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} onSelect={(t) => setTab(t)} />
+      <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} isMobile={isMobile} onSelect={(t) => setTab(t)} />
 
       {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && activeTab !== 'Stakeholders' && activeTab !== 'Requirements' && activeTab !== 'RAID' && (
         <Card>
@@ -333,10 +336,14 @@ const GROUP_LABEL_ID: Record<string, string> = {
   'Governance & Audit': 'Tata Kelola & Audit',
 };
 
-function GroupedTabs({ tabs, activeTab, changeCount, onSelect }: { tabs: Tab[]; activeTab: Tab; changeCount: number; onSelect: (t: Tab) => void }) {
+// Domain groups hidden from the phone tab bar (still reachable on desktop) — keeps the
+// mobile strip focused on the core delivery domains.
+const MOBILE_HIDDEN_GROUPS = new Set(['Quality', 'Closing', 'Governance & Audit']);
+
+function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tabs: Tab[]; activeTab: Tab; changeCount: number; isMobile: boolean; onSelect: (t: Tab) => void }) {
   const groups = TAB_GROUPS
     .map((g) => ({ label: g.label, tabs: g.tabs.filter((t) => tabs.includes(t)) }))
-    .filter((g) => g.tabs.length > 0);
+    .filter((g) => g.tabs.length > 0 && !(isMobile && MOBILE_HIDDEN_GROUPS.has(g.label)));
   // The active group is whichever contains the active tab — its sub-tabs get the second row.
   const activeGroup = groups.find((g) => g.tabs.includes(activeTab)) ?? groups[0];
 

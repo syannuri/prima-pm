@@ -285,6 +285,9 @@ export default function DashboardPage() {
         </Modal>
       )}
 
+      {/* Mobile-only page title for the Projects (cards) tab — desktop has the view toggle instead. */}
+      {view === 'cards' && <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 sm:hidden">{lang === 'id' ? 'Kartu Proyek' : 'Project Cards'}</h1>}
+
       {view === 'cards' && (isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
