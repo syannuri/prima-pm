@@ -79,6 +79,12 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ![In-app Manual — Closing section documenting the methodology-aware closure gate (predictive WBS 100%; agile/hybrid backlog Done-or-Deferred plus acceptance) and the Defer/Restore flow](docs/screenshots/manual-closing.png)
 
+**PMO activation review** — when a chartered project's baselines are set, the activation notification opens a review card summarising **Scope (Charter)**, **Budget (Cost Baseline)** and **Schedule (WBS)** with a baseline-readiness checklist. The PMO can **Approve** (start execution), **Reject**, or **Request revision** — the last two send the project back to the PM with a mandatory note; the PM then addresses it and **Resubmits for activation**.
+
+![PMO activation review card — Scope/Budget/Schedule summary with a baseline-readiness checklist and a note field, plus Reject / Request revision / Approve & activate buttons](docs/screenshots/activation-review.png)
+
+![Project manager's view after a revision request — an amber banner with the PMO's note and a "Resubmit for activation" button](docs/screenshots/activation-revision.png)
+
 ## 🧱 Tech stack
 
 | Layer | Tech |
