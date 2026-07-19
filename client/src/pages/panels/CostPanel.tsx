@@ -650,7 +650,7 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
             <Select aria-label="Pick resource from pool" value={resourceId} onChange={(e) => setResourceId(e.target.value)} title="Pick from the resource pool">
               <option value="">Resource…</option>
               {resourcesQ.data?.resources.map((r) => (
-                <option key={r.id} value={r.id}>{r.name} · {formatIdr(Number(r.unitCostPerManday))}/md</option>
+                <option key={r.id} value={r.id}>{r.name} · {r.roleTitle || (r.personnelRole === 'PM' ? 'Project Manager' : 'Project Personnel')} · {formatIdr(Number(r.unitCostPerManday))}/md</option>
               ))}
             </Select>
             <MoneyInput
