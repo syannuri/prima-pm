@@ -82,8 +82,11 @@ afterEach(() => {
 });
 
 describe('CostPanel actual-cost mutations', () => {
+  // Heavier component test (accordion + confirm modal + multiple async waits): under
+  // parallel test-file load the default 5s can be exceeded, so give it headroom and drop
+  // userEvent's artificial inter-event delay. It passes in ~3.6s in isolation.
   it('invalidates the EVM/forecast/portfolio queries when an Actual Cost entry is deleted', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { invalidateSpy } = renderPanel();
 
     // The cost sections are accordions; "Actual cost (AC)" is collapsed by default, so expand
@@ -113,5 +116,5 @@ describe('CostPanel actual-cost mutations', () => {
     // ...plus the cost/project queries it already refreshed before the fix.
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['cost', 'p1'] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['project', 'p1'] });
-  });
+  }, 15000);
 });
