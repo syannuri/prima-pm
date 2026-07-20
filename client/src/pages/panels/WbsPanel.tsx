@@ -43,9 +43,9 @@ function statusOf(pct: number): { label: string; color: string } {
 // Gantt bar palette (monday.com style): a light status-tinted track with a vivid
 // rounded progress fill. 'slate' (not started) reads as the brand/blue tint.
 const BAR: Record<string, { track: string; fill: string }> = {
-  green: { track: 'bg-emerald-400/25 dark:bg-emerald-500/20', fill: 'bg-emerald-500' },
-  amber: { track: 'bg-amber-400/25 dark:bg-amber-500/20', fill: 'bg-amber-500' },
-  red: { track: 'bg-red-400/25 dark:bg-red-500/20', fill: 'bg-red-500' }, // late / overdue
+  green: { track: 'bg-emerald-400/40 dark:bg-emerald-500/30', fill: 'bg-emerald-500' },
+  amber: { track: 'bg-amber-400/40 dark:bg-amber-500/30', fill: 'bg-amber-500' },
+  red: { track: 'bg-red-400/40 dark:bg-red-500/30', fill: 'bg-red-500' }, // late / overdue
   slate: { track: 'bg-slate-300/70 dark:bg-slate-600/50', fill: 'bg-slate-400 dark:bg-slate-500' },
 };
 
@@ -695,7 +695,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             {/* actual bar — vivid, at REAL dates, overlaid on the plan track (leaf tasks that started) */}
                             {started && (
                               <div
-                                className={`pointer-events-none absolute top-[15px] z-[6] h-[9px] rounded-full shadow-sm ${bar.fill} ${r.pct < 100 ? 'opacity-95' : ''}`}
+                                className={`pointer-events-none absolute top-[13px] z-[6] h-[13px] rounded-full shadow-sm ${bar.fill} ${r.pct < 100 ? 'opacity-95' : ''}`}
                                 style={{ left: `${actLeft}%`, width: `${actWidth}%` }}
                                 title={`${r.pct >= 100 ? 'Actual' : 'Actual so far'}: ${formatDate(new Date(actStart))} → ${r.pct >= 100 ? formatDate(new Date(actEnd)) : 'today'} · ${r.pct}%`}
                               />
