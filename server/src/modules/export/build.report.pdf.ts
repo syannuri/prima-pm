@@ -175,8 +175,27 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
     doc.text('All work packages complete.', left, doc.y);
   }
 
-  // ---------- 3. Earned Value (EVM) ----------
-  heading('3. Earned Value (EVM)');
+  // ---------- 3. Schedule detail (plan vs actual) ----------
+  if (r.tasks.schedule.length) {
+    heading('3. Schedule Detail (plan vs actual)');
+    table(
+      [
+        { title: 'Task', w: 150 },
+        { title: 'Plan start', w: 66, align: 'right' }, { title: 'Actual start', w: 66, align: 'right' },
+        { title: 'Plan finish', w: 66, align: 'right' }, { title: 'Actual finish', w: 66, align: 'right' },
+        { title: '%', w: 32, align: 'right' },
+      ],
+      r.tasks.schedule.map((t) => [
+        `${t.isMilestone ? '* ' : ''}${t.name}`,
+        iso(t.planStart), iso(t.actualStart), iso(t.planEnd), iso(t.actualFinish), `${t.pct}%`,
+      ]),
+    );
+    doc.fillColor(GRAY).fontSize(7).font('Helvetica')
+      .text('Actual start is stamped on first progress; actual finish when a task reaches 100%. "—" = not yet reached. * = milestone.', left, doc.y, { width });
+  }
+
+  // ---------- 4. Earned Value (EVM) ----------
+  heading('4. Earned Value (EVM)');
   table(
     [{ title: 'Metric', w: 240 }, { title: 'Value', w: 275, align: 'right' }],
     [
@@ -190,8 +209,8 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
     ],
   );
 
-  // ---------- 4. Forecast ----------
-  heading('4. Forecast (Estimate at Completion)');
+  // ---------- 5. Forecast ----------
+  heading('5. Forecast (Estimate at Completion)');
   table(
     [{ title: 'Forecast', w: 240 }, { title: 'Value', w: 275, align: 'right' }],
     [
@@ -213,7 +232,7 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
 
   // ---------- 5. Project chart — EVM S-curve (vector line chart, then exact figures) ----------
   if (f.sCurve.length) {
-    heading(`5. Project chart — EVM S-curve (${r.period})`);
+    heading(`6. Project chart — EVM S-curve (${r.period})`);
     const pts = f.sCurve;
     const padL = 42; // left gutter for the y-axis (money) labels
     const cX = left + padL;

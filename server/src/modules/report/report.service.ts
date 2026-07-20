@@ -70,7 +70,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
     getProjectForecast(projectId, asOf),
     prisma.task.findMany({
       where: { projectId },
-      select: { id: true, name: true, parentTaskId: true, planEnd: true, progressPct: true, isMilestone: true, picResource: { select: { name: true } } },
+      select: { id: true, name: true, wbsCode: true, parentTaskId: true, planStart: true, planEnd: true, actualStart: true, actualFinish: true, progressPct: true, isMilestone: true, picResource: { select: { name: true } } },
     }),
     prisma.actualCostEntry.findMany({ where: { projectId }, orderBy: { date: 'asc' }, select: { date: true, amount: true } }),
   ]);
@@ -92,6 +92,23 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
       overdue: +t.planEnd < now,
       isMilestone: t.isMilestone,
       owner: t.picResource?.name ?? null,
+    }));
+
+  // Full schedule detail (all leaf work packages, chronological) with plan vs actual dates —
+  // actualStart is stamped on first progress, actualFinish when a task reaches 100%.
+  const schedule = leaves
+    .slice()
+    .sort((a, b) => +a.planStart - +b.planStart || +a.planEnd - +b.planEnd)
+    .map((t) => ({
+      wbs: t.wbsCode,
+      name: t.name,
+      isMilestone: t.isMilestone,
+      pct: t.progressPct,
+      owner: t.picResource?.name ?? null,
+      planStart: new Date(t.planStart).toISOString(),
+      planEnd: new Date(t.planEnd).toISOString(),
+      actualStart: t.actualStart ? new Date(t.actualStart).toISOString() : null,
+      actualFinish: t.actualFinish ? new Date(t.actualFinish).toISOString() : null,
     }));
 
   // EVM S-curve resampled at weekly/monthly points: planned PV across the whole window,
@@ -148,6 +165,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
       notStarted,
       weightedPct: r2(evm.scheduleProgress * 100),
       remaining,
+      schedule,
     },
     // Full forecast payload, but with the S-curve resampled to the report's granularity so
     // ForecastChart renders weekly/monthly buckets.
