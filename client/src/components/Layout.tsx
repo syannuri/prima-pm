@@ -19,9 +19,25 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const onHome = location.pathname === '/';
-  // Primary bottom-nav destinations get the home-style header (greeting + name, no back arrow).
-  // Timesheet is a bottom-tab page too, so it should read like Home, not a nested sub-page.
-  const isPrimaryPage = onHome || location.pathname === '/my-timesheet';
+  const path = location.pathname;
+  const cards = location.search.includes('view=cards');
+  const isGuest = user?.role === 'GUEST';
+  // The greeting header (monday.com-style) is the Home dashboard only; the Projects-cards view and
+  // every other page instead show their menu-name title in the top bar (e.g. a project detail → "Projects").
+  const showGreeting = onHome && !cards;
+  // The three bottom-nav destinations (Home, Projects-cards, Timesheet/Resources) never get a back arrow.
+  const isBottomTab = onHome || path === '/my-timesheet' || path.startsWith('/admin/resources');
+  const pageTitle = onHome
+    ? (cards ? 'Projects' : '')
+    : path.startsWith('/projects/') ? 'Projects'
+    : path === '/reports' ? (isGuest ? 'My Reports' : 'Reports')
+    : path === '/my-timesheet' ? 'Timesheet'
+    : path.startsWith('/admin/resources') ? (isGuest ? 'My Resources' : 'Resources')
+    : path === '/admin/users' ? 'Users'
+    : path === '/admin/audit' ? 'Audit trail'
+    : path === '/settings' ? 'Settings'
+    : path === '/manual' ? 'Manual'
+    : '';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('prima_sidebar_collapsed') === '1');
@@ -59,8 +75,8 @@ export default function Layout({ children }: { children: ReactNode }) {
         >
           {/* Phones: initials avatar (account/settings) sits top-left. */}
           <div className="md:hidden"><AvatarMenu /></div>
-          {/* Phones, primary pages (Home + Timesheet): a monday.com-style greeting + full name. */}
-          {isPrimaryPage && (
+          {/* Phones, Home only: a monday.com-style greeting + full name. */}
+          {showGreeting && (
             <div className="min-w-0 leading-tight md:hidden">
               <div className="truncate text-xs text-slate-500 dark:text-slate-400">{greet(lang, new Date().getHours())}</div>
               <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{user?.name}</div>
@@ -77,17 +93,21 @@ export default function Layout({ children }: { children: ReactNode }) {
             </svg>
           </button>
           {/* Back — appears on nested pages (not the primary bottom-nav destinations). */}
-          {!isPrimaryPage && (
+          {!isBottomTab && (
             <button
               onClick={() => navigate(-1)}
               aria-label="Back"
               title="Back"
-              className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
             </button>
+          )}
+          {/* Section title on every non-Home page (phones) — mirrors the menu name. */}
+          {!showGreeting && pageTitle && (
+            <div className="min-w-0 truncate text-base font-semibold text-slate-800 dark:text-slate-100 md:hidden">{pageTitle}</div>
           )}
           <button
             onClick={() => setCollapsed((c) => !c)}

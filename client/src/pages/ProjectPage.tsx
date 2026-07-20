@@ -146,11 +146,13 @@ export default function ProjectPage() {
   return (
     <div className="space-y-5">
       <div>
-        <Link to="/" className="text-sm text-brand-600 hover:underline">
+        {/* On phones the top-bar "Projects" title + back arrow carry this context, so the
+            in-page breadcrumb link and project code are desktop-only. */}
+        <Link to="/" className="hidden text-sm text-brand-600 hover:underline sm:inline-block">
           ← All projects
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
-          <span className="font-mono text-sm text-slate-500 dark:text-slate-400">{project.code}</span>
+          <span className="hidden font-mono text-sm text-slate-500 dark:text-slate-400 sm:inline">{project.code}</span>
           <h1 className="min-w-0 break-words text-xl font-bold text-slate-800 dark:text-slate-100 sm:text-2xl">{project.name}</h1>
           <span className="flex items-center gap-2">
             <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'}>{project.status}</Badge>
