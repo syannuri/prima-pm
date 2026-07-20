@@ -251,7 +251,7 @@ function ReportBody({ r }: { r: ProjectReportData }) {
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Task completion */}
-        <Card>
+        <Card className="min-w-0">
           <SectionHead title="Task completion" sub="Completed vs uncompleted work packages" />
           <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
             {slices.length > 0 ? <DonutChart title="" slices={slices} unit="tasks" /> : <p className="text-sm text-slate-500">No work packages.</p>}
@@ -284,7 +284,7 @@ function ReportBody({ r }: { r: ProjectReportData }) {
         </Card>
 
         {/* EVM S-curve chart */}
-        <Card>
+        <Card className="min-w-0">
           <SectionHead title="Project chart — EVM S-curve" sub={`Planned value, actual cost & forecast (${r.period})`} />
           {f.sCurve.length ? <ForecastChart data={f} /> : <p className="py-8 text-center text-sm text-slate-500">Not enough schedule/cost data to chart yet.</p>}
         </Card>
