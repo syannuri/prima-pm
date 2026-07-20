@@ -596,7 +596,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </span>
                     </td>
                     <td><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></td>
-                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.start))}</td>
+                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">
+                      {started && node.actualStart
+                        ? <span className="text-slate-600 dark:text-slate-300" title={`Actual start · plan was ${formatDate(new Date(r.start))}`}>{formatDate(new Date(node.actualStart))}</span>
+                        : formatDate(new Date(r.start))}
+                    </td>
                     <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">
                       {r.pct >= 100 && !r.isParent && node.actualFinish
                         ? <span className="text-slate-600 dark:text-slate-300" title={`Actual finish · plan was ${formatDate(new Date(r.end))}`}>{formatDate(new Date(node.actualFinish))}</span>
