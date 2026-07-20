@@ -40,6 +40,14 @@ function statusOf(pct: number): { label: string; color: string } {
   return { label: 'Not started', color: 'slate' };
 }
 
+// Gantt bar palette (monday.com style): a light status-tinted track with a vivid
+// rounded progress fill. 'slate' (not started) reads as the brand/blue tint.
+const BAR: Record<string, { track: string; fill: string }> = {
+  green: { track: 'bg-emerald-400/25 dark:bg-emerald-500/20', fill: 'bg-emerald-500' },
+  amber: { track: 'bg-amber-400/25 dark:bg-amber-500/20', fill: 'bg-amber-500' },
+  slate: { track: 'bg-slate-300/70 dark:bg-slate-600/50', fill: 'bg-slate-400 dark:bg-slate-500' },
+};
+
 const day = 86_400_000;
 type Scale = 'day' | 'week' | 'month';
 const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
@@ -385,6 +393,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {rows.map(({ node, depth, wbs }) => {
                 const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null };
                 const st = statusOf(r.pct);
+                const bar = BAR[st.color] ?? BAR.slate;
                 const leftPct = axis ? ((r.start - axis.min) / axis.span) * 100 : 0;
                 const widthPct = axis ? Math.max(axis.minBarPct, ((r.end - r.start) / axis.span) * 100) : 0;
                 const varDays = r.baseEnd != null ? Math.round((r.end - r.baseEnd) / day) : null;
@@ -451,26 +460,37 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </td>
                     )}
                     <td>
-                      <div className="relative h-6" style={{ width: axis?.width }}>
+                      <div className="relative h-7" style={{ width: axis?.width }}>
                         {/* month/period gridlines + today marker for orientation */}
                         {axis?.ticks.filter((t) => t.major).map((t) => (
                           <div key={t.key} className="absolute inset-y-0 w-px bg-slate-100 dark:bg-slate-800/80" style={{ left: `${t.leftPct}%` }} />
                         ))}
                         {axis?.todayPct != null && (
-                          <div className="absolute inset-y-0 z-10 w-px bg-brand-500/50" style={{ left: `${axis.todayPct}%` }} />
+                          <div className="absolute inset-y-0 z-10 w-px bg-brand-500/60" style={{ left: `${axis.todayPct}%` }} />
                         )}
-                        {/* baseline (ghost) bar */}
-                        {baseLeft != null && baseWidth != null && (
-                          <div className="absolute top-0 h-2 rounded bg-slate-300 dark:bg-slate-600" style={{ left: `${baseLeft}%`, width: `${baseWidth}%` }} title={`Baseline: ${formatDate(new Date(r.baseStart!))} → ${formatDate(new Date(r.baseEnd!))}`} />
+                        {node.isMilestone ? (
+                          /* milestone → diamond marker */
+                          <div
+                            className="absolute top-1/2 z-[5] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] bg-brand-500 shadow-sm ring-2 ring-white dark:ring-slate-900"
+                            style={{ left: `${leftPct}%` }}
+                            title={`Milestone · ${formatDate(new Date(r.end))}`}
+                          />
+                        ) : (
+                          <>
+                            {/* baseline (ghost) bar — thin pill above the live bar */}
+                            {baseLeft != null && baseWidth != null && (
+                              <div className="absolute top-1 h-1.5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" style={{ left: `${baseLeft}%`, width: `${baseWidth}%` }} title={`Baseline: ${formatDate(new Date(r.baseStart!))} → ${formatDate(new Date(r.baseEnd!))}`} />
+                            )}
+                            {/* live bar — light status track with a vivid rounded progress fill (monday.com style) */}
+                            <div
+                              className={`absolute ${baseLeft != null ? 'top-3' : 'top-1/2 -translate-y-1/2'} h-[18px] overflow-hidden rounded-full shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10 ${bar.track}`}
+                              style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                              title={`${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))} · ${r.pct}%`}
+                            >
+                              <div className={`h-full rounded-full ${bar.fill}`} style={{ width: `${r.pct}%` }} />
+                            </div>
+                          </>
                         )}
-                        {/* current bar with progress fill */}
-                        <div
-                          className={`absolute ${baseLeft != null ? 'top-2.5' : 'top-1.5'} h-3 rounded ${st.color === 'green' ? 'bg-green-400' : st.color === 'amber' ? 'bg-amber-400' : 'bg-brand-400'}`}
-                          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                          title={`${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))} · ${r.pct}%`}
-                        >
-                          <div className="h-3 rounded bg-black/25" style={{ width: `${r.pct}%` }} />
-                        </div>
                       </div>
                     </td>
                   </tr>
