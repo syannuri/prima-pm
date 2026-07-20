@@ -66,29 +66,47 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
       ) : !data?.entries.length ? (
         <p className="py-4 text-center text-slate-500 dark:text-slate-400">No audit entries match.</p>
       ) : (
-        <div className="max-h-[32rem] overflow-auto">
-          <table className="prima-rows w-full text-sm">
-            <thead>
-              <tr className="sticky top-0 z-10 border-b bg-white text-left text-xs uppercase text-slate-400 dark:bg-slate-900 dark:text-slate-500">
-                <th className="py-2">When</th><th>User</th><th>Role</th><th>Entity</th><th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.entries.map((e) => (
-                <tr key={e.id} className="border-b border-slate-100 dark:border-slate-800">
-                  <td className="py-2 text-slate-500 dark:text-slate-400">{fmt(e.createdAt)}</td>
-                  <td>{e.user?.name ?? '—'}</td>
-                  <td className="text-xs text-slate-500 dark:text-slate-400">{e.user?.role ?? '—'}</td>
-                  <td className="font-mono text-xs">{e.entity}</td>
-                  <td><Badge color={ACTION_COLOR[e.action] ?? 'slate'}>{e.action}</Badge></td>
+        <>
+          {/* Desktop table */}
+          <div className="hidden max-h-[32rem] overflow-auto sm:block">
+            <table className="prima-rows w-full text-sm">
+              <thead>
+                <tr className="sticky top-0 z-10 border-b bg-white text-left text-xs uppercase text-slate-400 dark:bg-slate-900 dark:text-slate-500">
+                  <th className="py-2">When</th><th>User</th><th>Role</th><th>Entity</th><th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.entries.map((e) => (
+                  <tr key={e.id} className="border-b border-slate-100 dark:border-slate-800">
+                    <td className="py-2 text-slate-500 dark:text-slate-400">{fmt(e.createdAt)}</td>
+                    <td>{e.user?.name ?? '—'}</td>
+                    <td className="text-xs text-slate-500 dark:text-slate-400">{e.user?.role ?? '—'}</td>
+                    <td className="font-mono text-xs">{e.entity}</td>
+                    <td><Badge color={ACTION_COLOR[e.action] ?? 'slate'}>{e.action}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Mobile cards — the 5-col table clips the Action badge off-screen at 390px */}
+          <div className="max-h-[32rem] space-y-2 overflow-auto sm:hidden">
+            {data.entries.map((e) => (
+              <div key={e.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge color={ACTION_COLOR[e.action] ?? 'slate'}>{e.action}</Badge>
+                  <span className="text-xs text-slate-400">{fmt(e.createdAt)}</span>
+                </div>
+                <p className="mt-1.5 font-mono text-sm text-slate-700 dark:text-slate-200">{e.entity}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {e.user?.name ?? '—'}{e.user && <span className="ml-1 text-slate-400 dark:text-slate-500">· {e.user.role}</span>}
+                </p>
+              </div>
+            ))}
+          </div>
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
             Showing latest {data.entries.length}{entity || action ? ' matching' : ` of ${data.total}`} entries.
           </p>
-        </div>
+        </>
       )}
     </Card>
   );
