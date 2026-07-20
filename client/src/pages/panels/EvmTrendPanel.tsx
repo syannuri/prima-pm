@@ -93,8 +93,8 @@ export default function EvmTrendPanel({ projectId }: { projectId: string }) {
           <EvmTrendChart data={data} />
           <CpiSpiTrend data={data} />
 
-          {/* Snapshot register */}
-          <Card className="!p-0 overflow-hidden">
+          {/* Snapshot register — table on desktop, cards on mobile (register-table convention) */}
+          <Card className="hidden overflow-hidden !p-0 sm:block">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -135,8 +135,46 @@ export default function EvmTrendPanel({ projectId }: { projectId: string }) {
               </table>
             </div>
           </Card>
+
+          {/* Mobile: one card per snapshot (the 9-col table scrolls off-screen at 390px) */}
+          <div className="space-y-2 sm:hidden">
+            {[...snaps].reverse().map((s) => (
+              <div key={s.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-medium text-slate-700 dark:text-slate-200">{formatDate(s.statusDate)}</div>
+                  <div className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{Math.round(s.weightedProgress * 100)}% compl.</div>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-2 dark:border-slate-800/70">
+                  <Cell label="CPI" value={s.cpi ? formatNum(s.cpi, 2) : '—'} tone={s.cpi > 0 && s.cpi < 1 ? 'red' : s.cpi >= 1 ? 'green' : undefined} />
+                  <Cell label="SPI" value={s.spi ? formatNum(s.spi, 2) : '—'} tone={s.spi > 0 && s.spi < 1 ? 'red' : s.spi >= 1 ? 'green' : undefined} />
+                  <Cell label="PV" value={formatIdr(s.pv)} />
+                  <Cell label="EV" value={formatIdr(s.ev)} />
+                  <Cell label="AC" value={formatIdr(s.ac)} className="col-span-2" />
+                  {s.note && <Cell label="Note" value={`${s.note}${s.createdByName ? ` · ${s.createdByName}` : ''}`} className="col-span-2" />}
+                </dl>
+                {canWrite && (
+                  <div className="mt-2 flex justify-end border-t border-slate-100 pt-2 dark:border-slate-800/70">
+                    <button
+                      onClick={async () => { if (await confirm({ title: 'Delete snapshot?', message: <>Delete the status snapshot for <strong>{formatDate(s.statusDate)}</strong>?</>, confirmLabel: 'Delete', danger: true })) del.mutate(s.id); }}
+                      className="text-xs text-red-500 hover:underline"
+                    >delete</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </>
       )}
+    </div>
+  );
+}
+
+function Cell({ label, value, tone, className }: { label: string; value: string; tone?: 'red' | 'green'; className?: string }) {
+  const c = tone === 'red' ? 'text-red-600 dark:text-red-400' : tone === 'green' ? 'text-green-600 dark:text-green-400' : 'text-slate-700 dark:text-slate-200';
+  return (
+    <div className={className}>
+      <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</dt>
+      <dd className={`tabular-nums ${c}`}>{value}</dd>
     </div>
   );
 }
