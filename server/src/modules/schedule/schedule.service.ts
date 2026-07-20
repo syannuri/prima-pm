@@ -93,7 +93,7 @@ export async function getGantt(projectId: string) {
     prisma.taskDependency.findMany({ where: { predecessor: { projectId } } }),
     manpowerByTask(projectId),
     directCostByTask(projectId),
-    prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true } }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true, baselineLockedAt: true } }),
   ]);
 
   const enriched = tasks.map((t) => ({
@@ -103,7 +103,9 @@ export async function getGantt(projectId: string) {
     linkedPlanMandays: mp.mandays.get(t.id) ?? 0,
   }));
 
-  return { tree: buildGanttTree(enriched), dependencies: deps, baselinedAt: project?.scheduleBaselinedAt ?? null };
+  // baselineLocked freezes task dates + dependencies (assertBaselineUnlocked), so the client
+  // disables drag-reschedule and dependency editing when it's set.
+  return { tree: buildGanttTree(enriched), dependencies: deps, baselinedAt: project?.scheduleBaselinedAt ?? null, baselineLocked: !!project?.baselineLockedAt };
 }
 
 // Critical Path Method over the leaf tasks (activities) and their FS/SS/FF/SF

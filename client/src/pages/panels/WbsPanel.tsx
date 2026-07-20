@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useMemo, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
@@ -45,6 +45,7 @@ function statusOf(pct: number): { label: string; color: string } {
 const BAR: Record<string, { track: string; fill: string }> = {
   green: { track: 'bg-emerald-400/25 dark:bg-emerald-500/20', fill: 'bg-emerald-500' },
   amber: { track: 'bg-amber-400/25 dark:bg-amber-500/20', fill: 'bg-amber-500' },
+  red: { track: 'bg-red-400/25 dark:bg-red-500/20', fill: 'bg-red-500' }, // late / overdue
   slate: { track: 'bg-slate-300/70 dark:bg-slate-600/50', fill: 'bg-slate-400 dark:bg-slate-500' },
 };
 
@@ -201,9 +202,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
 
   const ganttQ = useQuery({
     queryKey: ['gantt', projectId],
-    queryFn: () => api.get<{ tree: GanttNode[]; dependencies: TaskDependency[]; baselinedAt: string | null }>(`${base}/gantt`),
+    queryFn: () => api.get<{ tree: GanttNode[]; dependencies: TaskDependency[]; baselinedAt: string | null; baselineLocked?: boolean }>(`${base}/gantt`),
   });
   const baselinedAt = ganttQ.data?.baselinedAt ?? null;
+  const baselineLocked = ganttQ.data?.baselineLocked ?? false;
+  // Drag-reschedule + dependency editing are frozen once the baseline is locked (the API enforces it).
+  const canPlan = canEdit && !baselineLocked;
+  const deps = ganttQ.data?.dependencies ?? [];
 
   // Overall project % complete — read from the EVM engine (the SAME weighted roll-up the
   // dashboard shows) so the Gantt's headline figure always matches it exactly. statusDate
@@ -320,6 +325,102 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     onSuccess: () => { invalidate(); toast.success('Task deleted'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete task'),
   });
+  // Drag-to-reschedule: PUT replaces the whole task, so preserve every field and only move the dates.
+  const reschedule = useMutation({
+    mutationFn: ({ node, planStart, planEnd }: { node: GanttNode; planStart: string; planEnd: string }) =>
+      api.put(`${base}/tasks/${node.id}`, {
+        name: node.name, planStart, planEnd,
+        parentTaskId: node.parentTaskId, sortOrder: node.sortOrder,
+        picUserId: node.picUserId ?? undefined, picResourceId: node.picResourceId ?? undefined,
+        description: node.description ?? null, deliverable: node.deliverable ?? null, acceptanceCriteria: node.acceptanceCriteria ?? null,
+        actualStart: node.actualStart ?? undefined, actualFinish: node.actualFinish ?? undefined,
+        progressPct: node.progressPct, isMilestone: node.isMilestone,
+      }),
+    onSuccess: invalidate,
+    onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to reschedule'); },
+  });
+  const addDep = useMutation({
+    mutationFn: ({ predecessorId, successorId }: { predecessorId: string; successorId: string }) =>
+      api.post(`${base}/tasks/${successorId}/dependencies`, { predecessorId, type: 'FS', lagDays: 0 }),
+    onSuccess: () => { invalidate(); toast.success('Dependency linked'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not link tasks'),
+  });
+  const removeDep = useMutation({
+    mutationFn: (depId: string) => api.del(`${base}/dependencies/${depId}`),
+    onSuccess: () => { invalidate(); toast.success('Dependency removed'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to remove dependency'),
+  });
+
+  // Chart interactions: drag a bar to reschedule; click a link handle then another bar to connect them.
+  const [drag, setDrag] = useState<{ id: string; mode: 'move' | 'start' | 'end'; dx: number } | null>(null);
+  const [linkFrom, setLinkFrom] = useState<string | null>(null);
+  const barRefs = useRef(new Map<string, HTMLDivElement>());
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [arrows, setArrows] = useState<{ id: string; d: string; bad: boolean; mx: number; my: number }[]>([]);
+  const [geomTick, setGeomTick] = useState(0);
+  const uid = useId().replace(/:/g, '');
+
+  useEffect(() => { if (!linkFrom) return; const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLinkFrom(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [linkFrom]);
+
+  function startDrag(e: React.PointerEvent, node: GanttNode, mode: 'move' | 'start' | 'end') {
+    if (!canPlan || (node.children && node.children.length > 0) || !axis) return;
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.clientX;
+    setDrag({ id: node.id, mode, dx: 0 });
+    const onMove = (ev: PointerEvent) => setDrag((d) => (d ? { ...d, dx: ev.clientX - startX } : d));
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setDrag(null);
+      const pxPerDay = axis.width / (axis.span / day);
+      const deltaDays = Math.round((ev.clientX - startX) / pxPerDay);
+      if (deltaDays === 0) return;
+      const s = +new Date(node.planStart), en = +new Date(node.planEnd);
+      let ns = s, ne = en;
+      if (mode === 'move') { ns = s + deltaDays * day; ne = en + deltaDays * day; }
+      else if (mode === 'start') ns = Math.min(s + deltaDays * day, en);
+      else ne = Math.max(en + deltaDays * day, s);
+      reschedule.mutate({ node, planStart: new Date(ns).toISOString(), planEnd: new Date(ne).toISOString() });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  // Re-measure dependency arrows whenever layout could have changed.
+  useEffect(() => {
+    const bump = () => setGeomTick((t) => t + 1);
+    window.addEventListener('resize', bump);
+    const ro = new ResizeObserver(bump);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    return () => { window.removeEventListener('resize', bump); ro.disconnect(); };
+  }, []);
+  useLayoutEffect(() => {
+    if (!wrapRef.current || deps.length === 0 || !axis || drag) return;
+    const wrap = wrapRef.current.getBoundingClientRect();
+    const g = new Map<string, { x0: number; x1: number; y: number }>();
+    for (const [id, el] of barRefs.current) {
+      if (!el) continue;
+      const rc = el.getBoundingClientRect();
+      const l = Number(el.dataset.left) || 0, w = Number(el.dataset.width) || 0;
+      g.set(id, { x0: rc.left - wrap.left + (l / 100) * rc.width, x1: rc.left - wrap.left + ((l + w) / 100) * rc.width, y: rc.top - wrap.top + rc.height / 2 });
+    }
+    const out: { id: string; d: string; bad: boolean; mx: number; my: number }[] = [];
+    for (const dp of deps) {
+      const a = g.get(dp.predecessorId), b = g.get(dp.successorId);
+      if (!a || !b) continue;
+      const sx = dp.type === 'SS' || dp.type === 'SF' ? a.x0 : a.x1;
+      const tx = dp.type === 'FF' || dp.type === 'SF' ? b.x1 : b.x0;
+      const sy = a.y, ty = b.y;
+      const stub = 11;
+      const back = tx < sx + stub; // successor sits at/left of predecessor → elbow around
+      const ax = sx + stub;
+      const bx = back ? tx - stub : ax;
+      const midY = (sy + ty) / 2;
+      const d = `M ${sx} ${sy} L ${ax} ${sy} L ${ax} ${midY} L ${bx} ${midY} L ${bx} ${ty} L ${tx} ${ty}`;
+      out.push({ id: dp.id, d, bad: dp.type === 'FS' && b.x0 < a.x1 - 1, mx: (ax + bx) / 2, my: midY }); // FS violated if succ starts before pred finishes
+    }
+    setArrows(out);
+  }, [deps, rows, rolled, axis, scale, fullscreen, expanded, geomTick, drag]);
 
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
@@ -374,9 +475,39 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <div className="overflow-x-auto">
+          {linkFrom && (
+            <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
+              <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
+              <button onClick={() => setLinkFrom(null)} className="shrink-0 font-medium hover:underline">Cancel (Esc)</button>
+            </div>
+          )}
           {/* One scrollable table for every viewport — on phones swipe left/right to reach the
               Start/Finish/Budget/Var/Actions columns and the Gantt timeline (WBS renders as the
               Gantt/table view on mobile, not cards). */}
+          <div ref={wrapRef} className="group relative">
+          {/* Dependency arrows — a purely-visual SVG overlay measured from the rendered bars (spans
+              all rows). pointer-events-none so it never steals a drag from the bars beneath it. */}
+          {arrows.length > 0 && (
+            <>
+              <svg className="pointer-events-none absolute inset-0 z-[7] h-full w-full" style={{ overflow: 'visible' }} aria-hidden>
+                <defs>
+                  <marker id={`arrow-${uid}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M0 0 L10 5 L0 10 z" className="fill-slate-400 dark:fill-slate-500" />
+                  </marker>
+                </defs>
+                {arrows.map((a) => (
+                  <path key={a.id} d={a.d} markerEnd={`url(#arrow-${uid})`} className={`fill-none ${a.bad ? 'stroke-red-400' : 'stroke-slate-400 dark:stroke-slate-500'}`} strokeWidth={1.5} />
+                ))}
+              </svg>
+              {/* Delete handles — a small ✕ at each connector's midpoint (sits in the row gap, clear of bars). */}
+              {canPlan && arrows.map((a) => (
+                <button key={a.id} type="button" title="Remove dependency"
+                  onClick={async () => { if (await confirm({ title: 'Remove dependency?', message: 'Delete this task link?', confirmLabel: 'Remove', danger: true })) removeDep.mutate(a.id); }}
+                  className="absolute z-[9] grid h-4 w-4 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-slate-300 bg-white text-[9px] leading-none text-slate-500 opacity-0 shadow-sm transition hover:border-red-400 hover:text-red-500 group-hover:opacity-70 hover:!opacity-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  style={{ left: a.mx, top: a.my }}>✕</button>
+              ))}
+            </>
+          )}
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-2 [&>th]:pr-3">
@@ -409,9 +540,21 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {rows.map(({ node, depth, wbs }) => {
                 const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null };
                 const st = statusOf(r.pct);
-                const bar = BAR[st.color] ?? BAR.slate;
+                // "Late/overdue" = unfinished and past its planned finish DATE (whole days, so a task
+                // due today isn't flagged until tomorrow) → red bar + badge.
+                const overdue = r.pct < 100 && Math.floor(r.end / day) < Math.floor(Date.now() / day);
+                const inProgress = r.pct > 0 && r.pct < 100;
+                const bar = BAR[overdue ? 'red' : st.color] ?? BAR.slate;
                 const leftPct = axis ? ((r.start - axis.min) / axis.span) * 100 : 0;
                 const widthPct = axis ? Math.max(axis.minBarPct, ((r.end - r.start) / axis.span) * 100) : 0;
+                // Live drag preview — shift/resize the plan bar by the dragged pixels (as % of span).
+                const dragging = drag?.id === node.id ? drag : null;
+                const dShiftPct = dragging && axis ? (dragging.dx / axis.width) * 100 : 0;
+                const pLeft = dragging && dragging.mode !== 'end' ? leftPct + dShiftPct : leftPct;
+                const pWidth = dragging && axis
+                  ? Math.max(axis.minBarPct, dragging.mode === 'move' ? widthPct : dragging.mode === 'start' ? widthPct - dShiftPct : widthPct + dShiftPct)
+                  : widthPct;
+                const draggable = canPlan && !r.isParent && !linkFrom;
                 const baseLeft = axis && r.baseStart != null ? ((r.baseStart - axis.min) / axis.span) * 100 : null;
                 const baseWidth = axis && r.baseStart != null && r.baseEnd != null ? Math.max(axis.minBarPct, ((r.baseEnd - r.baseStart) / axis.span) * 100) : null;
                 // Actuals (leaf tasks only): a task that has started draws a vivid bar at its REAL
@@ -478,7 +621,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         </span>
                       )}
                     </td>
-                    <td><Badge color={st.color}>{st.label}</Badge></td>
+                    <td><Badge color={overdue ? 'red' : st.color}>{overdue ? 'Overdue' : st.label}</Badge></td>
                     <td className="text-right tabular-nums text-xs">
                       {varDays == null ? (
                         <span className="text-slate-300 dark:text-slate-600">—</span>
@@ -496,7 +639,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </td>
                     )}
                     <td>
-                      <div className="relative h-8" style={{ width: axis?.width }}>
+                      <div
+                        ref={(el) => { if (el) barRefs.current.set(node.id, el); else barRefs.current.delete(node.id); }}
+                        data-left={node.isMilestone ? msLeft : leftPct}
+                        data-width={node.isMilestone ? 0 : widthPct}
+                        onClick={() => { if (linkFrom && linkFrom !== node.id) { addDep.mutate({ predecessorId: linkFrom, successorId: node.id }); setLinkFrom(null); } }}
+                        className={`group/bar relative h-8 ${linkFrom && linkFrom !== node.id ? 'cursor-crosshair rounded ring-1 ring-inset ring-brand-400/50 hover:bg-brand-500/5' : ''}`}
+                        style={{ width: axis?.width }}
+                      >
                         {/* month/period gridlines + today marker for orientation */}
                         {axis?.ticks.filter((t) => t.major).map((t) => (
                           <div key={t.key} className="absolute inset-y-0 w-px bg-slate-100 dark:bg-slate-800/80" style={{ left: `${t.leftPct}%` }} />
@@ -511,10 +661,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                               <div className="absolute top-1/2 z-[4] h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] bg-slate-300/80 dark:bg-slate-600/70"
                                 style={{ left: `${((r.baseEnd - axis.min) / axis.span) * 100}%` }} title={`Baseline milestone · ${formatDate(new Date(r.baseEnd))}`} />
                             )}
-                            {/* milestone diamond — at the confirmed date when reached, else the planned date */}
+                            {/* milestone diamond — draggable; sits at the confirmed date when reached, else the planned date */}
                             <div
-                              className={`absolute top-1/2 z-[5] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] shadow-sm ring-2 ring-white dark:ring-slate-900 ${r.pct >= 100 ? bar.fill : 'bg-brand-500'}`}
-                              style={{ left: `${msLeft}%` }}
+                              onPointerDown={(e) => draggable && startDrag(e, node, 'move')}
+                              className={`absolute top-1/2 z-[5] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] shadow-sm ring-2 ring-white dark:ring-slate-900 ${draggable ? 'cursor-grab touch-none active:cursor-grabbing' : ''} ${dragging ? 'ring-brand-400' : ''} ${overdue ? 'bg-red-500' : r.pct >= 100 ? bar.fill : 'bg-brand-500'}`}
+                              style={{ left: `${dragging ? msLeft + dShiftPct : msLeft}%` }}
                               title={r.pct >= 100 && node.actualFinish ? `Milestone reached · ${formatDate(new Date(node.actualFinish))}` : `Milestone (planned) · ${formatDate(new Date(r.end))}`}
                             />
                           </>
@@ -524,24 +675,43 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             {baseLeft != null && baseWidth != null && (
                               <div className="absolute top-1 h-1.5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" style={{ left: `${baseLeft}%`, width: `${baseWidth}%` }} title={`Baseline: ${formatDate(new Date(r.baseStart!))} → ${formatDate(new Date(r.baseEnd!))}`} />
                             )}
-                            {/* plan track — light status-tinted reference (planStart → planEnd) */}
+                            {/* plan track — light status-tinted reference; drag to move, edge handles to resize */}
                             <div
-                              className={`absolute top-3 h-[15px] overflow-hidden rounded-full ring-1 ring-inset ring-black/5 dark:ring-white/10 ${bar.track}`}
-                              style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                              title={`Plan: ${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))}`}
+                              onPointerDown={(e) => draggable && startDrag(e, node, 'move')}
+                              className={`group/track absolute top-3 h-[15px] overflow-hidden rounded-full ring-1 ring-inset ring-black/5 dark:ring-white/10 ${bar.track} ${draggable ? 'cursor-grab touch-none active:cursor-grabbing' : ''} ${dragging ? 'ring-2 ring-brand-400' : ''}`}
+                              style={{ left: `${pLeft}%`, width: `${pWidth}%` }}
+                              title={dragging ? 'Release to reschedule' : `Plan: ${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))}`}
                             >
                               {/* summary (parent) rows show rolled progress inside the plan track */}
                               {r.isParent && <div className={`h-full rounded-full ${bar.fill}`} style={{ width: `${r.pct}%` }} />}
+                              {/* resize handles (leaf, editable) */}
+                              {draggable && <span onPointerDown={(e) => startDrag(e, node, 'start')} className="absolute inset-y-0 left-0 w-2 cursor-ew-resize touch-none rounded-l-full bg-black/25 opacity-0 group-hover/track:opacity-100 dark:bg-white/25" />}
+                              {draggable && <span onPointerDown={(e) => startDrag(e, node, 'end')} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize touch-none rounded-r-full bg-black/25 opacity-0 group-hover/track:opacity-100 dark:bg-white/25" />}
                             </div>
                             {/* actual bar — vivid, at REAL dates, overlaid on the plan track (leaf tasks that started) */}
                             {started && (
                               <div
-                                className={`absolute top-[15px] z-[6] h-[9px] rounded-full shadow-sm ${bar.fill} ${r.pct < 100 ? 'opacity-95' : ''}`}
+                                className={`pointer-events-none absolute top-[15px] z-[6] h-[9px] rounded-full shadow-sm ${bar.fill} ${r.pct < 100 ? 'opacity-95' : ''}`}
                                 style={{ left: `${actLeft}%`, width: `${actWidth}%` }}
                                 title={`${r.pct >= 100 ? 'Actual' : 'Actual so far'}: ${formatDate(new Date(actStart))} → ${r.pct >= 100 ? formatDate(new Date(actEnd)) : 'today'} · ${r.pct}%`}
                               />
                             )}
+                            {/* in-progress pulse at the leading (today) edge */}
+                            {started && inProgress && axis && (
+                              <span className={`pointer-events-none absolute top-[15px] z-[7] h-[9px] w-[9px] -translate-x-1/2 animate-pulse rounded-full ring-2 ring-white dark:ring-slate-900 ${overdue ? 'bg-red-400' : 'bg-amber-400'}`} style={{ left: `${actLeft + actWidth}%` }} />
+                            )}
                           </>
+                        )}
+                        {/* link handle — click to start a Finish→Start dependency from this task */}
+                        {canPlan && !dragging && (
+                          <button
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); setLinkFrom(linkFrom === node.id ? null : node.id); }}
+                            title={linkFrom === node.id ? 'Click another task to link (Esc to cancel)' : 'Link this task → another (Finish-to-Start)'}
+                            className={`absolute top-1/2 z-[8] h-3 w-3 -translate-y-1/2 translate-x-1.5 rounded-full border shadow-sm transition ${linkFrom === node.id ? 'border-brand-500 bg-brand-500 ring-2 ring-brand-300' : 'border-slate-300 bg-white opacity-0 group-hover/bar:opacity-100 dark:border-slate-500 dark:bg-slate-700'}`}
+                            style={{ left: `${node.isMilestone ? msLeft : leftPct + widthPct}%` }}
+                          />
                         )}
                       </div>
                     </td>
@@ -558,12 +728,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               })}
             </tbody>
           </table>
+          </div>
           {/* Tracking-Gantt legend — the timeline overlays baseline, plan and actual dates. */}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
             <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" />Baseline</span>
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full bg-slate-300/50 ring-1 ring-inset ring-black/5 dark:bg-slate-600/40 dark:ring-white/10" />Plan</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-emerald-500" /><span className="h-2 w-5 rounded-full bg-slate-400 dark:bg-slate-500" />Actual (real start→finish; today if ongoing)</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-emerald-500" />Actual · done</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-amber-500" />In progress</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-red-500" />Late / overdue</span>
             <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-brand-500" />Milestone</span>
+            <span className="flex items-center gap-1.5"><svg width="26" height="8" className="overflow-visible"><line x1="1" y1="4" x2="20" y2="4" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" markerEnd={`url(#arrow-${uid})`} /></svg>Dependency (FS)</span>
+            {canPlan && <span className="text-slate-400 dark:text-slate-500">· drag a bar to reschedule · use the ⛓ handle to link tasks</span>}
+            {baselineLocked && <span className="text-amber-600 dark:text-amber-400">· baseline locked — unlock to edit the schedule</span>}
           </div>
         </div>
       )}
