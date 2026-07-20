@@ -238,10 +238,27 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // changing the scale only restyles the axis and grows/shrinks the timeline width.
   const axis = useMemo(() => {
     if (!rows.length) return null;
-    const starts = rows.map((r) => { const x = rolled.get(r.node.id); return Math.min(x?.start ?? +new Date(r.node.planStart), x?.baseStart ?? Infinity); });
-    const ends = rows.map((r) => { const x = rolled.get(r.node.id); return Math.max(x?.end ?? +new Date(r.node.planEnd), x?.baseEnd ?? -Infinity); });
-    const min = Math.min(...starts);
-    const max = Math.max(...ends);
+    const now = Date.now();
+    // Span covers plan + baseline + ACTUAL dates (a task that finished late/early must fit),
+    // and extends to "today" when any leaf task is still in progress (its actual bar runs to now).
+    let anyActive = false;
+    const lo: number[] = [];
+    const hi: number[] = [];
+    for (const r of rows) {
+      const x = rolled.get(r.node.id);
+      const pStart = x?.start ?? +new Date(r.node.planStart);
+      const pEnd = x?.end ?? +new Date(r.node.planEnd);
+      lo.push(Math.min(pStart, x?.baseStart ?? Infinity));
+      hi.push(Math.max(pEnd, x?.baseEnd ?? -Infinity));
+      const pct = x?.pct ?? r.node.progressPct;
+      if (!x?.isParent && pct > 0) { // leaf task that has actually started
+        lo.push(r.node.actualStart ? +new Date(r.node.actualStart) : pStart);
+        if (pct >= 100) hi.push(r.node.actualFinish ? +new Date(r.node.actualFinish) : pEnd);
+        else anyActive = true;
+      }
+    }
+    const min = Math.min(...lo);
+    const max = Math.max(...hi, anyActive ? now : -Infinity);
     const span = Math.max(max - min, day);
     const spanDays = span / day;
     const width = Math.round(Math.min(11000, Math.max(300, spanDays * PX_PER_DAY[scale])));
@@ -259,7 +276,6 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
       const d = new Date(min); d.setUTCHours(0, 0, 0, 0);
       while (+d <= max) { const first = d.getUTCDate() === 1; ticks.push({ key: `${+d}`, label: first ? d.toLocaleString('en', { month: 'short', timeZone: 'UTC' }) : String(d.getUTCDate()), leftPct: pct(+d), major: first }); d.setUTCDate(d.getUTCDate() + 1); }
     }
-    const now = Date.now();
     const todayPct = now >= min && now <= max ? pct(now) : null;
     const minBarPct = (6 / width) * 100; // keep tiny tasks/milestones visible at any scale
     return { min, span, width, ticks, todayPct, minBarPct };
@@ -396,9 +412,25 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 const bar = BAR[st.color] ?? BAR.slate;
                 const leftPct = axis ? ((r.start - axis.min) / axis.span) * 100 : 0;
                 const widthPct = axis ? Math.max(axis.minBarPct, ((r.end - r.start) / axis.span) * 100) : 0;
-                const varDays = r.baseEnd != null ? Math.round((r.end - r.baseEnd) / day) : null;
                 const baseLeft = axis && r.baseStart != null ? ((r.baseStart - axis.min) / axis.span) * 100 : null;
                 const baseWidth = axis && r.baseStart != null && r.baseEnd != null ? Math.max(axis.minBarPct, ((r.baseEnd - r.baseStart) / axis.span) * 100) : null;
+                // Actuals (leaf tasks only): a task that has started draws a vivid bar at its REAL
+                // dates — actualStart → actualFinish (done) or → today (in progress) — so a late/early
+                // finish shows a shift vs the plan track. Falls back to plan dates if a stamp is missing.
+                const started = !r.isParent && r.pct > 0;
+                const actStart = node.actualStart ? +new Date(node.actualStart) : r.start;
+                const actEnd = r.pct >= 100 ? (node.actualFinish ? +new Date(node.actualFinish) : r.end) : Date.now();
+                const actLeft = axis ? ((actStart - axis.min) / axis.span) * 100 : 0;
+                const actWidth = axis ? Math.max(axis.minBarPct, ((actEnd - actStart) / axis.span) * 100) : 0;
+                // Milestone marker sits at its confirmed date when done, else the planned date.
+                const msMs = r.pct >= 100 && node.actualFinish ? +new Date(node.actualFinish) : r.end;
+                const msLeft = axis ? ((msMs - axis.min) / axis.span) * 100 : 0;
+                // Schedule variance: actual finish (if completed) else current plan finish, vs baseline.
+                const finishMs = r.pct >= 100 && !r.isParent && node.actualFinish ? +new Date(node.actualFinish) : r.end;
+                // Compare whole calendar days — actualFinish carries a time-of-day that would
+                // otherwise inflate the variance by a day.
+                const varDays = r.baseEnd != null ? Math.floor(finishMs / day) - Math.floor(r.baseEnd / day) : null;
+                const varIsActual = r.pct >= 100 && !r.isParent && !!node.actualFinish;
                 const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.picResource || node.pic);
                 const isOpen = expanded.has(node.id);
                 const togglingId = progress.isPending && progress.variables?.id === node.id;
@@ -422,7 +454,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     </td>
                     <td><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></td>
                     <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.start))}</td>
-                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">{formatDate(new Date(r.end))}</td>
+                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">
+                      {r.pct >= 100 && !r.isParent && node.actualFinish
+                        ? <span className="text-slate-600 dark:text-slate-300" title={`Actual finish · plan was ${formatDate(new Date(r.end))}`}>{formatDate(new Date(node.actualFinish))}</span>
+                        : formatDate(new Date(r.end))}
+                    </td>
                     <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
                     <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
                       {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
@@ -447,8 +483,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       {varDays == null ? (
                         <span className="text-slate-300 dark:text-slate-600">—</span>
                       ) : (
-                        <span title={`Baseline finish ${formatDate(new Date(r.baseEnd!))}`} className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}>
-                          {varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}
+                        <span title={`${varIsActual ? 'Actual' : 'Forecast'} finish vs baseline (${formatDate(new Date(r.baseEnd!))})`} className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}>
+                          {varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}{varIsActual && <span className="ml-0.5 text-green-600 dark:text-green-400" title="Based on the confirmed actual finish">✓</span>}
                         </span>
                       )}
                     </td>
@@ -460,7 +496,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </td>
                     )}
                     <td>
-                      <div className="relative h-7" style={{ width: axis?.width }}>
+                      <div className="relative h-8" style={{ width: axis?.width }}>
                         {/* month/period gridlines + today marker for orientation */}
                         {axis?.ticks.filter((t) => t.major).map((t) => (
                           <div key={t.key} className="absolute inset-y-0 w-px bg-slate-100 dark:bg-slate-800/80" style={{ left: `${t.leftPct}%` }} />
@@ -469,26 +505,42 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                           <div className="absolute inset-y-0 z-10 w-px bg-brand-500/60" style={{ left: `${axis.todayPct}%` }} />
                         )}
                         {node.isMilestone ? (
-                          /* milestone → diamond marker */
-                          <div
-                            className="absolute top-1/2 z-[5] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] bg-brand-500 shadow-sm ring-2 ring-white dark:ring-slate-900"
-                            style={{ left: `${leftPct}%` }}
-                            title={`Milestone · ${formatDate(new Date(r.end))}`}
-                          />
+                          <>
+                            {/* baseline milestone (ghost diamond) */}
+                            {r.baseEnd != null && axis && (
+                              <div className="absolute top-1/2 z-[4] h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] bg-slate-300/80 dark:bg-slate-600/70"
+                                style={{ left: `${((r.baseEnd - axis.min) / axis.span) * 100}%` }} title={`Baseline milestone · ${formatDate(new Date(r.baseEnd))}`} />
+                            )}
+                            {/* milestone diamond — at the confirmed date when reached, else the planned date */}
+                            <div
+                              className={`absolute top-1/2 z-[5] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] shadow-sm ring-2 ring-white dark:ring-slate-900 ${r.pct >= 100 ? bar.fill : 'bg-brand-500'}`}
+                              style={{ left: `${msLeft}%` }}
+                              title={r.pct >= 100 && node.actualFinish ? `Milestone reached · ${formatDate(new Date(node.actualFinish))}` : `Milestone (planned) · ${formatDate(new Date(r.end))}`}
+                            />
+                          </>
                         ) : (
                           <>
-                            {/* baseline (ghost) bar — thin pill above the live bar */}
+                            {/* baseline (ghost) — thin pill on top */}
                             {baseLeft != null && baseWidth != null && (
                               <div className="absolute top-1 h-1.5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" style={{ left: `${baseLeft}%`, width: `${baseWidth}%` }} title={`Baseline: ${formatDate(new Date(r.baseStart!))} → ${formatDate(new Date(r.baseEnd!))}`} />
                             )}
-                            {/* live bar — light status track with a vivid rounded progress fill (monday.com style) */}
+                            {/* plan track — light status-tinted reference (planStart → planEnd) */}
                             <div
-                              className={`absolute ${baseLeft != null ? 'top-3' : 'top-1/2 -translate-y-1/2'} h-[18px] overflow-hidden rounded-full shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10 ${bar.track}`}
+                              className={`absolute top-3 h-[15px] overflow-hidden rounded-full ring-1 ring-inset ring-black/5 dark:ring-white/10 ${bar.track}`}
                               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                              title={`${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))} · ${r.pct}%`}
+                              title={`Plan: ${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))}`}
                             >
-                              <div className={`h-full rounded-full ${bar.fill}`} style={{ width: `${r.pct}%` }} />
+                              {/* summary (parent) rows show rolled progress inside the plan track */}
+                              {r.isParent && <div className={`h-full rounded-full ${bar.fill}`} style={{ width: `${r.pct}%` }} />}
                             </div>
+                            {/* actual bar — vivid, at REAL dates, overlaid on the plan track (leaf tasks that started) */}
+                            {started && (
+                              <div
+                                className={`absolute top-[15px] z-[6] h-[9px] rounded-full shadow-sm ${bar.fill} ${r.pct < 100 ? 'opacity-95' : ''}`}
+                                style={{ left: `${actLeft}%`, width: `${actWidth}%` }}
+                                title={`${r.pct >= 100 ? 'Actual' : 'Actual so far'}: ${formatDate(new Date(actStart))} → ${r.pct >= 100 ? formatDate(new Date(actEnd)) : 'today'} · ${r.pct}%`}
+                              />
+                            )}
                           </>
                         )}
                       </div>
@@ -506,6 +558,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               })}
             </tbody>
           </table>
+          {/* Tracking-Gantt legend — the timeline overlays baseline, plan and actual dates. */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" />Baseline</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full bg-slate-300/50 ring-1 ring-inset ring-black/5 dark:bg-slate-600/40 dark:ring-white/10" />Plan</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-emerald-500" /><span className="h-2 w-5 rounded-full bg-slate-400 dark:bg-slate-500" />Actual (real start→finish; today if ongoing)</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-brand-500" />Milestone</span>
+          </div>
         </div>
       )}
 
