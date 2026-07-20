@@ -5,6 +5,7 @@ import type { Evm, EvmTrend, Forecast, GanttNode } from '../api/types';
 import { Card, Spinner } from './ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { formatNum } from '../lib/format';
+import { computeMargin } from '../lib/margin';
 import HealthGauge from './HealthGauge';
 import { useLang } from '../context/LanguageContext';
 
@@ -177,14 +178,12 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const hasCost = planCurve.length >= 2 || actCost.length > 0;
   const hasProg = bac > 0 && (planProg.length >= 2 || actProg.length > 0);
 
-  // Plan vs actual margin & profit (internally consistent with the EVM cost bars above:
-  // plan cost = BAC, actual cost = AC).
+  // Plan vs projected margin & profit. Plan = Revenue − BAC (the cost baseline); projected =
+  // Revenue − EAC (forecast cost at completion) — the honest "where margin will land". We do NOT
+  // use Revenue − AC as a profit (cost-to-date looks inflated mid-project).
   const rev = m?.revenue ?? 0;
-  const planProfit = rev - bac;
-  const actProfit = rev - e.ac;
-  const planMarginPct = rev > 0 ? (planProfit / rev) * 100 : null;
-  const actMarginPct = rev > 0 ? (actProfit / rev) * 100 : null;
-  const hasActualCost = e.ac > 0;
+  const plan = computeMargin(rev, bac);
+  const projected = computeMargin(rev, e.eac);
   const profitTone = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400');
 
   const tasks = ganttQ.data ? countTasks(ganttQ.data.tree) : null;
@@ -229,20 +228,20 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Margin & profit — plan vs actual */}
       {m && m.revenue > 0 && (
         <Panel onClick={onJump ? () => onJump('Forecast') : undefined}>
-          <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Margin & Laba — Rencana vs Aktual' : 'Margin & profit — plan vs actual'}</h3>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Margin & Laba — Rencana vs Proyeksi' : 'Margin & profit — plan vs projected'}</h3>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
               <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{id ? 'Laba rencana' : 'Plan profit'}</div>
-              <div className={`text-sm font-semibold tabular-nums ${profitTone(planProfit)}`}>{formatIdrShort(planProfit)}</div>
-              <div className="text-[11px] text-slate-400 dark:text-slate-500">{id ? 'Margin' : 'Margin'} {planMarginPct != null ? `${planMarginPct.toFixed(1)}%` : '—'}</div>
+              <div className={`text-sm font-semibold tabular-nums ${profitTone(plan.profit)}`}>{formatIdrShort(plan.profit)}</div>
+              <div className="text-[11px] text-slate-400 dark:text-slate-500">{id ? 'Margin' : 'Margin'} {plan.marginPct != null ? `${plan.marginPct.toFixed(1)}%` : '—'}</div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
-              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{id ? 'Laba aktual' : 'Actual profit'}</div>
-              <div className={`text-sm font-semibold tabular-nums ${hasActualCost ? profitTone(actProfit) : 'text-slate-400 dark:text-slate-500'}`}>{hasActualCost ? formatIdrShort(actProfit) : '—'}</div>
-              <div className="text-[11px] text-slate-400 dark:text-slate-500">{id ? 'Margin' : 'Margin'} {hasActualCost && actMarginPct != null ? `${actMarginPct.toFixed(1)}%` : '—'}</div>
+              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{id ? 'Laba proyeksi' : 'Projected profit'}</div>
+              <div className={`text-sm font-semibold tabular-nums ${profitTone(projected.profit)}`}>{formatIdrShort(projected.profit)}</div>
+              <div className="text-[11px] text-slate-400 dark:text-slate-500">{id ? 'Margin' : 'Margin'} {projected.marginPct != null ? `${projected.marginPct.toFixed(1)}%` : '—'}</div>
             </div>
           </div>
-          <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">{id ? 'Rencana = Pendapatan − BAC · Aktual = Pendapatan − Biaya aktual (AC).' : 'Plan = Revenue − BAC · Actual = Revenue − actual cost (AC).'}</p>
+          <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">{id ? 'Rencana = Pendapatan − BAC · Proyeksi = Pendapatan − EAC (perkiraan biaya saat selesai).' : 'Plan = Revenue − BAC · Projected = Revenue − EAC (forecast cost at completion).'}</p>
         </Panel>
       )}
 

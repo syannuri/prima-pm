@@ -82,6 +82,8 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
   const inProgress = leaves.filter((t) => t.progressPct > 0 && t.progressPct < 100).length;
   const notStarted = leaves.filter((t) => t.progressPct <= 0).length;
   const now = +asOf;
+  const DAY = 86_400_000;
+  const dayFloor = (ms: number) => Math.floor(ms / DAY); // compare whole calendar days (asOf carries a time-of-day)
   const remaining = leaves
     .filter((t) => t.progressPct < 100)
     .sort((a, b) => +a.planEnd - +b.planEnd)
@@ -89,7 +91,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
       name: t.name,
       pct: t.progressPct,
       planEnd: new Date(t.planEnd).toISOString(),
-      overdue: +t.planEnd < now,
+      overdue: dayFloor(+t.planEnd) < dayFloor(now), // due today is not overdue until tomorrow (matches the Gantt)
       isMilestone: t.isMilestone,
       owner: t.picResource?.name ?? null,
     }));

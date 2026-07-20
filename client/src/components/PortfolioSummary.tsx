@@ -6,6 +6,7 @@ import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types'
 import HealthGauge from './HealthGauge';
 import { Badge, Card, Skeleton } from './ui';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
+import { computeMargin, likelyEac } from '../lib/margin';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
@@ -139,13 +140,15 @@ export default function PortfolioSummary() {
 
   // Cost & revenue per project (PMO dashboard) — highest revenue first.
   const finRows = [...data.projects].sort((a, b) => b.revenue - a.revenue);
+  // Plan cost = BAC (the cost-baseline PMB), forecast cost = likely EAC (BAC÷CPI). Profit uses the
+  // shared computeMargin helper so the dashboard, Overview, forecast and PDF never diverge.
   const finTotals = data.projects.reduce(
-    (a, p) => ({ cost: a.cost + p.plannedCost, actualCost: a.actualCost + p.ac, revenue: a.revenue + p.revenue }),
-    { cost: 0, actualCost: 0, revenue: 0 },
+    (a, p) => ({ bac: a.bac + p.bac, actualCost: a.actualCost + p.ac, eac: a.eac + likelyEac(p.bac, p.cpi), revenue: a.revenue + p.revenue }),
+    { bac: 0, actualCost: 0, eac: 0, revenue: 0 },
   );
-  const finPlanProfit = finTotals.revenue - finTotals.cost; // profit at the cost baseline
-  const finActualProfit = finTotals.revenue - finTotals.actualCost; // profit at actual cost to date
-  const hasFinancials = finTotals.cost > 0 || finTotals.revenue > 0;
+  const finPlan = computeMargin(finTotals.revenue, finTotals.bac); // profit at the cost baseline
+  const finProjected = computeMargin(finTotals.revenue, finTotals.eac); // forecast profit at completion (EAC)
+  const hasFinancials = finTotals.bac > 0 || finTotals.revenue > 0;
 
   return (
     <div className="space-y-3">
@@ -362,12 +365,12 @@ export default function PortfolioSummary() {
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cost &amp; revenue by project</span>
             <span className="text-xs text-slate-500 dark:text-slate-400">
               Revenue {formatIdr(finTotals.revenue)} · Plan profit{' '}
-              <span className={finPlanProfit < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
-                {formatIdr(finPlanProfit)}{finTotals.revenue > 0 ? ` (${formatNum((finPlanProfit / finTotals.revenue) * 100, 1)}%)` : ''}
+              <span className={finPlan.profit < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
+                {formatIdr(finPlan.profit)}{finPlan.marginPct != null ? ` (${finPlan.marginPct.toFixed(1)}%)` : ''}
               </span>
-              {finTotals.actualCost > 0 && <> · Actual profit{' '}
-                <span className={finActualProfit < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
-                  {formatIdr(finActualProfit)}{finTotals.revenue > 0 ? ` (${formatNum((finActualProfit / finTotals.revenue) * 100, 1)}%)` : ''}
+              {finTotals.actualCost > 0 && <> · Projected profit{' '}
+                <span className={finProjected.profit < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
+                  {formatIdr(finProjected.profit)}{finProjected.marginPct != null ? ` (${finProjected.marginPct.toFixed(1)}%)` : ''}
                 </span>
               </>}
             </span>
@@ -382,19 +385,19 @@ export default function PortfolioSummary() {
                   <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                     <th className="py-2">Project</th>
                     <th className="text-right">Revenue</th>
-                    <th className="text-right" title="Cost baseline (planned)">Plan cost</th>
-                    <th className="text-right" title="Actual cost to date (EVM AC)">Actual cost</th>
-                    <th className="text-right" title="Plan profit = Revenue − Plan cost">Plan profit</th>
-                    <th className="text-right" title="Actual profit = Revenue − Actual cost">Actual profit</th>
+                    <th className="text-right" title="Cost baseline / PMB (BAC = direct + indirect + contingency)">Plan cost</th>
+                    <th className="text-right" title="Actual cost incurred to date (EVM AC)">Actual cost</th>
+                    <th className="text-right" title="Plan profit = Revenue − BAC">Plan profit</th>
+                    <th className="text-right" title="Projected profit at completion = Revenue − EAC (forecast cost)">Projected profit</th>
                     <th className="text-right" title="Plan margin = Plan profit ÷ Revenue">Plan margin</th>
-                    <th className="text-right" title="Actual margin = Actual profit ÷ Revenue">Actual margin</th>
+                    <th className="text-right" title="Projected margin = Projected profit ÷ Revenue">Projected margin</th>
                   </tr>
                 </thead>
                 <tbody>
                   {finRows.map((p) => {
-                    const planProfit = p.revenue - p.plannedCost;
-                    const actualProfit = p.revenue - p.ac;
-                    const hasPlan = p.revenue > 0 || p.plannedCost > 0;
+                    const plan = computeMargin(p.revenue, p.bac);
+                    const projected = computeMargin(p.revenue, likelyEac(p.bac, p.cpi));
+                    const hasPlan = p.revenue > 0 || p.bac > 0;
                     const hasActual = p.ac > 0;
                     const money = (v: number, tone: boolean, on: boolean) => (
                       <td className={`text-right whitespace-nowrap ${on && tone ? (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : ''}`} title={on ? formatIdr(v) : undefined}>{on ? formatIdrShort(v) : '—'}</td>
@@ -408,12 +411,12 @@ export default function PortfolioSummary() {
                           </Link>
                         </td>
                         {money(p.revenue, false, !!p.revenue)}
-                        {money(p.plannedCost, false, !!p.plannedCost)}
+                        {money(p.bac, false, !!p.bac)}
                         {money(p.ac, false, hasActual)}
-                        {money(planProfit, true, hasPlan)}
-                        {money(actualProfit, true, hasActual)}
-                        <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((planProfit / p.revenue) * 100, 1)}%` : '—'}</td>
-                        <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{hasActual && p.revenue > 0 ? `${formatNum((actualProfit / p.revenue) * 100, 1)}%` : '—'}</td>
+                        {money(plan.profit, true, hasPlan)}
+                        {money(projected.profit, true, hasPlan)}
+                        <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{plan.marginPct != null ? `${plan.marginPct.toFixed(1)}%` : '—'}</td>
+                        <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{projected.marginPct != null ? `${projected.marginPct.toFixed(1)}%` : '—'}</td>
                       </tr>
                     );
                   })}
@@ -422,12 +425,12 @@ export default function PortfolioSummary() {
                   <tr className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                     <td className="py-2">Total</td>
                     <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.revenue)}>{formatIdrShort(finTotals.revenue)}</td>
-                    <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.cost)}>{formatIdrShort(finTotals.cost)}</td>
+                    <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.bac)}>{formatIdrShort(finTotals.bac)}</td>
                     <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.actualCost)}>{finTotals.actualCost > 0 ? formatIdrShort(finTotals.actualCost) : '—'}</td>
-                    <td className={`text-right whitespace-nowrap ${finPlanProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`} title={formatIdr(finPlanProfit)}>{formatIdrShort(finPlanProfit)}</td>
-                    <td className={`text-right whitespace-nowrap ${finTotals.actualCost > 0 ? (finActualProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : ''}`} title={finTotals.actualCost > 0 ? formatIdr(finActualProfit) : undefined}>{finTotals.actualCost > 0 ? formatIdrShort(finActualProfit) : '—'}</td>
-                    <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finTotals.revenue > 0 ? `${formatNum((finPlanProfit / finTotals.revenue) * 100, 1)}%` : '—'}</td>
-                    <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finTotals.actualCost > 0 && finTotals.revenue > 0 ? `${formatNum((finActualProfit / finTotals.revenue) * 100, 1)}%` : '—'}</td>
+                    <td className={`text-right whitespace-nowrap ${finPlan.profit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`} title={formatIdr(finPlan.profit)}>{formatIdrShort(finPlan.profit)}</td>
+                    <td className={`text-right whitespace-nowrap ${finProjected.profit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`} title={formatIdr(finProjected.profit)}>{formatIdrShort(finProjected.profit)}</td>
+                    <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finPlan.marginPct != null ? `${finPlan.marginPct.toFixed(1)}%` : '—'}</td>
+                    <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finProjected.marginPct != null ? `${finProjected.marginPct.toFixed(1)}%` : '—'}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -435,9 +438,9 @@ export default function PortfolioSummary() {
             {/* Mobile card list — table hidden < sm. */}
             <div className="space-y-2 sm:hidden">
               {finRows.map((p) => {
-                const planProfit = p.revenue - p.plannedCost;
-                const actualProfit = p.revenue - p.ac;
-                const hasPlan = p.revenue > 0 || p.plannedCost > 0;
+                const plan = computeMargin(p.revenue, p.bac);
+                const projected = computeMargin(p.revenue, likelyEac(p.bac, p.cpi));
+                const hasPlan = p.revenue > 0 || p.bac > 0;
                 const hasActual = p.ac > 0;
                 const tone = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400');
                 return (
@@ -448,13 +451,13 @@ export default function PortfolioSummary() {
                     </Link>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-xs tabular-nums">
                       <div><div className="text-slate-400">Revenue</div><div className="text-slate-700 dark:text-slate-200">{p.revenue ? formatIdrShort(p.revenue) : '—'}</div></div>
-                      <div><div className="text-slate-400">Plan cost</div><div className="text-slate-700 dark:text-slate-200">{p.plannedCost ? formatIdrShort(p.plannedCost) : '—'}</div></div>
+                      <div><div className="text-slate-400">Plan cost</div><div className="text-slate-700 dark:text-slate-200">{p.bac ? formatIdrShort(p.bac) : '—'}</div></div>
                       <div><div className="text-slate-400">Actual cost</div><div className="text-slate-700 dark:text-slate-200">{hasActual ? formatIdrShort(p.ac) : '—'}</div></div>
-                      <div><div className="text-slate-400">Plan profit</div><div className={hasPlan ? tone(planProfit) : 'text-slate-400'}>{hasPlan ? formatIdrShort(planProfit) : '—'}</div></div>
-                      <div><div className="text-slate-400">Actual profit</div><div className={hasActual ? tone(actualProfit) : 'text-slate-400'}>{hasActual ? formatIdrShort(actualProfit) : '—'}</div></div>
+                      <div><div className="text-slate-400">Plan profit</div><div className={hasPlan ? tone(plan.profit) : 'text-slate-400'}>{hasPlan ? formatIdrShort(plan.profit) : '—'}</div></div>
+                      <div><div className="text-slate-400">Projected profit</div><div className={hasPlan ? tone(projected.profit) : 'text-slate-400'}>{hasPlan ? formatIdrShort(projected.profit) : '—'}</div></div>
                       <div />
-                      <div><div className="text-slate-400">Plan margin</div><div className="text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((planProfit / p.revenue) * 100, 1)}%` : '—'}</div></div>
-                      <div><div className="text-slate-400">Actual margin</div><div className="text-slate-500 dark:text-slate-400">{hasActual && p.revenue > 0 ? `${formatNum((actualProfit / p.revenue) * 100, 1)}%` : '—'}</div></div>
+                      <div><div className="text-slate-400">Plan margin</div><div className="text-slate-500 dark:text-slate-400">{plan.marginPct != null ? `${plan.marginPct.toFixed(1)}%` : '—'}</div></div>
+                      <div><div className="text-slate-400">Projected margin</div><div className="text-slate-500 dark:text-slate-400">{projected.marginPct != null ? `${projected.marginPct.toFixed(1)}%` : '—'}</div></div>
                     </div>
                   </div>
                 );
@@ -463,8 +466,8 @@ export default function PortfolioSummary() {
                 <div className="mb-1 text-slate-600 dark:text-slate-300">Total</div>
                 <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-xs tabular-nums text-slate-600 dark:text-slate-300">
                   <span>Rev {formatIdrShort(finTotals.revenue)}</span>
-                  <span className={finPlanProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>Plan profit {formatIdrShort(finPlanProfit)}</span>
-                  {finTotals.actualCost > 0 && <span className={finActualProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>Actual profit {formatIdrShort(finActualProfit)}</span>}
+                  <span className={finPlan.profit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>Plan profit {formatIdrShort(finPlan.profit)}</span>
+                  <span className={finProjected.profit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>Projected profit {formatIdrShort(finProjected.profit)}</span>
                 </div>
               </div>
             </div>

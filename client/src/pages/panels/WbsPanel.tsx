@@ -378,8 +378,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
       const s = +new Date(node.planStart), en = +new Date(node.planEnd);
       let ns = s, ne = en;
       if (mode === 'move') { ns = s + deltaDays * day; ne = en + deltaDays * day; }
-      else if (mode === 'start') ns = Math.min(s + deltaDays * day, en);
-      else ne = Math.max(en + deltaDays * day, s);
+      // Resize keeps a ≥1-day span so a task never collapses to 0 days (which would zero its EVM weight).
+      else if (mode === 'start') ns = Math.min(s + deltaDays * day, node.isMilestone ? en : en - day);
+      else ne = Math.max(en + deltaDays * day, node.isMilestone ? s : s + day);
       reschedule.mutate({ node, planStart: new Date(ns).toISOString(), planEnd: new Date(ne).toISOString() });
     };
     window.addEventListener('pointermove', onMove);

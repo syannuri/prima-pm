@@ -301,8 +301,9 @@ export async function setTaskProgress(projectId: string, taskId: string, progres
   if (!existing) throw NotFound('Task not found');
 
   const now = new Date();
-  const data: { progressPct: number; actualStart?: Date; actualFinish?: Date | null } = { progressPct };
+  const data: { progressPct: number; actualStart?: Date | null; actualFinish?: Date | null } = { progressPct };
   if (progressPct > 0 && !existing.actualStart) data.actualStart = now;
+  else if (progressPct <= 0 && existing.actualStart) data.actualStart = null; // back to not-started → clear the stamp
   if (progressPct >= 100) data.actualFinish = existing.actualFinish ?? now;
   else if (existing.actualFinish) data.actualFinish = null;
 
