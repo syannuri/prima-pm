@@ -140,10 +140,11 @@ export default function PortfolioSummary() {
   // Cost & revenue per project (PMO dashboard) — highest revenue first.
   const finRows = [...data.projects].sort((a, b) => b.revenue - a.revenue);
   const finTotals = data.projects.reduce(
-    (a, p) => ({ cost: a.cost + p.plannedCost, revenue: a.revenue + p.revenue }),
-    { cost: 0, revenue: 0 },
+    (a, p) => ({ cost: a.cost + p.plannedCost, actualCost: a.actualCost + p.ac, revenue: a.revenue + p.revenue }),
+    { cost: 0, actualCost: 0, revenue: 0 },
   );
-  const finMargin = finTotals.revenue - finTotals.cost;
+  const finPlanProfit = finTotals.revenue - finTotals.cost; // profit at the cost baseline
+  const finActualProfit = finTotals.revenue - finTotals.actualCost; // profit at actual cost to date
   const hasFinancials = finTotals.cost > 0 || finTotals.revenue > 0;
 
   return (
@@ -360,10 +361,15 @@ export default function PortfolioSummary() {
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cost &amp; revenue by project</span>
             <span className="text-xs text-slate-500 dark:text-slate-400">
-              Cost {formatIdr(finTotals.cost)} · Revenue {formatIdr(finTotals.revenue)} · Profit{' '}
-              <span className={finMargin < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
-                {formatIdr(finMargin)}{finTotals.revenue > 0 ? ` (${formatNum((finMargin / finTotals.revenue) * 100, 1)}%)` : ''}
+              Revenue {formatIdr(finTotals.revenue)} · Plan profit{' '}
+              <span className={finPlanProfit < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
+                {formatIdr(finPlanProfit)}{finTotals.revenue > 0 ? ` (${formatNum((finPlanProfit / finTotals.revenue) * 100, 1)}%)` : ''}
               </span>
+              {finTotals.actualCost > 0 && <> · Actual profit{' '}
+                <span className={finActualProfit < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}>
+                  {formatIdr(finActualProfit)}{finTotals.revenue > 0 ? ` (${formatNum((finActualProfit / finTotals.revenue) * 100, 1)}%)` : ''}
+                </span>
+              </>}
             </span>
           </div>
           {!hasFinancials ? (
@@ -375,15 +381,24 @@ export default function PortfolioSummary() {
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                     <th className="py-2">Project</th>
-                    <th className="text-right">Cost</th>
                     <th className="text-right">Revenue</th>
-                    <th className="text-right" title="Profit = Revenue − Cost">Profit</th>
-                    <th className="text-right" title="Profit margin = Profit ÷ Revenue">Margin %</th>
+                    <th className="text-right" title="Cost baseline (planned)">Plan cost</th>
+                    <th className="text-right" title="Actual cost to date (EVM AC)">Actual cost</th>
+                    <th className="text-right" title="Plan profit = Revenue − Plan cost">Plan profit</th>
+                    <th className="text-right" title="Actual profit = Revenue − Actual cost">Actual profit</th>
+                    <th className="text-right" title="Plan margin = Plan profit ÷ Revenue">Plan margin</th>
+                    <th className="text-right" title="Actual margin = Actual profit ÷ Revenue">Actual margin</th>
                   </tr>
                 </thead>
                 <tbody>
                   {finRows.map((p) => {
-                    const margin = p.revenue - p.plannedCost;
+                    const planProfit = p.revenue - p.plannedCost;
+                    const actualProfit = p.revenue - p.ac;
+                    const hasPlan = p.revenue > 0 || p.plannedCost > 0;
+                    const hasActual = p.ac > 0;
+                    const money = (v: number, tone: boolean, on: boolean) => (
+                      <td className={`text-right whitespace-nowrap ${on && tone ? (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : ''}`} title={on ? formatIdr(v) : undefined}>{on ? formatIdrShort(v) : '—'}</td>
+                    );
                     return (
                       <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                         <td className="py-2">
@@ -392,12 +407,13 @@ export default function PortfolioSummary() {
                             <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
                           </Link>
                         </td>
-                        <td className="text-right whitespace-nowrap" title={p.plannedCost ? formatIdr(p.plannedCost) : undefined}>{p.plannedCost ? formatIdrShort(p.plannedCost) : '—'}</td>
-                        <td className="text-right whitespace-nowrap" title={p.revenue ? formatIdr(p.revenue) : undefined}>{p.revenue ? formatIdrShort(p.revenue) : '—'}</td>
-                        <td className={`text-right whitespace-nowrap ${p.revenue || p.plannedCost ? (margin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : ''}`} title={p.revenue || p.plannedCost ? formatIdr(margin) : undefined}>
-                          {p.revenue || p.plannedCost ? formatIdrShort(margin) : '—'}
-                        </td>
-                        <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((margin / p.revenue) * 100, 1)}%` : '—'}</td>
+                        {money(p.revenue, false, !!p.revenue)}
+                        {money(p.plannedCost, false, !!p.plannedCost)}
+                        {money(p.ac, false, hasActual)}
+                        {money(planProfit, true, hasPlan)}
+                        {money(actualProfit, true, hasActual)}
+                        <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((planProfit / p.revenue) * 100, 1)}%` : '—'}</td>
+                        <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{hasActual && p.revenue > 0 ? `${formatNum((actualProfit / p.revenue) * 100, 1)}%` : '—'}</td>
                       </tr>
                     );
                   })}
@@ -405,10 +421,13 @@ export default function PortfolioSummary() {
                 <tfoot>
                   <tr className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                     <td className="py-2">Total</td>
-                    <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.cost)}>{formatIdrShort(finTotals.cost)}</td>
                     <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.revenue)}>{formatIdrShort(finTotals.revenue)}</td>
-                    <td className={`text-right whitespace-nowrap ${finMargin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`} title={formatIdr(finMargin)}>{formatIdrShort(finMargin)}</td>
-                    <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finTotals.revenue > 0 ? `${formatNum((finMargin / finTotals.revenue) * 100, 1)}%` : '—'}</td>
+                    <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.cost)}>{formatIdrShort(finTotals.cost)}</td>
+                    <td className="text-right whitespace-nowrap" title={formatIdr(finTotals.actualCost)}>{finTotals.actualCost > 0 ? formatIdrShort(finTotals.actualCost) : '—'}</td>
+                    <td className={`text-right whitespace-nowrap ${finPlanProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`} title={formatIdr(finPlanProfit)}>{formatIdrShort(finPlanProfit)}</td>
+                    <td className={`text-right whitespace-nowrap ${finTotals.actualCost > 0 ? (finActualProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : ''}`} title={finTotals.actualCost > 0 ? formatIdr(finActualProfit) : undefined}>{finTotals.actualCost > 0 ? formatIdrShort(finActualProfit) : '—'}</td>
+                    <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finTotals.revenue > 0 ? `${formatNum((finPlanProfit / finTotals.revenue) * 100, 1)}%` : '—'}</td>
+                    <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{finTotals.actualCost > 0 && finTotals.revenue > 0 ? `${formatNum((finActualProfit / finTotals.revenue) * 100, 1)}%` : '—'}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -416,30 +435,37 @@ export default function PortfolioSummary() {
             {/* Mobile card list — table hidden < sm. */}
             <div className="space-y-2 sm:hidden">
               {finRows.map((p) => {
-                const margin = p.revenue - p.plannedCost;
-                const has = p.revenue > 0 || p.plannedCost > 0;
+                const planProfit = p.revenue - p.plannedCost;
+                const actualProfit = p.revenue - p.ac;
+                const hasPlan = p.revenue > 0 || p.plannedCost > 0;
+                const hasActual = p.ac > 0;
+                const tone = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400');
                 return (
                   <div key={p.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
                     <Link to={`/projects/${p.id}`} className="block">
                       <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>{' '}
                       <span className="font-medium text-brand-600 hover:underline">{p.name}</span>
                     </Link>
-                    <div className="mt-2 grid grid-cols-4 gap-2 text-xs tabular-nums">
-                      <div><div className="text-slate-400">Cost</div><div className="text-slate-700 dark:text-slate-200">{p.plannedCost ? formatIdrShort(p.plannedCost) : '—'}</div></div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-xs tabular-nums">
                       <div><div className="text-slate-400">Revenue</div><div className="text-slate-700 dark:text-slate-200">{p.revenue ? formatIdrShort(p.revenue) : '—'}</div></div>
-                      <div><div className="text-slate-400">Profit</div><div className={has ? (margin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : 'text-slate-400'}>{has ? formatIdrShort(margin) : '—'}</div></div>
-                      <div><div className="text-slate-400">Margin</div><div className="text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((margin / p.revenue) * 100, 1)}%` : '—'}</div></div>
+                      <div><div className="text-slate-400">Plan cost</div><div className="text-slate-700 dark:text-slate-200">{p.plannedCost ? formatIdrShort(p.plannedCost) : '—'}</div></div>
+                      <div><div className="text-slate-400">Actual cost</div><div className="text-slate-700 dark:text-slate-200">{hasActual ? formatIdrShort(p.ac) : '—'}</div></div>
+                      <div><div className="text-slate-400">Plan profit</div><div className={hasPlan ? tone(planProfit) : 'text-slate-400'}>{hasPlan ? formatIdrShort(planProfit) : '—'}</div></div>
+                      <div><div className="text-slate-400">Actual profit</div><div className={hasActual ? tone(actualProfit) : 'text-slate-400'}>{hasActual ? formatIdrShort(actualProfit) : '—'}</div></div>
+                      <div />
+                      <div><div className="text-slate-400">Plan margin</div><div className="text-slate-500 dark:text-slate-400">{p.revenue > 0 ? `${formatNum((planProfit / p.revenue) * 100, 1)}%` : '—'}</div></div>
+                      <div><div className="text-slate-400">Actual margin</div><div className="text-slate-500 dark:text-slate-400">{hasActual && p.revenue > 0 ? `${formatNum((actualProfit / p.revenue) * 100, 1)}%` : '—'}</div></div>
                     </div>
                   </div>
                 );
               })}
-              <div className="flex items-center justify-between rounded-lg border-2 border-slate-200 p-3 text-sm font-semibold dark:border-slate-700">
-                <span className="text-slate-600 dark:text-slate-300">Total</span>
-                <span className="flex flex-wrap justify-end gap-x-3 gap-y-0.5 tabular-nums text-slate-600 dark:text-slate-300">
-                  <span>Cost {formatIdrShort(finTotals.cost)}</span>
+              <div className="rounded-lg border-2 border-slate-200 p-3 text-sm font-semibold dark:border-slate-700">
+                <div className="mb-1 text-slate-600 dark:text-slate-300">Total</div>
+                <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-xs tabular-nums text-slate-600 dark:text-slate-300">
                   <span>Rev {formatIdrShort(finTotals.revenue)}</span>
-                  <span className={finMargin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>Profit {formatIdrShort(finMargin)}</span>
-                </span>
+                  <span className={finPlanProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>Plan profit {formatIdrShort(finPlanProfit)}</span>
+                  {finTotals.actualCost > 0 && <span className={finActualProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>Actual profit {formatIdrShort(finActualProfit)}</span>}
+                </div>
               </div>
             </div>
             </>
