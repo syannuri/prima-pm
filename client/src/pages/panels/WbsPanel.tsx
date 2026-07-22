@@ -184,6 +184,65 @@ function OwnerCell({ name }: { name: string | null | undefined }) {
   );
 }
 
+// Click-to-edit date cell: shows the date; clicking (when editable) swaps to a native date
+// input that commits on blur/Enter and cancels on Esc. Values move as 'YYYY-MM-DD' strings,
+// matching the task form. Read-only cells just render the value.
+function InlineDate({ value, editable, onSave, title }: {
+  value: string | null; editable: boolean; onSave: (date: string | null) => void; title?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const cur = value ? formatDateInput(value) : '';
+  if (editing) {
+    return (
+      <input
+        type="date" autoFocus defaultValue={cur}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={(e) => { setEditing(false); const v = e.target.value || null; if (v !== (cur || null)) onSave(v); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setEditing(false); }}
+        className="w-[7.25rem] rounded border border-brand-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100"
+      />
+    );
+  }
+  return (
+    <button
+      type="button" disabled={!editable} title={editable ? (title ?? 'Click to edit') : title}
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+      className={`w-full rounded px-1 py-0.5 text-right text-xs tabular-nums ${editable ? 'cursor-text text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-brand-900/20' : 'cursor-default text-slate-500 dark:text-slate-400'}`}
+    >
+      {value ? formatDate(new Date(value)) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+    </button>
+  );
+}
+
+// Click-to-edit Owner cell — swaps to a resource picker that commits on change.
+function InlineOwner({ name, resourceId, editable, resources, onSave }: {
+  name: string | null | undefined; resourceId: string | null; editable: boolean;
+  resources: ResourceItem[]; onSave: (id: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <select
+        autoFocus defaultValue={resourceId ?? ''}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={() => setEditing(false)}
+        onChange={(e) => { const id = e.target.value || null; setEditing(false); if (id !== (resourceId ?? null)) onSave(id); }}
+        className="max-w-[10rem] rounded border border-brand-300 bg-white px-1 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100"
+      >
+        <option value="">— unassigned —</option>
+        {resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
+      </select>
+    );
+  }
+  if (!editable) return <OwnerCell name={name} />;
+  return (
+    <button type="button" onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to change owner"
+      className="rounded px-1 py-0.5 hover:bg-brand-50 dark:hover:bg-brand-900/20">
+      <OwnerCell name={name} />
+    </button>
+  );
+}
+
 // The date a new task should default to starting: the latest planEnd among its would-be
 // siblings (same parent), else the latest planEnd across the whole WBS, else null (today).
 // Keeps newly added tasks running sequentially instead of all starting on the same day.
@@ -293,7 +352,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [fullscreen, setFullscreen] = useState(false);
-  const colCount = 12 + (canEdit ? 1 : 0);
+  // Timeline (Gantt) column is collapsible — hiding it gives the widened 4-date table room.
+  const [showGantt, setShowGantt] = useState(true);
+  // Inline "add subtask" draft row (monday.com style) — rendered under its parent row.
+  const [draft, setDraft] = useState<{ parentId: string; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
+  // ✓ WBS Task Owner | Plan Start·Finish | Actual Start·Finish | Dur Budget % Status Var  = 13,
+  // plus the Actions column (editors) and the Gantt column (when shown).
+  const colCount = 13 + (canEdit ? 1 : 0) + (showGantt ? 1 : 0);
+  // Resource pool for the inline owner picker + add-subtask draft (editors only).
+  const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources'), enabled: canEdit });
+  const resources = resourcesQ.data?.resources ?? [];
 
   // Esc exits full screen.
   useEffect(() => {
@@ -341,6 +409,34 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
       }),
     onSuccess: invalidate,
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to reschedule'); },
+  });
+  // Inline single-field edit (dates / owner): PUT replaces the whole task, so send the full
+  // record and override just the changed field(s). Actual dates carried through as-is so the
+  // progress auto-stamp isn't the only way to set them.
+  const patchTask = useMutation({
+    mutationFn: ({ node, patch }: { node: GanttNode; patch: Record<string, unknown> }) =>
+      api.put(`${base}/tasks/${node.id}`, {
+        name: node.name, planStart: node.planStart, planEnd: node.planEnd,
+        progressPct: node.progressPct, isMilestone: node.isMilestone,
+        parentTaskId: node.parentTaskId, sortOrder: node.sortOrder,
+        picUserId: node.picUserId ?? undefined, picResourceId: node.picResourceId ?? undefined,
+        description: node.description ?? null, deliverable: node.deliverable ?? null, acceptanceCriteria: node.acceptanceCriteria ?? null,
+        actualStart: node.actualStart ?? undefined, actualFinish: node.actualFinish ?? undefined,
+        ...patch,
+      }),
+    onSuccess: invalidate,
+    onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to save'); },
+  });
+  // Inline add-subtask (keeps the draft open for the next sibling on success).
+  const createSub = useMutation({
+    mutationFn: ({ parentId, name, picResourceId, planStart, planEnd, sortOrder }:
+      { parentId: string; name: string; picResourceId: string; planStart: string; planEnd: string; sortOrder: number }) =>
+      api.post(`${base}/tasks`, {
+        name, planStart, planEnd, progressPct: 0, isMilestone: false,
+        parentTaskId: parentId, sortOrder, picResourceId: picResourceId || undefined,
+      }),
+    onSuccess: () => { invalidate(); setDraft((d) => (d ? { ...d, name: '' } : null)); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to add subtask'),
   });
   const addDep = useMutation({
     mutationFn: ({ predecessorId, successorId }: { predecessorId: string; successorId: string }) =>
@@ -444,6 +540,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </button>
           )}
           {rows.length > 0 && (
+            <button onClick={() => setShowGantt((g) => !g)} title={showGantt ? 'Hide the Gantt timeline (more room for the date columns)' : 'Show the Gantt timeline'}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+              {showGantt ? '📊 Hide timeline' : '📊 Show timeline'}
+            </button>
+          )}
+          {rows.length > 0 && showGantt && (
             <div className="inline-flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
               <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
@@ -514,30 +616,40 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           )}
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-2 [&>th]:pr-3">
-                <th className="w-8 text-center" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
-                <th className="w-12">WBS</th>
-                <th className="min-w-[14rem]">Task</th>
-                <th title="Owner (PIC) responsible for the task">Owner</th>
-                <th className="text-right">Start</th>
-                <th className="text-right">Finish</th>
-                <th className="text-right">Dur</th>
-                <th className="text-right" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
-                <th className="text-right">% </th>
-                <th>Status</th>
-                <th className="text-right" title="Finish variance vs baseline (days)">Var</th>
-                {canEdit && <th className="text-right">Actions</th>}
+              {/* Row 1 — column groups. Plan (Rencana) & Actual (Aktual) each span a Start/Finish pair. */}
+              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:py-2 [&>th]:pr-3">
+                <th rowSpan={2} className="w-8 border-b border-slate-200 text-center align-bottom dark:border-slate-800" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
+                <th rowSpan={2} className="w-12 border-b border-slate-200 align-bottom dark:border-slate-800">WBS</th>
+                <th rowSpan={2} className="min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800">Task</th>
+                <th rowSpan={2} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
+                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[10px] font-semibold tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500" title="Planned (baseline plan) dates">Rencana</th>
+                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[10px] font-semibold tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500" title="Actual start & finish (tracking)">Aktual</th>
+                <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Dur</th>
+                <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
+                <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
+                <th rowSpan={2} className="border-b border-slate-200 align-bottom dark:border-slate-800">Status</th>
+                <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Finish variance vs baseline (days)">Var</th>
+                {canEdit && <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Actions</th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
-                <th>
-                  <div className="relative h-4" style={{ width: axis?.width }}>
-                    {axis?.ticks.map((t) => (
-                      <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
-                    ))}
-                    {axis?.todayPct != null && (
-                      <span className="absolute -top-0.5 z-10 -translate-x-1/2 rounded bg-brand-600 px-1 text-[9px] font-semibold normal-case text-white" style={{ left: `${axis.todayPct}%` }}>Today</span>
-                    )}
-                  </div>
-                </th>
+                {showGantt && (
+                  <th rowSpan={2} className="border-b border-slate-200 align-bottom dark:border-slate-800">
+                    <div className="relative h-4" style={{ width: axis?.width }}>
+                      {axis?.ticks.map((t) => (
+                        <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
+                      ))}
+                      {axis?.todayPct != null && (
+                        <span className="absolute -top-0.5 z-10 -translate-x-1/2 rounded bg-brand-600 px-1 text-[9px] font-semibold normal-case text-white" style={{ left: `${axis.todayPct}%` }}>Today</span>
+                      )}
+                    </div>
+                  </th>
+                )}
+              </tr>
+              {/* Row 2 — the Start/Finish sub-labels under each group. */}
+              <tr className="text-left text-[11px] uppercase text-slate-400 dark:text-slate-500 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-normal">
+                <th>Start</th>
+                <th>Finish</th>
+                <th>Start</th>
+                <th>Finish</th>
               </tr>
             </thead>
             <tbody>
@@ -599,16 +711,32 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
                       </span>
                     </td>
-                    <td><OwnerCell name={node.picResource?.name ?? node.pic?.name} /></td>
-                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">
-                      {started && node.actualStart
-                        ? <span className="text-slate-600 dark:text-slate-300" title={`Actual start · plan was ${formatDate(new Date(r.start))}`}>{formatDate(new Date(node.actualStart))}</span>
-                        : formatDate(new Date(r.start))}
+                    <td>{canEdit
+                      ? <InlineOwner name={node.picResource?.name ?? node.pic?.name} resourceId={node.picResourceId ?? null} editable resources={resources} onSave={(id) => patchTask.mutate({ node, patch: { picResourceId: id } })} />
+                      : <OwnerCell name={node.picResource?.name ?? node.pic?.name} />}</td>
+                    {/* Plan Start — rolls up (read-only) on summary rows; leaf is click-to-edit unless baselined. */}
+                    <td className="whitespace-nowrap text-right">
+                      {r.isParent
+                        ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
+                        : <InlineDate value={node.planStart} editable={canDrag} onSave={(v) => v && patchTask.mutate({ node, patch: { planStart: v } })} title={canDrag ? 'Plan start — click to edit' : baselinedAt ? 'Baselined — change via a change request' : undefined} />}
                     </td>
-                    <td className="whitespace-nowrap text-right text-xs text-slate-500 dark:text-slate-400">
-                      {r.pct >= 100 && !r.isParent && node.actualFinish
-                        ? <span className="text-slate-600 dark:text-slate-300" title={`Actual finish · plan was ${formatDate(new Date(r.end))}`}>{formatDate(new Date(node.actualFinish))}</span>
-                        : formatDate(new Date(r.end))}
+                    {/* Plan Finish */}
+                    <td className="whitespace-nowrap text-right">
+                      {r.isParent
+                        ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
+                        : <InlineDate value={node.planEnd} editable={canDrag} onSave={(v) => v && patchTask.mutate({ node, patch: { planEnd: v } })} title={canDrag ? 'Plan finish — click to edit' : baselinedAt ? 'Baselined — change via a change request' : undefined} />}
+                    </td>
+                    {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
+                    <td className="whitespace-nowrap text-right">
+                      {r.isParent
+                        ? <span className="text-slate-300 dark:text-slate-600">—</span>
+                        : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => patchTask.mutate({ node, patch: { actualStart: v } })} title="Actual start — click to set" />}
+                    </td>
+                    {/* Actual Finish */}
+                    <td className="whitespace-nowrap text-right">
+                      {r.isParent
+                        ? <span className="text-slate-300 dark:text-slate-600">—</span>
+                        : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => patchTask.mutate({ node, patch: { actualFinish: v } })} title="Actual finish — click to set" />}
                     </td>
                     <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
                     <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
@@ -641,11 +769,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     </td>
                     {canEdit && (
                       <td className="whitespace-nowrap text-right text-xs">
-                        <button onClick={() => setForm({ parentId: node.id })} className="text-brand-600 hover:underline" title="Add subtask">+ Sub</button>
-                        <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400">Edit</button>
+                        <button onClick={() => setDraft({ parentId: node.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(node.planStart)), planEnd: formatDateInput(new Date(node.planEnd)) })} className="text-brand-600 hover:underline" title="Add a subtask inline">+ Sub</button>
+                        <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400" title="Full editor (dictionary, scope, acceptance)">Edit</button>
                         <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
                       </td>
                     )}
+                    {showGantt && (
                     <td>
                       <div
                         ref={(el) => { if (el) barRefs.current.set(node.id, el); else barRefs.current.delete(node.id); }}
@@ -723,6 +852,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         )}
                       </div>
                     </td>
+                    )}
                   </tr>
                   {isOpen && (
                     <tr>
@@ -730,6 +860,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <DictionaryView node={node} />
                       </td>
                     </tr>
+                  )}
+                  {draft?.parentId === node.id && (
+                    <DraftRow
+                      draft={draft} depth={depth + 1} colCount={colCount} resources={resources} saving={createSub.isPending}
+                      onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
+                      onCancel={() => setDraft(null)}
+                      onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: node.children.length }); }}
+                    />
                   )}
                   </Fragment>
                 );
@@ -831,6 +969,45 @@ function DictionaryView({ node }: { node: GanttNode }) {
       <div className="sm:col-span-2"><Item label="Description / Scope" value={node.description} /></div>
       <div className="sm:col-span-2"><Item label="Acceptance criteria" value={node.acceptanceCriteria} /></div>
     </div>
+  );
+}
+
+// Inline "add subtask" row (monday.com style) — editable name / owner / plan dates in-column;
+// Enter saves & keeps the row open for the next sibling, Esc cancels. The remaining columns
+// merge into a single Save/Cancel cell (a fresh task has no actuals/budget/status yet).
+function DraftRow({ draft, depth, colCount, resources, saving, onChange, onCancel, onSave }: {
+  draft: { name: string; picResourceId: string; planStart: string; planEnd: string };
+  depth: number; colCount: number; resources: ResourceItem[]; saving: boolean;
+  onChange: (patch: Partial<{ name: string; picResourceId: string; planStart: string; planEnd: string }>) => void;
+  onCancel: () => void; onSave: () => void;
+}) {
+  const inp = 'w-full rounded border border-brand-300 bg-white px-1.5 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100';
+  return (
+    <tr className="bg-brand-50/40 dark:bg-brand-900/10 [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3">
+      <td className="text-center text-brand-500">＋</td>
+      <td className="font-mono text-[10px] uppercase text-brand-500">new</td>
+      <td>
+        <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center">
+          <input autoFocus value={draft.name} placeholder="Nama subtask…" aria-label="Subtask name"
+            onChange={(e) => onChange({ name: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSave(); } else if (e.key === 'Escape') onCancel(); }}
+            className={inp} />
+        </span>
+      </td>
+      <td>
+        <select value={draft.picResourceId} onChange={(e) => onChange({ picResourceId: e.target.value })} className={`${inp} max-w-[10rem]`} aria-label="Subtask owner">
+          <option value="">— owner —</option>
+          {resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
+        </select>
+      </td>
+      <td><input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan start" /></td>
+      <td><input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan finish" /></td>
+      <td colSpan={Math.max(1, colCount - 6)} className="whitespace-nowrap text-right text-xs">
+        <span className="mr-2 hidden text-[11px] text-slate-400 sm:inline dark:text-slate-500">Enter=simpan · Esc=batal</span>
+        <button disabled={!draft.name.trim() || saving} onClick={onSave} className="rounded bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-40">{saving ? 'Menyimpan…' : 'Simpan'}</button>
+        <button onClick={onCancel} className="ml-2 rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Batal</button>
+      </td>
+    </tr>
   );
 }
 
