@@ -616,14 +616,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           )}
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
-              {/* Row 1 — column groups. Plan (Rencana) & Actual (Aktual) each span a Start/Finish pair. */}
+              {/* Row 1 — column groups. Plan & Actual each span a Start/Finish pair. */}
               <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:py-2 [&>th]:pr-3">
                 <th rowSpan={2} className="w-8 border-b border-slate-200 text-center align-bottom dark:border-slate-800" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
                 <th rowSpan={2} className="w-12 border-b border-slate-200 align-bottom dark:border-slate-800">WBS</th>
                 <th rowSpan={2} className="min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800">Task</th>
                 <th rowSpan={2} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
-                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[10px] font-semibold tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500" title="Planned (baseline plan) dates">Rencana</th>
-                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[10px] font-semibold tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500" title="Actual start & finish (tracking)">Aktual</th>
+                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[10px] font-semibold tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500" title="Planned (baseline plan) dates">Plan</th>
+                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[10px] font-semibold tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500" title="Actual start & finish (tracking)">Actual</th>
                 <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Dur</th>
                 <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
                 <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
@@ -988,7 +988,7 @@ function DraftRow({ draft, depth, colCount, resources, saving, onChange, onCance
       <td className="font-mono text-[10px] uppercase text-brand-500">new</td>
       <td>
         <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center">
-          <input autoFocus value={draft.name} placeholder="Nama subtask…" aria-label="Subtask name"
+          <input autoFocus value={draft.name} placeholder="Subtask name…" aria-label="Subtask name"
             onChange={(e) => onChange({ name: e.target.value })}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSave(); } else if (e.key === 'Escape') onCancel(); }}
             className={inp} />
@@ -1003,9 +1003,9 @@ function DraftRow({ draft, depth, colCount, resources, saving, onChange, onCance
       <td><input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan start" /></td>
       <td><input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan finish" /></td>
       <td colSpan={Math.max(1, colCount - 6)} className="whitespace-nowrap text-right text-xs">
-        <span className="mr-2 hidden text-[11px] text-slate-400 sm:inline dark:text-slate-500">Enter=simpan · Esc=batal</span>
-        <button disabled={!draft.name.trim() || saving} onClick={onSave} className="rounded bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-40">{saving ? 'Menyimpan…' : 'Simpan'}</button>
-        <button onClick={onCancel} className="ml-2 rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Batal</button>
+        <span className="mr-2 hidden text-[11px] text-slate-400 sm:inline dark:text-slate-500">Enter=save · Esc=cancel</span>
+        <button disabled={!draft.name.trim() || saving} onClick={onSave} className="rounded bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-40">{saving ? 'Saving…' : 'Save'}</button>
+        <button onClick={onCancel} className="ml-2 rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Cancel</button>
       </td>
     </tr>
   );
