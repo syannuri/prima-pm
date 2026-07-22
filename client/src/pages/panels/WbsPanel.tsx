@@ -208,6 +208,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const baselineLocked = ganttQ.data?.baselineLocked ?? false;
   // Drag-reschedule + dependency editing are frozen once the baseline is locked (the API enforces it).
   const canPlan = canEdit && !baselineLocked;
+  // Drag-to-reschedule is blocked once a schedule baseline is captured — plan dates are then frozen
+  // for variance tracking, and any change must go through a change request (not a casual drag).
+  const canDrag = canEdit && !baselineLocked && !baselinedAt;
   const deps = ganttQ.data?.dependencies ?? [];
 
   // Overall project % complete — read from the EVM engine (the SAME weighted roll-up the
@@ -555,7 +558,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 const pWidth = dragging && axis
                   ? Math.max(axis.minBarPct, dragging.mode === 'move' ? widthPct : dragging.mode === 'start' ? widthPct - dShiftPct : widthPct + dShiftPct)
                   : widthPct;
-                const draggable = canPlan && !r.isParent && !linkFrom;
+                const draggable = canDrag && !r.isParent && !linkFrom;
                 const baseLeft = axis && r.baseStart != null ? ((r.baseStart - axis.min) / axis.span) * 100 : null;
                 const baseWidth = axis && r.baseStart != null && r.baseEnd != null ? Math.max(axis.minBarPct, ((r.baseEnd - r.baseStart) / axis.span) * 100) : null;
                 // Actuals (leaf tasks only): a task that has started draws a vivid bar at its REAL
@@ -743,7 +746,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-red-500" />Late / overdue</span>
             <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-brand-500" />Milestone</span>
             <span className="flex items-center gap-1.5"><svg width="26" height="8" className="overflow-visible"><line x1="1" y1="4" x2="20" y2="4" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" markerEnd={`url(#arrow-${uid})`} /></svg>Dependency (FS)</span>
-            {canPlan && <span className="text-slate-400 dark:text-slate-500">· drag a bar to reschedule · use the ⛓ handle to link tasks</span>}
+            {canDrag && <span className="text-slate-400 dark:text-slate-500">· drag a bar to reschedule</span>}
+            {canPlan && <span className="text-slate-400 dark:text-slate-500">· use the ⛓ handle to link tasks</span>}
+            {canPlan && baselinedAt && <span className="text-amber-600 dark:text-amber-400">· schedule baselined — reschedule via a change request</span>}
             {baselineLocked && <span className="text-amber-600 dark:text-amber-400">· baseline locked — unlock to edit the schedule</span>}
           </div>
         </div>

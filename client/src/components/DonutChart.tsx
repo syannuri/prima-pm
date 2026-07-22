@@ -29,7 +29,8 @@ function donutPath(a0: number, a1: number): string {
 
 // `unit` labels what each slice counts (default "projects" for the dashboard status donut;
 // e.g. "tasks" for the report's task-completion donut) — used in the corner hint + tooltips.
-export default function DonutChart({ title, slices, unit = 'projects' }: { title: string; slices: DonutSlice[]; unit?: string }) {
+// `bare` strips the outer card container so the chart can sit inside an existing Card.
+export default function DonutChart({ title, slices, unit = 'projects', bare }: { title: string; slices: DonutSlice[]; unit?: string; bare?: boolean }) {
   const uid = useId().replace(/:/g, '');
   const total = slices.reduce((s, d) => s + d.value, 0);
   const [hover, setHover] = useState<number | null>(null);
@@ -45,12 +46,17 @@ export default function DonutChart({ title, slices, unit = 'projects' }: { title
     return { ...s, a0, a1, frac };
   });
 
+  const outer = bare
+    ? 'py-1'
+    : 'rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900';
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</span>
-        <span className="text-xs text-slate-400 dark:text-slate-500" title={`Each % = share of ${unit} in this slice.`}>= % of {unit}</span>
-      </div>
+    <div className={outer}>
+      {!bare && (
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500" title={`Each % = share of ${unit} in this slice.`}>= % of {unit}</span>
+        </div>
+      )}
       {total === 0 ? (
         <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No data</p>
       ) : (

@@ -11,6 +11,13 @@ const iso = (d: string | null) => (d ? new Date(d).toISOString().slice(0, 10) : 
 const healthColor = (h: string) => (h === 'GREEN' ? GREEN : h === 'AMBER' ? AMBER : h === 'RED' ? RED : GRAY);
 const healthLabel = (h: string) => (h === 'NO_DATA' ? 'No data' : h);
 const statusLabel = (s: string) => s.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+// Performance-index RAG matching the app engine (>=0.95 green, >=0.85 amber, else red) — so the
+// report's CPI/SPI colour & wording agree with the health pill instead of a binary >=1 cut-off.
+const idxColor = (v: number) => (v >= 0.95 ? GREEN : v >= 0.85 ? AMBER : RED);
+const schedWord = (v: number) => (v >= 0.95 ? 'on or ahead of plan' : v >= 0.85 ? 'slightly behind plan' : 'behind plan');
+const costWord = (v: number) => (v >= 0.95 ? 'on or under budget' : v >= 0.85 ? 'slightly over budget' : 'over budget');
+const schedTag = (v: number) => (v >= 0.95 ? '  (on/ahead)' : v >= 0.85 ? '  (watch)' : '  (behind)');
+const costTag = (v: number) => (v >= 0.95 ? '  (on/under)' : v >= 0.85 ? '  (watch)' : '  (over)');
 
 // A professional single-project status report PDF (period-aware). Mirrors the in-app
 // Reports page: status summary, task completion, EVM, forecast and the EVM S-curve.
@@ -103,9 +110,9 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
   sentences.push(`Overall status is ${ragText.toLowerCase()} at ${r.tasks.weightedPct}% complete by weighted value (${byCount}% by task count, ${r.tasks.completed} of ${r.tasks.total} work packages done).`);
   if (e.pv > 0) {
     const v = f.schedule.varianceDays;
-    sentences.push(`Schedule performance is ${e.spi.toFixed(2)} SPI — ${e.spi >= 1 ? 'on or ahead of plan' : 'behind plan'}${v != null ? `, forecast finish ${v > 0 ? `${v} day${v === 1 ? '' : 's'} late` : v < 0 ? `${-v} day${v === -1 ? '' : 's'} early` : 'on the baseline date'}` : ''}.`);
+    sentences.push(`Schedule performance is ${e.spi.toFixed(2)} SPI — ${schedWord(e.spi)}${v != null ? `, forecast finish ${v > 0 ? `${v} day${v === 1 ? '' : 's'} late` : v < 0 ? `${-v} day${v === -1 ? '' : 's'} early` : 'on the baseline date'}` : ''}.`);
   }
-  if (e.ac > 0) sentences.push(`Cost performance is ${e.cpi.toFixed(2)} CPI — ${e.cpi >= 1 ? 'on or under budget' : 'over budget'}; estimate at completion ${moneyShort(f.eac.likely)} against a ${moneyShort(e.bac)} budget (VAC ${moneyShort(f.vac)}).`);
+  if (e.ac > 0) sentences.push(`Cost performance is ${e.cpi.toFixed(2)} CPI — ${costWord(e.cpi)}; estimate at completion ${moneyShort(f.eac.likely)} against a ${moneyShort(e.bac)} budget (VAC ${moneyShort(f.vac)}).`);
   const overdue = r.tasks.remaining.filter((t) => t.overdue).length;
   if (overdue > 0) sentences.push(`${overdue} work package${overdue === 1 ? '' : 's'} currently overdue and need${overdue === 1 ? 's' : ''} attention.`);
   const summary = sentences.join(' ');
@@ -126,8 +133,8 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
   doc.moveDown(0.7);
   const kpis: { label: string; value: string; color?: string }[] = [
     { label: '% Complete', value: `${r.tasks.weightedPct}%` },
-    { label: 'SPI', value: e.pv > 0 ? e.spi.toFixed(2) : '—', color: e.pv > 0 ? (e.spi >= 1 ? GREEN : RED) : undefined },
-    { label: 'CPI', value: e.ac > 0 ? e.cpi.toFixed(2) : '—', color: e.ac > 0 ? (e.cpi >= 1 ? GREEN : RED) : undefined },
+    { label: 'SPI', value: e.pv > 0 ? e.spi.toFixed(2) : '—', color: e.pv > 0 ? idxColor(e.spi) : undefined },
+    { label: 'CPI', value: e.ac > 0 ? e.cpi.toFixed(2) : '—', color: e.ac > 0 ? idxColor(e.cpi) : undefined },
     { label: 'EAC (likely)', value: moneyShort(f.eac.likely), color: f.eac.likely > e.bac ? RED : undefined },
     { label: 'VAC', value: moneyShort(f.vac), color: f.vac < 0 ? RED : GREEN },
     { label: 'Forecast finish', value: f.schedule.forecastFinish ? iso(f.schedule.forecastFinish) : '—' },

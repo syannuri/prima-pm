@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Evm, EvmTrend, Forecast, GanttNode } from '../api/types';
@@ -188,18 +188,51 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
   const tasks = ganttQ.data ? countTasks(ganttQ.data.tree) : null;
   const taskTotal = tasks ? tasks.completed + tasks.remaining : 0;
+  const [sCurveTab, setSCurveTab] = useState<'progress' | 'cost'>('progress');
 
   return (
-    <div className="space-y-4">
-      {/* Health gauge + a SINGLE physical-% progress bar + the EVM cost bars, stacked in one
-          card (the gauge shows SPI/CPI; the lone bar shows % complete; cost bars sit under it). */}
+    <div className="space-y-3">
+      {/* Health gauge — compact on mobile (side-by-side: gauge left, quick KPIs right).
+          On sm+ the gauge is centred and larger with progress bar below. */}
       <Panel onClick={onJump ? () => onJump('Cost') : undefined}>
-        <div className="flex flex-col items-center">
-          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={marginLine} />
+        {/* Mobile: gauge (small, left) + progress bar + SPI/CPI mini tiles (right) */}
+        <div className="flex items-start gap-4 sm:hidden">
+          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={null} compact className="max-w-[148px] shrink-0" />
+          <div className="min-w-0 flex-1 space-y-2.5 pt-1">
+            <div>
+              <div className="mb-1 flex items-baseline justify-between text-xs">
+                <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres' : 'Progress'}</span>
+                <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div className={`h-full rounded-full ${barColor(health)} transition-[width] duration-700`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-800/40">
+                <div className="text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">SPI</div>
+                <div className={`text-sm font-bold tabular-nums ${e.pv > 0 && e.spi < 1 ? 'text-red-600 dark:text-red-400' : e.pv > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100'}`}>
+                  {e.pv > 0 ? formatNum(e.spi, 2) : '—'}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-800/40">
+                <div className="text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">CPI</div>
+                <div className={`text-sm font-bold tabular-nums ${e.ac > 0 && e.cpi < 1 ? 'text-red-600 dark:text-red-400' : e.ac > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100'}`}>
+                  {e.ac > 0 ? formatNum(e.cpi, 2) : '—'}
+                </div>
+              </div>
+            </div>
+            {marginLine && (
+              <p className={`text-[11px] font-semibold ${marginLine.warn ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{marginLine.text}</p>
+            )}
+          </div>
         </div>
 
-        {/* the one and only progress bar — physical % complete (scheduleProgress) */}
-        <div className="mt-1">
+        {/* Desktop: gauge centred, larger */}
+        <div className="hidden sm:flex sm:flex-col sm:items-center">
+          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={marginLine} className="max-w-[250px]" />
+        </div>
+        <div className="mt-1 hidden sm:block">
           <div className="mb-1 flex items-baseline justify-between text-xs">
             <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres (selesai)' : 'Progress (complete)'}</span>
             <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
@@ -209,8 +242,8 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           </div>
         </div>
 
-        {/* EVM cost bars stacked under the gauge */}
-        <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+        {/* EVM cost bars — always shown */}
+        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Biaya (EVM)' : 'Cost (EVM)'}</h3>
             <span className={`text-xs font-medium ${overBudget ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
@@ -271,35 +304,58 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
         </Panel>
       )}
 
-      {/* S-curve — Plan vs Actual progress (% of BAC: PV = plan, EV = actual/earned) */}
-      <Panel onClick={onJump ? () => onJump('EVM Trend') : undefined}>
-        <h3 className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Kurva-S — Progres: Rencana vs Aktual' : 'S-curve — Progress: Plan vs Actual'}</h3>
-        {trendQ.isLoading ? (
-          <div className="flex justify-center py-8"><Spinner /></div>
-        ) : hasProg ? (
-          <>
-            <MiniSCurve planned={planProg} actual={actProg} actualColor="stroke-emerald-500" unitMax={100} />
-            <SLegend planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (EV diperoleh)' : 'Actual (EV earned)'} actualSwatch="bg-emerald-500" />
-          </>
-        ) : (
-          <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
-        )}
-      </Panel>
-
-      {/* S-curve — Plan vs Actual cost (PV = plan cost, AC = actual cost) */}
-      <Panel onClick={onJump ? () => onJump('EVM Trend') : undefined}>
-        <h3 className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Kurva-S — Biaya: Rencana vs Aktual' : 'S-curve — Cost: Plan vs Actual'}</h3>
-        {trendQ.isLoading ? (
-          <div className="flex justify-center py-8"><Spinner /></div>
-        ) : hasCost ? (
-          <>
-            <MiniSCurve planned={planCurve} actual={actCost} actualColor="stroke-brand-500" />
-            <SLegend planLabel={id ? 'Biaya rencana (PV)' : 'Plan cost (PV)'} actualLabel={id ? 'Biaya aktual (AC)' : 'Actual cost (AC)'} actualSwatch="bg-brand-500" />
-          </>
-        ) : (
-          <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
-        )}
-      </Panel>
+      {/* S-curve — two views (Progress % / Cost IDR) in one panel with a tab toggle.
+          Saves one full card height on mobile vs the old 2-panel layout. */}
+      {(hasProg || hasCost || trendQ.isLoading) && (
+        <Panel onClick={onJump ? () => onJump('EVM Trend') : undefined}>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {sCurveTab === 'progress'
+                ? (id ? 'Kurva-S — Progres' : 'S-curve — Progress')
+                : (id ? 'Kurva-S — Biaya' : 'S-curve — Cost')}
+            </h3>
+            {/* Tab toggle — stopPropagation so it doesn't fire the Panel's navigate-to-EVM-Trend click */}
+            <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs dark:bg-slate-800">
+              {(['progress', 'cost'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={(e) => { e.stopPropagation(); setSCurveTab(tab); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setSCurveTab(tab); } }}
+                  disabled={(tab === 'progress' && !hasProg) || (tab === 'cost' && !hasCost)}
+                  className={`rounded-md px-2.5 py-1 font-medium transition disabled:opacity-40 ${
+                    sCurveTab === tab
+                      ? 'bg-white text-slate-700 shadow dark:bg-slate-700 dark:text-slate-100'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  {tab === 'progress' ? (id ? 'Progres' : 'Progress') : (id ? 'Biaya' : 'Cost')}
+                </button>
+              ))}
+            </div>
+          </div>
+          {trendQ.isLoading ? (
+            <div className="flex justify-center py-8"><Spinner /></div>
+          ) : sCurveTab === 'progress' ? (
+            hasProg ? (
+              <>
+                <MiniSCurve planned={planProg} actual={actProg} actualColor="stroke-emerald-500" unitMax={100} />
+                <SLegend planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (EV)' : 'Actual (EV)'} actualSwatch="bg-emerald-500" />
+              </>
+            ) : (
+              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
+            )
+          ) : (
+            hasCost ? (
+              <>
+                <MiniSCurve planned={planCurve} actual={actCost} actualColor="stroke-brand-500" />
+                <SLegend planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (AC)' : 'Actual (AC)'} actualSwatch="bg-brand-500" />
+              </>
+            ) : (
+              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
+            )
+          )}
+        </Panel>
+      )}
 
       {/* Key figures */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

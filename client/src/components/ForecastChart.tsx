@@ -25,10 +25,11 @@ function monthTicks(t0: number, t1: number): { ms: number; label: string }[] {
 
 // EVM cost S-curve: planned PV (baseline), actual AC (to today), and a dashed
 // forecast line projecting cost to the likely EAC at the forecast finish date.
-export default function ForecastChart({ data }: { data: Forecast }) {
+// `bare` strips the outer card container + title so the chart can sit inside an existing Card.
+export default function ForecastChart({ data, bare }: { data: Forecast; bare?: boolean }) {
   const pts = data.sCurve;
   if (pts.length < 2) {
-    return <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">No schedule data to project a cost curve.</div>;
+    return <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No schedule data to project a cost curve.</p>;
   }
 
   const W = 720, H = 240, padL = 8, padR = 12, padT = 12, padB = 26;
@@ -54,11 +55,13 @@ export default function ForecastChart({ data }: { data: Forecast }) {
   const ticks = rawTicks.filter((_, i) => i % step === 0);
   const tickX = (ms: number) => Math.max(padL, Math.min(W - padR, x(ms)));
 
+  const outer = bare ? '' : 'rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900';
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <div className={outer}>
+      {/* Legend row — when bare, parent SectionHead already titles the card; we keep the series legend */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Cost projection (S-curve)</div>
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+        {!bare && <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Cost projection (S-curve)</div>}
+        <div className={`flex flex-wrap items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 ${bare ? 'w-full' : ''}`}>
           <span className="flex items-center gap-1"><span className="h-0.5 w-4" style={{ background: PV }} />Planned (PV)</span>
           <span className="flex items-center gap-1"><span className="h-0.5 w-4" style={{ background: AC }} />Actual (AC)</span>
           <span className="flex items-center gap-1"><span className="h-0.5 w-4 border-t border-dashed" style={{ borderColor: FC }} />Forecast</span>

@@ -31,10 +31,13 @@ function arc(f0: number, f1: number, radius = R) {
   return `M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`;
 }
 
-export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin }: {
+export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin, className, compact }: {
   spi: number; cpi: number; pct: number; status: PortfolioHealth; statusLabel: string;
-  // Optional projected-margin read-out shown inside the dial (project Overview only).
   margin?: { text: string; warn: boolean } | null;
+  // Override the container max-width class (default 'max-w-[280px]').
+  className?: string;
+  // Smaller text inside the dial — use when the gauge is rendered at reduced size.
+  compact?: boolean;
 }) {
   const noData = status === 'NO_DATA';
   const f = noData ? 0.5 : spiToF(spi);
@@ -87,7 +90,7 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
   const ticks = Array.from({ length: 11 }, (_, i) => i / 10);
 
   return (
-    <div className="relative mx-auto w-full max-w-[280px]">
+    <div className={`relative mx-auto w-full ${className ?? 'max-w-[280px]'}`}>
       <svg viewBox="0 0 220 168" className="w-full drop-shadow-[0_6px_10px_rgba(0,0,0,0.35)]">
         <defs>
           {/* Glossy face — radial depth so the gauge reads as a physical dial. */}
@@ -158,14 +161,14 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
 
       {/* Digital read-out — sits in the open lower-middle of the dial. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-1 flex flex-col items-center">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">{statusLabel}</span>
-        <span className="mt-0.5 text-2xl font-extrabold leading-none tabular-nums text-white drop-shadow">
+        <span className={`font-semibold uppercase tracking-[0.12em] text-white/70 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>{statusLabel}</span>
+        <span className={`mt-0.5 font-extrabold leading-none tabular-nums text-white drop-shadow ${compact ? 'text-lg' : 'text-2xl'}`}>
           {noData ? '—' : `SPI ${spi.toFixed(2)}`}
         </span>
-        <span className="mt-1 text-[11px] tabular-nums text-white/70">
-          CPI {cpi > 0 ? cpi.toFixed(2) : '—'} · {pct}% complete
+        <span className={`mt-0.5 tabular-nums text-white/70 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
+          CPI {cpi > 0 ? cpi.toFixed(2) : '—'} · {pct}%
         </span>
-        {margin && (
+        {margin && !compact && (
           <span className={`mt-0.5 text-[11px] font-semibold tabular-nums ${margin.warn ? 'text-rose-300' : 'text-emerald-300'}`}>
             {margin.text}
           </span>
