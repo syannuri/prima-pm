@@ -123,9 +123,11 @@ export default function ProjectPage() {
   // Agile (its scheduling lives in sprints/board) but kept for predictive & hybrid.
   const showSchedule = project.deliveryApproach !== 'AGILE';
   const tabs: Tab[] = [
-    // Graphic Overview leads for chartered projects — a visual EVM/health summary so the
-    // phone lands on charts, not a wall of tabs. DRAFT projects have no EVM yet, so skip it.
-    ...(chartered ? (['Overview'] as Tab[]) : []),
+    // Graphic Overview is a MOBILE-ONLY tab — a visual EVM/health summary so the phone lands
+    // on charts, not a wall of tabs. On the web/desktop it's hidden (the health strip, Next-steps
+    // guide and the dedicated Health/EVM tabs already cover this on a wide screen). DRAFT projects
+    // have no EVM yet, so skip it there too.
+    ...(chartered && isMobile ? (['Overview'] as Tab[]) : []),
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
     'Cost', 'Procurement', 'Timesheet', 'Health', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
@@ -134,10 +136,13 @@ export default function ProjectPage() {
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once chartered,
   // phones land on the graphic Overview; desktop keeps the first working tab (Schedule/Agile/Cost).
   const landingTab: Tab = chartered ? (showSchedule ? 'Schedule' : isAgile ? 'Agile' : 'Cost') : 'Charter';
-  const activeTab: Tab =
+  const chosenTab: Tab =
     tab ?? (requestedTab && tabs.includes(requestedTab) ? requestedTab
       : chartered && isMobile ? 'Overview'
       : landingTab);
+  // Overview is mobile-only: never resolve to it on desktop (e.g. a phone→desktop resize while it
+  // was open, or a stale ?tab=Overview deep link) — fall back to the normal landing tab.
+  const activeTab: Tab = chosenTab === 'Overview' && !isMobile ? landingTab : chosenTab;
 
   // Shared pill style for the compact header meta chips (add the display util per use so
   // the conditionally-hidden chips can toggle with `hidden sm:inline-flex`).
