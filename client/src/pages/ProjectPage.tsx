@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -356,6 +356,20 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
   // The active group is whichever contains the active tab — its sub-tabs get the second row.
   const activeGroup = groups.find((g) => g.tabs.includes(activeTab)) ?? groups[0];
 
+  // Auto-scroll the selected domain group fully into view within its scroll strip (horizontal
+  // only — never nudges the page) so a tab off the right/left edge slides into sight and lands
+  // with a little breathing room instead of half-clipped. Runs on selection + when groups change.
+  const listRef = useRef<HTMLDivElement>(null);
+  const activeBtnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const box = listRef.current, el = activeBtnRef.current;
+    if (!box || !el) return;
+    const b = box.getBoundingClientRect(), e = el.getBoundingClientRect();
+    const pad = 24;
+    if (e.left < b.left + pad) box.scrollBy({ left: e.left - b.left - pad, behavior: 'smooth' });
+    else if (e.right > b.right - pad) box.scrollBy({ left: e.right - b.right + pad, behavior: 'smooth' });
+  }, [activeGroup?.label, groups.length]);
+
   const AuditBadge = () => (changeCount > 0 ? (
     <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-slate-200 px-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">{changeCount}</span>
   ) : null);
@@ -380,7 +394,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
       {/* Level 1 — domain groups. Scrolls horizontally on narrow screens; a right-edge fade
           hints there are more groups to swipe to (hidden on md+ where they all fit). */}
       <div className="relative">
-        <div role="tablist" aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
+        <div ref={listRef} role="tablist" aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
           {groups.map((g) => {
             const active = g.tabs.includes(activeTab);
             const single = g.tabs.length === 1;
@@ -388,7 +402,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
               // Every group shows its domain label (e.g. "Schedule"); the stable
               // aria-label lets tests/AT target the group by that label. role="tab" +
               // aria-selected expose the active section to assistive tech (not colour alone).
-              <button key={g.label} role="tab" aria-selected={active} aria-label={g.label} data-tour={g.label === 'Schedule & WBS' ? 'tab-schedule' : g.label === 'Monitoring' ? 'tab-monitoring' : undefined} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
+              <button key={g.label} ref={active ? activeBtnRef : undefined} role="tab" aria-selected={active} aria-label={g.label} data-tour={g.label === 'Schedule & WBS' ? 'tab-schedule' : g.label === 'Monitoring' ? 'tab-monitoring' : undefined} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
                 {g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
               </button>
             );
