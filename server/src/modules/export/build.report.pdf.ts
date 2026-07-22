@@ -16,6 +16,7 @@ const statusLabel = (s: string) => s.replace(/_/g, ' ').toLowerCase().replace(/^
 const idxColor = (v: number) => (v >= 0.95 ? GREEN : v >= 0.85 ? AMBER : RED);
 const schedWord = (v: number) => (v >= 0.95 ? 'on or ahead of plan' : v >= 0.85 ? 'slightly behind plan' : 'behind plan');
 const costWord = (v: number) => (v >= 0.95 ? 'on or under budget' : v >= 0.85 ? 'slightly over budget' : 'over budget');
+// Compact 3-band tags for the KV metric rows (same thresholds as idxColor, so colour & label agree).
 const schedTag = (v: number) => (v >= 0.95 ? '  (on/ahead)' : v >= 0.85 ? '  (watch)' : '  (behind)');
 const costTag = (v: number) => (v >= 0.95 ? '  (on/under)' : v >= 0.85 ? '  (watch)' : '  (over)');
 
@@ -153,8 +154,8 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
   kv('Overall health', healthLabel(r.health), healthColor(r.health));
   kv('% Complete (weighted)', `${r.tasks.weightedPct}%`);
   kv('Tasks completed', `${r.tasks.completed} of ${r.tasks.total}  (${r.tasks.inProgress} in progress, ${r.tasks.notStarted} not started)`);
-  kv('Schedule (SPI)', e.pv > 0 ? `${e.spi.toFixed(2)}${e.spi >= 1 ? '  (on/ahead)' : '  (behind)'}` : '—', e.pv > 0 ? (e.spi >= 1 ? GREEN : RED) : GRAY);
-  kv('Cost (CPI)', e.ac > 0 ? `${e.cpi.toFixed(2)}${e.cpi >= 1 ? '  (on/under)' : '  (over)'}` : '—', e.ac > 0 ? (e.cpi >= 1 ? GREEN : RED) : GRAY);
+  kv('Schedule (SPI)', e.pv > 0 ? `${e.spi.toFixed(2)}${schedTag(e.spi)}` : '—', e.pv > 0 ? idxColor(e.spi) : GRAY);
+  kv('Cost (CPI)', e.ac > 0 ? `${e.cpi.toFixed(2)}${costTag(e.cpi)}` : '—', e.ac > 0 ? idxColor(e.cpi) : GRAY);
   kv('Planned finish', iso(f.schedule.plannedFinish));
   kv('Forecast finish', f.schedule.forecastFinish ? `${iso(f.schedule.forecastFinish)}${f.schedule.varianceDays != null ? `  (${f.schedule.varianceDays > 0 ? '+' : ''}${f.schedule.varianceDays}d)` : ''}` : '—',
     f.schedule.varianceDays != null ? (f.schedule.varianceDays > 0 ? RED : GREEN) : undefined);
