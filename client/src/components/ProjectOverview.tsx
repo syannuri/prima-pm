@@ -32,20 +32,21 @@ function countTasks(nodes: GanttNode[]): { completed: number; remaining: number 
   return { completed, remaining };
 }
 
-// Donut of completed (emerald) vs remaining (slate), total in the centre.
-function TaskDonut({ completed, remaining }: { completed: number; remaining: number }) {
+// Compact donut of completed (emerald) vs remaining (slate). Centre reads the % complete
+// (the donut's meaning) with the task total as a small sub-label.
+function TaskDonut({ completed, remaining, label }: { completed: number; remaining: number; label: string }) {
   const total = completed + remaining;
   const R = 34, C = 2 * Math.PI * R;
   const frac = total > 0 ? completed / total : 0;
   return (
-    <div className="relative h-24 w-24 shrink-0">
-      <svg viewBox="0 0 80 80" className="h-24 w-24 -rotate-90">
-        <circle cx="40" cy="40" r={R} fill="none" strokeWidth="8" className="stroke-slate-200 dark:stroke-slate-700" />
-        <circle cx="40" cy="40" r={R} fill="none" strokeWidth="8" strokeLinecap="round" className="stroke-emerald-500 transition-[stroke-dasharray] duration-700" strokeDasharray={`${frac * C} ${C}`} />
+    <div className="relative h-20 w-20 shrink-0">
+      <svg viewBox="0 0 80 80" className="h-20 w-20 -rotate-90">
+        <circle cx="40" cy="40" r={R} fill="none" strokeWidth="7" className="stroke-slate-200 dark:stroke-slate-700" />
+        <circle cx="40" cy="40" r={R} fill="none" strokeWidth="7" strokeLinecap="round" className="stroke-emerald-500 transition-[stroke-dasharray] duration-700" strokeDasharray={`${frac * C} ${C}`} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xl font-bold tabular-nums leading-none text-slate-800 dark:text-slate-100">{total}</span>
-        <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">task</span>
+        <span className="text-lg font-bold tabular-nums leading-none text-slate-800 dark:text-slate-100">{Math.round(frac * 100)}%</span>
+        <span className="mt-0.5 text-[9px] font-medium tabular-nums tracking-wide text-slate-400 dark:text-slate-500">{total} {label}</span>
       </div>
     </div>
   );
@@ -245,7 +246,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       <Panel onClick={onJump ? () => onJump('Cost') : undefined}>
         {/* Mobile: gauge (small, left) + progress bar + SPI/CPI mini tiles (right) */}
         <div className="flex items-start gap-4 sm:hidden">
-          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={null} compact className="max-w-[148px] shrink-0" />
+          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={null} compact className="max-w-[128px] shrink-0" />
           <div className="min-w-0 flex-1 space-y-2.5 pt-1">
             <div>
               <div className="mb-1 flex items-baseline justify-between text-xs">
@@ -276,9 +277,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           </div>
         </div>
 
-        {/* Desktop: gauge centred, larger */}
+        {/* Desktop: gauge centred (compact — smaller than the old 250px centrepiece) */}
         <div className="hidden sm:flex sm:flex-col sm:items-center">
-          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={marginLine} className="max-w-[250px]" />
+          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={marginLine} className="max-w-[200px]" />
         </div>
         <div className="mt-1 hidden sm:block">
           <div className="mb-1 flex items-baseline justify-between text-xs">
@@ -329,10 +330,10 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Completed vs remaining tasks */}
       {tasks && taskTotal > 0 && (
         <Panel onClick={onJump ? () => onJump('Schedule') : undefined}>
-          <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}</h3>
-          <div className="flex items-center gap-5">
-            <TaskDonut completed={tasks.completed} remaining={tasks.remaining} />
-            <div className="min-w-0 flex-1 space-y-2 text-sm">
+          <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}</h3>
+          <div className="flex items-center gap-4">
+            <TaskDonut completed={tasks.completed} remaining={tasks.remaining} label={id ? 'tugas' : 'tasks'} />
+            <div className="min-w-0 flex-1 space-y-1.5 text-sm">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" />
                 <span className="text-slate-600 dark:text-slate-300">{id ? 'Selesai' : 'Completed'}</span>
@@ -342,10 +343,6 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300 dark:bg-slate-600" />
                 <span className="text-slate-600 dark:text-slate-300">{id ? 'Tersisa' : 'Remaining'}</span>
                 <span className="ml-auto font-semibold tabular-nums text-slate-800 dark:text-slate-100">{tasks.remaining}</span>
-              </div>
-              <div className="flex items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
-                <span className="text-slate-500 dark:text-slate-400">{id ? 'Total' : 'Total'}</span>
-                <span className="ml-auto font-semibold tabular-nums text-slate-700 dark:text-slate-200">{taskTotal}</span>
               </div>
             </div>
           </div>
