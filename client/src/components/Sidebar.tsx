@@ -31,7 +31,9 @@ const linkIdle = 'text-slate-300 hover:bg-slate-800 hover:text-white';
 // Active item: soft coral wash + a crisp coral left accent bar.
 const linkActive = 'bg-brand-600/15 text-white shadow-[inset_2px_0_0_#f4675f]';
 
-export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
+// `drawer` = rendered as the mobile slide-over (not the fixed web sidebar). The Manual/Settings
+// footer is drawer-only: on the web those live in the header top-bar, so the sidebar hides them.
+export default function Sidebar({ collapsed = false, onNavigate, drawer = false }: { collapsed?: boolean; onNavigate?: () => void; drawer?: boolean }) {
   const { user } = useAuth();
   const isAdminPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const { data, isLoading: projectsLoading } = useQuery({
@@ -131,14 +133,18 @@ export default function Sidebar({ collapsed = false, onNavigate }: { collapsed?:
         )}
       </nav>
 
-      <div className="space-y-1 border-t border-slate-800 px-3 py-2">
-        <NavLink to="/manual" onClick={onNavigate} title="Manual" className={({ isActive }) => cx(isActive)}>
-          <Icon path={ICONS.manual} /> {!collapsed && 'Manual'}
-        </NavLink>
-        <NavLink to="/settings" onClick={onNavigate} title="Settings" className={({ isActive }) => cx(isActive)}>
-          <Icon path={ICONS.settings} /> {!collapsed && 'Settings'}
-        </NavLink>
-      </div>
+      {/* Manual + Settings: drawer-only. On the web these sit in the header top-bar, so the
+          fixed sidebar keeps its focus on Dashboard / Resources / Projects. */}
+      {drawer && (
+        <div className="space-y-1 border-t border-slate-800 px-3 py-2">
+          <NavLink to="/manual" onClick={onNavigate} title="Manual" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.manual} /> {!collapsed && 'Manual'}
+          </NavLink>
+          <NavLink to="/settings" onClick={onNavigate} title="Settings" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.settings} /> {!collapsed && 'Settings'}
+          </NavLink>
+        </div>
+      )}
 
       <div className={`flex items-center gap-3 border-t border-slate-800 py-3 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600/80 text-sm font-semibold text-white" title={user?.name}>
