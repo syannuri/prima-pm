@@ -93,37 +93,76 @@ function Tile({ label, value, tone, hint }: { label: string; value: string; tone
   );
 }
 
-// Compact 2-line S-curve: a dashed slate "plan" line + a solid coloured "actual" line
-// (with dots at each captured snapshot). Scales uniformly to the card width.
-function MiniSCurve({ planned, actual, actualColor, unitMax }: {
+// Linear-interpolate a step-series value at time t (plan value "as of now" for the delta).
+function valAt(series: { t: number; v: number }[], t: number): number | null {
+  if (!series.length) return null;
+  if (t <= series[0].t) return series[0].v;
+  for (let i = 1; i < series.length; i++) {
+    if (t <= series[i].t) {
+      const a = series[i - 1], b = series[i];
+      return a.v + (b.v - a.v) * ((t - a.t) / ((b.t - a.t) || 1));
+    }
+  }
+  return series[series.length - 1].v;
+}
+
+// Compact S-curve: a dashed slate "plan" line + a solid coloured "actual" line with a
+// value label on the latest actual point, so the current figure reads without hovering.
+// Shorter than before (H 92) to keep the Overview tight.
+function MiniSCurve({ planned, actual, actualColor, unitMax, fmt }: {
   planned: { t: number; v: number }[];
   actual: { t: number; v: number }[];
   actualColor: string; // e.g. 'stroke-emerald-500'
   unitMax?: number; // fixed Y max (100 for %)
+  fmt: (v: number) => string; // label formatter for the latest-actual callout
 }) {
   const pts = [...planned, ...actual];
   if (!pts.length) return null;
-  const W = 320, H = 130, padL = 4, padR = 8, padT = 10, padB = 4;
+  const W = 320, H = 92, padL = 4, padR = 8, padT = 12, padB = 4;
   const t0 = Math.min(...pts.map((p) => p.t)), t1 = Math.max(...pts.map((p) => p.t));
-  const maxV = unitMax ?? Math.max(1, ...pts.map((p) => p.v)) * 1.08;
+  const maxV = unitMax ?? Math.max(1, ...pts.map((p) => p.v)) * 1.12;
   const X = (t: number) => padL + (t1 > t0 ? (t - t0) / (t1 - t0) : 0) * (W - padL - padR);
   const Y = (v: number) => padT + (1 - Math.min(v, maxV) / maxV) * (H - padT - padB);
   const d = (a: { t: number; v: number }[]) => a.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ');
+  const fillClass = actualColor.replace('stroke-', 'fill-');
+  const last = actual[actual.length - 1];
+  const lx = last ? X(last.t) : 0, ly = last ? Y(last.v) : 0;
+  const labelLeft = lx > W * 0.7; // flip the callout inward near the right edge
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="S-curve plan vs actual">
       {[0, 0.5, 1].map((fr) => <line key={fr} x1={padL} x2={W - padR} y1={Y(maxV * fr)} y2={Y(maxV * fr)} className="stroke-slate-100 dark:stroke-slate-800" strokeWidth="1" />)}
       {planned.length >= 2 && <path d={d(planned)} fill="none" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" strokeDasharray="4 3" />}
       {actual.length >= 2 && <path d={d(actual)} fill="none" className={actualColor} strokeWidth="2" />}
-      {actual.map((p, i) => <circle key={i} cx={X(p.t)} cy={Y(p.v)} r="2.6" className={actualColor.replace('stroke-', 'fill-')} />)}
+      {actual.map((p, i) => <circle key={i} cx={X(p.t)} cy={Y(p.v)} r="2.4" className={fillClass} />)}
+      {/* Latest-actual value callout — the one number that matters, on the chart. */}
+      {last && (
+        <>
+          <circle cx={lx} cy={ly} r="3.4" className={fillClass} stroke="#fff" strokeWidth="1.2" />
+          <text x={labelLeft ? lx - 6 : lx + 6} y={Math.max(9, ly - 5)} textAnchor={labelLeft ? 'end' : 'start'} className={`${fillClass} text-[10px] font-bold`} style={{ paintOrder: 'stroke', stroke: '#fff', strokeWidth: 2.6 } as React.CSSProperties}>{fmt(last.v)}</text>
+        </>
+      )}
     </svg>
   );
 }
 
-function SLegend({ actualLabel, actualSwatch, planLabel }: { actualLabel: string; actualSwatch: string; planLabel: string }) {
+// Informative caption under an S-curve: plan vs actual "as of now" + the signed delta,
+// coloured by whether the actual is favourable (progress ahead = good; cost over = bad).
+function SCurveCaption({ planLabel, actualLabel, actualSwatch, planNow, actualNow, fmt, higherIsGood }: {
+  planLabel: string; actualLabel: string; actualSwatch: string;
+  planNow: number | null; actualNow: number | null;
+  fmt: (v: number) => string; higherIsGood: boolean;
+}) {
+  const delta = planNow != null && actualNow != null ? actualNow - planNow : null;
+  const good = delta == null ? true : higherIsGood ? delta >= 0 : delta <= 0;
   return (
-    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-      <span className="flex items-center gap-1.5"><span className="inline-block h-0 w-4 border-t-[1.5px] border-dashed border-slate-400 dark:border-slate-500" />{planLabel}</span>
-      <span className="flex items-center gap-1.5"><span className={`inline-block h-0.5 w-4 rounded ${actualSwatch}`} />{actualLabel}</span>
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+      <span className="flex items-center gap-1.5"><span className="inline-block h-0 w-4 border-t-[1.5px] border-dashed border-slate-400 dark:border-slate-500" />{planLabel} {planNow != null ? <b className="font-semibold tabular-nums text-slate-600 dark:text-slate-300">{fmt(planNow)}</b> : null}</span>
+      <span className="flex items-center gap-1.5"><span className={`inline-block h-0.5 w-4 rounded ${actualSwatch}`} />{actualLabel} {actualNow != null ? <b className="font-semibold tabular-nums text-slate-600 dark:text-slate-300">{fmt(actualNow)}</b> : null}</span>
+      {delta != null && Math.abs(delta) > 0.5 && (
+        <span className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${good ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+          {delta > 0 ? '+' : '−'}{fmt(Math.abs(delta))}
+        </span>
+      )}
     </div>
   );
 }
@@ -181,6 +220,12 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const actProg = bac > 0 ? snaps.map((s) => ({ t: +new Date(s.statusDate), v: (s.ev / bac) * 100 })) : [];
   const hasCost = planCurve.length >= 2 || actCost.length > 0;
   const hasProg = bac > 0 && (planProg.length >= 2 || actProg.length > 0);
+  // Plan vs actual "as of the latest snapshot" — feeds the on-chart callout + delta badge.
+  const progNow = actProg[actProg.length - 1]?.v ?? null;
+  const progPlanNow = progNow != null ? valAt(planProg, actProg[actProg.length - 1].t) : null;
+  const costNow = actCost[actCost.length - 1]?.v ?? null;
+  const costPlanNow = costNow != null ? valAt(planCurve, actCost[actCost.length - 1].t) : null;
+  const pctFmt = (v: number) => `${Math.round(v)}%`;
 
   // Plan vs projected margin & profit. Plan = Revenue − BAC (the cost baseline); projected =
   // Revenue − EAC (forecast cost at completion) — the honest "where margin will land". We do NOT
@@ -341,8 +386,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           ) : sCurveTab === 'progress' ? (
             hasProg ? (
               <>
-                <MiniSCurve planned={planProg} actual={actProg} actualColor="stroke-emerald-500" unitMax={100} />
-                <SLegend planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (EV)' : 'Actual (EV)'} actualSwatch="bg-emerald-500" />
+                <MiniSCurve planned={planProg} actual={actProg} actualColor="stroke-emerald-500" unitMax={100} fmt={pctFmt} />
+                <SCurveCaption planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (EV)' : 'Actual (EV)'} actualSwatch="bg-emerald-500"
+                  planNow={progPlanNow} actualNow={progNow} fmt={pctFmt} higherIsGood />
               </>
             ) : (
               <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
@@ -350,8 +396,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           ) : (
             hasCost ? (
               <>
-                <MiniSCurve planned={planCurve} actual={actCost} actualColor="stroke-brand-500" />
-                <SLegend planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (AC)' : 'Actual (AC)'} actualSwatch="bg-brand-500" />
+                <MiniSCurve planned={planCurve} actual={actCost} actualColor="stroke-brand-500" fmt={formatIdrShort} />
+                <SCurveCaption planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (AC)' : 'Actual (AC)'} actualSwatch="bg-brand-500"
+                  planNow={costPlanNow} actualNow={costNow} fmt={formatIdrShort} higherIsGood={false} />
               </>
             ) : (
               <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
