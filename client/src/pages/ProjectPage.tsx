@@ -79,6 +79,16 @@ export default function ProjectPage() {
     });
     return () => cancelAnimationFrame(raf);
   }, [jump, tab]);
+  // On a user tab switch, bring the tab strip to the top of the scroll area so the newly-selected
+  // panel is in view. Keyed on the `tab` STATE (changes on every click) and declared BEFORE the
+  // loading/not-found early returns so the hook order stays stable. Skips the initial mount; a
+  // section "jump" does its own scroll.
+  useEffect(() => {
+    if (firstTabRun.current) { firstTabRun.current = false; return; }
+    if (jump) return;
+    tabsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
   const isMobile = useIsMobile();
   const { lang } = useLang();
@@ -147,15 +157,6 @@ export default function ProjectPage() {
   // Overview is mobile-only: never resolve to it on desktop (e.g. a phone→desktop resize while it
   // was open, or a stale ?tab=Overview deep link) — fall back to the normal landing tab.
   const activeTab: Tab = chosenTab === 'Overview' && !isMobile ? landingTab : chosenTab;
-
-  // On a tab switch, bring the tab strip to the top of the scroll area so the newly-selected
-  // panel is visible (skip the first render / initial landing; a section "jump" scrolls itself).
-  useEffect(() => {
-    if (firstTabRun.current) { firstTabRun.current = false; return; }
-    if (jump) return;
-    tabsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
 
   // Shared pill style for the compact header meta chips (add the display util per use so
   // the conditionally-hidden chips can toggle with `hidden sm:inline-flex`).
