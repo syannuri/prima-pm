@@ -149,6 +149,10 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     queryKey: ['gantt', projectId, 'overview'],
     queryFn: () => api.get<{ tree: GanttNode[] }>(`/projects/${projectId}/schedule/gantt`),
   });
+  // NOTE: keep every hook ABOVE the early returns below — a hook after a conditional
+  // return violates the Rules of Hooks (the count changes once data loads → React throws
+  // "rendered more hooks than during the previous render" and the tab goes blank/black).
+  const [sCurveTab, setSCurveTab] = useState<'progress' | 'cost'>('progress');
 
   if (evmQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
   const e = evmQ.data;
@@ -188,7 +192,6 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
   const tasks = ganttQ.data ? countTasks(ganttQ.data.tree) : null;
   const taskTotal = tasks ? tasks.completed + tasks.remaining : 0;
-  const [sCurveTab, setSCurveTab] = useState<'progress' | 'cost'>('progress');
 
   return (
     <div className="space-y-3">

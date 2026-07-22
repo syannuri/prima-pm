@@ -30,7 +30,9 @@ function donutPath(a0: number, a1: number): string {
 // `unit` labels what each slice counts (default "projects" for the dashboard status donut;
 // e.g. "tasks" for the report's task-completion donut) — used in the corner hint + tooltips.
 // `bare` strips the outer card container so the chart can sit inside an existing Card.
-export default function DonutChart({ title, slices, unit = 'projects', bare }: { title: string; slices: DonutSlice[]; unit?: string; bare?: boolean }) {
+// `hideLegend` drops the built-in slice legend when the parent already renders its own
+// (the Report Hub task-completion card does — showing both duplicated/offset the legend).
+export default function DonutChart({ title, slices, unit = 'projects', bare, hideLegend }: { title: string; slices: DonutSlice[]; unit?: string; bare?: boolean; hideLegend?: boolean }) {
   const uid = useId().replace(/:/g, '');
   const total = slices.reduce((s, d) => s + d.value, 0);
   const [hover, setHover] = useState<number | null>(null);
@@ -113,7 +115,8 @@ export default function DonutChart({ title, slices, unit = 'projects', bare }: {
             </text>
           </svg>
 
-          {/* Legend */}
+          {/* Legend (skipped when the parent renders its own — avoids a duplicate/offset list) */}
+          {!hideLegend && (
           <ul className="flex-1 space-y-1 text-sm">
             {slices.map((d, i) => (
               <li
@@ -128,6 +131,7 @@ export default function DonutChart({ title, slices, unit = 'projects', bare }: {
               </li>
             ))}
           </ul>
+          )}
 
           {/* Hover tooltip — which projects are in this slice */}
           {hover !== null && segs[hover]?.value > 0 && (
