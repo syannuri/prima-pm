@@ -64,6 +64,10 @@ export default function ProjectPage() {
   // local choice takes over. Validated against the project's actual tab list below.
   const requestedTab = searchParams.get('tab') as Tab | null;
   const [tab, setTab] = useState<Tab | null>(null);
+  // Anchor at the top of the tab strip — selecting a tab scrolls it up so the freshly-loaded
+  // panel is in view (the project header/alerts above can push content below the fold).
+  const tabsAnchorRef = useRef<HTMLDivElement>(null);
+  const firstTabRun = useRef(true);
   // "Jump to" (More menu) — switch tab and optionally deep-link to a section anchor within it.
   const [jump, setJump] = useState<string | null>(null);
   const goto = (t: Tab, sectionId?: string) => { setTab(t); setJump(sectionId ?? null); };
@@ -143,6 +147,15 @@ export default function ProjectPage() {
   // Overview is mobile-only: never resolve to it on desktop (e.g. a phone→desktop resize while it
   // was open, or a stale ?tab=Overview deep link) — fall back to the normal landing tab.
   const activeTab: Tab = chosenTab === 'Overview' && !isMobile ? landingTab : chosenTab;
+
+  // On a tab switch, bring the tab strip to the top of the scroll area so the newly-selected
+  // panel is visible (skip the first render / initial landing; a section "jump" scrolls itself).
+  useEffect(() => {
+    if (firstTabRun.current) { firstTabRun.current = false; return; }
+    if (jump) return;
+    tabsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Shared pill style for the compact header meta chips (add the display util per use so
   // the conditionally-hidden chips can toggle with `hidden sm:inline-flex`).
@@ -255,6 +268,7 @@ export default function ProjectPage() {
       {/* Next-steps guide is desktop-only — phones lead with the graphic Overview tab. */}
       {!isMobile && <NextStepsGuide projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
 
+      <div ref={tabsAnchorRef} className="scroll-mt-4" />
       <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} isMobile={isMobile} onSelect={(t) => setTab(t)} />
 
       {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && activeTab !== 'Stakeholders' && activeTab !== 'Requirements' && activeTab !== 'RAID' && (
