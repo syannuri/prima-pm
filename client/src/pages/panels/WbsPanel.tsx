@@ -590,7 +590,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <>
-        <div className={`overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? '' : 'max-h-[65vh]'}`}>
+        <div className={`overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'max-h-[calc(100vh-9rem)]' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
