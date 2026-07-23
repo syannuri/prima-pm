@@ -271,6 +271,11 @@ export default function ProjectPage() {
       {!isMobile && <NextStepsGuide projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
 
       <div ref={tabsAnchorRef} className="scroll-mt-4" />
+      {/* Tab strip + active panel share one wrapper with a viewport-tall min-height (desktop only)
+          so a short panel still gives <main> enough scroll room to pin the whole tab strip to the
+          top on a tab switch — the align-to-top scroll then lands consistently for every tab,
+          not just the tall ones (WBS/Gantt). 3.5rem = the 56px top bar. */}
+      <div className="space-y-5 sm:min-h-[calc(100vh-3.5rem)]">
       <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} isMobile={isMobile} onSelect={(t) => setTab(t)} />
 
       {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && activeTab !== 'Stakeholders' && activeTab !== 'Requirements' && activeTab !== 'RAID' && (
@@ -308,6 +313,7 @@ export default function ProjectPage() {
       {activeTab === 'UAT' && chartered && <UatPanel projectId={projectId} />}
       {activeTab === 'Closeout' && <CloseoutPanel projectId={projectId} />}
       {activeTab === 'Audit' && <AuditPanel projectId={projectId} />}
+      </div>
     </div>
   );
 }

@@ -159,10 +159,11 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
         <circle cx={CX - 3} cy={CY - 3} r="3" fill="#fff" opacity="0.55" />
       </svg>
 
-      {/* Digital read-out — sits in the open lower-middle of the dial. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-1 flex flex-col items-center">
-        <span className={`font-semibold uppercase tracking-[0.12em] text-white/70 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>{statusLabel}</span>
-        <span className={`mt-0.5 font-extrabold leading-none tabular-nums text-white drop-shadow ${compact ? 'text-lg' : 'text-2xl'}`}>
+      {/* Digital read-out — sits in the open lower-middle of the dial. Compact (mobile) keeps
+          the SPI value small and pinned lower so it doesn't crowd the needle hub. */}
+      <div className={`pointer-events-none absolute inset-x-0 flex flex-col items-center ${compact ? 'bottom-0' : 'bottom-1'}`}>
+        <span className={`font-semibold uppercase tracking-[0.12em] text-white/70 ${compact ? 'text-[8px]' : 'text-[10px]'}`}>{statusLabel}</span>
+        <span className={`mt-0.5 font-extrabold leading-none tabular-nums text-white drop-shadow ${compact ? 'text-[13px]' : 'text-2xl'}`}>
           {noData ? '—' : `SPI ${spi.toFixed(2)}`}
         </span>
         <span className={`mt-0.5 tabular-nums text-white/70 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
