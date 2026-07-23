@@ -81,24 +81,25 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[13rem_1fr]">
-        {/* Hub sub-nav */}
-        <nav aria-label="Report views" className="flex gap-1.5 overflow-x-auto lg:flex-col lg:overflow-visible">
+      {/* View tabs — top-level nav (underline); the report content spans the full width below. */}
+      <div>
+        <div role="tablist" aria-label="Report views" className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
           {NAV.map((n) => {
             const active = n.key === view;
             return (
-              <button key={n.key} onClick={() => setView(n.key)} aria-current={active ? 'page' : undefined}
-                className={`flex shrink-0 items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+              <button key={n.key} role="tab" aria-selected={active} onClick={() => setView(n.key)}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition ${
                   active
-                    ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200 dark:bg-brand-900/30 dark:text-brand-300 dark:ring-brand-800'
-                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                    ? 'border-brand-500 text-brand-700 dark:text-brand-300'
+                    : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200'
                 }`}>
-                <span>{n.label}</span>
-                {!n.ready && <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">Soon</span>}
+                {n.label}
               </button>
             );
           })}
-        </nav>
+        </div>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{activeNav.desc}</p>
+      </div>
 
         <div className="min-w-0 space-y-5">
           {/* Control bar: Scope × Cadence × Export */}
@@ -163,7 +164,6 @@ export default function ReportsPage() {
           {/* Not-yet-built views — describe the target so the IA is legible. */}
           {view === 'portfolio' && <PortfolioReport />}
         </div>
-      </div>
     </div>
   );
 }

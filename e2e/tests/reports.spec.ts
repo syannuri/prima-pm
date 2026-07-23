@@ -11,19 +11,19 @@ test.describe('Reporting Hub', () => {
   });
 
   test('Executive view rolls up portfolio health', async ({ page }) => {
-    await page.getByRole('button', { name: 'Executive', exact: true }).click();
+    await page.getByRole('tab', { name: 'Executive', exact: true }).click();
     await expect(page.getByText(/Portfolio SPI/i)).toBeVisible();
     await expect(page.getByText(/Project heatmap/i)).toBeVisible();
   });
 
   test('Portfolio view shows budget vs actual', async ({ page }) => {
-    await page.getByRole('button', { name: 'Portfolio', exact: true }).click();
+    await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
     await expect(page.getByText(/Budget vs actual/i).first()).toBeVisible();
     await expect(page.getByText(/Cost variance/i)).toBeVisible();
   });
 
   test('Analytics view offers the velocity & burndown lens', async ({ page }) => {
-    await page.getByRole('button', { name: 'Analytics', exact: true }).click();
+    await page.getByRole('tab', { name: 'Analytics', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Velocity & Burndown' })).toBeVisible();
   });
 
