@@ -116,8 +116,15 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
             <stop offset="0%" stopColor="var(--hg-hub-0)" /><stop offset="45%" stopColor="var(--hg-hub-1)" /><stop offset="100%" stopColor="var(--hg-hub-2)" />
           </radialGradient>
           <linearGradient id="hgGloss" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.35" /><stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" /><stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
           </linearGradient>
+          {/* Glass reflection — a bluish specular sweep across the upper dial. */}
+          <radialGradient id="hgGlare" cx="42%" cy="28%" r="62%">
+            <stop offset="0%" stopColor="#f0f7ff" stopOpacity="0.95" />
+            <stop offset="55%" stopColor="#dbeafe" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#dbeafe" stopOpacity="0" />
+          </radialGradient>
+          <clipPath id="hgClip"><circle cx={CX} cy={CY} r={R + 14} /></clipPath>
           <filter id="hgShadow" x="-30%" y="-30%" width="160%" height="160%">
             <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000" floodOpacity="0.45" />
           </filter>
@@ -158,6 +165,12 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
         {/* Hub */}
         <circle cx={CX} cy={CY} r="11" fill="url(#hgHub)" stroke="var(--hg-rim)" strokeWidth="1" filter="url(#hgShadow)" />
         <circle cx={CX - 3} cy={CY - 3} r="3" fill="#fff" opacity="0.55" />
+
+        {/* Glass reflection — a soft specular sweep over the upper dial (clipped to the face). */}
+        <g clipPath="url(#hgClip)" style={{ opacity: 'var(--hg-glare-op)' }}>
+          <ellipse cx={CX - 6} cy={CY - 48} rx={R + 2} ry={30} fill="url(#hgGlare)" />
+          <path d={arc(0.04, 0.42, R + 6)} fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" opacity="0.5" />
+        </g>
       </svg>
 
       {/* Digital read-out — sits in the open lower-middle of the dial. Compact (mobile) keeps
