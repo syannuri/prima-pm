@@ -85,6 +85,10 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ![Project manager's view after a revision request — an amber banner with the PMO's note and a "Resubmit for activation" button](docs/screenshots/activation-revision.png)
 
+**Project Database** — an ADMIN/PMO console at `/admin/projects` listing every corporate project with filtering by **status**, **year** and **PM** plus text search, sortable columns, and per-row **Edit**, **Archive** and **Delete** tools. Archiving a project moves it to the **Archive** tab and hides it from the dashboard and the main project list, while keeping all its data intact — it can be **restored** at any time.
+
+![Project Database — an ADMIN/PMO table of every corporate project with status/year/PM filters, sortable columns, budget-at-completion, and Edit / Archive / Delete row tools plus a Database ↔ Archive tab](docs/screenshots/project-database.png)
+
 ## 🧱 Tech stack
 
 | Layer | Tech |
