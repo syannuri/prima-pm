@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { prisma } from './lib/prisma.js';
 import { pruneExpiredRefreshTokens } from './modules/auth/auth.service.js';
+import { runWeeklyAutoCaptureIfDue } from './modules/evm/evm.portfolio.js';
 
 // Defense-in-depth: a stray rejection should be logged, not take down the
 // whole server for every user (the root cause is still fixed at the source).
@@ -34,9 +35,26 @@ async function main() {
   const pruneTimer = setInterval(() => void prune(), PRUNE_INTERVAL_MS);
   pruneTimer.unref();
 
+  // Weekly EVM auto-capture (opt-in via AppSetting). Check on boot then every 6h; the helper
+  // only actually captures when it's enabled, today matches the configured weekday, and it
+  // hasn't already run today — so this frequent tick is cheap and idempotent.
+  const AUTO_CAPTURE_CHECK_MS = 6 * 60 * 60 * 1000;
+  const autoCapture = async () => {
+    try {
+      const r = await runWeeklyAutoCaptureIfDue();
+      if (r.ran) console.log(`[prima-pm] weekly EVM auto-capture: ${r.captured}/${r.total} project(s)${r.failed ? ` (${r.failed} skipped)` : ''}`);
+    } catch (err) {
+      console.error('[prima-pm] weekly EVM auto-capture failed', err);
+    }
+  };
+  void autoCapture();
+  const autoCaptureTimer = setInterval(() => void autoCapture(), AUTO_CAPTURE_CHECK_MS);
+  autoCaptureTimer.unref();
+
   const shutdown = async (signal: string) => {
     console.log(`[prima-pm] ${signal} received, shutting down...`);
     clearInterval(pruneTimer);
+    clearInterval(autoCaptureTimer);
     server.close();
     await prisma.$disconnect();
     process.exit(0);

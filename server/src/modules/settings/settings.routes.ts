@@ -13,8 +13,10 @@ const patchSchema = z
   .object({
     guestSignupEnabled: z.boolean().optional(),
     googleLoginEnabled: z.boolean().optional(),
+    evmAutoCaptureEnabled: z.boolean().optional(),
+    evmAutoCaptureWeekday: z.number().int().min(0).max(6).optional(),
   })
-  .refine((d) => d.guestSignupEnabled !== undefined || d.googleLoginEnabled !== undefined, 'Nothing to update');
+  .refine((d) => Object.values(d).some((v) => v !== undefined), 'Nothing to update');
 
 router.get(
   '/',

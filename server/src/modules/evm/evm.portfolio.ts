@@ -13,7 +13,8 @@ const GLOBAL_WRITE: Role[] = ['ADMIN', 'PMO'];
 const num = (d: unknown): number => (d == null ? 0 : Number(d));
 
 function scopeWhere(userId: string, role: string, global: Role[]): Prisma.ProjectWhereInput {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null };
+  // Archived projects are excluded from portfolio aggregates (same rule as listProjects / summary).
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null };
   if (role === 'GUEST') {
     where.personalOwnerId = userId; // guests: only their own personal projects
   } else {
@@ -64,4 +65,41 @@ export async function captureAllSnapshots(userId: string, role: string, statusDa
   const captured = results.filter((r) => r.status === 'fulfilled').length;
   const failed = results.length - captured;
   return { captured, failed, total: projects.length };
+}
+
+// ── Weekly auto-capture (opt-in scheduler) ─────────────────────────────────────
+// System-driven capture across the WHOLE corporate portfolio (every non-DRAFT, non-archived,
+// non-personal project) with a null actor + a marker note. Idempotent (upsert on project+date).
+function dayUTC(d: Date): Date {
+  const x = new Date(d);
+  x.setUTCHours(0, 0, 0, 0);
+  return x;
+}
+
+export async function autoCaptureWeekly(statusDate: Date) {
+  const projects = await prisma.project.findMany({
+    where: { deletedAt: null, archivedAt: null, personalOwnerId: null, status: { not: 'DRAFT' } },
+    select: { id: true },
+  });
+  const results = await Promise.allSettled(
+    projects.map((p) => captureSnapshot(p.id, { statusDate, note: 'Auto weekly capture' }, null)),
+  );
+  const captured = results.filter((r) => r.status === 'fulfilled').length;
+  return { captured, failed: results.length - captured, total: projects.length };
+}
+
+/**
+ * Run the weekly auto-capture IF it is due: enabled in AppSetting, today matches the configured
+ * weekday (0=Sun..6=Sat, UTC), and it hasn't already run today. Stamps lastRunAt on success so a
+ * server restart on the same day doesn't re-run it. Safe to call on a frequent timer.
+ */
+export async function runWeeklyAutoCaptureIfDue(now: Date = new Date()) {
+  const row = await prisma.appSetting.findUnique({ where: { id: 'singleton' } });
+  if (!row?.evmAutoCaptureEnabled) return { ran: false as const };
+  if (now.getUTCDay() !== row.evmAutoCaptureWeekday) return { ran: false as const };
+  if (row.evmAutoCaptureLastRunAt && dayUTC(row.evmAutoCaptureLastRunAt) >= dayUTC(now)) return { ran: false as const };
+
+  const res = await autoCaptureWeekly(now);
+  await prisma.appSetting.update({ where: { id: 'singleton' }, data: { evmAutoCaptureLastRunAt: now } });
+  return { ran: true as const, ...res };
 }

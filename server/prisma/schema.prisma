@@ -1287,6 +1287,11 @@ model AppSetting {
   id                 String   @id @default("singleton")
   guestSignupEnabled Boolean  @default(false)
   googleLoginEnabled Boolean  @default(false)
+  // Weekly EVM auto-capture (opt-in). Weekday: 0=Sun .. 6=Sat (default 1 = Monday).
+  // lastRunAt is scheduler-managed so a restart doesn't re-run the same day.
+  evmAutoCaptureEnabled   Boolean   @default(false)
+  evmAutoCaptureWeekday   Int       @default(1)
+  evmAutoCaptureLastRunAt DateTime?
   updatedById        String?
   updatedAt          DateTime @updatedAt
 }

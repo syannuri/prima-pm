@@ -7,6 +7,11 @@ const SINGLETON = 'singleton';
 export interface AppSettings {
   guestSignupEnabled: boolean;
   googleLoginEnabled: boolean;
+  // Weekly EVM auto-capture (opt-in). weekday: 0=Sun .. 6=Sat. lastRunAt is scheduler-managed
+  // (stamped after each run) and NOT part of the admin-editable/cached surface below — the
+  // scheduler reads & writes it straight on the row.
+  evmAutoCaptureEnabled: boolean;
+  evmAutoCaptureWeekday: number;
 }
 
 // Small in-process cache so the hot paths (login page /auth/providers, guest register, google
@@ -28,7 +33,12 @@ export async function getAppSettings(): Promise<AppSettings> {
     },
     update: {},
   });
-  cache = { guestSignupEnabled: row.guestSignupEnabled, googleLoginEnabled: row.googleLoginEnabled };
+  cache = {
+    guestSignupEnabled: row.guestSignupEnabled,
+    googleLoginEnabled: row.googleLoginEnabled,
+    evmAutoCaptureEnabled: row.evmAutoCaptureEnabled,
+    evmAutoCaptureWeekday: row.evmAutoCaptureWeekday,
+  };
   return cache;
 }
 
@@ -37,6 +47,8 @@ export async function updateAppSettings(patch: Partial<AppSettings>, actorId: st
   const next: AppSettings = {
     guestSignupEnabled: patch.guestSignupEnabled ?? current.guestSignupEnabled,
     googleLoginEnabled: patch.googleLoginEnabled ?? current.googleLoginEnabled,
+    evmAutoCaptureEnabled: patch.evmAutoCaptureEnabled ?? current.evmAutoCaptureEnabled,
+    evmAutoCaptureWeekday: patch.evmAutoCaptureWeekday ?? current.evmAutoCaptureWeekday,
   };
   await prisma.appSetting.update({ where: { id: SINGLETON }, data: { ...next, updatedById: actorId } });
   cache = next;

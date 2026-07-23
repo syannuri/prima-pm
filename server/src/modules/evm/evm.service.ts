@@ -30,8 +30,9 @@ async function ensureProject(projectId: string) {
   if (!project) throw NotFound('Project not found');
 }
 
-/** Capture (or re-capture) the current EVM as-of a status date. Upserts on (project, date). */
-export async function captureSnapshot(projectId: string, input: CaptureSnapshotInput, actorId: string) {
+/** Capture (or re-capture) the current EVM as-of a status date. Upserts on (project, date).
+ *  actorId may be null for a system-driven capture (the weekly auto-capture scheduler). */
+export async function captureSnapshot(projectId: string, input: CaptureSnapshotInput, actorId: string | null) {
   await ensureProject(projectId);
   const statusDate = dayUTC(input.statusDate ?? new Date());
   const evm = await getProjectEvm(projectId, undefined, statusDate);
