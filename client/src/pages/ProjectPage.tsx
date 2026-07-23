@@ -64,6 +64,7 @@ export default function ProjectPage() {
   // local choice takes over. Validated against the project's actual tab list below.
   const requestedTab = searchParams.get('tab') as Tab | null;
   const [tab, setTab] = useState<Tab | null>(null);
+  const isMobile = useIsMobile();
   // Anchor at the top of the tab strip — selecting a tab scrolls it up so the freshly-loaded
   // panel is in view (the project header/alerts above can push content below the fold).
   const tabsAnchorRef = useRef<HTMLDivElement>(null);
@@ -82,15 +83,15 @@ export default function ProjectPage() {
   // On a user tab switch, bring the tab strip to the top of the scroll area so the newly-selected
   // panel is in view. Keyed on the `tab` STATE (changes on every click) and declared BEFORE the
   // loading/not-found early returns so the hook order stays stable. Skips the initial mount; a
-  // section "jump" does its own scroll.
+  // section "jump" does its own scroll. Disabled on mobile — the iPhone-style bottom tab bar makes
+  // the extra page jump on every tap jarring, so phones just stay put.
   useEffect(() => {
     if (firstTabRun.current) { firstTabRun.current = false; return; }
-    if (jump) return;
+    if (jump || isMobile) return;
     tabsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
-  const isMobile = useIsMobile();
   const { lang } = useLang();
   const [editOpen, setEditOpen] = useState(false);
 
