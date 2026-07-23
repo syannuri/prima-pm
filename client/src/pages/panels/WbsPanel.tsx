@@ -589,7 +589,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className={`overflow-auto ${fullscreen ? '' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
@@ -626,7 +626,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               {/* Row 1 — column groups. Plan & Actual each span a Start/Finish pair. */}
-              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:py-2 [&>th]:pr-3">
+              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-white [&>th]:dark:bg-slate-900 [&>th]:py-2 [&>th]:pr-3">
                 <th rowSpan={2} className="w-8 border-b border-slate-200 text-center align-bottom dark:border-slate-800" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
                 <th rowSpan={2} className="w-12 border-b border-slate-200 align-bottom dark:border-slate-800">WBS</th>
                 <th rowSpan={2} className="min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800">Task</th>
@@ -654,7 +654,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 )}
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each group. */}
-              <tr className="text-left text-[11px] uppercase text-slate-400 dark:text-slate-500 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-normal">
+              <tr className="text-left text-[11px] uppercase text-slate-400 dark:text-slate-500 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-white [&>th]:dark:bg-slate-900 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-normal">
                 <th>Start</th>
                 <th>Finish</th>
                 <th>Start</th>
