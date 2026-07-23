@@ -146,6 +146,7 @@ export interface Project {
   closureNote?: string | null;
   onHoldReason?: string | null;
   baselineLockedAt?: string | null;
+  archivedAt?: string | null;
   // PMO activation-review outcome: null (in queue / approved) | 'NEEDS_REVISION' | 'REJECTED'.
   activationReviewStatus?: string | null;
   activationReviewNote?: string | null;

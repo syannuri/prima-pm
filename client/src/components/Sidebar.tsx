@@ -22,6 +22,7 @@ const ICONS = {
   changeLog: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 12l2 2 4-4',
   clock: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
   reports: 'M3 3v18h18M7 15v3M12 11v7M17 7v11',
+  database: 'M4 7c0 1.66 3.58 3 8 3s8-1.34 8-3-3.58-3-8-3-8 1.34-8 3zM4 7v5c0 1.66 3.58 3 8 3s8-1.34 8-3V7M4 12v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5',
 };
 
 const STATUS_DOT = PROJECT_STATUS_DOT;
@@ -86,6 +87,11 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {!!user && !['ADMIN', 'PMO'].includes(user.role) && (
           <NavLink to="/my-timesheet" onClick={onNavigate} title="My Timesheet" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.clock} /> {!collapsed && 'My Timesheet'}
+          </NavLink>
+        )}
+        {isAdminPmo && (
+          <NavLink to="/admin/projects" onClick={onNavigate} title="Project Database" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.database} /> {!collapsed && 'Project Database'}
           </NavLink>
         )}
         {user?.role === 'ADMIN' && (

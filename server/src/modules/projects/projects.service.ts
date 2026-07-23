@@ -1,4 +1,4 @@
-import type { Prisma, Role } from '@prisma/client';
+import type { Prisma, Role, ProjectStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
@@ -39,7 +39,9 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
 
 // List projects visible to the caller (global roles see all; others see owned).
 export async function listProjects(userId: string, role: Role) {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null };
+  // Archived projects are hidden from the corporate list, sidebar and dashboard — they live only
+  // in the ADMIN/PMO Project Database Archive tab (see listProjectDatabase).
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null };
   if (role === 'GUEST') {
     // Guests see ONLY their own personal projects (full sandbox).
     where.personalOwnerId = userId;
@@ -405,4 +407,61 @@ export async function softDeleteProject(id: string, actorId: string) {
   });
   await writeAudit({ projectId: id, userId: actorId, entity: 'Project', entityId: id, action: 'DELETE' });
   return project;
+}
+
+// Archive / restore — a reversible hide (distinct from soft-delete). Archived projects drop out
+// of the corporate list, dashboard and portfolio, and only appear in the Project Database Archive.
+export async function archiveProject(id: string, actorId: string) {
+  const before = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+  if (!before) throw NotFound('Project not found');
+  if (before.archivedAt) throw BadRequest('Project is already archived');
+  const project = await prisma.project.update({
+    where: { id },
+    data: { archivedAt: new Date(), archivedById: actorId },
+  });
+  await writeAudit({ projectId: id, userId: actorId, entity: 'Project', entityId: id, action: 'ARCHIVE' });
+  return project;
+}
+
+export async function unarchiveProject(id: string, actorId: string) {
+  const before = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+  if (!before) throw NotFound('Project not found');
+  if (!before.archivedAt) throw BadRequest('Project is not archived');
+  const project = await prisma.project.update({
+    where: { id },
+    data: { archivedAt: null, archivedById: null },
+  });
+  await writeAudit({ projectId: id, userId: actorId, entity: 'Project', entityId: id, action: 'UNARCHIVE' });
+  return project;
+}
+
+// ADMIN/PMO "Project Database": every corporate project (or, when archived=true, only the archived
+// ones) with optional status / year / PM filters. Sorting is done client-side. Excludes personal
+// (guest) sandboxes and soft-deleted rows.
+export async function listProjectDatabase(filters: {
+  archived?: boolean;
+  status?: ProjectStatus;
+  year?: number;
+  pmUserId?: string;
+}) {
+  const where: Prisma.ProjectWhereInput = {
+    deletedAt: null,
+    personalOwnerId: null,
+    archivedAt: filters.archived ? { not: null } : null,
+  };
+  if (filters.status) where.status = filters.status;
+  if (filters.pmUserId) where.pmUserId = filters.pmUserId;
+  // Year is encoded in the project code (PRJ-YYYY-####), so filter by that prefix.
+  if (filters.year) where.code = { startsWith: `PRJ-${filters.year}-` };
+
+  const projects = await prisma.project.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      pm: { select: { id: true, name: true, email: true } },
+      charter: { select: { id: true, locked: true, version: true, category: true } },
+      costBaseline: { select: { budgetAtCompletion: true } },
+    },
+  });
+  return projects;
 }

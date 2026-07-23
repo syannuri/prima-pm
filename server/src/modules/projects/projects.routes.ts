@@ -55,6 +55,24 @@ router.post(
   }),
 );
 
+// ADMIN/PMO "Project Database": the full corporate project list (or the Archive), with optional
+// status / year / PM filters. Registered before '/:id' so "admin" isn't read as a project id.
+router.get(
+  '/admin/database',
+  requireRole('ADMIN', 'PMO'),
+  asyncHandler(async (req, res) => {
+    const q = req.query;
+    const yearNum = q.year ? Number(q.year) : undefined;
+    const projects = await svc.listProjectDatabase({
+      archived: q.archived === 'true',
+      status: typeof q.status === 'string' && q.status ? (q.status as any) : undefined,
+      year: Number.isFinite(yearNum) ? yearNum : undefined,
+      pmUserId: typeof q.pmUserId === 'string' && q.pmUserId ? q.pmUserId : undefined,
+    });
+    res.json({ projects });
+  }),
+);
+
 // Single project (access-checked).
 router.get(
   '/:id',
@@ -187,6 +205,25 @@ router.delete(
   asyncHandler(async (req, res) => {
     await svc.softDeleteProject(req.params.id, req.user!.id);
     res.status(204).send();
+  }),
+);
+
+// Archive (reversible hide) / restore — ADMIN/PMO governance only (NOT requireProjectAccess:
+// archiving a CLOSED project is the main use case, and that write-guard freezes CLOSED projects).
+router.post(
+  '/:id/archive',
+  requireProjectGovernance('ADMIN', 'PMO'),
+  asyncHandler(async (req, res) => {
+    const project = await svc.archiveProject(req.params.id, req.user!.id);
+    res.json({ project });
+  }),
+);
+router.post(
+  '/:id/unarchive',
+  requireProjectGovernance('ADMIN', 'PMO'),
+  asyncHandler(async (req, res) => {
+    const project = await svc.unarchiveProject(req.params.id, req.user!.id);
+    res.json({ project });
   }),
 );
 

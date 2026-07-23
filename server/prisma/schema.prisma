@@ -274,6 +274,11 @@ model Project {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   deletedAt DateTime?
+  // Archived = hidden from the corporate list, dashboard and portfolio roll-ups but NOT deleted:
+  // it lives in the ADMIN/PMO "Project Database" Archive tab and can be restored. Distinct from
+  // deletedAt (a real soft-delete). NULL = a live project.
+  archivedAt   DateTime?
+  archivedById String?
   scheduleBaselinedAt DateTime? // when the schedule baseline was last captured
   closedAt    DateTime?    // when the project moved to CLOSED
   closedById  String?      // actor who closed it (plain id, no FK — kept light)

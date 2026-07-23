@@ -56,7 +56,8 @@ export interface PortfolioRow {
 }
 
 export async function getPortfolioSummary(userId: string, role: string, statusDate: Date) {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null };
+  // Archived projects are excluded from every dashboard roll-up (KPIs, cards, alerts).
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null };
   if (role === 'GUEST') {
     where.personalOwnerId = userId;
   } else {

@@ -16,7 +16,9 @@ type AuditAction =
   | 'FORCE_ACTIVATE'
   | 'REJECT_ACTIVATION'
   | 'REQUEST_ACTIVATION_REVISION'
-  | 'RESUBMIT_ACTIVATION';
+  | 'RESUBMIT_ACTIVATION'
+  | 'ARCHIVE'
+  | 'UNARCHIVE';
 
 interface AuditInput {
   userId?: string | null;
