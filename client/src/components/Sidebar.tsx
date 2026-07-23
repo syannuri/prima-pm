@@ -26,9 +26,10 @@ const ICONS = {
 };
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
-const linkIdle = 'text-slate-300 hover:bg-slate-800 hover:text-white';
+// Light sidebar in light mode, dark navy in dark mode.
+const linkIdle = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white';
 // Active item: soft coral wash + a crisp coral left accent bar.
-const linkActive = 'bg-brand-600/15 text-white shadow-[inset_2px_0_0_#f4675f]';
+const linkActive = 'bg-brand-50 text-brand-700 shadow-[inset_2px_0_0_#f4675f] dark:bg-brand-600/15 dark:text-white';
 
 // `drawer` = rendered as the mobile slide-over (not the fixed web sidebar). The Manual/Settings
 // footer is drawer-only: on the web those live in the header top-bar, so the sidebar hides them.
@@ -57,11 +58,11 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
   const cx = (active: boolean) => `${linkBase} ${collapsed ? 'justify-center px-0' : ''} ${active ? linkActive : linkIdle}`;
 
   return (
-    <div className={`flex h-full flex-col bg-slate-900 text-slate-300 transition-[width] duration-200 ${collapsed ? 'w-16' : 'w-60'}`}>
+    <div className={`flex h-full flex-col border-r border-slate-200 bg-white text-slate-600 transition-[width] duration-200 dark:border-transparent dark:bg-slate-900 dark:text-slate-300 ${collapsed ? 'w-16' : 'w-60'}`}>
       <div className={`flex h-14 items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <span className={`relative inline-block border-[3px] border-white dark:border-white font-brand font-bold tracking-wide text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
+        <span className={`relative inline-block border-[3px] border-slate-900 font-brand font-bold tracking-wide text-slate-900 dark:border-white dark:text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
           {collapsed ? 'P' : 'PRISMATIX'}
-          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-white" />
+          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-slate-900 dark:bg-white" />
         </span>
       </div>
 
@@ -69,7 +70,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         <NavLink to="/" end onClick={onNavigate} title={unread > 0 ? `Dashboard — ${unread} unread changes` : 'Dashboard'} className={({ isActive }) => `relative ${cx(isActive)}`}>
           <Icon path={ICONS.home} /> {!collapsed && 'Dashboard'}
           {unread > 0 && (collapsed ? (
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-900" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-white dark:ring-slate-900" />
           ) : (
             <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{unread}</span>
           ))}
@@ -108,7 +109,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
           </NavLink>
         )}
         {!collapsed && <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Projects</div>}
-        {collapsed && <div className="my-2 border-t border-slate-800" />}
+        {collapsed && <div className="my-2 border-t border-slate-200 dark:border-slate-800" />}
         {/* Don't flash "No projects yet" while the list is still loading (looks like the
             projects vanished on a slow first paint). */}
         {!collapsed && projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-500">Loading…</div>}
@@ -130,7 +131,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {!collapsed && projects.length > CAP && (
           <button
             onClick={() => setShowAllProjects((s) => !s)}
-            className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             {showAllProjects ? '▴ Show less' : `▾ Show all ${projects.length}`}
           </button>
@@ -140,7 +141,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
       {/* Manual + Settings: drawer-only. On the web these sit in the header top-bar, so the
           fixed sidebar keeps its focus on Dashboard / Resources / Projects. */}
       {drawer && (
-        <div className="space-y-1 border-t border-slate-800 px-3 py-2">
+        <div className="space-y-1 border-t border-slate-200 dark:border-slate-800 px-3 py-2">
           <NavLink to="/manual" onClick={onNavigate} title="Manual" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.manual} /> {!collapsed && 'Manual'}
           </NavLink>
@@ -150,14 +151,14 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         </div>
       )}
 
-      <div className={`flex items-center gap-3 border-t border-slate-800 py-3 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
+      <div className={`flex items-center gap-3 border-t border-slate-200 dark:border-slate-800 py-3 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600/80 text-sm font-semibold text-white" title={user?.name}>
           {user?.name?.[0]?.toUpperCase() ?? '?'}
         </span>
         {!collapsed && (
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-white">{user?.name}</div>
-            <div className="truncate text-xs text-slate-400">{user?.role}</div>
+            <div className="truncate text-sm font-medium text-slate-800 dark:text-white">{user?.name}</div>
+            <div className="truncate text-xs text-slate-500 dark:text-slate-400">{user?.role}</div>
           </div>
         )}
       </div>

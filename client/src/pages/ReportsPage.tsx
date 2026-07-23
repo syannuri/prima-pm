@@ -314,9 +314,9 @@ function ReportBody({ r }: { r: ProjectReportData }) {
 function Kpi({ label, value, sub, warn, good }: { label: string; value: string; sub?: string; warn?: boolean; good?: boolean }) {
   // Light-mode tint by state (monday.com-style); dark keeps the neutral card.
   const tint = warn
-    ? 'border-red-200 bg-red-50 dark:border-slate-800 dark:bg-transparent'
+    ? 'border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30'
     : good
-      ? 'border-emerald-200 bg-emerald-50 dark:border-slate-800 dark:bg-transparent'
+      ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30'
       : 'border-slate-200 dark:border-slate-800';
   return (
     <div className={`min-w-0 rounded-lg border p-2.5 ${tint}`}>

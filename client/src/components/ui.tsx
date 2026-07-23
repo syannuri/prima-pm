@@ -135,17 +135,17 @@ export function Badge({ children, color = 'slate', solid = false }: { children: 
     // Brand coral — reserved for positive/brand states (e.g. a closed project).
     coral: 'bg-brand-100 text-brand-700 dark:bg-brand-600/25 dark:text-brand-100',
   };
-  // Vivid filled pill (monday.com-style) — LIGHT mode only; dark keeps the soft tint so bright
-  // fills don't glare on the dark canvas. Use for status pills.
+  // Vivid filled pill (monday.com-style) — a saturated fill with white text in BOTH modes
+  // (reads fine on the dark card too). Use for status pills.
   const solidMap: Record<string, string> = {
-    slate: 'bg-slate-500 text-white dark:bg-slate-800 dark:text-slate-300',
-    green: 'bg-green-500 text-white dark:bg-green-900/40 dark:text-green-300',
-    amber: 'bg-amber-500 text-white dark:bg-amber-900/40 dark:text-amber-300',
-    red: 'bg-red-500 text-white dark:bg-red-900/40 dark:text-red-300',
-    sky: 'bg-sky-500 text-white dark:bg-sky-900/40 dark:text-sky-300',
-    indigo: 'bg-indigo-500 text-white dark:bg-indigo-900/40 dark:text-indigo-300',
-    violet: 'bg-violet-500 text-white dark:bg-violet-900/40 dark:text-violet-300',
-    coral: 'bg-brand-500 text-white dark:bg-brand-600/25 dark:text-brand-100',
+    slate: 'bg-slate-500 text-white',
+    green: 'bg-green-500 text-white',
+    amber: 'bg-amber-500 text-white',
+    red: 'bg-red-500 text-white',
+    sky: 'bg-sky-500 text-white',
+    indigo: 'bg-indigo-500 text-white',
+    violet: 'bg-violet-500 text-white',
+    coral: 'bg-brand-500 text-white',
   };
   const palette = solid ? solidMap : map;
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${palette[color] ?? palette.slate}`}>{children}</span>;

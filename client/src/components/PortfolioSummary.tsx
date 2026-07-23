@@ -155,7 +155,7 @@ export default function PortfolioSummary() {
       {/* Command bar — the gauge (health), the money/scope KPIs (filling what used to be
           empty space) and the status date, consolidated into one tight hero. SPI/CPI/%
           complete/projects live in the gauge + header, so they're not repeated here. */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 p-4 text-white shadow-lg ring-1 ring-white/10 sm:p-5">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 p-4 text-white shadow-lg ring-1 ring-white/10 dark:from-slate-900 dark:to-slate-950 sm:p-5">
         <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: HEALTH_META[gaugeStatus].dot, opacity: 0.18 }} />
         <div className="relative mb-3 flex items-start justify-between gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Portfolio health · <span className="text-white/45">{t.count} projects</span></div>
@@ -539,12 +539,12 @@ export default function PortfolioSummary() {
                   <td className="text-right">
                     {p.costHealth === 'NO_DATA'
                       ? <span className="text-slate-500 dark:text-slate-400" title={NODATA_HINT.cost}>—</span>
-                      : <Badge color={HEALTH_COLOR[p.costHealth]}>{HEALTH_LABEL[p.costHealth]}</Badge>}
+                      : <Badge solid color={HEALTH_COLOR[p.costHealth]}>{HEALTH_LABEL[p.costHealth]}</Badge>}
                   </td>
                   <td className="text-right">
                     {p.health === 'NO_DATA'
                       ? <span className="text-slate-500 dark:text-slate-400" title={NODATA_HINT.sched}>—</span>
-                      : <Badge color={HEALTH_COLOR[p.health]}>{HEALTH_LABEL[p.health]}</Badge>}
+                      : <Badge solid color={HEALTH_COLOR[p.health]}>{HEALTH_LABEL[p.health]}</Badge>}
                   </td>
                 </tr>
               ))}
@@ -587,9 +587,9 @@ export default function PortfolioSummary() {
                   <span className="text-slate-500 dark:text-slate-400">Changes {p.changeCount}</span>
                   <span className="ml-auto flex items-center gap-1.5">
                     <span className="text-slate-400">Cost</span>
-                    {p.costHealth === 'NO_DATA' ? <span className="text-slate-400" title={NODATA_HINT.cost}>—</span> : <Badge color={HEALTH_COLOR[p.costHealth]}>{HEALTH_LABEL[p.costHealth]}</Badge>}
+                    {p.costHealth === 'NO_DATA' ? <span className="text-slate-400" title={NODATA_HINT.cost}>—</span> : <Badge solid color={HEALTH_COLOR[p.costHealth]}>{HEALTH_LABEL[p.costHealth]}</Badge>}
                     <span className="ml-1 text-slate-400">Sched</span>
-                    {p.health === 'NO_DATA' ? <span className="text-slate-400" title={NODATA_HINT.sched}>—</span> : <Badge color={HEALTH_COLOR[p.health]}>{HEALTH_LABEL[p.health]}</Badge>}
+                    {p.health === 'NO_DATA' ? <span className="text-slate-400" title={NODATA_HINT.sched}>—</span> : <Badge solid color={HEALTH_COLOR[p.health]}>{HEALTH_LABEL[p.health]}</Badge>}
                   </span>
                 </div>
               </div>

@@ -91,13 +91,14 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
 
   return (
     <div className={`relative mx-auto w-full ${className ?? 'max-w-[280px]'}`}>
-      <svg viewBox="0 0 220 168" className="w-full drop-shadow-[0_6px_10px_rgba(0,0,0,0.35)]">
+      <svg viewBox="0 0 220 168" className="w-full drop-shadow-[0_6px_10px_var(--hg-shadow)]">
         <defs>
-          {/* Glossy face — radial depth so the gauge reads as a physical dial. */}
+          {/* Glossy face — radial depth so the gauge reads as a physical dial. Themed via CSS
+              vars: bright brushed-metal in light, glossy black in dark. */}
           <radialGradient id="hgFace" cx="50%" cy="42%" r="72%">
-            <stop offset="0%" stopColor="#1e293b" />
-            <stop offset="70%" stopColor="#0b1220" />
-            <stop offset="100%" stopColor="#020617" />
+            <stop offset="0%" stopColor="var(--hg-face-0)" />
+            <stop offset="70%" stopColor="var(--hg-face-1)" />
+            <stop offset="100%" stopColor="var(--hg-face-2)" />
           </radialGradient>
           <linearGradient id="hgRed" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="#7f1d1d" /><stop offset="100%" stopColor="#ef4444" />
@@ -109,10 +110,10 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
             <stop offset="0%" stopColor="#22c55e" /><stop offset="100%" stopColor="#4ade80" />
           </linearGradient>
           <linearGradient id="hgNeedle" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#e2e8f0" /><stop offset="55%" stopColor="#f8fafc" /><stop offset="100%" stopColor="#cbd5e1" />
+            <stop offset="0%" stopColor="var(--hg-needle-0)" /><stop offset="55%" stopColor="var(--hg-needle-1)" /><stop offset="100%" stopColor="var(--hg-needle-2)" />
           </linearGradient>
           <radialGradient id="hgHub" cx="38%" cy="35%" r="75%">
-            <stop offset="0%" stopColor="#f8fafc" /><stop offset="45%" stopColor="#94a3b8" /><stop offset="100%" stopColor="#334155" />
+            <stop offset="0%" stopColor="var(--hg-hub-0)" /><stop offset="45%" stopColor="var(--hg-hub-1)" /><stop offset="100%" stopColor="var(--hg-hub-2)" />
           </radialGradient>
           <linearGradient id="hgGloss" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#ffffff" stopOpacity="0.35" /><stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
@@ -123,11 +124,11 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
         </defs>
 
         {/* Dial face */}
-        <circle cx={CX} cy={CY} r={R + 14} fill="url(#hgFace)" stroke="#1e293b" strokeWidth="1.5" />
+        <circle cx={CX} cy={CY} r={R + 14} fill="url(#hgFace)" stroke="var(--hg-rim)" strokeWidth="1.5" />
         <path d={arc(0, 1, R + 14)} fill="none" stroke="url(#hgGloss)" strokeWidth="10" strokeLinecap="round" opacity="0.5" />
 
         {/* Track groove */}
-        <path d={arc(0, 1)} fill="none" stroke="#0f172a" strokeWidth="15" strokeLinecap="round" />
+        <path d={arc(0, 1)} fill="none" stroke="var(--hg-groove)" strokeWidth="15" strokeLinecap="round" />
 
         {/* Coloured zones */}
         <path d={arc(0, fAmber)} fill="none" stroke={noData ? '#334155' : 'url(#hgRed)'} strokeWidth="12" strokeLinecap="round" />
@@ -139,13 +140,13 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
           const a = point(tf, R - 9);
           const b = point(tf, R - 2);
           const major = tf === 0 || tf === 0.5 || tf === 1;
-          return <line key={tf} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#e2e8f0" strokeOpacity={major ? 0.9 : 0.4} strokeWidth={major ? 1.6 : 1} />;
+          return <line key={tf} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--hg-tick)" strokeOpacity={major ? 0.9 : 0.4} strokeWidth={major ? 1.6 : 1} />;
         })}
 
         {/* SPI scale labels at the major ticks (0.5 left · 1.0 top · 1.5 right). */}
         {[{ f: 0, t: '0.5' }, { f: 0.5, t: '1.0' }, { f: 1, t: '1.5' }].map(({ f: lf, t: lt }) => {
           const q = point(lf, R - 20);
-          return <text key={lt} x={q.x} y={q.y + 3} textAnchor="middle" className="fill-white/55 text-[8px] font-semibold tabular-nums">{lt}</text>;
+          return <text key={lt} x={q.x} y={q.y + 3} textAnchor="middle" fill="var(--hg-scale)" className="text-[8px] font-semibold tabular-nums">{lt}</text>;
         })}
 
         {/* Needle */}
@@ -155,18 +156,18 @@ export default function HealthGauge({ spi, cpi, pct, status, statusLabel, margin
           </g>
         )}
         {/* Hub */}
-        <circle cx={CX} cy={CY} r="11" fill="url(#hgHub)" stroke="#0f172a" strokeWidth="1" filter="url(#hgShadow)" />
+        <circle cx={CX} cy={CY} r="11" fill="url(#hgHub)" stroke="var(--hg-rim)" strokeWidth="1" filter="url(#hgShadow)" />
         <circle cx={CX - 3} cy={CY - 3} r="3" fill="#fff" opacity="0.55" />
       </svg>
 
       {/* Digital read-out — sits in the open lower-middle of the dial. Compact (mobile) keeps
           the SPI value small and pinned lower so it doesn't crowd the needle hub. */}
       <div className={`pointer-events-none absolute inset-x-0 flex flex-col items-center ${compact ? 'bottom-0' : 'bottom-1'}`}>
-        <span className={`font-semibold uppercase tracking-[0.12em] text-white/70 ${compact ? 'text-[8px]' : 'text-[10px]'}`}>{statusLabel}</span>
-        <span className={`mt-0.5 font-extrabold leading-none tabular-nums text-white drop-shadow ${compact ? 'text-[13px]' : 'text-2xl'}`}>
+        <span className={`font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white/70 ${compact ? 'text-[8px]' : 'text-[10px]'}`}>{statusLabel}</span>
+        <span className={`mt-0.5 font-extrabold leading-none tabular-nums text-slate-800 drop-shadow-sm dark:text-white dark:drop-shadow ${compact ? 'text-[13px]' : 'text-2xl'}`}>
           {noData ? '—' : `SPI ${spi.toFixed(2)}`}
         </span>
-        <span className={`mt-0.5 tabular-nums text-white/70 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
+        <span className={`mt-0.5 tabular-nums text-slate-500 dark:text-white/70 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
           CPI {cpi > 0 ? cpi.toFixed(2) : '—'} · {pct}%
         </span>
         {margin && !compact && (
