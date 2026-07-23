@@ -627,7 +627,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               {/* Row 1 — column groups. Plan & Actual each span a Start/Finish pair. */}
-              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-white [&>th]:dark:bg-slate-900 [&>th]:py-2 [&>th]:pr-3">
+              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
                 <th rowSpan={2} className="w-8 border-b border-slate-200 text-center align-bottom dark:border-slate-800" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
                 <th rowSpan={2} className="w-12 border-b border-slate-200 align-bottom dark:border-slate-800">WBS</th>
                 <th rowSpan={2} className="min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800">Task</th>
@@ -655,7 +655,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 )}
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each group. */}
-              <tr className="text-left text-[11px] uppercase text-slate-500 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-white [&>th]:dark:bg-slate-900 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
+              <tr className="text-left text-[11px] uppercase text-slate-500 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
                 <th>Start</th>
                 <th>Finish</th>
                 <th>Start</th>
