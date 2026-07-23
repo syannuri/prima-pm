@@ -589,6 +589,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
         </div>
       ) : (
+        <>
         <div className={`overflow-auto ${fullscreen ? '' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
@@ -884,7 +885,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </tbody>
           </table>
           </div>
-          {/* Tracking-Gantt legend — the timeline overlays baseline, plan and actual dates. */}
+        </div>
+          {/* Tracking-Gantt legend — outside the scroll box (kept in the card) so it stays visible without scrolling the table. */}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
             <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" />Baseline</span>
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full bg-slate-300/50 ring-1 ring-inset ring-black/5 dark:bg-slate-600/40 dark:ring-white/10" />Plan</span>
@@ -898,7 +900,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             {canPlan && baselinedAt && <span className="text-amber-600 dark:text-amber-400">· schedule baselined — reschedule via a change request</span>}
             {baselineLocked && <span className="text-amber-600 dark:text-amber-400">· baseline locked — unlock to edit the schedule</span>}
           </div>
-        </div>
+        </>
       )}
 
       {del.isError && <p className="mt-2 text-sm text-red-600">{(del.error as Error).message}</p>}
