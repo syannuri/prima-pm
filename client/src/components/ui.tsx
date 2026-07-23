@@ -15,7 +15,7 @@ export function SectionTitle({ children, sub }: { children: ReactNode; sub?: str
   // Card title as a tinted header band with a coral accent bar — the title text stays bold/dark
   // for strong legibility. Contained (its own rounded bg) so it works in any card padding.
   return (
-    <div className="mb-4 rounded-lg border-l-4 border-brand-500 bg-brand-50 px-3 py-2 dark:bg-brand-500/10">
+    <div className="mb-4 rounded-lg border-l-4 border-[#108AB1] bg-[#108AB1]/10 px-3 py-2 dark:bg-[#108AB1]/20">
       <h2 className="text-base font-bold text-slate-800 dark:text-white">{children}</h2>
       {sub && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{sub}</p>}
     </div>

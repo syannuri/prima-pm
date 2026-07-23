@@ -339,7 +339,7 @@ function Legend({ color, label, value }: { color: string; label: string; value: 
 
 function SectionHead({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="mb-3 rounded-lg border-l-4 border-brand-500 bg-brand-50 px-3 py-1.5 dark:bg-brand-500/10">
+    <div className="mb-3 rounded-lg border-l-4 border-[#108AB1] bg-[#108AB1]/10 px-3 py-1.5 dark:bg-[#108AB1]/20">
       <h3 className="text-sm font-bold text-slate-800 dark:text-white">{title}</h3>
       <p className="text-xs text-slate-500 dark:text-slate-400">{sub}</p>
     </div>

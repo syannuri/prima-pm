@@ -49,6 +49,15 @@ const BAR: Record<string, { track: string; fill: string }> = {
   slate: { track: 'bg-slate-300/70 dark:bg-slate-600/50', fill: 'bg-slate-400 dark:bg-slate-500' },
 };
 
+// Task-name cell tint by RAG status (same key as the bar) — greens on-track/done, amber in
+// progress, red late/overdue, slate not started. Reinforces the Gantt health at a glance.
+const NAME_TINT: Record<string, string> = {
+  green: 'bg-emerald-50 dark:bg-emerald-500/10',
+  amber: 'bg-amber-50 dark:bg-amber-500/10',
+  red: 'bg-red-50 dark:bg-red-500/10',
+  slate: 'bg-slate-50 dark:bg-slate-800/40',
+};
+
 const day = 86_400_000;
 type Scale = 'day' | 'week' | 'month';
 const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
@@ -702,7 +711,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </div>
                     </td>
                     <td className="font-mono text-xs text-slate-500 dark:text-slate-400">{wbs}</td>
-                    <td>
+                    <td className={NAME_TINT[overdue ? 'red' : st.color] ?? ''}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         <button onClick={() => toggle(node.id)} title="WBS dictionary" className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
                           {isOpen ? '▾' : 'ⓘ'}

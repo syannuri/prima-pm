@@ -108,7 +108,7 @@ function ChartBody({ fullDomain, title, legend, ariaLabel, bare, footer, tooltip
     <div className={bare && !enlarged ? '' : 'rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900'}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <div className="flex items-center gap-2">
-          {title && <div className="rounded-md border-l-4 border-brand-500 bg-brand-50 px-2 py-1 text-sm font-bold text-slate-800 dark:bg-brand-500/10 dark:text-white">{title}</div>}
+          {title && <div className="rounded-md border-l-4 border-[#108AB1] bg-[#108AB1]/10 px-2 py-1 text-sm font-bold text-slate-800 dark:bg-[#108AB1]/20 dark:text-white">{title}</div>}
           {zoomed && (
             <button onClick={reset} className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Reset zoom</button>
           )}
