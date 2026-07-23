@@ -155,21 +155,21 @@ export default function PortfolioSummary() {
       {/* Command bar — the gauge (health), the money/scope KPIs (filling what used to be
           empty space) and the status date, consolidated into one tight hero. SPI/CPI/%
           complete/projects live in the gauge + header, so they're not repeated here. */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 p-4 text-white shadow-lg ring-1 ring-white/10 dark:from-slate-900 dark:to-slate-950 sm:p-5">
-        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: HEALTH_META[gaugeStatus].dot, opacity: 0.18 }} />
-        <div className="relative mb-3 flex items-start justify-between gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Portfolio health · <span className="text-white/45">{t.count} projects</span></div>
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-800 shadow-sm dark:border-transparent dark:bg-gradient-to-br dark:from-slate-900 dark:to-slate-950 dark:text-white dark:shadow-lg">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: HEALTH_META[gaugeStatus].dot, opacity: 0.12 }} />
+        <div className="relative mb-2.5 flex items-start justify-between gap-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-white/70">Portfolio health · <span className="text-slate-400 dark:text-white/45">{t.count} projects</span></div>
           <div className="flex flex-col items-end">
-            <label className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/40">Status date (EVM)</label>
-            <input aria-label="Status date (EVM)" type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="w-40 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm text-white [color-scheme:dark] focus:border-white/30 focus:outline-none" />
+            <label className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-white/40">Status date (EVM)</label>
+            <input aria-label="Status date (EVM)" type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="w-36 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-700 focus:border-brand-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:focus:border-white/30" />
           </div>
         </div>
-        <div className="relative flex flex-col items-center gap-5 lg:flex-row lg:items-center lg:gap-8">
-          <div className="w-full max-w-[280px] shrink-0">
-            <HealthGauge spi={t.spi} cpi={t.cpi} pct={Math.round(t.scheduleProgress * 100)} status={gaugeStatus} statusLabel={HEALTH_META[gaugeStatus].label} />
+        <div className="relative flex flex-col items-center gap-3 lg:flex-row lg:items-center lg:gap-5">
+          <div className="w-full max-w-[200px] shrink-0">
+            <HealthGauge compact spi={t.spi} cpi={t.cpi} pct={Math.round(t.scheduleProgress * 100)} status={gaugeStatus} statusLabel={HEALTH_META[gaugeStatus].label} />
           </div>
           <div className="w-full flex-1">
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {([
                 { label: 'Total BAC', value: formatIdrShort(t.bac), title: formatIdr(t.bac) },
                 { label: 'Earned Value', value: formatIdrShort(t.ev), title: formatIdr(t.ev) },
@@ -178,36 +178,36 @@ export default function PortfolioSummary() {
                 { label: 'Changes', value: String(totalChanges) },
                 { label: 'Contingency', value: formatIdrShort(t.contingencyReserve), title: formatIdr(t.contingencyReserve) },
               ] as Array<{ label: string; value: string; title?: string; warn?: boolean }>).map((s) => (
-                <div key={s.label} className="rounded-xl bg-white/5 px-3 py-2 ring-1 ring-white/10">
-                  <div className="truncate text-[10px] font-medium uppercase tracking-wide text-white/50">{s.label}</div>
-                  <div title={s.title} className={`mt-0.5 truncate text-lg font-bold leading-tight tabular-nums ${s.warn ? 'text-red-300' : 'text-white'}`}>{s.value}</div>
+                <div key={s.label} className="rounded-lg bg-slate-50 px-2.5 py-1.5 ring-1 ring-slate-200 dark:bg-white/5 dark:ring-white/10">
+                  <div className="truncate text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-white/50">{s.label}</div>
+                  <div title={s.title} className={`mt-0.5 truncate text-base font-bold leading-tight tabular-nums ${s.warn ? 'text-red-500 dark:text-red-300' : 'text-slate-800 dark:text-white'}`}>{s.value}</div>
                 </div>
               ))}
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
-                <span key={h} className="flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs ring-1 ring-white/10">
+                <span key={h} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs ring-1 ring-slate-200 dark:bg-white/10 dark:ring-white/10">
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: HEALTH_META[h].dot }} />
-                  <span className="text-white/80">{HEALTH_META[h].label}</span>
+                  <span className="text-slate-600 dark:text-white/80">{HEALTH_META[h].label}</span>
                   <span className="font-bold tabular-nums">{data.byHealth[h]}</span>
                 </span>
               ))}
-              {(data.byHealth.NO_DATA ?? 0) > 0 && <span className="text-[11px] text-white/40">“No data” = not started by this date — pick a later one.</span>}
+              {(data.byHealth.NO_DATA ?? 0) > 0 && <span className="text-[11px] text-slate-400 dark:text-white/40">“No data” = not started by this date — pick a later one.</span>}
             </div>
           </div>
         </div>
         {/* SPI trend sparkline — the one thing the static gauge can't show. */}
         {spiSeries.length >= 2 && spiLast !== null && (
-          <div className="relative mt-4 flex items-center gap-4 rounded-xl bg-white/5 px-4 py-2.5 ring-1 ring-white/10">
+          <div className="relative mt-3 flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-white/5 dark:ring-white/10">
             <div className="shrink-0">
-              <div className="text-[10px] font-medium uppercase tracking-wide text-white/50">SPI trend</div>
+              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-white/50">SPI trend</div>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-lg font-bold tabular-nums text-white">{spiLast.toFixed(2)}</span>
-                {spiDelta !== null && <span className={`text-xs font-semibold ${spiDelta >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{spiDelta >= 0 ? '▲' : '▼'} {Math.abs(spiDelta).toFixed(2)} vs last</span>}
+                <span className="text-base font-bold tabular-nums text-slate-800 dark:text-white">{spiLast.toFixed(2)}</span>
+                {spiDelta !== null && <span className={`text-xs font-semibold ${spiDelta >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500 dark:text-red-300'}`}>{spiDelta >= 0 ? '▲' : '▼'} {Math.abs(spiDelta).toFixed(2)} vs last</span>}
               </div>
             </div>
-            <Sparkline values={spiSeries} up={(spiDelta ?? 0) >= 0} className="h-9 flex-1" />
-            <span className="shrink-0 text-[10px] text-white/40">{spiSeries.length} status points</span>
+            <Sparkline values={spiSeries} up={(spiDelta ?? 0) >= 0} className="h-8 flex-1" />
+            <span className="shrink-0 text-[10px] text-slate-400 dark:text-white/40">{spiSeries.length} status points</span>
           </div>
         )}
       </div>
