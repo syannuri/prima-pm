@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { useAuth } from '../context/AuthContext';
-import { PROJECT_STATUS_DOT } from '../lib/labels';
+import { projectAccent } from '../lib/projectColor';
 
 function Icon({ path }: { path: string }) {
   return (
@@ -24,8 +24,6 @@ const ICONS = {
   reports: 'M3 3v18h18M7 15v3M12 11v7M17 7v11',
   database: 'M4 7c0 1.66 3.58 3 8 3s8-1.34 8-3-3.58-3-8-3-8 1.34-8 3zM4 7v5c0 1.66 3.58 3 8 3s8-1.34 8-3V7M4 12v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5',
 };
-
-const STATUS_DOT = PROJECT_STATUS_DOT;
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
 const linkIdle = 'text-slate-300 hover:bg-slate-800 hover:text-white';
@@ -118,12 +116,12 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {visibleProjects.map((p) => (
           <NavLink key={p.id} to={`/projects/${p.id}`} onClick={onNavigate} title={p.name} className={({ isActive }) => cx(isActive)}>
             {collapsed ? (
-              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md text-[11px] font-semibold text-white ${STATUS_DOT[p.status] ?? 'bg-slate-500'}`}>
+              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md text-[11px] font-semibold text-white ${projectAccent(p.id).solid}`}>
                 {p.name[0]?.toUpperCase() ?? '?'}
               </span>
             ) : (
               <>
-                <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[p.status] ?? 'bg-slate-500'}`} />
+                <span className={`h-2 w-2 shrink-0 rounded-full ${projectAccent(p.id).solid}`} />
                 <span className="truncate">{p.name}</span>
               </>
             )}

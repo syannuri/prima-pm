@@ -9,6 +9,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import EditProjectModal from '../components/EditProjectModal';
 import { DELIVERY_APPROACH_LABEL, PROJECT_STATUS_BADGE, categoryLabel } from '../lib/labels';
 import { formatIdrShort } from '../lib/format';
+import { projectAccent } from '../lib/projectColor';
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
   DRAFT: 'Draft',
@@ -194,7 +195,7 @@ export default function AdminProjectDatabasePage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filtered.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</td>
+                    <td className={`whitespace-nowrap border-l-4 px-3 py-2 font-mono text-xs text-slate-500 dark:text-slate-400 ${projectAccent(p.id).spine}`}>{p.code}</td>
                     <td className="px-3 py-2">
                       <Link to={`/projects/${p.id}`} className="font-medium text-slate-800 hover:text-brand-600 dark:text-slate-100 dark:hover:text-brand-400">{p.name}</Link>
                       <div className="text-xs text-slate-400">{DELIVERY_APPROACH_LABEL[p.deliveryApproach]}{p.clientName ? ` · ${p.clientName}` : ''}</div>
@@ -202,7 +203,7 @@ export default function AdminProjectDatabasePage() {
                     <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{p.pm?.name ?? '—'}</td>
                     <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{categoryLabel(p.category, p.categoryOther) ?? '—'}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-300">{yearOf(p.code)}</td>
-                    <td className="px-3 py-2"><Badge color={PROJECT_STATUS_BADGE[p.status]}>{STATUS_LABEL[p.status]}</Badge></td>
+                    <td className="px-3 py-2"><Badge color={PROJECT_STATUS_BADGE[p.status]} solid>{STATUS_LABEL[p.status]}</Badge></td>
                     <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-slate-800 dark:text-slate-100">{p.costBaseline ? formatIdrShort(p.costBaseline.budgetAtCompletion) : '—'}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       <div className="inline-flex gap-1">

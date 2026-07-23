@@ -511,7 +511,7 @@ export default function PortfolioSummary() {
                       </div>
                     </div>
                   </td>
-                  <td><Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge></td>
+                  <td><Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'} solid>{p.status}</Badge></td>
                   <td className="text-right whitespace-nowrap" title={formatIdr(p.bac)}>{formatIdrShort(p.bac)}</td>
                   <td className="text-right whitespace-nowrap" title={formatIdr(p.ev)}>{formatIdrShort(p.ev)}</td>
                   <td className="text-right whitespace-nowrap" title={formatIdr(p.ac)}>{formatIdrShort(p.ac)}</td>
@@ -570,7 +570,7 @@ export default function PortfolioSummary() {
                     {p.clientName && <div className="text-xs text-slate-500 dark:text-slate-400">Client: {p.clientName}</div>}
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'}>{p.status}</Badge>
+                    <Badge color={PROJECT_STATUS_BADGE[p.status] ?? 'slate'} solid>{p.status}</Badge>
                     <BookmarkStar on={pinned.has(p.id)} onToggle={() => togglePin(p.id)} />
                   </div>
                 </div>

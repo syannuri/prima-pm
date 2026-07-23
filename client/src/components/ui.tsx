@@ -122,7 +122,8 @@ export function Select({ state = 'none', className, ...props }: SelectHTMLAttrib
   );
 }
 
-export function Badge({ children, color = 'slate' }: { children: ReactNode; color?: string }) {
+export function Badge({ children, color = 'slate', solid = false }: { children: ReactNode; color?: string; solid?: boolean }) {
+  // Soft tinted pill (default) — used for most badges.
   const map: Record<string, string> = {
     slate: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
     green: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -134,7 +135,20 @@ export function Badge({ children, color = 'slate' }: { children: ReactNode; colo
     // Brand coral — reserved for positive/brand states (e.g. a closed project).
     coral: 'bg-brand-100 text-brand-700 dark:bg-brand-600/25 dark:text-brand-100',
   };
-  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${map[color] ?? map.slate}`}>{children}</span>;
+  // Vivid filled pill (monday.com-style) — LIGHT mode only; dark keeps the soft tint so bright
+  // fills don't glare on the dark canvas. Use for status pills.
+  const solidMap: Record<string, string> = {
+    slate: 'bg-slate-500 text-white dark:bg-slate-800 dark:text-slate-300',
+    green: 'bg-green-500 text-white dark:bg-green-900/40 dark:text-green-300',
+    amber: 'bg-amber-500 text-white dark:bg-amber-900/40 dark:text-amber-300',
+    red: 'bg-red-500 text-white dark:bg-red-900/40 dark:text-red-300',
+    sky: 'bg-sky-500 text-white dark:bg-sky-900/40 dark:text-sky-300',
+    indigo: 'bg-indigo-500 text-white dark:bg-indigo-900/40 dark:text-indigo-300',
+    violet: 'bg-violet-500 text-white dark:bg-violet-900/40 dark:text-violet-300',
+    coral: 'bg-brand-500 text-white dark:bg-brand-600/25 dark:text-brand-100',
+  };
+  const palette = solid ? solidMap : map;
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${palette[color] ?? palette.slate}`}>{children}</span>;
 }
 
 export function Spinner() {

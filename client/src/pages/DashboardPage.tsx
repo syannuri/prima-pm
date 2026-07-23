@@ -7,7 +7,8 @@ import { Badge, Button, Card, EmptyState, Field, Input, Modal, MoneyInput, Selec
 import type { InputState } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { formatIdr, formatIdrShort } from '../lib/format';
-import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
+import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES, PROJECT_STATUS_BADGE } from '../lib/labels';
+import { projectAccent } from '../lib/projectColor';
 
 // HYBRID is hidden from the picker (kept in the type/labels for existing projects) — new
 // projects choose Predictive or Agile only.
@@ -331,12 +332,12 @@ export default function DashboardPage() {
                     dropped — that detail lives on the project page. min-w-0 on the grid item (Link)
                     is essential: without it, the truncated (nowrap) title/meta force the card wider
                     than the viewport on long real-world names → horizontal overflow. */}
-                <div className="relative h-full overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg dark:border-slate-700/60 dark:bg-slate-900 dark:hover:border-brand-700">
-                  {/* status accent bar (calm palette) */}
-                  <span className={`absolute inset-x-0 top-0 h-1 ${PROJECT_STATUS_DOT[p.status] ?? 'bg-slate-400'}`} />
+                <div className="relative h-full overflow-hidden rounded-xl border border-slate-200 bg-white p-4 pl-5 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg dark:border-slate-700/60 dark:bg-slate-900 dark:hover:border-brand-700">
+                  {/* per-project colour spine (monday.com-style identity accent) */}
+                  <span className={`absolute inset-y-0 left-0 w-1.5 ${projectAccent(p.id).solid}`} />
                   <div className="flex min-w-0 items-center justify-between gap-2">
                     <span className="min-w-0 truncate font-mono text-[11px] text-slate-400 dark:text-slate-500">{p.code}</span>
-                    <Badge color={STATUS_COLOR[p.status]}>{p.status}</Badge>
+                    <Badge color={STATUS_COLOR[p.status]} solid>{p.status}</Badge>
                   </div>
                   <h3 className="mt-1 truncate font-semibold text-slate-800 dark:text-slate-100" title={p.name}>{p.name}</h3>
 

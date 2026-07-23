@@ -312,8 +312,14 @@ function ReportBody({ r }: { r: ProjectReportData }) {
 }
 
 function Kpi({ label, value, sub, warn, good }: { label: string; value: string; sub?: string; warn?: boolean; good?: boolean }) {
+  // Light-mode tint by state (monday.com-style); dark keeps the neutral card.
+  const tint = warn
+    ? 'border-red-200 bg-red-50 dark:border-slate-800 dark:bg-transparent'
+    : good
+      ? 'border-emerald-200 bg-emerald-50 dark:border-slate-800 dark:bg-transparent'
+      : 'border-slate-200 dark:border-slate-800';
   return (
-    <div className="min-w-0 rounded-lg border border-slate-200 p-2.5 dark:border-slate-800">
+    <div className={`min-w-0 rounded-lg border p-2.5 ${tint}`}>
       <div className="truncate text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400" title={label}>{label}</div>
       <div title={value} className={`truncate text-base font-bold tabular-nums sm:text-lg ${warn ? 'text-red-600 dark:text-red-400' : good ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-100'}`}>{value}</div>
       {sub && <div className="truncate text-[10px] text-slate-400" title={sub}>{sub}</div>}
