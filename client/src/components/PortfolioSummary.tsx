@@ -118,10 +118,9 @@ export default function PortfolioSummary() {
   const cpiSlices = groupSlices('costHealth', { GREEN: 'On budget', AMBER: 'At risk', RED: 'Over budget', NO_DATA: 'Not tracked' });
   const spiSlices = groupSlices('health', { GREEN: 'On track', AMBER: 'At risk', RED: 'Behind', NO_DATA: 'No data' });
 
-  // Changes breakdown (PMO dashboard) — most-changed projects first.
-  const changeRows = [...data.projects].sort((a, b) => b.changeCount - a.changeCount);
+  // Total changes across the portfolio (used by the "Changes" KPI tile; the per-project
+  // "Changes by project" panel is hidden per user request).
   const totalChanges = data.projects.reduce((s, p) => s + p.changeCount, 0);
-  const maxChanges = Math.max(1, ...data.projects.map((p) => p.changeCount));
 
   // Resource summary per project (PMO dashboard) — most manpower-heavy first.
   const resourceRows = [...data.projects].sort((a, b) => b.manpowerCost - a.manpowerCost);
@@ -231,33 +230,7 @@ export default function PortfolioSummary() {
         </div>
       )}
 
-      {/* PMO dashboard — change activity per project */}
-      {showPies && (
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Changes by project</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">{totalChanges} total changes (WBS · Cost · Risk · …)</span>
-          </div>
-          {totalChanges === 0 ? (
-            <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">No changes recorded yet.</p>
-          ) : (
-            <ul className="space-y-2">
-              {changeRows.map((p) => (
-                <li key={p.id} className="flex items-center gap-3">
-                  <Link to={`/projects/${p.id}`} className="w-44 shrink-0 truncate text-sm hover:underline" title={p.name}>
-                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>{' '}
-                    <span className="text-brand-600">{p.name}</span>
-                  </Link>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className="h-full rounded-full bg-sky-500/80" style={{ width: `${(p.changeCount / maxChanges) * 100}%` }} />
-                  </div>
-                  <span className="w-10 shrink-0 text-right text-sm font-medium tabular-nums text-slate-700 dark:text-slate-200">{p.changeCount}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      )}
+      {/* "Changes by project" panel hidden per user request (2026-07-23). */}
 
       {/* Per-project detail — tabbed (EVM · Resource load · Cost & revenue) to cut scroll. */}
       {(() => {
