@@ -590,7 +590,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <>
-        <div className={`overflow-auto ${fullscreen ? '' : 'max-h-[65vh]'}`}>
+        <div className={`overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? '' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
@@ -632,8 +632,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 <th rowSpan={2} className="w-12 border-b border-slate-200 align-bottom dark:border-slate-800">WBS</th>
                 <th rowSpan={2} className="min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800">Task</th>
                 <th rowSpan={2} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
-                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[10px] font-semibold tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500" title="Planned (baseline plan) dates">Plan</th>
-                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[10px] font-semibold tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500" title="Actual start & finish (tracking)">Actual</th>
+                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Planned (baseline plan) dates">Plan</th>
+                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Actual start & finish (tracking)">Actual</th>
                 <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Dur</th>
                 <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
                 <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
@@ -655,7 +655,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 )}
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each group. */}
-              <tr className="text-left text-[11px] uppercase text-slate-400 dark:text-slate-500 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-white [&>th]:dark:bg-slate-900 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-normal">
+              <tr className="text-left text-[11px] uppercase text-slate-500 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-white [&>th]:dark:bg-slate-900 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
                 <th>Start</th>
                 <th>Finish</th>
                 <th>Start</th>
