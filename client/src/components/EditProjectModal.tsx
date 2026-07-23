@@ -6,7 +6,9 @@ import { Button, Field, Input, Modal, MoneyInput, Select } from './ui';
 import type { InputState } from './ui';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../lib/labels';
 
-const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
+// HYBRID is hidden from the picker (new projects use Predictive/Agile); still offered when the
+// project being edited is already HYBRID so its dropdown isn't blank (grandfathered).
+const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE'];
 import { formatIdr } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
@@ -133,7 +135,7 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
                 </Field>
                 <Field label="Delivery approach" hint="Agile/Hybrid unlocks the Backlog & Board">
                   <Select value={deliveryApproach} onChange={(e) => setDeliveryApproach(e.target.value as DeliveryApproach)}>
-                    {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
+                    {(deliveryApproach === 'HYBRID' ? [...APPROACHES, 'HYBRID' as DeliveryApproach] : APPROACHES).map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
                   </Select>
                 </Field>
                 <Field label="Cost Baseline (IDR)">

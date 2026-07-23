@@ -9,7 +9,9 @@ import { useLang } from '../../context/LanguageContext';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../../lib/labels';
 import { formatDateInput } from '../../lib/format';
 
-const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
+// HYBRID is hidden from the picker (new projects use Predictive/Agile); still offered when the
+// charter's project is already HYBRID so its dropdown isn't blank (grandfathered).
+const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE'];
 import Attachments from '../../components/Attachments';
 
 type Form = {
@@ -29,12 +31,19 @@ const empty: Form = {
   hiScheduleStart: '', hiScheduleEnd: '', hiDeliverables: '', pmUserId: '',
 };
 
-export default function CharterPanel({ projectId, approach: initialApproach, sponsor: initialSponsor, personalOwnerId, assignedPmId, assignedPmName }: { projectId: string; approach: DeliveryApproach; sponsor: string | null; personalOwnerId?: string | null; assignedPmId?: string | null; assignedPmName?: string | null }) {
+export default function CharterPanel({ projectId, approach: initialApproach, sponsor: initialSponsor, costBaselineIdr, personalOwnerId, assignedPmId, assignedPmName }: { projectId: string; approach: DeliveryApproach; sponsor: string | null; costBaselineIdr: string | null; personalOwnerId?: string | null; assignedPmId?: string | null; assignedPmName?: string | null }) {
   const qc = useQueryClient();
   // The PM is set once, upstream: by the guest owner (personal project) or by the PMO when the
   // project is created/assigned (corporate). Default the charter's PM to that so it isn't
   // re-entered here, and show it read-only (changing the PM is a separate PMO/assign action).
-  const [form, setForm] = useState<Form>({ ...empty, pmUserId: personalOwnerId ?? assignedPmId ?? '' });
+  // Prefill the high-level cost from the planning cost baseline entered at New Project (like the
+  // sponsor & delivery approach), so the charter carries over what was captured on creation. When
+  // a saved charter loads, its own hiCostIdr wins (see the charter effect below).
+  const [form, setForm] = useState<Form>({
+    ...empty,
+    hiCostIdr: costBaselineIdr != null ? String(Number(costBaselineIdr)) : '',
+    pmUserId: personalOwnerId ?? assignedPmId ?? '',
+  });
   const [approach, setApproach] = useState<DeliveryApproach>(initialApproach);
   const [sponsor, setSponsor] = useState<string>(initialSponsor ?? '');
   // Free-text detail, required only when category = OTHER. Kept out of `form` so it doesn't
@@ -181,7 +190,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         </Field>
         <Field label="Delivery Approach" hint="Locked at commit — change later via a Change Request">
           <Select value={approach} onChange={(e) => setApproach(e.target.value as DeliveryApproach)}>
-            {APPROACHES.map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
+            {(approach === 'HYBRID' ? [...APPROACHES, 'HYBRID' as DeliveryApproach] : APPROACHES).map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
           </Select>
         </Field>
         {/* Personal (guest) → hidden (owner is the PM). Corporate with an assigned PM (from the

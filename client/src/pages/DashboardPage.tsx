@@ -9,7 +9,9 @@ import { useToast } from '../components/Toast';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES, PROJECT_STATUS_BADGE, PROJECT_STATUS_DOT } from '../lib/labels';
 
-const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE', 'HYBRID'];
+// HYBRID is hidden from the picker (kept in the type/labels for existing projects) — new
+// projects choose Predictive or Agile only.
+const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE'];
 
 // Health → calm pill (label + Badge colour). Shown on a card only when meaningful.
 const HEALTH_PILL: Record<string, [string, string]> = {
