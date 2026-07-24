@@ -827,8 +827,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     <td style={{ left: 88 }} className={`${FROZEN_TD} ${rowBg} ${rowHover} ${FROZEN_EDGE} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         {hasKids && (
-                          <button onClick={() => toggleCollapse(node.id)} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-700">
-                            {isCollapsed ? '▸' : '▾'}
+                          <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
+                            <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} fill="currentColor" aria-hidden><path d="M7 5l6 5-6 5V5z" /></svg>
                           </button>
                         )}
                         <button onClick={() => toggle(node.id)} title="WBS dictionary" className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
