@@ -85,6 +85,12 @@ export default function CostPanel({ projectId }: { projectId: string }) {
 
   if (isLoading) return <PanelLoading />;
   const b = data?.baseline;
+  // Overall spend vs remaining across ALL costed lines (Direct + Indirect). Reserves
+  // (contingency/management) aren't spent per line, so the actionable "remaining budget"
+  // is measured against the Direct + Indirect baseline the actuals draw down.
+  const allLines = [...(data?.directCosts ?? []), ...(data?.indirectCosts ?? [])];
+  const totalSpent = allLines.reduce((s, l) => s + l.actualToDate, 0);
+  const totalRemaining = allLines.reduce((s, l) => s + l.remaining, 0);
 
   return (
     <div className="space-y-5">
@@ -100,6 +106,11 @@ export default function CostPanel({ projectId }: { projectId: string }) {
         <Stat label="Mgmt Reserve" value={formatIdr(b?.managementReserve)} />
         <Stat label="BAC (PMB)" value={formatIdr(b?.costBaseline)} hint="Budget at Completion = direct + indirect + contingency (excl. mgmt reserve)" strong />
         <Stat label="Total Budget" value={formatIdr(b?.budgetAtCompletion)} hint="BAC + management reserve" />
+      </div>
+      {/* Overall drawdown across Direct + Indirect: total spent so far and budget still remaining. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Stat label="Spent to date" value={formatIdr(totalSpent)} hint="Direct + Indirect actuals (manpower from timesheet)" />
+        <Stat label="Remaining budget" value={formatIdr(totalRemaining)} hint="Direct + Indirect budget − spent" strong valueClass={totalRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} />
       </div>
       {data?.highLevelCharterCost != null && b && (
         <CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} />
@@ -351,11 +362,11 @@ function UntouchedNote({ count, total, remaining, names }: { count: number; tota
   );
 }
 
-function Stat({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
+function Stat({ label, value, hint, strong, valueClass }: { label: string; value: string; hint?: string; strong?: boolean; valueClass?: string }) {
   return (
     <Card className="!p-3">
       <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-1 ${strong ? 'text-base font-bold text-slate-900 dark:text-white' : 'text-sm font-semibold text-slate-800 dark:text-slate-100'}`}>
+      <div className={`mt-1 ${strong ? 'text-base font-bold' : 'text-sm font-semibold'} ${valueClass ?? (strong ? 'text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-100')}`}>
         {value}
       </div>
       {hint && <div className="text-[10px] text-slate-500 dark:text-slate-400">{hint}</div>}
