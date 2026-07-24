@@ -14,6 +14,7 @@ import { useBookmarks } from '../hooks/useBookmarks';
 import PieChart, { type Slice } from './PieChart';
 import ProgressChart from './ProgressChart';
 import DonutChart, { type DonutSlice } from './DonutChart';
+import { projectAccent } from '../lib/projectColor';
 
 const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#f4675f' };
 
@@ -470,7 +471,7 @@ export default function PortfolioSummary() {
             <tbody>
               {evmProjects.map((p) => (
                 <tr key={p.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 ${pinned.has(p.id) ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
-                  <td className="py-2">
+                  <td className={`border-l-4 py-2 !pl-2 ${projectAccent(p.id).spine}`}>
                     <div className="flex items-start gap-2">
                       <BookmarkStar on={pinned.has(p.id)} onToggle={() => togglePin(p.id)} />
                       <div className="min-w-0">
@@ -536,7 +537,7 @@ export default function PortfolioSummary() {
             const varText = p.finishVarianceDays == null ? '—' : p.finishVarianceDays > 0 ? `+${p.finishVarianceDays}d` : p.finishVarianceDays < 0 ? `${p.finishVarianceDays}d` : '0';
             const varClass = p.finishVarianceDays == null ? 'text-slate-400' : p.finishVarianceDays > 0 ? 'text-red-600 dark:text-red-400' : p.finishVarianceDays < 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400';
             return (
-              <div key={p.id} className={`rounded-lg border p-3 ${pinned.has(p.id) ? 'border-amber-300 bg-amber-50/40 dark:border-amber-500/40 dark:bg-amber-900/10' : 'border-slate-200 dark:border-slate-800'}`}>
+              <div key={p.id} className={`rounded-lg border border-l-4 p-3 ${projectAccent(p.id).spine} ${pinned.has(p.id) ? 'border-amber-300 bg-amber-50/40 dark:border-amber-500/40 dark:bg-amber-900/10' : 'border-slate-200 dark:border-slate-800'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
