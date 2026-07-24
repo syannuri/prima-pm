@@ -15,6 +15,8 @@ import AwaitingActivation from './AwaitingActivation';
 import AwaitingClosure from './AwaitingClosure';
 import PendingApprovals from './PendingApprovals';
 import HealthGauge from './HealthGauge';
+import HealthArcGauge from './HealthArcGauge';
+import { useTheme } from '../context/ThemeContext';
 
 const RAG: Record<PortfolioHealth, { c: string; dot: string; label: string }> = {
   GREEN: { c: '#16a34a', dot: '#22c55e', label: 'On track' },
@@ -47,6 +49,9 @@ const ICON = {
 export default function MobileDashboard() {
   const { user } = useAuth();
   const { lang } = useLang();
+  const { theme } = useTheme();
+  // Light mode gets a bright hero card + a flat arc gauge; dark keeps the premium speedometer.
+  const light = theme === 'light';
   const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const isGuest = user?.role === 'GUEST';
   const [statusDate] = useState(formatDateInput(new Date()));
@@ -99,20 +104,22 @@ export default function MobileDashboard() {
 
   return (
     <div className="space-y-4">
-      {/* Hero — a 3D speedometer of portfolio schedule health on a premium dark dial. */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 p-5 text-white shadow-lg ring-1 ring-white/10">
+      {/* Hero — light mode: bright card + flat arc gauge; dark mode: premium speedometer dial. */}
+      <div className={`relative overflow-hidden rounded-3xl p-5 shadow-lg ring-1 ${light ? 'bg-gradient-to-br from-white to-slate-50 text-slate-900 ring-slate-200' : 'bg-gradient-to-br from-slate-900 to-slate-950 text-white ring-white/10'}`}>
         {/* Health-tinted glow so the card still signals RAG at a glance. */}
-        <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 h-48 w-48 rounded-full blur-2xl" style={{ backgroundColor: RAG[status].dot, opacity: 0.22 }} />
+        <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 h-48 w-48 rounded-full blur-2xl" style={{ backgroundColor: RAG[status].dot, opacity: light ? 0.14 : 0.22 }} />
         <div className="relative flex items-center justify-between">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Portfolio health</div>
-          <span className="text-[11px] font-medium text-white/60">{t.count} projects</span>
+          <div className={`text-[11px] font-semibold uppercase tracking-wide ${light ? 'text-slate-500' : 'text-white/70'}`}>Portfolio health</div>
+          <span className={`text-[11px] font-medium ${light ? 'text-slate-400' : 'text-white/60'}`}>{t.count} projects</span>
         </div>
         <div className="relative mt-1">
-          <HealthGauge spi={t.spi} cpi={t.cpi} pct={pct} status={status} statusLabel={RAG[status].label} />
+          {light
+            ? <HealthArcGauge spi={t.spi} cpi={t.cpi} pct={pct} status={status} statusLabel={RAG[status].label} />
+            : <HealthGauge spi={t.spi} cpi={t.cpi} pct={pct} status={status} statusLabel={RAG[status].label} />}
         </div>
         <div className="relative mt-3 flex flex-wrap justify-center gap-2">
           {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
-            <span key={h} className="flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs backdrop-blur-sm ring-1 ring-white/10">
+            <span key={h} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 ${light ? 'bg-slate-100 text-slate-600 ring-slate-200' : 'bg-white/10 ring-white/10 backdrop-blur-sm'}`}>
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: RAG[h].dot }} />{RAG[h].label} {data.byHealth[h]}
             </span>
           ))}
