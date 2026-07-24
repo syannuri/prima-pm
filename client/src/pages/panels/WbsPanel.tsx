@@ -319,7 +319,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     return m;
   }, [ganttQ.data]);
 
-  const [scale, setScale] = useState<Scale>('month');
+  // 'fit' = auto — the axis picks day/week/month from the project span so bars are legible on
+  // first load; Day/Week/Month override manually, and 'fit' returns to auto.
+  const [scale, setScale] = useState<Scale | 'fit'>('fit');
 
   // Timeline axis: span of all (rolled) plan dates → a pixel width + ticks for the
   // chosen scale, plus a "today" marker. Bars are positioned by % of the span, so
@@ -349,14 +351,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     const max = Math.max(...hi, anyActive ? now : -Infinity);
     const span = Math.max(max - min, day);
     const spanDays = span / day;
-    const width = Math.round(Math.min(11000, Math.max(300, spanDays * PX_PER_DAY[scale])));
+    // Fit = auto-pick the scale from the span so bars are legible without manual zooming.
+    const effScale: Scale = scale === 'fit' ? (spanDays <= 45 ? 'day' : spanDays <= 400 ? 'week' : 'month') : scale;
+    const width = Math.round(Math.min(11000, Math.max(300, spanDays * PX_PER_DAY[effScale])));
     const pct = (t: number) => Math.max(0, ((t - min) / span) * 100);
 
     const ticks: { key: string; label: string; leftPct: number; major: boolean }[] = [];
-    if (scale === 'month') {
+    if (effScale === 'month') {
       const d = new Date(min); d.setUTCDate(1); d.setUTCHours(0, 0, 0, 0);
       while (+d <= max) { ticks.push({ key: `${+d}`, label: d.toLocaleString('en', { month: 'short', year: '2-digit', timeZone: 'UTC' }), leftPct: pct(+d), major: true }); d.setUTCMonth(d.getUTCMonth() + 1); }
-    } else if (scale === 'week') {
+    } else if (effScale === 'week') {
       const d = new Date(min); d.setUTCHours(0, 0, 0, 0);
       d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); // back to Monday
       while (+d <= max) { ticks.push({ key: `${+d}`, label: d.toLocaleString('en', { day: 'numeric', month: 'short', timeZone: 'UTC' }), leftPct: pct(+d), major: d.getUTCDate() <= 7 }); d.setUTCDate(d.getUTCDate() + 7); }
@@ -366,7 +370,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     }
     const todayPct = now >= min && now <= max ? pct(now) : null;
     const minBarPct = (6 / width) * 100; // keep tiny tasks/milestones visible at any scale
-    return { min, span, width, ticks, todayPct, minBarPct };
+    return { min, span, width, ticks, todayPct, minBarPct, effScale };
   }, [rows, rolled, scale]);
 
   const [form, setForm] = useState<{ parentId: string | null; edit?: GanttNode } | null>(null);
@@ -580,8 +584,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             <div className="inline-flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
               <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-                {(['day', 'week', 'month'] as Scale[]).map((s) => (
+                {(['fit', 'day', 'week', 'month'] as (Scale | 'fit')[]).map((s) => (
                   <button key={s} onClick={() => setScale(s)}
+                    title={s === 'fit' ? `Auto-fit the scale to the project span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : undefined}
                     className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
                     {s}
                   </button>
@@ -730,6 +735,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 // otherwise inflate the variance by a day.
                 const varDays = r.baseEnd != null ? Math.floor(finishMs / day) - Math.floor(r.baseEnd / day) : null;
                 const varIsActual = r.pct >= 100 && !r.isParent && !!node.actualFinish;
+                // Variance connector: a short line from the BASELINE finish to the current/actual
+                // finish, drawn under the bar (red = late, green = early). Leaf tasks that slipped.
+                const baseEndPct = axis && r.baseEnd != null ? ((r.baseEnd - axis.min) / axis.span) * 100 : null;
+                const finishPct = axis ? ((finishMs - axis.min) / axis.span) * 100 : null;
+                const showVarConnector = !node.isMilestone && !r.isParent && varDays != null && varDays !== 0 && baseEndPct != null && finishPct != null;
                 const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.picResource || node.pic);
                 const isOpen = expanded.has(node.id);
                 const togglingId = progress.isPending && progress.variables?.id === node.id;
@@ -833,7 +843,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                           <div key={t.key} className="absolute inset-y-0 w-px bg-slate-100 dark:bg-slate-800/80" style={{ left: `${t.leftPct}%` }} />
                         ))}
                         {axis?.todayPct != null && (
-                          <div className="absolute inset-y-0 z-10 w-px bg-brand-500/60" style={{ left: `${axis.todayPct}%` }} />
+                          <div className="absolute inset-y-0 z-10 w-0 border-l border-dashed border-brand-500/70" style={{ left: `${axis.todayPct}%` }} />
+                        )}
+                        {/* Variance connector — baseline finish → current/actual finish (red late, green early). */}
+                        {showVarConnector && (
+                          <>
+                            <div className="pointer-events-none absolute top-[24px] z-[3] h-[7px] w-px bg-slate-400/70 dark:bg-slate-500/70" style={{ left: `${baseEndPct}%` }} title={`Baseline finish · ${formatDate(new Date(r.baseEnd!))}`} />
+                            <div
+                              className="pointer-events-none absolute top-[26px] z-[3] h-[3px] rounded-full"
+                              style={{ left: `${Math.min(baseEndPct!, finishPct!)}%`, width: `${Math.max(0.4, Math.abs(finishPct! - baseEndPct!))}%`, backgroundColor: varDays! > 0 ? '#ef4444' : '#22c55e' }}
+                              title={`${varDays! > 0 ? `+${varDays}` : varDays}d vs baseline (${formatDate(new Date(r.baseEnd!))} → ${formatDate(new Date(finishMs))})`}
+                            />
+                          </>
                         )}
                         {node.isMilestone ? (
                           <>
@@ -880,6 +901,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             {/* in-progress pulse at the leading (today) edge */}
                             {started && inProgress && axis && (
                               <span className={`pointer-events-none absolute top-[15px] z-[7] h-[9px] w-[9px] -translate-x-1/2 animate-pulse rounded-full ring-2 ring-white dark:ring-slate-900 ${overdue ? 'bg-red-400' : 'bg-amber-400'}`} style={{ left: `${actLeft + actWidth}%` }} />
+                            )}
+                            {/* % label for in-progress leaves (wide bars only) — sits just past the leading edge */}
+                            {started && inProgress && actWidth > 3 && (
+                              <span className="pointer-events-none absolute top-[10px] z-[7] text-[9px] font-semibold leading-none tabular-nums text-slate-500 dark:text-slate-300" style={{ left: `calc(${Math.min(actLeft + actWidth, 92)}% + 12px)` }}>{r.pct}%</span>
                             )}
                           </>
                         )}
@@ -928,6 +953,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-amber-500" />In progress</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-red-500" />Late / overdue</span>
             <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-brand-500" />Milestone</span>
+            <span className="flex items-center gap-1.5"><span className="h-[3px] w-5 rounded-full bg-red-500" />Slip vs baseline (red late · green early)</span>
             <span className="flex items-center gap-1.5"><svg width="26" height="8" className="overflow-visible"><line x1="1" y1="4" x2="20" y2="4" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" markerEnd={`url(#arrow-${uid})`} /></svg>Dependency (FS)</span>
             {canDrag && <span className="text-slate-400 dark:text-slate-500">· drag a bar to reschedule</span>}
             {canPlan && <span className="text-slate-400 dark:text-slate-500">· use the ⛓ handle to link tasks</span>}
