@@ -88,8 +88,9 @@ export default function MobileDashboard() {
 
   // Quick actions — route shortcuts most useful for the role, on the go.
   // ("New project" lives on the floating action button, not here.)
-  const resourcesAction = { label: isGuest ? 'My Resources' : 'Resources', icon: ICON.resources, grad: 'from-violet-400 to-indigo-600', glow: 'shadow-indigo-500/40', halo: 'bg-violet-400', tint: 'from-violet-500/25 to-indigo-600/10', to: '/admin/resources' };
-  const reportsAction = { label: isGuest ? 'My Reports' : 'Reports', icon: ICON.reports, grad: 'from-sky-400 to-blue-600', glow: 'shadow-blue-500/40', halo: 'bg-sky-400', tint: 'from-sky-500/25 to-blue-600/10', to: '/reports' };
+  // Masculine "Amethyst" palette: Reports = deep violet→indigo, Resources/Timesheet = dark magenta→purple.
+  const resourcesAction = { label: isGuest ? 'My Resources' : 'Resources', icon: ICON.resources, grad: 'from-fuchsia-700 to-purple-900', glow: 'shadow-purple-800/40', halo: 'bg-fuchsia-600', tint: 'from-fuchsia-700/25 to-purple-800/10', to: '/admin/resources' };
+  const reportsAction = { label: isGuest ? 'My Reports' : 'Reports', icon: ICON.reports, grad: 'from-violet-600 to-indigo-800', glow: 'shadow-indigo-700/40', halo: 'bg-violet-500', tint: 'from-violet-600/25 to-indigo-700/10', to: '/reports' };
   const actions: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }[] = isGuest
     ? // A guest works in their own sandbox — the report hub (scoped to their projects) + their
       // private Resource Pool are the key shortcuts. New project = the FAB.
@@ -98,7 +99,7 @@ export default function MobileDashboard() {
         reportsAction,
         isPmo
           ? resourcesAction
-          : { label: 'Timesheet', icon: ICON.clock, grad: 'from-amber-400 to-orange-500', glow: 'shadow-orange-500/40', halo: 'bg-amber-400', tint: 'from-amber-500/25 to-orange-600/10', to: '/my-timesheet' },
+          : { label: 'Timesheet', icon: ICON.clock, grad: 'from-fuchsia-700 to-purple-900', glow: 'shadow-purple-800/40', halo: 'bg-fuchsia-600', tint: 'from-fuchsia-700/25 to-purple-800/10', to: '/my-timesheet' },
       ];
   const actionCols = actions.length >= 3 ? 'grid-cols-3' : actions.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
 

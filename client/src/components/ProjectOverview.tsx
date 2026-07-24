@@ -7,7 +7,9 @@ import { formatIdr, formatIdrShort } from '../lib/format';
 import { formatNum } from '../lib/format';
 import { computeMargin } from '../lib/margin';
 import HealthGauge from './HealthGauge';
+import HealthArcGauge from './HealthArcGauge';
 import { useLang } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 
 // Graphic-first, mobile-friendly project summary — the default landing on phones.
 // Reuses the existing SVG charts (HealthGauge speedometer + EvmTrendChart S-curve) and
@@ -171,6 +173,8 @@ function SCurveCaption({ planLabel, actualLabel, actualSwatch, planNow, actualNo
 export default function ProjectOverview({ projectId, onJump }: { projectId: string; onJump?: (tab: string) => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
+  const { theme } = useTheme();
+  const light = theme === 'light';
   const evmQ = useQuery({
     queryKey: ['evm', `/projects/${projectId}`, '', 'overview'],
     queryFn: () => api.get<Evm>(`/projects/${projectId}/evm`),
@@ -246,7 +250,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       <Panel onClick={onJump ? () => onJump('Cost') : undefined}>
         {/* Mobile: gauge (small, left) + progress bar + SPI/CPI mini tiles (right) */}
         <div className="flex items-start gap-4 sm:hidden">
-          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={null} compact className="max-w-[128px] shrink-0" />
+          {light
+            ? <HealthArcGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} compact className="max-w-[128px] shrink-0" />
+            : <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={null} compact className="max-w-[128px] shrink-0" />}
           <div className="min-w-0 flex-1 space-y-2.5 pt-1">
             <div>
               <div className="mb-1 flex items-baseline justify-between text-xs">
