@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
+import type { CpmResult, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -24,12 +24,13 @@ function subtreeStart(node: GanttNode): number {
 // Flatten the tree into ordered rows and assign hierarchical WBS outline numbers.
 // Siblings are ordered chronologically (earliest start first, tie-break on end) so the
 // WBS reads top-to-bottom by date — the kick-off / earliest task is #1.
-function flatten(nodes: GanttNode[], depth = 0, prefix = '', acc: Row[] = []): Row[] {
+function flatten(nodes: GanttNode[], collapsed?: Set<string>, depth = 0, prefix = '', acc: Row[] = []): Row[] {
   const ordered = [...nodes].sort((a, b) => subtreeStart(a) - subtreeStart(b) || +new Date(a.planEnd) - +new Date(b.planEnd));
   ordered.forEach((node, i) => {
     const wbs = prefix ? `${prefix}.${i + 1}` : `${i + 1}`;
     acc.push({ node, depth, wbs });
-    if (node.children?.length) flatten(node.children, depth + 1, wbs, acc);
+    // Skip descendants of a collapsed parent (its rolled bar still spans the subtree).
+    if (node.children?.length && !collapsed?.has(node.id)) flatten(node.children, collapsed, depth + 1, wbs, acc);
   });
   return acc;
 }
@@ -71,7 +72,7 @@ const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
 // but below the sticky header. Body cells carry an opaque bg + group-hover so the row highlight
 // still reads across the frozen boundary.
 const FROZEN_TH = 'sticky !z-30 bg-slate-50 dark:bg-slate-800';
-const FROZEN_TD = 'sticky z-10 bg-white group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/50';
+const FROZEN_TD = 'sticky z-10'; // opaque zebra bg + group-hover are applied per-row (see rowBg)
 const FROZEN_EDGE = 'border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-3px_rgba(15,23,42,0.25)]';
 
 // Summary-task roll-up (MS-Project / WBS 100% rule): a parent's dates span its
@@ -303,6 +304,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   });
   const overallPct = (evmQ.data?.scheduleProgress ?? 0) * 100;
 
+  // Critical Path (CPM) — the set of tasks whose slip moves the whole project finish. Fetched
+  // read-only to outline the critical bars on the Gantt (same data as the CPM panel).
+  const cpmQ = useQuery({ queryKey: ['cpm', projectId], queryFn: () => api.get<CpmResult>(`${base}/cpm`) });
+  const criticalIds = useMemo(() => new Set((cpmQ.data?.tasks ?? []).filter((t) => t.critical).map((t) => t.id)), [cpmQ.data]);
+
+  // Collapsed parent rows (subtree hidden; the parent's rolled bar still spans it).
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleCollapse = (id: string) => setCollapsed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // Horizontal scroll container + timeline header, for the "scroll to Today" jump.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLTableCellElement>(null);
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['gantt', projectId] });
     qc.invalidateQueries({ queryKey: ['mp-sync', projectId] });
@@ -312,12 +325,34 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
   };
 
-  const rows = useMemo(() => (ganttQ.data ? flatten(ganttQ.data.tree) : []), [ganttQ.data]);
+  const rows = useMemo(() => (ganttQ.data ? flatten(ganttQ.data.tree, collapsed) : []), [ganttQ.data, collapsed]);
+  // Every parent id (for "collapse all") + whether anything is currently collapsed.
+  const allParentIds = useMemo(() => {
+    const ids: string[] = [];
+    const walk = (ns: GanttNode[]) => ns.forEach((n) => { if (n.children?.length) { ids.push(n.id); walk(n.children); } });
+    walk(ganttQ.data?.tree ?? []);
+    return ids;
+  }, [ganttQ.data]);
   const rolled = useMemo(() => {
     const m = new Map<string, Roll>();
     (ganttQ.data?.tree ?? []).forEach((n) => rollup(n, m));
     return m;
   }, [ganttQ.data]);
+
+  // Schedule-slip roll-up for the banner: how many baselined leaf tasks finish late vs baseline
+  // and the worst slip (days). "Late" uses actual finish when done, else the current plan finish.
+  const slip = useMemo(() => {
+    let late = 0, worst = 0, baselined = 0;
+    for (const { node } of rows) {
+      const r = rolled.get(node.id);
+      if (!r || r.isParent || r.baseEnd == null) continue;
+      baselined++;
+      const finishMs = r.pct >= 100 && node.actualFinish ? +new Date(node.actualFinish) : r.end;
+      const v = Math.floor(finishMs / day) - Math.floor(r.baseEnd / day);
+      if (v > 0) { late++; worst = Math.max(worst, v); }
+    }
+    return { late, worst, baselined };
+  }, [rows, rolled]);
 
   // 'fit' = auto — the axis picks day/week/month from the project span so bars are legible on
   // first load; Day/Week/Month override manually, and 'fit' returns to auto.
@@ -372,6 +407,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     const minBarPct = (6 / width) * 100; // keep tiny tasks/milestones visible at any scale
     return { min, span, width, ticks, todayPct, minBarPct, effScale };
   }, [rows, rolled, scale]);
+
+  // Jump the horizontal scroll so the Today marker is centered (measured from the live layout so
+  // it's robust to the frozen pane + whatever columns precede the timeline).
+  const scrollToToday = () => {
+    const sc = scrollRef.current, tl = timelineRef.current;
+    if (!sc || !tl || !axis || axis.todayPct == null) return;
+    const todayX = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft + (axis.todayPct / 100) * axis.width;
+    sc.scrollTo({ left: Math.max(0, todayX - sc.clientWidth / 2), behavior: 'smooth' });
+  };
 
   const [form, setForm] = useState<{ parentId: string | null; edit?: GanttNode } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -580,6 +624,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {showDates ? '🗓 Hide dates' : '🗓 Show dates'}
             </button>
           )}
+          {allParentIds.length > 0 && (
+            <button onClick={() => setCollapsed((c) => (c.size > 0 ? new Set() : new Set(allParentIds)))} title={collapsed.size > 0 ? 'Expand all work packages' : 'Collapse all work packages (show top-level only)'}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+              {collapsed.size > 0 ? '⊞ Expand all' : '⊟ Collapse all'}
+            </button>
+          )}
+          {rows.length > 0 && showGantt && axis?.todayPct != null && (
+            <button onClick={scrollToToday} title="Scroll the timeline to today"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+              ↦ Today
+            </button>
+          )}
           {rows.length > 0 && showGantt && (
             <div className="inline-flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
@@ -617,7 +673,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <>
-        <div className={`overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'max-h-[calc(100vh-9rem)]' : 'max-h-[65vh]'}`}>
+        {slip.baselined > 0 && (
+          <div className={`mb-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${slip.late > 0 ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>
+            {slip.late > 0
+              ? <>⚠ {slip.late} of {slip.baselined} tasks late vs baseline · worst +{slip.worst}d</>
+              : <>✓ All {slip.baselined} baselined tasks on or ahead of schedule</>}
+            {criticalIds.size > 0 && <span className="ml-1 text-red-600 dark:text-red-400">· {criticalIds.size} on the critical path</span>}
+          </div>
+        )}
+        <div ref={scrollRef} className={`overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'max-h-[calc(100vh-9rem)]' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
@@ -675,7 +739,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 {canEdit && <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Actions</th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
                 {showGantt && (
-                  <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">
+                  <th ref={timelineRef} rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">
                     <div className="relative h-4" style={{ width: axis?.width }}>
                       {axis?.ticks.map((t) => (
                         <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
@@ -698,9 +762,17 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               )}
             </thead>
             <tbody>
-              {rows.map(({ node, depth, wbs }) => {
+              {rows.map(({ node, depth, wbs }, rowIdx) => {
                 const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null };
                 const st = statusOf(r.pct);
+                // Zebra striping — the opaque frozen cells carry the same bg so the stripe + hover
+                // read continuously across the frozen/scroll boundary.
+                const alt = rowIdx % 2 === 1;
+                const rowBg = alt ? 'bg-slate-50/70 dark:bg-slate-800/30' : 'bg-white dark:bg-slate-900';
+                const rowHover = 'group-hover:bg-slate-100 dark:group-hover:bg-slate-800/60';
+                const hasKids = !!node.children?.length;
+                const isCollapsed = collapsed.has(node.id);
+                const isCritical = criticalIds.has(node.id);
                 // "Late/overdue" = unfinished and past its planned finish DATE (whole days, so a task
                 // due today isn't flagged until tomorrow) → red bar + badge.
                 const overdue = r.pct < 100 && Math.floor(r.end / day) < Math.floor(Date.now() / day);
@@ -745,20 +817,27 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 const togglingId = progress.isPending && progress.variables?.id === node.id;
                 return (
                   <Fragment key={node.id}>
-                  <tr className="group [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }} className={`text-center ${FROZEN_TD}`}>
+                  <tr className={`group [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 ${alt ? 'bg-slate-50/70 dark:bg-slate-800/30' : ''} hover:bg-slate-100 dark:hover:bg-slate-800/60`}>
+                    <td style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }} className={`text-center ${FROZEN_TD} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
                       </div>
                     </td>
-                    <td style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${FROZEN_TD}`}>{wbs}</td>
-                    <td style={{ left: 88 }} className={`${FROZEN_TD} ${FROZEN_EDGE} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
+                    <td style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${FROZEN_TD} ${rowBg} ${rowHover}`}>{wbs}</td>
+                    <td style={{ left: 88 }} className={`${FROZEN_TD} ${rowBg} ${rowHover} ${FROZEN_EDGE} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
+                        {hasKids && (
+                          <button onClick={() => toggleCollapse(node.id)} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-700">
+                            {isCollapsed ? '▸' : '▾'}
+                          </button>
+                        )}
                         <button onClick={() => toggle(node.id)} title="WBS dictionary" className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
                           {isOpen ? '▾' : 'ⓘ'}
                         </button>
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
                         <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
+                        {isCollapsed && hasKids && <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">⋯</span>}
+                        {isCritical && <span className="shrink-0 text-[10px] font-bold text-red-500" title="On the critical path — a slip here delays the whole project">▲ CP</span>}
                       </span>
                     </td>
                     <td>{canEdit
@@ -823,9 +902,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     </td>
                     {canEdit && (
                       <td className="whitespace-nowrap text-right text-xs">
-                        <button onClick={() => setDraft({ parentId: node.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(node.planStart)), planEnd: formatDateInput(new Date(node.planEnd)) })} className="text-brand-600 hover:underline" title="Add a subtask inline">+ Sub</button>
-                        <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400" title="Full editor (dictionary, scope, acceptance)">Edit</button>
-                        <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
+                        {/* Hover-reveal to declutter the dense grid; focus-within keeps keyboard access. */}
+                        <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
+                          <button onClick={() => setDraft({ parentId: node.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(node.planStart)), planEnd: formatDateInput(new Date(node.planEnd)) })} className="text-brand-600 hover:underline" title="Add a subtask inline">+ Sub</button>
+                          <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400" title="Full editor (dictionary, scope, acceptance)">Edit</button>
+                          <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
+                        </span>
                       </td>
                     )}
                     {showGantt && (
@@ -880,7 +962,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             {/* plan track — light status-tinted reference; drag to move, edge handles to resize */}
                             <div
                               onPointerDown={(e) => draggable && startDrag(e, node, 'move')}
-                              className={`group/track absolute top-3 h-[15px] overflow-hidden rounded-full ring-1 ring-inset ring-black/5 dark:ring-white/10 ${bar.track} ${draggable ? 'cursor-grab touch-none active:cursor-grabbing' : ''} ${dragging ? 'ring-2 ring-brand-400' : ''}`}
+                              className={`group/track absolute top-3 h-[15px] overflow-hidden rounded-full ${isCritical ? 'ring-2 ring-red-500/70' : 'ring-1 ring-inset ring-black/5 dark:ring-white/10'} ${bar.track} ${draggable ? 'cursor-grab touch-none active:cursor-grabbing' : ''} ${dragging ? 'ring-2 ring-brand-400' : ''}`}
                               style={{ left: `${pLeft}%`, width: `${pWidth}%` }}
                               title={dragging ? 'Release to reschedule' : `Plan: ${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))}`}
                             >
@@ -954,6 +1036,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-red-500" />Late / overdue</span>
             <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-brand-500" />Milestone</span>
             <span className="flex items-center gap-1.5"><span className="h-[3px] w-5 rounded-full bg-red-500" />Slip vs baseline (red late · green early)</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full ring-2 ring-red-500/70" />Critical path</span>
             <span className="flex items-center gap-1.5"><svg width="26" height="8" className="overflow-visible"><line x1="1" y1="4" x2="20" y2="4" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" markerEnd={`url(#arrow-${uid})`} /></svg>Dependency (FS)</span>
             {canDrag && <span className="text-slate-400 dark:text-slate-500">· drag a bar to reschedule</span>}
             {canPlan && <span className="text-slate-400 dark:text-slate-500">· use the ⛓ handle to link tasks</span>}
