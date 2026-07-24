@@ -105,7 +105,7 @@ function ChartBody({ fullDomain, title, legend, ariaLabel, bare, footer, tooltip
   const tipRight = hoverPx != null && hoverPx > width * 0.6 ? width - hoverPx + 12 : undefined;
 
   return (
-    <div className={bare && !enlarged ? '' : 'rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900'}>
+    <div className={bare && !enlarged ? '' : 'chart-panel'}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <div className="flex items-center gap-2">
           {title && <div className="rounded-md border-l-4 border-[#108AB1] bg-[#108AB1]/10 px-2 py-1 text-sm font-bold text-slate-800 dark:bg-[#108AB1]/20 dark:text-white">{title}</div>}

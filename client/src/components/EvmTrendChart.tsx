@@ -61,8 +61,19 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
         const pvPath = curve.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(+new Date(p.t)).toFixed(1)},${y(p.pv).toFixed(1)}`).join(' ');
         const snapLine = (sel: (s: EvmTrend['snapshots'][number]) => number) =>
           snaps.map((s, i) => `${i === 0 ? 'M' : 'L'}${x(+new Date(s.statusDate)).toFixed(1)},${y(sel(s)).toFixed(1)}`).join(' ');
+        // Soft area fill under the Earned-Value curve for a modern, layered look.
+        const evArea = snaps.length > 1
+          ? `${snapLine((s) => s.ev)} L${x(+new Date(snaps[snaps.length - 1].statusDate)).toFixed(1)},${(H - padB).toFixed(1)} L${x(+new Date(snaps[0].statusDate)).toFixed(1)},${(H - padB).toFixed(1)} Z`
+          : '';
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="evTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={EV} stopOpacity="0.18" />
+                <stop offset="100%" stopColor={EV} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {evArea && <path d={evArea} fill="url(#evTrendGrad)" stroke="none" />}
             <line x1={padL} x2={W - padR} y1={bacY} y2={bacY} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth="1" strokeDasharray="2 3" />
             {curve.length > 1 && <path d={pvPath} fill="none" stroke={PV} strokeWidth="2" />}
             {snaps.length > 1 && <path d={snapLine((s) => s.ac)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" />}

@@ -7,7 +7,7 @@ export default function PieChart({ title, data }: { title: string; data: Slice[]
 
   let acc = 0; // accumulated percentage, for dash offsets
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <div className="chart-panel">
       <div className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">{title}</div>
       {total === 0 ? (
         <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No data</p>

@@ -48,9 +48,7 @@ export default function DonutChart({ title, slices, unit = 'projects', bare, hid
     return { ...s, a0, a1, frac };
   });
 
-  const outer = bare
-    ? 'py-1'
-    : 'rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900';
+  const outer = bare ? 'py-1' : 'chart-panel';
   return (
     <div className={outer}>
       {!bare && (

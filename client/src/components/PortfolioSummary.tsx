@@ -157,7 +157,12 @@ export default function PortfolioSummary() {
       <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-800 shadow-sm dark:border-transparent dark:bg-gradient-to-br dark:from-slate-900 dark:to-slate-950 dark:text-white dark:shadow-lg">
         <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: HEALTH_META[gaugeStatus].dot, opacity: 0.12 }} />
         <div className="relative mb-2.5 flex items-start justify-between gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-white/70">Portfolio health · <span className="text-slate-400 dark:text-white/45">{t.count} projects</span></div>
+          {/* Titled band with a left accent bar tinted by the live RAG health — same colour
+              language as the gauge, and consistent with the other cards' SectionTitle band. */}
+          <div className="inline-flex items-center gap-2 rounded-lg border-l-4 py-1 pl-2.5 pr-3" style={{ borderColor: HEALTH_META[gaugeStatus].dot, backgroundColor: `${HEALTH_META[gaugeStatus].dot}1a` }}>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-700 dark:text-white">Portfolio Health</span>
+            <span className="text-[10px] font-medium text-slate-500 dark:text-white/50">· {HEALTH_META[gaugeStatus].label} · {t.count} projects</span>
+          </div>
           <div className="flex flex-col items-end">
             <label className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-white/40">Status date (EVM)</label>
             <input aria-label="Status date (EVM)" type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="w-36 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-700 focus:border-brand-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:focus:border-white/30" />

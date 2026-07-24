@@ -89,6 +89,22 @@ html.dark .prima-rows tbody tr:hover {
   background-color: rgb(30 41 59 / 0.45); /* slate-800 @ 45% */
 }
 
+/* Minimal "pro" chart frame — soft panel + a faint dotted-grid backdrop for depth.
+   Add class "chart-panel" to a chart's outer container (replaces the plain white card). */
+.chart-panel {
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background-color: rgb(248 250 252 / 0.6); /* slate-50 @ 60% */
+  box-shadow: inset 0 0 0 1px theme('colors.slate.200');
+  background-image: radial-gradient(circle, rgb(100 116 139 / 0.10) 1px, transparent 1px);
+  background-size: 15px 15px;
+}
+html.dark .chart-panel {
+  background-color: rgb(255 255 255 / 0.04);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.10);
+  background-image: radial-gradient(circle, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+}
+
 /* Gentle "needs attention" reminder: fade in → hold → fade out over its lifetime. */
 @keyframes prima-remind {
   0% { opacity: 0; transform: translateY(-6px); }
