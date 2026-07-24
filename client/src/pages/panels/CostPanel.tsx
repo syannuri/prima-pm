@@ -296,14 +296,14 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data
           {directLineOptions.length > 0 && (
             <optgroup label="Direct lines">
               {directLineOptions.map((d) => (
-                <option key={d.id} value={`d:${d.id}`}>{d.label} — sisa {formatIdr(d.remaining)}</option>
+                <option key={d.id} value={`d:${d.id}`}>{d.label} — {formatIdr(d.remaining)} left</option>
               ))}
             </optgroup>
           )}
           {data.indirectCosts.length > 0 && (
             <optgroup label="Indirect lines">
               {data.indirectCosts.map((i) => (
-                <option key={i.id} value={`i:${i.id}`}>{i.description} — sisa {formatIdr(i.remaining)}</option>
+                <option key={i.id} value={`i:${i.id}`}>{i.description} — {formatIdr(i.remaining)} left</option>
               ))}
             </optgroup>
           )}
@@ -337,16 +337,16 @@ function LineBadge({ label }: { label: string | undefined }) {
   );
 }
 
-// "Belum dikeluarkan" strip above a cost table: how many budget lines have zero spend
+// "Not yet spent" strip above a cost table: how many budget lines have zero spend
 // so far, and the total budget still remaining across the whole section.
 function UntouchedNote({ count, total, remaining, names }: { count: number; total: number; remaining: number; names: string[] }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-slate-50 dark:bg-slate-800/60 p-2.5 text-xs text-slate-600 dark:text-slate-300">
-      <span title={count > 0 ? `Belum ada pengeluaran: ${names.join(', ')}` : undefined}>
-        <span className="font-semibold text-slate-800 dark:text-slate-100">Belum dikeluarkan:</span> {count} dari {total} komponen
+      <span title={count > 0 ? `No spend yet: ${names.join(', ')}` : undefined}>
+        <span className="font-semibold text-slate-800 dark:text-slate-100">Not yet spent:</span> {count} of {total} components
       </span>
       <span className="text-slate-300 dark:text-slate-600">·</span>
-      <span>Sisa anggaran: <span className={`font-semibold ${remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>{formatIdr(remaining)}</span></span>
+      <span>Remaining budget: <span className={`font-semibold ${remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>{formatIdr(remaining)}</span></span>
     </div>
   );
 }
@@ -677,8 +677,8 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
                 {isMp ? `${d.personnelRole} · ${formatIdr(d.unitCostPerManday)}/md × ${d.planMandays} md` : `${d.qty} × ${formatIdr(d.unitCost)}`}
               </div>
               <div className="mt-1 flex gap-4 text-xs">
-                <span className="text-slate-500 dark:text-slate-400">Terpakai: <span className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(d.actualToDate)}</span></span>
-                <span className="text-slate-500 dark:text-slate-400">Sisa: <span className={`tabular-nums font-medium ${d.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(d.remaining)}</span></span>
+                <span className="text-slate-500 dark:text-slate-400">Spent: <span className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(d.actualToDate)}</span></span>
+                <span className="text-slate-500 dark:text-slate-400">Remaining: <span className={`tabular-nums font-medium ${d.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(d.remaining)}</span></span>
               </div>
               {isMp && (
                 <div className="mt-2 flex flex-col gap-1.5">
@@ -707,8 +707,8 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
               <span className="tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal)}</span>
             </div>
             <div className="mt-1 flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
-              <span>Terpakai {formatIdr(directSpent)}</span>
-              <span>Sisa <span className={`font-medium ${directRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(directRemaining)}</span></span>
+              <span>Spent {formatIdr(directSpent)}</span>
+              <span>Remaining <span className={`font-medium ${directRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(directRemaining)}</span></span>
             </div>
           </div>
         )}
@@ -926,8 +926,8 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
                 <div className="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{formatIdr(i.amount)}</div>
               </div>
               <div className="mt-1 flex gap-4 text-xs">
-                <span className="text-slate-500 dark:text-slate-400">Terpakai: <span className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(i.actualToDate)}</span></span>
-                <span className="text-slate-500 dark:text-slate-400">Sisa: <span className={`tabular-nums font-medium ${i.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(i.remaining)}</span></span>
+                <span className="text-slate-500 dark:text-slate-400">Spent: <span className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(i.actualToDate)}</span></span>
+                <span className="text-slate-500 dark:text-slate-400">Remaining: <span className={`tabular-nums font-medium ${i.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(i.remaining)}</span></span>
               </div>
               <div className="mt-2 flex gap-4">
                 <button onClick={() => startEdit(i)} className="text-xs text-brand-600 hover:underline">edit</button>
@@ -944,8 +944,8 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
               <span className="tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal)}</span>
             </div>
             <div className="mt-1 flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
-              <span>Terpakai {formatIdr(indirectSpent)}</span>
-              <span>Sisa <span className={`font-medium ${indirectRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(indirectRemaining)}</span></span>
+              <span>Spent {formatIdr(indirectSpent)}</span>
+              <span>Remaining <span className={`font-medium ${indirectRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(indirectRemaining)}</span></span>
             </div>
           </div>
         )}
