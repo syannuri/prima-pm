@@ -350,13 +350,27 @@ export async function listActualCosts(projectId: string) {
 
 export async function addActualCost(projectId: string, input: ActualCostInput, actorId: string) {
   await ensureChartered(projectId);
+  // When attributed to a budget line, verify it belongs to this project and derive the
+  // drawn-down category from the line (a picked line wins over any category in the payload).
+  let category = input.category ?? 'DIRECT';
+  if (input.directLineId) {
+    const line = await prisma.costItemDirect.findFirst({ where: { id: input.directLineId, projectId }, select: { id: true } });
+    if (!line) throw NotFound('Direct cost line not found');
+    category = 'DIRECT';
+  } else if (input.indirectLineId) {
+    const line = await prisma.costItemIndirect.findFirst({ where: { id: input.indirectLineId, projectId }, select: { id: true } });
+    if (!line) throw NotFound('Indirect cost line not found');
+    category = 'INDIRECT';
+  }
   const entry = await prisma.actualCostEntry.create({
     data: {
       projectId,
       date: input.date,
       amount: input.amount,
       description: input.description ?? null,
-      category: input.category ?? 'DIRECT',
+      category,
+      directLineId: input.directLineId ?? null,
+      indirectLineId: input.indirectLineId ?? null,
       recordedBy: actorId,
     },
   });
@@ -489,18 +503,44 @@ export async function getCostSummary(projectId: string) {
   // (the live timesheet figure), so the labour sentinel AC entry is skipped here to
   // avoid double-counting even after "Fill AC from timesheet". Everything else is
   // attributed by its category (legacy rows default to DIRECT in the schema).
+  // Per-component (per-line) attribution is accumulated in parallel so each budget line can
+  // report how much of it has been spent / is still remaining.
+  const directLineActual = new Map<string, number>(); // material lines only (manpower uses timesheet)
+  const indirectLineActual = new Map<string, number>();
   let directMaterialActual = 0;
   let indirectActual = 0;
   for (const a of actualCosts) {
     if (a.description === LABOUR_AC_DESC) continue;
-    if (a.category === 'INDIRECT') indirectActual += dec(a.amount);
-    else directMaterialActual += dec(a.amount);
+    const amt = dec(a.amount);
+    if (a.category === 'INDIRECT') {
+      indirectActual += amt;
+      if (a.indirectLineId) indirectLineActual.set(a.indirectLineId, (indirectLineActual.get(a.indirectLineId) ?? 0) + amt);
+    } else {
+      directMaterialActual += amt;
+      if (a.directLineId) directLineActual.set(a.directLineId, (directLineActual.get(a.directLineId) ?? 0) + amt);
+    }
   }
   const directActual = labourActual + directMaterialActual;
 
+  // Attach per-line spent-to-date + remaining. Manpower draws its actual from the timesheet
+  // (consumed md × rate); material & indirect lines from attributed Actual Cost entries.
+  const attributedDirect = [...directLineActual.values()].reduce((s, v) => s + v, 0);
+  const attributedIndirect = [...indirectLineActual.values()].reduce((s, v) => s + v, 0);
+  const directCostsWithSpend = directCosts.map((d) => {
+    const budget = dec(d.type === 'MANPOWER' ? d.manpowerCost : d.amount);
+    const actualToDate = d.type === 'MANPOWER'
+      ? round2((consumedByLine.get(d.id) ?? 0) * dec(d.unitCostPerManday))
+      : round2(directLineActual.get(d.id) ?? 0);
+    return { ...d, actualToDate, remaining: round2(budget - actualToDate) };
+  });
+  const indirectCostsWithSpend = indirectCosts.map((i) => {
+    const actualToDate = round2(indirectLineActual.get(i.id) ?? 0);
+    return { ...i, actualToDate, remaining: round2(dec(i.amount) - actualToDate) };
+  });
+
   return {
-    directCosts,
-    indirectCosts,
+    directCosts: directCostsWithSpend,
+    indirectCosts: indirectCostsWithSpend,
     baseline: baseline ?? null,
     highLevelCharterCost: charter ? dec(charter.hiCostIdr) : null,
     actualCosts,
@@ -509,6 +549,9 @@ export async function getCostSummary(projectId: string) {
     labourConsumedMandays: Math.round(labourConsumedMandays * 100) / 100,
     directActual: Math.round(directActual * 100) / 100,
     indirectActual: Math.round(indirectActual * 100) / 100,
+    // Spend not booked against any specific line — rolls up to the category bucket only.
+    unattributedDirectActual: round2(directMaterialActual - attributedDirect),
+    unattributedIndirectActual: round2(indirectActual - attributedIndirect),
     autoPostLabourAc: project?.autoPostLabourAc ?? false,
   };
 }

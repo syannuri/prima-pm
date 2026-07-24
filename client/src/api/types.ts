@@ -290,6 +290,10 @@ export interface DirectCost {
   resource: { id: string; name: string } | null;
   resourceId: string | null;
   resourceRef: { id: string; name: string; resourceType: ResourceType } | null;
+  // Per-component drawdown: spend booked to this line and what's left of its budget.
+  // Manpower draws actualToDate from the timesheet; material lines from attributed Actual Cost.
+  actualToDate: number;
+  remaining: number;
 }
 
 export interface IndirectCost {
@@ -298,6 +302,9 @@ export interface IndirectCost {
   description: string;
   subCategory: string | null;
   amount: string;
+  // Per-component drawdown: spend booked to this line and what's left of its budget.
+  actualToDate: number;
+  remaining: number;
 }
 
 export interface ActualCostEntry {
@@ -306,6 +313,9 @@ export interface ActualCostEntry {
   amount: string;
   description: string | null;
   category: 'DIRECT' | 'INDIRECT';
+  // Optional per-component attribution to a budget line (at most one set).
+  directLineId: string | null;
+  indirectLineId: string | null;
 }
 
 export interface CostSummary {
@@ -323,6 +333,9 @@ export interface CostSummary {
   // "remaining Direct / Indirect" summary; sums don't double-count the labour sentinel entry.
   directActual: number;
   indirectActual: number;
+  // Spend not booked to any specific line (rolls up to the category bucket only).
+  unattributedDirectActual: number;
+  unattributedIndirectActual: number;
   // When true, each man-day mutation auto-refreshes the labour AC entry (no manual "Fill AC").
   autoPostLabourAc: boolean;
 }

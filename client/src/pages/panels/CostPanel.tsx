@@ -120,7 +120,22 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<'DIRECT' | 'INDIRECT'>('DIRECT');
+  // Attribution target: 'gen:DIRECT' / 'gen:INDIRECT' (no line) or 'd:<id>' / 'i:<id>' (a line).
+  const [target, setTarget] = useState('gen:DIRECT');
+
+  // Budget lines pickable for per-component attribution + a label lookup for the entry list.
+  // Manpower lines draw their actual from the timesheet, so only material lines are attributable.
+  const directLineOptions = data.directCosts.filter((d) => d.type !== 'MANPOWER');
+  const lineLabel = new Map<string, string>();
+  for (const d of data.directCosts) lineLabel.set(d.id, d.label);
+  for (const i of data.indirectCosts) lineLabel.set(i.id, i.description);
+
+  // Turn the picked target into the request payload (line id + derived category).
+  const targetPayload = (): { category: 'DIRECT' | 'INDIRECT'; directLineId?: string; indirectLineId?: string } => {
+    if (target.startsWith('d:')) return { category: 'DIRECT', directLineId: target.slice(2) };
+    if (target.startsWith('i:')) return { category: 'INDIRECT', indirectLineId: target.slice(2) };
+    return { category: target === 'gen:INDIRECT' ? 'INDIRECT' : 'DIRECT' };
+  };
 
   // Pull EV/AC/CPI so the user can see how Actual Cost relates to Earned Value.
   const scheduleBase = base.replace(/\/cost$/, '/schedule');
@@ -158,7 +173,7 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data
   });
 
   const add = useMutation({
-    mutationFn: () => api.post(`${base}/actuals`, { date, amount: Number(amount), description: description || undefined, category }),
+    mutationFn: () => api.post(`${base}/actuals`, { date, amount: Number(amount), description: description || undefined, ...targetPayload() }),
     onSuccess: () => { setAmount(''); setDescription(''); onChange(); toast.success('Actual cost recorded'); },
     onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to record actual cost'),
   });
@@ -236,7 +251,7 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data
                 {a.description ?? '—'}
                 {a.description === LABOUR_AC_DESC
                   ? <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">auto · timesheet</span>
-                  : <CatBadge category={a.category} />}
+                  : <><CatBadge category={a.category} /><LineBadge label={lineLabel.get(a.directLineId ?? a.indirectLineId ?? '')} /></>}
               </td>
               <td className="text-right font-medium">{formatIdr(a.amount)}</td>
               <td className="text-right">
@@ -259,7 +274,7 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data
                   {a.description ?? '—'}
                   {a.description === LABOUR_AC_DESC
                     ? <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">auto · timesheet</span>
-                    : <CatBadge category={a.category} />}
+                    : <><CatBadge category={a.category} /><LineBadge label={lineLabel.get(a.directLineId ?? a.indirectLineId ?? '')} /></>}
                 </div>
                 <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{new Date(a.date).toLocaleDateString('en-GB')}</div>
               </div>
@@ -272,12 +287,26 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data
       </div>
 
       {/* Phones: date + amount share a row (so the native date picker isn't full-width); description + button span both columns. */}
-      <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-5">
+      <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-6">
         <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
         <MoneyInput aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
-        <Select className="col-span-2 md:col-span-1" aria-label="Cost category" title="Which budget this spend draws down" value={category} onChange={(e) => setCategory(e.target.value as 'DIRECT' | 'INDIRECT')}>
-          <option value="DIRECT">Direct</option>
-          <option value="INDIRECT">Indirect</option>
+        <Select className="col-span-2 md:col-span-2" aria-label="Apply to budget line" title="Book this spend to a specific budget line (per-component remaining), or leave it general to its category" value={target} onChange={(e) => setTarget(e.target.value)}>
+          <option value="gen:DIRECT">General · Direct</option>
+          <option value="gen:INDIRECT">General · Indirect</option>
+          {directLineOptions.length > 0 && (
+            <optgroup label="Direct lines">
+              {directLineOptions.map((d) => (
+                <option key={d.id} value={`d:${d.id}`}>{d.label} — sisa {formatIdr(d.remaining)}</option>
+              ))}
+            </optgroup>
+          )}
+          {data.indirectCosts.length > 0 && (
+            <optgroup label="Indirect lines">
+              {data.indirectCosts.map((i) => (
+                <option key={i.id} value={`i:${i.id}`}>{i.description} — sisa {formatIdr(i.remaining)}</option>
+              ))}
+            </optgroup>
+          )}
         </Select>
         <Input className="col-span-2 md:col-span-1" aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
         <Button className="col-span-2 md:col-span-1" onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
@@ -294,6 +323,31 @@ function CatBadge({ category }: { category: 'DIRECT' | 'INDIRECT' }) {
     <span className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${indirect ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'}`}>
       {indirect ? 'Indirect' : 'Direct'}
     </span>
+  );
+}
+
+// Shows which budget line an Actual Cost entry is booked to (per-component attribution).
+// Renders nothing for a general (unattributed) entry.
+function LineBadge({ label }: { label: string | undefined }) {
+  if (!label) return null;
+  return (
+    <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300" title={`Booked to: ${label}`}>
+      ↳ {label}
+    </span>
+  );
+}
+
+// "Belum dikeluarkan" strip above a cost table: how many budget lines have zero spend
+// so far, and the total budget still remaining across the whole section.
+function UntouchedNote({ count, total, remaining, names }: { count: number; total: number; remaining: number; names: string[] }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-slate-50 dark:bg-slate-800/60 p-2.5 text-xs text-slate-600 dark:text-slate-300">
+      <span title={count > 0 ? `Belum ada pengeluaran: ${names.join(', ')}` : undefined}>
+        <span className="font-semibold text-slate-800 dark:text-slate-100">Belum dikeluarkan:</span> {count} dari {total} komponen
+      </span>
+      <span className="text-slate-300 dark:text-slate-600">·</span>
+      <span>Sisa anggaran: <span className={`font-semibold ${remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>{formatIdr(remaining)}</span></span>
+    </div>
   );
 }
 
@@ -437,18 +491,24 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
   // Running total of recorded direct lines (matches the per-row Amount cells) so the
   // projected grand total can be previewed before the new line is submitted.
   const directTotal = data.directCosts.reduce((s, d) => s + Number((d.type === 'MANPOWER' ? d.manpowerCost : d.amount) ?? 0), 0);
+  const directSpent = data.directCosts.reduce((s, d) => s + d.actualToDate, 0);
+  const directRemaining = data.directCosts.reduce((s, d) => s + d.remaining, 0);
+  const directUntouched = data.directCosts.filter((d) => d.actualToDate === 0);
 
   return (
     <Card>
       <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Material (qty × unit cost) and Manpower (rate × mandays)</p>
+      {data.directCosts.length > 0 && (
+        <UntouchedNote count={directUntouched.length} total={data.directCosts.length} remaining={directRemaining} names={directUntouched.map((d) => d.label)} />
+      )}
       {/* Desktop: table. Mobile (< sm): a card list below (same handlers/state). */}
       <div className="hidden overflow-x-auto sm:block">
         <table className="prima-rows w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-              <th className="py-2">Type</th><th>Item</th><th>Detail</th><th className="text-right">Amount</th><th></th>
+              <th className="py-2">Type</th><th>Item</th><th>Detail</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -532,6 +592,8 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
                   )}
                 </td>
                 <td className="text-right font-medium tabular-nums">{formatIdr(editing ? efAmount : (isMp ? d.manpowerCost : d.amount))}</td>
+                <td className="text-right tabular-nums text-slate-500 dark:text-slate-400" title={isMp ? 'From timesheet (consumed man-days × rate)' : 'Actual Cost booked to this line'}>{formatIdr(d.actualToDate)}</td>
+                <td className={`text-right tabular-nums font-medium ${d.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`} title={d.remaining < 0 ? 'Over budget' : 'Budget still available'}>{formatIdr(d.remaining)}</td>
                 <td className="text-right whitespace-nowrap">
                   {editing ? (
                     <>
@@ -548,13 +610,15 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
               </tr>
               );
             })}
-            {!data.directCosts.length && <tr><td colSpan={5} className="py-3 text-center text-slate-500 dark:text-slate-400">No direct costs yet.</td></tr>}
+            {!data.directCosts.length && <tr><td colSpan={7} className="py-3 text-center text-slate-500 dark:text-slate-400">No direct costs yet.</td></tr>}
           </tbody>
           {data.directCosts.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-slate-200 text-sm font-semibold dark:border-slate-700">
                 <td colSpan={3} className="py-2 text-slate-600 dark:text-slate-300">Total ({data.directCosts.length} {data.directCosts.length === 1 ? 'line' : 'lines'})</td>
                 <td className="text-right tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal)}</td>
+                <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{formatIdr(directSpent)}</td>
+                <td className={`text-right tabular-nums ${directRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{formatIdr(directRemaining)}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -612,6 +676,10 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
               <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {isMp ? `${d.personnelRole} · ${formatIdr(d.unitCostPerManday)}/md × ${d.planMandays} md` : `${d.qty} × ${formatIdr(d.unitCost)}`}
               </div>
+              <div className="mt-1 flex gap-4 text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Terpakai: <span className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(d.actualToDate)}</span></span>
+                <span className="text-slate-500 dark:text-slate-400">Sisa: <span className={`tabular-nums font-medium ${d.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(d.remaining)}</span></span>
+              </div>
               {isMp && (
                 <div className="mt-2 flex flex-col gap-1.5">
                   <select value={d.resourceId ?? ''} disabled={reassign.isPending} onChange={(e) => reassign.mutate({ d, resourceId: e.target.value })} aria-label={`Assign resource to ${d.label}`} className={`w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs dark:border-slate-800 dark:bg-slate-900 ${d.resourceId ? 'text-brand-700' : 'text-slate-500 dark:text-slate-400'}`}>
@@ -633,9 +701,15 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
         })}
         {!data.directCosts.length && <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">No direct costs yet.</div>}
         {data.directCosts.length > 0 && (
-          <div className="flex items-center justify-between border-t-2 border-slate-200 pt-2 text-sm font-semibold dark:border-slate-700">
-            <span className="text-slate-600 dark:text-slate-300">Total ({data.directCosts.length} {data.directCosts.length === 1 ? 'line' : 'lines'})</span>
-            <span className="tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal)}</span>
+          <div className="border-t-2 border-slate-200 pt-2 text-sm font-semibold dark:border-slate-700">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-600 dark:text-slate-300">Total ({data.directCosts.length} {data.directCosts.length === 1 ? 'line' : 'lines'})</span>
+              <span className="tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal)}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Terpakai {formatIdr(directSpent)}</span>
+              <span>Sisa <span className={`font-medium ${directRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(directRemaining)}</span></span>
+            </div>
           </div>
         )}
       </div>
@@ -742,6 +816,9 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
   // Running total of recorded indirect lines, so the projected grand total can be
   // previewed before the new line is submitted.
   const indirectTotal = data.indirectCosts.reduce((s, i) => s + Number(i.amount ?? 0), 0);
+  const indirectSpent = data.indirectCosts.reduce((s, i) => s + i.actualToDate, 0);
+  const indirectRemaining = data.indirectCosts.reduce((s, i) => s + i.remaining, 0);
+  const indirectUntouched = data.indirectCosts.filter((i) => i.actualToDate === 0);
   const addAmount = Number(amount || 0);
 
   return (
@@ -749,9 +826,17 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
       <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Overhead: transport, accommodation, meals, communication, supplies, venue…</p>
+      {data.indirectCosts.length > 0 && (
+        <UntouchedNote count={indirectUntouched.length} total={data.indirectCosts.length} remaining={indirectRemaining} names={indirectUntouched.map((i) => i.description)} />
+      )}
       {/* Desktop: table. Mobile (< sm): card list below (same edit/delete handlers). */}
       <div className="hidden overflow-x-auto sm:block">
         <table className="prima-rows w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+              <th className="py-2">Type</th><th>Description</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th></th>
+            </tr>
+          </thead>
           <tbody>
             {data.indirectCosts.map((i) => {
               const editing = editId === i.id;
@@ -777,6 +862,8 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
                 <td className="text-right font-medium tabular-nums">
                   {editing ? <div className="ml-auto w-32"><MoneyInput aria-label="Amount" value={ef.amount} onValueChange={(v) => setEf((p) => ({ ...p, amount: v }))} /></div> : formatIdr(i.amount)}
                 </td>
+                <td className="text-right tabular-nums text-slate-500 dark:text-slate-400" title="Actual Cost booked to this line">{formatIdr(i.actualToDate)}</td>
+                <td className={`text-right tabular-nums font-medium ${i.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`} title={i.remaining < 0 ? 'Over budget' : 'Budget still available'}>{formatIdr(i.remaining)}</td>
                 <td className="text-right whitespace-nowrap">
                   {editing ? (
                     <>
@@ -793,13 +880,15 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
               </tr>
               );
             })}
-            {!data.indirectCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-500 dark:text-slate-400">No indirect costs yet.</td></tr>}
+            {!data.indirectCosts.length && <tr><td colSpan={6} className="py-3 text-center text-slate-500 dark:text-slate-400">No indirect costs yet.</td></tr>}
           </tbody>
           {data.indirectCosts.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-slate-200 text-sm font-semibold dark:border-slate-700">
                 <td colSpan={2} className="py-2 text-slate-600 dark:text-slate-300">Total ({data.indirectCosts.length} {data.indirectCosts.length === 1 ? 'line' : 'lines'})</td>
                 <td className="text-right tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal)}</td>
+                <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{formatIdr(indirectSpent)}</td>
+                <td className={`text-right tabular-nums ${indirectRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{formatIdr(indirectRemaining)}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -836,6 +925,10 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
                 </div>
                 <div className="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{formatIdr(i.amount)}</div>
               </div>
+              <div className="mt-1 flex gap-4 text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Terpakai: <span className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(i.actualToDate)}</span></span>
+                <span className="text-slate-500 dark:text-slate-400">Sisa: <span className={`tabular-nums font-medium ${i.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(i.remaining)}</span></span>
+              </div>
               <div className="mt-2 flex gap-4">
                 <button onClick={() => startEdit(i)} className="text-xs text-brand-600 hover:underline">edit</button>
                 <button onClick={() => confirmDelete(i)} className="text-xs text-red-500 hover:underline">delete</button>
@@ -845,9 +938,15 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
         })}
         {!data.indirectCosts.length && <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">No indirect costs yet.</div>}
         {data.indirectCosts.length > 0 && (
-          <div className="flex items-center justify-between border-t-2 border-slate-200 pt-2 text-sm font-semibold dark:border-slate-700">
-            <span className="text-slate-600 dark:text-slate-300">Total ({data.indirectCosts.length} {data.indirectCosts.length === 1 ? 'line' : 'lines'})</span>
-            <span className="tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal)}</span>
+          <div className="border-t-2 border-slate-200 pt-2 text-sm font-semibold dark:border-slate-700">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-600 dark:text-slate-300">Total ({data.indirectCosts.length} {data.indirectCosts.length === 1 ? 'line' : 'lines'})</span>
+              <span className="tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal)}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Terpakai {formatIdr(indirectSpent)}</span>
+              <span>Sisa <span className={`font-medium ${indirectRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(indirectRemaining)}</span></span>
+            </div>
           </div>
         )}
       </div>

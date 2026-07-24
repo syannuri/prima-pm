@@ -91,13 +91,22 @@ export const managementReserveSchema = z.object({
   managementReserve: z.coerce.number().nonnegative(),
 });
 
-export const actualCostSchema = z.object({
-  date: z.coerce.date(),
-  amount: z.coerce.number().positive(),
-  description: z.string().max(300).optional(),
-  // Which budget this spend draws down. Defaults to DIRECT when omitted.
-  category: z.enum(['DIRECT', 'INDIRECT']).optional(),
-});
+export const actualCostSchema = z
+  .object({
+    date: z.coerce.date(),
+    amount: z.coerce.number().positive(),
+    description: z.string().max(300).optional(),
+    // Which budget this spend draws down. Defaults to DIRECT when omitted.
+    category: z.enum(['DIRECT', 'INDIRECT']).optional(),
+    // Optional per-component attribution: bill this spend to one budget line. At most one
+    // may be set; the drawn-down category is then derived from which line was picked.
+    directLineId: z.string().uuid().optional(),
+    indirectLineId: z.string().uuid().optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (d.directLineId && d.indirectLineId)
+      ctx.addIssue({ code: 'custom', path: ['indirectLineId'], message: 'Attribute to a direct OR an indirect line, not both' });
+  });
 
 export const autoPostLabourSchema = z.object({
   enabled: z.boolean(),

@@ -434,6 +434,10 @@ model CostItemDirect {
   // Timesheet: actual man-days logged against this manpower line.
   mandayEntries MandayEntry[] @relation("LineTimesheet")
 
+  // Actual spend attributed to THIS material line (per-component drawdown). Manpower lines
+  // draw their actual from timesheets instead, so this is used for non-MANPOWER lines.
+  actuals ActualCostEntry[] @relation("DirectLineActuals")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -449,6 +453,10 @@ model CostItemIndirect {
   // Free-text classification for type = OTHER (e.g. "Insurance", "Bank charges"); null otherwise.
   subCategory String?
   amount      Decimal          @db.Decimal(18, 2)
+
+  // Actual spend attributed to THIS indirect line (per-component drawdown).
+  actuals ActualCostEntry[] @relation("IndirectLineActuals")
+
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -550,10 +558,21 @@ model ActualCostEntry {
   // Which budget this spend draws down (direct vs indirect). Defaults to DIRECT:
   // existing rows + labour-from-timesheet are direct; the AC form can set INDIRECT.
   category    CostCategory @default(DIRECT)
+
+  // Optional attribution to a specific budget line (per-component remaining). At most one is
+  // set; both null = an "unattributed" entry that rolls up to its category bucket (legacy
+  // behaviour). SetNull so deleting a budget line keeps the recorded spend (becomes general).
+  directLineId   String?
+  directLine     CostItemDirect?   @relation("DirectLineActuals",   fields: [directLineId],   references: [id], onDelete: SetNull)
+  indirectLineId String?
+  indirectLine   CostItemIndirect? @relation("IndirectLineActuals", fields: [indirectLineId], references: [id], onDelete: SetNull)
+
   recordedBy  String?
   createdAt   DateTime @default(now())
 
   @@index([projectId, date])
+  @@index([directLineId])
+  @@index([indirectLineId])
 }
 
 // Timesheet: actual man-days consumed, logged against a MANPOWER cost line
