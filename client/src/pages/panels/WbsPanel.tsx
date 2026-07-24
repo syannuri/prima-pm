@@ -49,18 +49,30 @@ const BAR: Record<string, { track: string; fill: string }> = {
   slate: { track: 'bg-slate-300/70 dark:bg-slate-600/50', fill: 'bg-slate-400 dark:bg-slate-500' },
 };
 
-// Task-name cell tint by RAG status (same key as the bar) — greens on-track/done, amber in
-// progress, red late/overdue, slate not started. Reinforces the Gantt health at a glance.
-const NAME_TINT: Record<string, string> = {
-  green: 'bg-emerald-50 dark:bg-emerald-500/10',
-  amber: 'bg-amber-50 dark:bg-amber-500/10',
-  red: 'bg-red-50 dark:bg-red-500/10',
-  slate: 'bg-slate-50 dark:bg-slate-800/40',
+// Left accent rail on the (frozen) task-name cell by RAG status — greens on-track/done, amber
+// in progress, red late/overdue, transparent not-started. A slim rail keeps the Gantt health
+// readable in the pinned pane WITHOUT a translucent bg (which would let scrolled content bleed
+// through the sticky cell).
+const NAME_ACCENT: Record<string, string> = {
+  green: 'border-l-4 border-l-emerald-400 dark:border-l-emerald-500/70',
+  amber: 'border-l-4 border-l-amber-400 dark:border-l-amber-500/70',
+  red: 'border-l-4 border-l-red-400 dark:border-l-red-500/70',
+  slate: 'border-l-4 border-l-transparent',
 };
 
 const day = 86_400_000;
 type Scale = 'day' | 'week' | 'month';
 const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
+
+// Frozen identity pane — ✓ · WBS · Task stay pinned while the timeline (and any date columns)
+// scroll horizontally, so a bar is always readable next to its task name. Cumulative left
+// offsets = the preceding sticky widths: ✓ w-8 (2rem) → WBS left-8; +WBS w-12 (3rem) → Task
+// left-20 (5rem). Header cells sit above everything (z-30); body cells above normal cells (z-10)
+// but below the sticky header. Body cells carry an opaque bg + group-hover so the row highlight
+// still reads across the frozen boundary.
+const FROZEN_TH = 'sticky !z-30 bg-slate-50 dark:bg-slate-800';
+const FROZEN_TD = 'sticky z-10 bg-white group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/50';
+const FROZEN_EDGE = 'border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-3px_rgba(15,23,42,0.25)]';
 
 // Summary-task roll-up (MS-Project / WBS 100% rule): a parent's dates span its
 // descendants and its % is the duration-weighted average of theirs. Leaves keep
@@ -363,11 +375,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const [fullscreen, setFullscreen] = useState(false);
   // Timeline (Gantt) column is collapsible — hiding it gives the widened 4-date table room.
   const [showGantt, setShowGantt] = useState(true);
+  // Date/budget columns (Plan·Actual Start/Finish, Dur, Budget) are OFF by default so the
+  // frozen ✓/WBS/Task pane + the timeline get the room — the Gantt bars already encode the
+  // plan-vs-actual dates. Toggle on for the full spreadsheet view.
+  const [showDates, setShowDates] = useState(false);
   // Inline "add subtask" draft row (monday.com style) — rendered under its parent row.
   const [draft, setDraft] = useState<{ parentId: string; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
-  // ✓ WBS Task Owner | Plan Start·Finish | Actual Start·Finish | Dur Budget % Status Var  = 13,
-  // plus the Actions column (editors) and the Gantt column (when shown).
-  const colCount = 13 + (canEdit ? 1 : 0) + (showGantt ? 1 : 0);
+  // Base = ✓ WBS Task Owner % Status Var (7); +6 date/budget cols when shown; + Actions (editors)
+  // + the Gantt column (when shown).
+  const colCount = (showDates ? 13 : 7) + (canEdit ? 1 : 0) + (showGantt ? 1 : 0);
   // Resource pool for the inline owner picker + add-subtask draft (editors only).
   const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources'), enabled: canEdit });
   const resources = resourcesQ.data?.resources ?? [];
@@ -554,6 +570,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {showGantt ? '📊 Hide timeline' : '📊 Show timeline'}
             </button>
           )}
+          {rows.length > 0 && (
+            <button onClick={() => setShowDates((d) => !d)} title={showDates ? 'Hide the Plan/Actual date, duration & budget columns for a wider timeline' : 'Show the Plan/Actual dates, duration & budget columns (spreadsheet view)'}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+              {showDates ? '🗓 Hide dates' : '🗓 Show dates'}
+            </button>
+          )}
           {rows.length > 0 && showGantt && (
             <div className="inline-flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
@@ -626,23 +648,29 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           )}
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
-              {/* Row 1 — column groups. Plan & Actual each span a Start/Finish pair. */}
+              {/* Row 1 — ✓/WBS/Task are frozen (sticky-left). Plan & Actual groups + Dur/Budget
+                  appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
+                  then (rowSpan=hrs), 1 otherwise. */}
               <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
-                <th rowSpan={2} className="w-8 border-b border-slate-200 text-center align-bottom dark:border-slate-800" title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
-                <th rowSpan={2} className="w-12 border-b border-slate-200 align-bottom dark:border-slate-800">WBS</th>
-                <th rowSpan={2} className="min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800">Task</th>
-                <th rowSpan={2} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
-                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Planned (baseline plan) dates">Plan</th>
-                <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Actual start & finish (tracking)">Actual</th>
-                <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Dur</th>
-                <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
-                <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
-                <th rowSpan={2} className="border-b border-slate-200 align-bottom dark:border-slate-800">Status</th>
-                <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Finish variance vs baseline (days)">Var</th>
-                {canEdit && <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Actions</th>}
+                <th rowSpan={showDates ? 2 : 1} style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${FROZEN_TH}`} title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
+                <th rowSpan={showDates ? 2 : 1} style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${FROZEN_TH}`}>WBS</th>
+                <th rowSpan={showDates ? 2 : 1} style={{ left: 88 }} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${FROZEN_TH} ${FROZEN_EDGE}`}>Task</th>
+                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
+                {showDates && (
+                  <>
+                    <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Planned (baseline plan) dates">Plan</th>
+                    <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Actual start & finish (tracking)">Actual</th>
+                    <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Dur</th>
+                    <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
+                  </>
+                )}
+                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
+                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">Status</th>
+                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Finish variance vs baseline (days)">Var</th>
+                {canEdit && <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Actions</th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
                 {showGantt && (
-                  <th rowSpan={2} className="border-b border-slate-200 align-bottom dark:border-slate-800">
+                  <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">
                     <div className="relative h-4" style={{ width: axis?.width }}>
                       {axis?.ticks.map((t) => (
                         <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
@@ -654,13 +682,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                   </th>
                 )}
               </tr>
-              {/* Row 2 — the Start/Finish sub-labels under each group. */}
-              <tr className="text-left text-[11px] uppercase text-slate-500 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
-                <th>Start</th>
-                <th>Finish</th>
-                <th>Start</th>
-                <th>Finish</th>
-              </tr>
+              {/* Row 2 — the Start/Finish sub-labels under each group (spreadsheet view only). */}
+              {showDates && (
+                <tr className="text-left text-[11px] uppercase text-slate-500 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
+                  <th>Start</th>
+                  <th>Finish</th>
+                  <th>Start</th>
+                  <th>Finish</th>
+                </tr>
+              )}
             </thead>
             <tbody>
               {rows.map(({ node, depth, wbs }) => {
@@ -705,14 +735,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 const togglingId = progress.isPending && progress.variables?.id === node.id;
                 return (
                   <Fragment key={node.id}>
-                  <tr className="[&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="text-center">
+                  <tr className="group [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }} className={`text-center ${FROZEN_TD}`}>
                       <div className="flex justify-center">
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
                       </div>
                     </td>
-                    <td className="font-mono text-xs text-slate-500 dark:text-slate-400">{wbs}</td>
-                    <td className={NAME_TINT[overdue ? 'red' : st.color] ?? ''}>
+                    <td style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${FROZEN_TD}`}>{wbs}</td>
+                    <td style={{ left: 88 }} className={`${FROZEN_TD} ${FROZEN_EDGE} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         <button onClick={() => toggle(node.id)} title="WBS dictionary" className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
                           {isOpen ? '▾' : 'ⓘ'}
@@ -724,34 +754,38 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     <td>{canEdit
                       ? <InlineOwner name={node.picResource?.name ?? node.pic?.name} resourceId={node.picResourceId ?? null} editable resources={resources} onSave={(id) => patchTask.mutate({ node, patch: { picResourceId: id } })} />
                       : <OwnerCell name={node.picResource?.name ?? node.pic?.name} />}</td>
-                    {/* Plan Start — rolls up (read-only) on summary rows; leaf is click-to-edit unless baselined. */}
-                    <td className="whitespace-nowrap text-right">
-                      {r.isParent
-                        ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
-                        : <InlineDate value={node.planStart} editable={canDrag} onSave={(v) => v && patchTask.mutate({ node, patch: { planStart: v } })} title={canDrag ? 'Plan start — click to edit' : baselinedAt ? 'Baselined — change via a change request' : undefined} />}
-                    </td>
-                    {/* Plan Finish */}
-                    <td className="whitespace-nowrap text-right">
-                      {r.isParent
-                        ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
-                        : <InlineDate value={node.planEnd} editable={canDrag} onSave={(v) => v && patchTask.mutate({ node, patch: { planEnd: v } })} title={canDrag ? 'Plan finish — click to edit' : baselinedAt ? 'Baselined — change via a change request' : undefined} />}
-                    </td>
-                    {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
-                    <td className="whitespace-nowrap text-right">
-                      {r.isParent
-                        ? <span className="text-slate-300 dark:text-slate-600">—</span>
-                        : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => patchTask.mutate({ node, patch: { actualStart: v } })} title="Actual start — click to set" />}
-                    </td>
-                    {/* Actual Finish */}
-                    <td className="whitespace-nowrap text-right">
-                      {r.isParent
-                        ? <span className="text-slate-300 dark:text-slate-600">—</span>
-                        : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => patchTask.mutate({ node, patch: { actualFinish: v } })} title="Actual finish — click to set" />}
-                    </td>
-                    <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
-                    <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
-                      {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
-                    </td>
+                    {showDates && (
+                      <>
+                        {/* Plan Start — rolls up (read-only) on summary rows; leaf is click-to-edit unless baselined. */}
+                        <td className="whitespace-nowrap text-right">
+                          {r.isParent
+                            ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
+                            : <InlineDate value={node.planStart} editable={canDrag} onSave={(v) => v && patchTask.mutate({ node, patch: { planStart: v } })} title={canDrag ? 'Plan start — click to edit' : baselinedAt ? 'Baselined — change via a change request' : undefined} />}
+                        </td>
+                        {/* Plan Finish */}
+                        <td className="whitespace-nowrap text-right">
+                          {r.isParent
+                            ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
+                            : <InlineDate value={node.planEnd} editable={canDrag} onSave={(v) => v && patchTask.mutate({ node, patch: { planEnd: v } })} title={canDrag ? 'Plan finish — click to edit' : baselinedAt ? 'Baselined — change via a change request' : undefined} />}
+                        </td>
+                        {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
+                        <td className="whitespace-nowrap text-right">
+                          {r.isParent
+                            ? <span className="text-slate-300 dark:text-slate-600">—</span>
+                            : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => patchTask.mutate({ node, patch: { actualStart: v } })} title="Actual start — click to set" />}
+                        </td>
+                        {/* Actual Finish */}
+                        <td className="whitespace-nowrap text-right">
+                          {r.isParent
+                            ? <span className="text-slate-300 dark:text-slate-600">—</span>
+                            : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => patchTask.mutate({ node, patch: { actualFinish: v } })} title="Actual finish — click to set" />}
+                        </td>
+                        <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
+                        <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
+                          {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                        </td>
+                      </>
+                    )}
                     <td className="text-right">
                       {canEdit && !r.isParent ? (
                         <input
@@ -873,7 +907,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                   )}
                   {draft?.parentId === node.id && (
                     <DraftRow
-                      draft={draft} depth={depth + 1} colCount={colCount} resources={resources} saving={createSub.isPending}
+                      draft={draft} depth={depth + 1} colCount={colCount} showDates={showDates} resources={resources} saving={createSub.isPending}
                       onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
                       onCancel={() => setDraft(null)}
                       onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: node.children.length }); }}
@@ -986,9 +1020,9 @@ function DictionaryView({ node }: { node: GanttNode }) {
 // Inline "add subtask" row (monday.com style) — editable name / owner / plan dates in-column;
 // Enter saves & keeps the row open for the next sibling, Esc cancels. The remaining columns
 // merge into a single Save/Cancel cell (a fresh task has no actuals/budget/status yet).
-function DraftRow({ draft, depth, colCount, resources, saving, onChange, onCancel, onSave }: {
+function DraftRow({ draft, depth, colCount, showDates, resources, saving, onChange, onCancel, onSave }: {
   draft: { name: string; picResourceId: string; planStart: string; planEnd: string };
-  depth: number; colCount: number; resources: ResourceItem[]; saving: boolean;
+  depth: number; colCount: number; showDates: boolean; resources: ResourceItem[]; saving: boolean;
   onChange: (patch: Partial<{ name: string; picResourceId: string; planStart: string; planEnd: string }>) => void;
   onCancel: () => void; onSave: () => void;
 }) {
@@ -1011,9 +1045,22 @@ function DraftRow({ draft, depth, colCount, resources, saving, onChange, onCance
           {resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
         </select>
       </td>
-      <td><input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan start" /></td>
-      <td><input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan finish" /></td>
-      <td colSpan={Math.max(1, colCount - 6)} className="whitespace-nowrap text-right text-xs">
+      {/* Spreadsheet view: plan dates align under their own columns. Lean view: the date pickers
+          move into the action cell so a subtask's dates are still settable. */}
+      {showDates && (
+        <>
+          <td><input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan start" /></td>
+          <td><input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan finish" /></td>
+        </>
+      )}
+      <td colSpan={Math.max(1, colCount - (showDates ? 6 : 4))} className="whitespace-nowrap text-right text-xs">
+        {!showDates && (
+          <span className="mr-2 inline-flex items-center gap-1 align-middle">
+            <input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} w-32 text-right`} aria-label="Subtask plan start" title="Plan start" />
+            <span className="text-slate-400">→</span>
+            <input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} w-32 text-right`} aria-label="Subtask plan finish" title="Plan finish" />
+          </span>
+        )}
         <span className="mr-2 hidden text-[11px] text-slate-400 sm:inline dark:text-slate-500">Enter=save · Esc=cancel</span>
         <button disabled={!draft.name.trim() || saving} onClick={onSave} className="rounded bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-40">{saving ? 'Saving…' : 'Save'}</button>
         <button onClick={onCancel} className="ml-2 rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Cancel</button>
