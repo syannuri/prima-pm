@@ -6,7 +6,7 @@ import type { Project } from '../api/types';
 import { Badge, Card, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
-import { categoryLabel, PROJECT_STATUS_BADGE } from '../lib/labels';
+import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useIsMobile } from '../hooks/useIsMobile';
 import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
@@ -221,7 +221,7 @@ export default function ProjectPage() {
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
-        {/* Compact meta chips (PM · Client · Sponsor · Margin · Category). Hidden entirely on
+        {/* Compact meta chips (PM · Client · Margin · Next steps). Hidden entirely on
             phones — the mobile Overview tab carries the health/financials, so the header stays
             tight; the full chip row returns on sm+ (desktop/tablet). */}
         <div className="mt-2 hidden flex-wrap items-center gap-1.5 text-xs sm:flex">
@@ -233,12 +233,8 @@ export default function ProjectPage() {
           {project.clientName && (
             <span className={`hidden sm:inline-flex ${chipCls}`}><span aria-hidden>🏢</span>{project.clientName}</span>
           )}
-          {project.sponsor && (
-            <span className={`hidden sm:inline-flex ${chipCls}`}><span aria-hidden>🎯</span>{project.sponsor}</span>
-          )}
           {/* Margin chip doubles as the trigger for a Cost Baseline / Revenue breakdown popover. */}
           <ProjectDetailsPopover project={project} />
-          {project.category && <Badge color="slate">{categoryLabel(project.category, project.categoryOther)}</Badge>}
           {/* Lifecycle "what to do next" guide as a compact informational chip (expands to a
               popover). Renders nothing when no steps pending; desktop-only by virtue of this
               hidden-on-phones chip row (phones lead with the graphic Overview tab instead). */}
