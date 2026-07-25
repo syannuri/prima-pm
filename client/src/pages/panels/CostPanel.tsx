@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
@@ -65,11 +65,22 @@ function AccordionHeader({ title, count, total, open, onToggle }: { title: strin
   );
 }
 
-export default function CostPanel({ projectId }: { projectId: string }) {
+export default function CostPanel({ projectId, onNavigateTab }: { projectId: string; onNavigateTab?: (tab: string) => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState({ direct: true, indirect: false, actual: false });
   const toggle = (k: 'direct' | 'indirect' | 'actual') => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const base = `/projects/${projectId}/cost`;
+  // Attribution target for the Actual Cost form, lifted here so a per-line "+ Record AC"
+  // button (in the Direct/Indirect tables) can preset it, expand the AC section, and scroll
+  // to the form — booking spend in-context against the line the user is looking at.
+  const [acTarget, setAcTarget] = useState('gen:DIRECT');
+  const actualRef = useRef<HTMLDivElement>(null);
+  const bookToLine = (t: string) => {
+    setAcTarget(t);
+    setOpen((o) => ({ ...o, actual: true }));
+    // Let the section expand before scrolling the now-visible form into view.
+    setTimeout(() => actualRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  };
   const { data, isLoading } = useQuery({
     queryKey: ['cost', projectId],
     queryFn: () => api.get<CostSummary>(base),
@@ -117,22 +128,25 @@ export default function CostPanel({ projectId }: { projectId: string }) {
       )}
 
       {/* Cost lines as collapsible accordion sections (header + total always visible). */}
-      <DirectCosts data={data!} base={base} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} />
-      <IndirectCosts data={data!} base={base} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} />
-      <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.actual} onToggle={() => toggle('actual')} />
+      <DirectCosts data={data!} base={base} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} onBookAc={bookToLine} onNavigateTab={onNavigateTab} />
+      <IndirectCosts data={data!} base={base} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} onBookAc={bookToLine} />
+      <div ref={actualRef}>
+        <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.actual} onToggle={() => toggle('actual')} target={acTarget} setTarget={setAcTarget} />
+      </div>
     </div>
   );
 }
 
-function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void }) {
+function ActualCosts({ data, base, projectId, onChange, open, onToggle, target, setTarget }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void; target: string; setTarget: (t: string) => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const canWrite = useProjectWrite(projectId, ['FINANCE']);
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  // Attribution target: 'gen:DIRECT' / 'gen:INDIRECT' (no line) or 'd:<id>' / 'i:<id>' (a line).
-  const [target, setTarget] = useState('gen:DIRECT');
+  // Attribution target ('gen:DIRECT' / 'gen:INDIRECT' = no line, or 'd:<id>' / 'i:<id>' = a
+  // specific line) is owned by the parent so a per-line "+ Record AC" button can preset it.
+  const isGeneral = target.startsWith('gen:');
 
   // Budget lines pickable for per-component attribution + a label lookup for the entry list.
   // Manpower lines draw their actual from the timesheet, so only material lines are attributable.
@@ -297,30 +311,42 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle }: { data
         {!data.actualCosts.length && <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">No actual cost recorded yet.</div>}
       </div>
 
-      {/* Phones: date + amount share a row (so the native date picker isn't full-width); description + button span both columns. */}
-      <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-6">
-        <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <MoneyInput aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
-        <Select className="col-span-2 md:col-span-2" aria-label="Apply to budget line" title="Book this spend to a specific budget line (per-component remaining), or leave it general to its category" value={target} onChange={(e) => setTarget(e.target.value)}>
-          <option value="gen:DIRECT">General · Direct</option>
-          <option value="gen:INDIRECT">General · Indirect</option>
-          {directLineOptions.length > 0 && (
-            <optgroup label="Direct lines">
-              {directLineOptions.map((d) => (
-                <option key={d.id} value={`d:${d.id}`}>{d.label} — {formatIdr(d.remaining)} left</option>
-              ))}
-            </optgroup>
-          )}
-          {data.indirectCosts.length > 0 && (
-            <optgroup label="Indirect lines">
-              {data.indirectCosts.map((i) => (
-                <option key={i.id} value={`i:${i.id}`}>{i.description} — {formatIdr(i.remaining)} left</option>
-              ))}
-            </optgroup>
-          )}
-        </Select>
-        <Input className="col-span-2 md:col-span-1" aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <Button className="col-span-2 md:col-span-1" onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
+      {/* Phones: date + amount share a row (so the native date picker isn't full-width); the
+          "book to line" picker + description + button span both columns. */}
+      <div className="mt-4 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+          <Input type="date" aria-label="Actual cost date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <MoneyInput aria-label="Actual cost amount (IDR)" placeholder="Amount" value={amount} onValueChange={setAmount} />
+          <label className="col-span-2 md:col-span-2 flex flex-col gap-1">
+            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Book to budget line</span>
+            <Select aria-label="Book to budget line" title="Book this spend to a specific budget line so its Spent/Remaining updates, or leave it general to the category only" value={target} onChange={(e) => setTarget(e.target.value)}>
+              <option value="gen:DIRECT">— No specific line · Direct —</option>
+              <option value="gen:INDIRECT">— No specific line · Indirect —</option>
+              {directLineOptions.length > 0 && (
+                <optgroup label="Direct lines">
+                  {directLineOptions.map((d) => (
+                    <option key={d.id} value={`d:${d.id}`}>{d.label} — {formatIdr(d.remaining)} left</option>
+                  ))}
+                </optgroup>
+              )}
+              {data.indirectCosts.length > 0 && (
+                <optgroup label="Indirect lines">
+                  {data.indirectCosts.map((i) => (
+                    <option key={i.id} value={`i:${i.id}`}>{i.description} — {formatIdr(i.remaining)} left</option>
+                  ))}
+                </optgroup>
+              )}
+            </Select>
+          </label>
+          <Input className="col-span-2 md:col-span-1 md:self-end" aria-label="Actual cost description" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <Button className="col-span-2 md:col-span-1 md:self-end" onClick={() => add.mutate()} disabled={!date || !amount || add.isPending}>Record AC</Button>
+        </div>
+        {/* Warn when the spend won't draw down any single line's remaining (goes to the category bucket only). */}
+        {isGeneral && (
+          <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+            ⚠ This won’t reduce any line’s Remaining — it rolls up to the {target === 'gen:INDIRECT' ? 'Indirect' : 'Direct'} category total only. Pick a line above to book it per-component.
+          </p>
+        )}
       </div>
       </div>)}
     </Card>
@@ -389,7 +415,7 @@ function CharterVariance({ charter, bac }: { charter: number; bac: number }) {
   );
 }
 
-function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSummary; base: string; onChange: () => void; open: boolean; onToggle: () => void }) {
+function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigateTab }: { data: CostSummary; base: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void; onNavigateTab?: (tab: string) => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [type, setType] = useState('TECHNOLOGY_CLOUD');
@@ -613,6 +639,11 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
                     </>
                   ) : (
                     <>
+                      {isMp
+                        ? (onNavigateTab && d.actualToDate === 0
+                            ? <button onClick={() => onNavigateTab('Timesheet')} className="mr-2 text-[11px] font-medium text-amber-600 hover:underline dark:text-amber-400" title="No man-days logged yet — spend stays Rp 0. Log this person's effort in the Timesheet tab to populate Spent.">🕒 Log timesheet →</button>
+                            : <button onClick={() => onNavigateTab?.('Timesheet')} disabled={!onNavigateTab} className="mr-2 text-[11px] text-slate-400 hover:underline disabled:no-underline dark:text-slate-500" title="Manpower spend is drawn from the timesheet automatically (consumed man-days × rate) — no manual AC entry needed here.">🕒 timesheet</button>)
+                        : <button onClick={() => onBookAc(`d:${d.id}`)} className="mr-2 text-xs text-emerald-600 hover:underline dark:text-emerald-400" title="Record actual spend against this line">+ AC</button>}
                       <button onClick={() => startEdit(d)} className="mr-2 text-xs text-brand-600 hover:underline">edit</button>
                       <button onClick={() => confirmDelete(d)} className="text-xs text-red-500 hover:underline">delete</button>
                     </>
@@ -703,7 +734,12 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
                   </select>
                 </div>
               )}
-              <div className="mt-2 flex gap-4">
+              <div className="mt-2 flex items-center gap-4">
+                {isMp
+                  ? (onNavigateTab && d.actualToDate === 0
+                      ? <button onClick={() => onNavigateTab('Timesheet')} className="text-xs font-medium text-amber-600 hover:underline dark:text-amber-400" title="No man-days logged yet — spend stays Rp 0. Log this person's effort in the Timesheet tab.">🕒 Log timesheet →</button>
+                      : <button onClick={() => onNavigateTab?.('Timesheet')} disabled={!onNavigateTab} className="text-xs text-slate-400 hover:underline disabled:no-underline dark:text-slate-500" title="Manpower spend is drawn from the timesheet automatically (consumed man-days × rate).">🕒 Spent from timesheet</button>)
+                  : <button onClick={() => onBookAc(`d:${d.id}`)} className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400">+ Record AC</button>}
                 <button onClick={() => startEdit(d)} className="text-xs text-brand-600 hover:underline">edit</button>
                 <button onClick={() => confirmDelete(d)} className="text-xs text-red-500 hover:underline">delete</button>
               </div>
@@ -791,7 +827,7 @@ function DirectCosts({ data, base, onChange, open, onToggle }: { data: CostSumma
   );
 }
 
-function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSummary; base: string; onChange: () => void; open: boolean; onToggle: () => void }) {
+function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { data: CostSummary; base: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [type, setType] = useState('TRANSPORTATION');
@@ -883,6 +919,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
                     </>
                   ) : (
                     <>
+                      <button onClick={() => onBookAc(`i:${i.id}`)} className="mr-2 text-xs text-emerald-600 hover:underline dark:text-emerald-400" title="Record actual spend against this line">+ AC</button>
                       <button onClick={() => startEdit(i)} className="mr-2 text-xs text-brand-600 hover:underline">edit</button>
                       <button onClick={() => confirmDelete(i)} className="text-xs text-red-500 hover:underline">delete</button>
                     </>
@@ -941,6 +978,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle }: { data: CostSum
                 <span className="text-slate-500 dark:text-slate-400">Remaining: <span className={`tabular-nums font-medium ${i.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(i.remaining)}</span></span>
               </div>
               <div className="mt-2 flex gap-4">
+                <button onClick={() => onBookAc(`i:${i.id}`)} className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400">+ Record AC</button>
                 <button onClick={() => startEdit(i)} className="text-xs text-brand-600 hover:underline">edit</button>
                 <button onClick={() => confirmDelete(i)} className="text-xs text-red-500 hover:underline">delete</button>
               </div>
