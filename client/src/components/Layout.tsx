@@ -9,6 +9,7 @@ import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
 import MobileTabBar from './MobileTabBar';
 import ChatFab from './ChatFab';
+import ChatNotifier from './ChatNotifier';
 import AvatarMenu from './AvatarMenu';
 import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
@@ -186,6 +187,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       <InstallPrompt />
+      <ChatNotifier />
       <ChatFab />
       <MobileTabBar />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />

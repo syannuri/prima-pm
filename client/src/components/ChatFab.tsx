@@ -4,11 +4,11 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { haptic } from '../lib/haptics';
 
-// Phones-only floating chat bubble. Sits in the bottom-right corner just above the tab bar's
-// Timesheet quicklink (and above the page FAB when present). It's a frosted/translucent button
-// that FADES + SLIDES in only when there are unread direct messages, so it stays out of the way
-// otherwise. Tapping opens the Messages page. Hidden for guests (they can't message) and on the
-// Messages page itself.
+// Floating chat bubble. On phones it sits in the bottom-right corner just above the tab bar's
+// Timesheet quicklink (and above the page FAB when present); on desktop it drops to the true
+// bottom-right corner. It's a frosted/translucent button that FADES + SLIDES in only when there
+// are unread direct messages, so it stays out of the way otherwise. Tapping opens the Messages
+// page. Hidden for guests (they can't message) and on the Messages page itself.
 export default function ChatFab() {
   const { user } = useAuth();
   const loc = useLocation();
@@ -30,9 +30,9 @@ export default function ChatFab() {
       aria-label={`${unread} new message${unread === 1 ? '' : 's'}`}
       aria-hidden={!show}
       tabIndex={show ? 0 : -1}
-      // Stacked above the FAB slot (4.75rem) so it clears both the tab bar and a page FAB.
-      style={{ bottom: 'calc(4.75rem + env(safe-area-inset-bottom) + 4rem)' }}
-      className={`fixed right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-white/70 text-[#0073ea] shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-md backdrop-saturate-150 transition-all duration-300 ease-out active:scale-90 dark:bg-slate-800/70 dark:text-[#4c9bff] dark:ring-white/10 md:hidden ${
+      // Phones: stacked above the FAB slot (4.75rem) so it clears the tab bar + a page FAB.
+      // Desktop (md+): the true bottom-right corner (no tab bar there).
+      className={`fixed right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-white/70 text-[#0073ea] shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-md backdrop-saturate-150 transition-all duration-300 ease-out active:scale-90 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+4rem)] md:bottom-6 md:right-6 dark:bg-slate-800/70 dark:text-[#4c9bff] dark:ring-white/10 ${
         show ? 'translate-y-0 scale-100 opacity-100' : 'pointer-events-none translate-y-3 scale-90 opacity-0'
       }`}
     >
