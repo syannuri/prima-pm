@@ -117,7 +117,7 @@ export default function MessagesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className={`items-center justify-between ${active ? 'hidden sm:flex' : 'flex'}`}>
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 sm:text-2xl">Messages</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">Private 1-to-1 chat with your team</p>
@@ -143,8 +143,8 @@ export default function MessagesPage() {
         </Card>
       )}
 
-      <Card className="!p-0 overflow-hidden !rounded-2xl shadow-sm">
-        <div className="grid sm:grid-cols-[20rem_1fr]" style={{ height: 'calc(100vh - 12rem)' }}>
+      <Card className="!p-0 overflow-hidden shadow-sm -mx-4 !rounded-none sm:mx-0 sm:!rounded-2xl">
+        <div className="grid sm:grid-cols-[20rem_1fr]" style={{ height: 'calc(100vh - 11rem)' }}>
           {/* Conversation list */}
           <div className={`border-r border-slate-100 dark:border-slate-800 sm:block ${active ? 'hidden' : 'block'} overflow-y-auto bg-white dark:bg-slate-900`}>
             {conversations.length === 0 ? (
@@ -170,16 +170,17 @@ export default function MessagesPage() {
             })}
           </div>
 
-          {/* Thread */}
-          <div className={`flex-col bg-[#f6f7fb] dark:bg-slate-950 ${active ? 'flex' : 'hidden sm:flex'}`}>
+          {/* Thread — on phones an immersive full-screen overlay (covers the app header + tab bar);
+              a normal grid cell on sm+ (two-pane). */}
+          <div className={`bg-[#f6f7fb] dark:bg-slate-950 ${active ? 'fixed inset-0 z-50 flex flex-col sm:static sm:z-auto sm:flex' : 'hidden flex-col sm:flex'}`}>
             {!active ? (
               <div className="grid flex-1 place-items-center p-6 text-center text-sm text-slate-400">
                 <div><div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-2xl dark:bg-slate-800">💬</div>Select a conversation to start chatting.</div>
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-3 border-b border-slate-100 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-                  <button onClick={() => setActive(null)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 sm:hidden" aria-label="Back">←</button>
+                <div className="flex items-center gap-3 border-b border-slate-100 bg-white px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] dark:border-slate-800 dark:bg-slate-900 sm:pt-3">
+                  <button onClick={() => setActive(null)} className="-ml-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 sm:hidden" aria-label="Back">←</button>
                   <Avatar id={active.contact.id} name={active.contact.name} size={38} />
                   <span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">{active.contact.name}</span><span className="block truncate text-xs text-slate-400">{active.contact.role.replace(/_/g, ' ').toLowerCase()}</span></span>
                 </div>
@@ -208,7 +209,7 @@ export default function MessagesPage() {
                   <div ref={endRef} />
                 </div>
 
-                <div className="border-t border-slate-100 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                <div className="border-t border-slate-100 bg-white px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] dark:border-slate-800 dark:bg-slate-900 sm:pb-3">
                   <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 py-1.5 pl-4 pr-1.5 focus-within:border-[#0073ea] focus-within:bg-white dark:border-slate-700 dark:bg-slate-800">
                     <input
                       aria-label="Message"
