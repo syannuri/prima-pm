@@ -66,7 +66,7 @@ function ChatWidgetPanel({ onClose }: { onClose: () => void }) {
       {/* Scrim (phones) — tap to close */}
       <div onClick={onClose} className="fixed inset-0 z-[55] bg-black/30 sm:hidden" aria-hidden />
       {/* Panel: bottom-sheet on phones, floating card on desktop */}
-      <div className="prima-slide-up fixed z-[56] flex flex-col overflow-hidden bg-white shadow-2xl ring-1 ring-black/5 dark:bg-slate-900 dark:ring-white/10 inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl pb-[env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[34rem] sm:max-h-none sm:w-[23rem] sm:rounded-2xl sm:pb-0">
+      <div className="prima-slide-up fixed z-[56] flex flex-col overflow-hidden bg-white shadow-2xl ring-1 ring-black/5 dark:bg-slate-900 dark:ring-white/10 inset-x-0 bottom-0 h-[85vh] rounded-t-2xl pb-[env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[25.5rem] sm:w-[23rem] sm:rounded-2xl sm:pb-0">
         {chat.active ? (
           <ChatThread chat={chat} onBack={chat.closeThread} headerRight={<>{Expand}{Close}</>} />
         ) : (
