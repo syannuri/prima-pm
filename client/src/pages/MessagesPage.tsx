@@ -197,7 +197,7 @@ export default function MessagesPage() {
                       <div key={m.id} className={`flex items-end gap-2 ${mine ? 'justify-end' : 'justify-start'} ${it.firstOfRun ? 'mt-2' : ''}`}>
                         {!mine && (it.firstOfRun ? <Avatar id={active.contact.id} name={active.contact.name} size={28} /> : <span className="w-7 shrink-0" />)}
                         <div className={`max-w-[78%] px-3.5 py-2 text-sm shadow-sm ${mine
-                          ? `rounded-2xl ${it.firstOfRun ? 'rounded-tr-md' : ''} bg-brand-600 text-white`
+                          ? `rounded-2xl ${it.firstOfRun ? 'rounded-tr-md' : ''} bg-[#0073ea] text-white`
                           : `rounded-2xl ${it.firstOfRun ? 'rounded-tl-md' : ''} bg-white text-slate-700 ring-1 ring-slate-100 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700`}`}>
                           <div className="whitespace-pre-wrap break-words leading-snug">{m.body}</div>
                           <div className={`mt-0.5 text-right text-[10px] ${mine ? 'text-white/70' : 'text-slate-400'}`}>{timeOf(m.createdAt)}</div>
@@ -209,7 +209,7 @@ export default function MessagesPage() {
                 </div>
 
                 <div className="border-t border-slate-100 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 py-1.5 pl-4 pr-1.5 focus-within:border-brand-400 focus-within:bg-white dark:border-slate-700 dark:bg-slate-800">
+                  <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 py-1.5 pl-4 pr-1.5 focus-within:border-[#0073ea] focus-within:bg-white dark:border-slate-700 dark:bg-slate-800">
                     <input
                       aria-label="Message"
                       placeholder="Type a message…"
@@ -218,7 +218,7 @@ export default function MessagesPage() {
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
                       className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none dark:text-slate-100"
                     />
-                    <button onClick={submit} disabled={!draft.trim() || send.isPending} aria-label="Send" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-white transition enabled:hover:bg-brand-700 disabled:opacity-40">
+                    <button onClick={submit} disabled={!draft.trim() || send.isPending} aria-label="Send" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#0073ea] text-white transition enabled:hover:bg-[#0060b9] disabled:opacity-40">
                       <svg viewBox="0 0 24 24" className="h-4 w-4 -ml-px" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
                     </button>
                   </div>
