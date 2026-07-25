@@ -293,9 +293,11 @@ export async function updateTask(
   return task;
 }
 
-// Update only a task's progress (% complete). Also keeps actual dates sensible:
-// first progress stamps actualStart; reaching 100% stamps actualFinish; dropping
-// below 100% clears it.
+// Update only a task's progress (% complete). Actual-date stamping is ADDITIVE-ONLY: the first
+// progress stamps actualStart, reaching 100% stamps actualFinish, but an already-recorded actual
+// date is NEVER auto-cleared or overwritten. This locks the real start/finish once set, so an
+// accidental un-check (100→0) and re-check doesn't wipe the original dates or re-stamp them to
+// "today". To genuinely change an actual date, edit it via the inline date field.
 export async function setTaskProgress(projectId: string, taskId: string, progressPct: number, actorId: string) {
   const existing = await prisma.task.findFirst({ where: { id: taskId, projectId } });
   if (!existing) throw NotFound('Task not found');
@@ -303,9 +305,7 @@ export async function setTaskProgress(projectId: string, taskId: string, progres
   const now = new Date();
   const data: { progressPct: number; actualStart?: Date | null; actualFinish?: Date | null } = { progressPct };
   if (progressPct > 0 && !existing.actualStart) data.actualStart = now;
-  else if (progressPct <= 0 && existing.actualStart) data.actualStart = null; // back to not-started → clear the stamp
-  if (progressPct >= 100) data.actualFinish = existing.actualFinish ?? now;
-  else if (existing.actualFinish) data.actualFinish = null;
+  if (progressPct >= 100 && !existing.actualFinish) data.actualFinish = now;
 
   const task = await prisma.task.update({ where: { id: taskId }, data });
   await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: taskId, action: 'UPDATE', before: { progressPct: existing.progressPct }, after: { progressPct } });
