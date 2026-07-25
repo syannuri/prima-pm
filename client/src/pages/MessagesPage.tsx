@@ -42,7 +42,7 @@ export default function MessagesPage() {
           {/* Thread — phones: immersive full-screen overlay (covers app header + tab bar); sm+: grid cell. */}
           {active ? (
             <div className="fixed inset-0 z-50 sm:static sm:z-auto sm:h-full">
-              <ChatThread chat={chat} onBack={chat.closeThread} safeArea />
+              <ChatThread chat={chat} onBack={chat.closeThread} backMobileOnly safeArea />
             </div>
           ) : (
             <div className="hidden bg-[#f6f7fb] dark:bg-slate-950 sm:grid sm:place-items-center">

@@ -173,13 +173,13 @@ export function ContactPicker({ contacts, loading, onPick }: { contacts: ChatCon
 // The thread body: sticky header (+ optional back), grouped messages, pinned composer. The parent
 // supplies the sized/positioned container; this fills it (h-full flex-col). `safeArea` adds
 // top/bottom safe-area padding for the phone full-screen surface.
-export function ChatThread({ chat, onBack, showBack = true, safeArea = false, headerRight }: { chat: ChatState; onBack: () => void; showBack?: boolean; safeArea?: boolean; headerRight?: ReactNode }) {
+export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = false, safeArea = false, headerRight }: { chat: ChatState; onBack: () => void; showBack?: boolean; backMobileOnly?: boolean; safeArea?: boolean; headerRight?: ReactNode }) {
   const { active, grouped, me, draft, setDraft, submit, sending, endRef } = chat;
   if (!active) return null;
   return (
     <div className="flex h-full flex-col bg-[#f6f7fb] dark:bg-slate-950">
-      <div className={`flex items-center gap-3 border-b border-slate-100 bg-white px-4 pb-3 dark:border-slate-800 dark:bg-slate-900 ${safeArea ? 'pt-[calc(env(safe-area-inset-top)+0.75rem)]' : 'pt-3'}`}>
-        {showBack && <button onClick={onBack} className="-ml-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Back">←</button>}
+      <div className={`flex items-center gap-3 border-b border-blue-100 bg-blue-50 px-4 pb-3 dark:border-slate-800 dark:bg-slate-800/60 ${safeArea ? 'pt-[calc(env(safe-area-inset-top)+0.75rem)]' : 'pt-3'}`}>
+        {showBack && <button onClick={onBack} className={`-ml-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xl text-slate-500 hover:bg-white/70 dark:hover:bg-slate-700 ${backMobileOnly ? 'sm:hidden' : ''}`} aria-label="Back">←</button>}
         <Avatar id={active.contact.id} name={active.contact.name} size={38} />
         <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">{active.contact.name}</span><span className="block truncate text-xs text-slate-400">{active.contact.role.replace(/_/g, ' ').toLowerCase()}</span></span>
         {headerRight && <span className="flex shrink-0 items-center gap-1">{headerRight}</span>}

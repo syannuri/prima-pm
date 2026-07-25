@@ -71,7 +71,7 @@ function ChatWidgetPanel({ onClose }: { onClose: () => void }) {
           <ChatThread chat={chat} onBack={chat.closeThread} headerRight={<>{Expand}{Close}</>} />
         ) : (
           <>
-            <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+            <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-800/60">
               <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Messages</span>
               <span className="ml-auto flex items-center gap-1">
                 <IconBtn label={showNew ? 'Close' : 'New message'} onClick={toggleNew}><span className="text-lg leading-none">{showNew ? '×' : '＋'}</span></IconBtn>
