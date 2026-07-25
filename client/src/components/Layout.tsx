@@ -8,6 +8,7 @@ import NotificationBell from './NotificationBell';
 import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
 import MobileTabBar from './MobileTabBar';
+import ChatFab from './ChatFab';
 import AvatarMenu from './AvatarMenu';
 import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
@@ -185,6 +186,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       <InstallPrompt />
+      <ChatFab />
       <MobileTabBar />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
