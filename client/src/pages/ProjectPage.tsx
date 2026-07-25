@@ -147,7 +147,7 @@ export default function ProjectPage() {
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
     'Cost', 'Procurement', 'Timesheet', 'Health', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
-    'Charter', 'Kick-Off', 'Stakeholders', 'Requirements', 'UAT', 'Closeout', 'Audit',
+    'Charter', 'Stakeholders', 'Requirements', 'UAT', 'Closeout', 'Audit',
   ];
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once chartered,
   // phones land on the graphic Overview; desktop keeps the first working tab (Schedule/Agile/Cost).
@@ -322,7 +322,7 @@ export default function ProjectPage() {
 // still resolve. A single-tab group renders as a plain tab; a multi-tab group shows a sub-row.
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: 'Overview', tabs: ['Overview'] },
-  { label: 'Initiating', tabs: ['Charter', 'Kick-Off', 'Stakeholders', 'Requirements'] },
+  { label: 'Initiating', tabs: ['Charter', 'Stakeholders', 'Requirements'] },
   { label: 'Schedule & WBS', tabs: ['Schedule', 'Agile'] },
   { label: 'Cost', tabs: ['Cost', 'Procurement'] },
   { label: 'Risk', tabs: ['Risk', 'RAID', 'Issues'] },
