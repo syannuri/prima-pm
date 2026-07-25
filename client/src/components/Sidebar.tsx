@@ -23,6 +23,7 @@ const ICONS = {
   clock: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
   reports: 'M3 3v18h18M7 15v3M12 11v7M17 7v11',
   database: 'M4 7c0 1.66 3.58 3 8 3s8-1.34 8-3-3.58-3-8-3-8 1.34-8 3zM4 7v5c0 1.66 3.58 3 8 3s8-1.34 8-3V7M4 12v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5',
+  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
 };
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
@@ -46,6 +47,15 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
     enabled: isAdminPmo,
     refetchInterval: 60_000,
   });
+  // Unread direct messages — drives the Messages nav badge. Guests can't message.
+  const isGuest = user?.role === 'GUEST';
+  const { data: chatUnread } = useQuery({
+    queryKey: ['chat-unread'],
+    queryFn: () => api.get<{ unread: number }>('/messages/unread-count'),
+    enabled: !!user && !isGuest,
+    refetchInterval: 30_000,
+  });
+  const chatUnreadCount = chatUnread?.unread ?? 0;
   const [showAllProjects, setShowAllProjects] = useState(false);
   // Active work first so the most relevant projects stay near the top of a long list.
   const STATUS_RANK: Record<string, number> = { IN_PROGRESS: 0, ON_HOLD: 1, CHARTERED: 2, DRAFT: 3, CLOSED: 4 };
@@ -75,6 +85,17 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
             <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{unread}</span>
           ))}
         </NavLink>
+        {/* Messages — private 1-to-1 direct chat. Hidden for sandboxed guests. */}
+        {!!user && !isGuest && (
+          <NavLink to="/messages" onClick={onNavigate} title={chatUnreadCount > 0 ? `Messages — ${chatUnreadCount} unread` : 'Messages'} className={({ isActive }) => `relative ${cx(isActive)}`}>
+            <Icon path={ICONS.chat} /> {!collapsed && 'Messages'}
+            {chatUnreadCount > 0 && (collapsed ? (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-white dark:ring-slate-900" />
+            ) : (
+              <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{chatUnreadCount}</span>
+            ))}
+          </NavLink>
+        )}
         {/* Reports — PM status report (weekly/monthly); PMs run them, ADMIN/PMO oversee. A guest
             gets the same hub scoped to their own personal projects. */}
         {!!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'GUEST'].includes(user.role) && (

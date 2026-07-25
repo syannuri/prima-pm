@@ -227,6 +227,9 @@ model User {
   assignedBacklog   BacklogItem[]   @relation("BacklogAssignee")
   notifications     Notification[]  @relation("UserNotifications")
   refreshTokens     RefreshToken[]  @relation("UserRefreshTokens")
+  sentMessages      Message[]       @relation("MessageSender")
+  conversationsA    Conversation[]  @relation("ConvUserA")
+  conversationsB    Conversation[]  @relation("ConvUserB")
 
   @@index([role])
 }
@@ -1069,6 +1072,40 @@ model Notification {
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
+}
+
+// A private 1-to-1 direct-message thread between two users. Exactly one row per pair,
+// enforced by storing the pair in canonical order (userAId < userBId string compare) with a
+// unique constraint — so find-or-create is deterministic. `lastReadA/BAt` are each side's read
+// cursor: a user's unread count = messages from the OTHER side newer than their own cursor.
+model Conversation {
+  id            String    @id @default(uuid())
+  userAId       String
+  userBId       String
+  userA         User      @relation("ConvUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB         User      @relation("ConvUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  lastReadAAt   DateTime?
+  lastReadBAt   DateTime?
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  messages      Message[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId, lastMessageAt])
+  @@index([userBId, lastMessageAt])
+}
+
+// A single chat message within a Conversation.
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  body           String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
 }
 
 // A product-backlog work item (epic/story/task/bug). `sprintId` null = product

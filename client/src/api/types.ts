@@ -811,3 +811,30 @@ export interface PortfolioEvmTrend {
   projectCount: number;
   series: { statusDate: string; pv: number; ev: number; ac: number; cpi: number; spi: number; projectCount: number }[];
 }
+
+// --- Direct messaging (1-to-1 chat) ---
+export interface ChatContact {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+}
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+}
+export interface ChatConversation {
+  id: string;
+  other: ChatContact;
+  lastMessage: { body: string; senderId: string; createdAt: string } | null;
+  lastMessageAt: string;
+  unread: number;
+}
+export interface ChatThread {
+  conversationId: string;
+  other: ChatContact;
+  messages: ChatMessage[];
+}

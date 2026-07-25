@@ -19,6 +19,7 @@ import myTimesheetRoutes from './modules/timesheet/timesheet.me.routes.js';
 import bookmarkRoutes from './modules/bookmark/bookmark.routes.js';
 import adminAuditRoutes from './modules/audit/adminAudit.routes.js';
 import adminSettingsRoutes from './modules/settings/settings.routes.js';
+import messagesRoutes from './modules/messages/messages.routes.js';
 
 // Locate the built frontend (server/dist/app.js → ../../client/dist). Overridable
 // via CLIENT_DIST_PATH for non-standard layouts.
@@ -123,6 +124,7 @@ export function createApp() {
   api.use('/bookmarks', bookmarkRoutes);
   api.use('/admin/audit', adminAuditRoutes);
   api.use('/admin/settings', adminSettingsRoutes);
+  api.use('/messages', messagesRoutes);
   app.use('/api/v1', api);
 
   if (serveClient) {
