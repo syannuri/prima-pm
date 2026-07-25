@@ -287,11 +287,27 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   });
   const baselinedAt = ganttQ.data?.baselinedAt ?? null;
   const baselineLocked = ganttQ.data?.baselineLocked ?? false;
+  // Coarse-pointer (touch) devices: bar drag uses touch-action:none, which on a phone swallows
+  // vertical/horizontal swipes over the bars → the timeline feels "stuck". So drag is disabled on
+  // touch (edit dates via the inline fields instead); it also drives the landscape hint. `portrait`
+  // tracks orientation for that hint + for whether to offer orientation-lock on fullscreen.
+  const [isTouch, setIsTouch] = useState(false);
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    const coarse = window.matchMedia('(pointer: coarse)');
+    const port = window.matchMedia('(orientation: portrait)');
+    const sync = () => { setIsTouch(coarse.matches); setPortrait(port.matches); };
+    sync();
+    coarse.addEventListener('change', sync);
+    port.addEventListener('change', sync);
+    return () => { coarse.removeEventListener('change', sync); port.removeEventListener('change', sync); };
+  }, []);
   // Drag-reschedule + dependency editing are frozen once the baseline is locked (the API enforces it).
   const canPlan = canEdit && !baselineLocked;
   // Drag-to-reschedule is blocked once a schedule baseline is captured — plan dates are then frozen
-  // for variance tracking, and any change must go through a change request (not a casual drag).
-  const canDrag = canEdit && !baselineLocked && !baselinedAt;
+  // for variance tracking, and any change must go through a change request (not a casual drag) —
+  // and is off on touch devices (see isTouch above) so the timeline scrolls freely.
+  const canDrag = canEdit && !baselineLocked && !baselinedAt && !isTouch;
   const deps = ganttQ.data?.dependencies ?? [];
 
   // Overall project % complete — read from the EVM engine (the SAME weighted roll-up the
@@ -421,6 +437,29 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [fullscreen, setFullscreen] = useState(false);
+  const fsRef = useRef<HTMLDivElement>(null);
+  // Fullscreen = a CSS overlay always; on top of that, where the platform supports it
+  // (Android/desktop Chrome) we request the real Fullscreen API and lock landscape so the
+  // timeline gets max width. iOS Safari supports neither element-fullscreen nor orientation.lock,
+  // so it just gets the overlay + a "rotate your device" hint (see the header below).
+  const enterFullscreen = async () => {
+    setFullscreen(true);
+    const el = fsRef.current;
+    if (el?.requestFullscreen) {
+      try {
+        await el.requestFullscreen();
+        const orient = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
+        if (orient?.lock) { try { await orient.lock('landscape'); } catch { /* desktop / unsupported — no-op */ } }
+      } catch { /* element-fullscreen unsupported (iOS) — the CSS overlay still applies */ }
+    }
+  };
+  const exitFullscreen = async () => {
+    const orient = screen.orientation as (ScreenOrientation & { unlock?: () => void }) | undefined;
+    try { orient?.unlock?.(); } catch { /* no-op */ }
+    if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { /* no-op */ } }
+    setFullscreen(false);
+  };
+  const toggleFullscreen = () => { fullscreen ? exitFullscreen() : enterFullscreen(); };
   // Timeline (Gantt) column is collapsible — hiding it gives the widened 4-date table room.
   const [showGantt, setShowGantt] = useState(true);
   // Date/budget columns (Plan·Actual Start/Finish, Dur, Budget) are OFF by default so the
@@ -436,12 +475,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources'), enabled: canEdit });
   const resources = resourcesQ.data?.resources ?? [];
 
-  // Esc exits full screen.
+  // Esc exits full screen; also keep our state in sync when native fullscreen is left via the
+  // device back-gesture / browser chrome (fullscreenchange) so the overlay + orientation unlock too.
   useEffect(() => {
     if (!fullscreen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') exitFullscreen(); };
+    const onFsChange = () => { if (!document.fullscreenElement) exitFullscreen(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => { window.removeEventListener('keydown', onKey); document.removeEventListener('fullscreenchange', onFsChange); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullscreen]);
 
   const toast = useToast();
@@ -598,8 +641,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
   return (
-    <div className={fullscreen ? 'fixed inset-0 z-50 overflow-auto bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
+    <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 overflow-auto bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
     <Card className={fullscreen ? 'min-h-full' : ''}>
+      {/* iOS (and any platform where orientation-lock isn't available) can't auto-rotate — nudge
+          the user to turn the device so the timeline gets the full landscape width. */}
+      {fullscreen && isTouch && portrait && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
+          <span aria-hidden>↻</span> Rotate your device to landscape for the full timeline.
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete">
           Work Breakdown Structure
@@ -607,7 +657,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {rows.length > 0 && (
-            <button onClick={() => setFullscreen((f) => !f)} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'}
+            <button onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
               {fullscreen ? <><CollapseIcon /> Exit full screen</> : <><ExpandIcon /> Full screen</>}
             </button>
@@ -681,7 +731,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             {criticalIds.size > 0 && <span className="ml-1 text-red-600 dark:text-red-400">· {criticalIds.size} on the critical path</span>}
           </div>
         )}
-        <div ref={scrollRef} className={`overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'max-h-[calc(100vh-9rem)]' : 'max-h-[65vh]'}`}>
+        <div ref={scrollRef} className={`touch-pan-x touch-pan-y overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'max-h-[calc(100vh-9rem)]' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>

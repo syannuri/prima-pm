@@ -406,7 +406,10 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
     }`;
 
   return (
-    <div>
+    // Freeze the whole tab strip at the top of the scroll area so it stays visible while the
+    // panel content scrolls under it. Negative insets let the opaque bg span edge-to-edge under
+    // <main>'s padding; a hairline + shadow separate it from the scrolling content beneath.
+    <div className="sticky top-0 z-20 -mx-4 border-b border-slate-200 bg-slate-50/95 px-4 pt-1 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:-mx-6 sm:px-6">
       {/* Level 1 — domain groups. Scrolls horizontally on narrow screens; a right-edge fade
           hints there are more groups to swipe to (hidden on md+ where they all fit). */}
       <div className="relative">
