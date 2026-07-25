@@ -26,7 +26,7 @@ import UatPanel from './panels/UatPanel';
 import KickoffPanel from './panels/KickoffPanel';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
-import NextStepsGuide from './panels/NextStepsGuide';
+import NextStepChip from '../components/NextStepChip';
 import CrDecisionBanner from '../components/CrDecisionBanner';
 import ReassignPm from '../components/ReassignPm';
 import ProjectDetailsPopover from '../components/ProjectDetailsPopover';
@@ -239,6 +239,10 @@ export default function ProjectPage() {
           {/* Margin chip doubles as the trigger for a Cost Baseline / Revenue breakdown popover. */}
           <ProjectDetailsPopover project={project} />
           {project.category && <Badge color="slate">{categoryLabel(project.category, project.categoryOther)}</Badge>}
+          {/* Lifecycle "what to do next" guide as a compact informational chip (expands to a
+              popover). Renders nothing when no steps pending; desktop-only by virtue of this
+              hidden-on-phones chip row (phones lead with the graphic Overview tab instead). */}
+          <NextStepChip projectId={projectId} onJump={(t) => setTab(t as Tab)} />
         </div>
         {/* Always-visible project-health summary (EVM RAG + CPI/SPI/%complete). Full detail
             lives in the Monitoring → Health tab; clicking here jumps there. */}
@@ -266,9 +270,6 @@ export default function ProjectPage() {
       {reviewOpen && canEdit && <ActivationReviewModal projectId={projectId} onClose={closeReview} />}
 
       <ProjectAlerts projectId={projectId} onJump={(t) => setTab(t as Tab)} />
-
-      {/* Next-steps guide is desktop-only — phones lead with the graphic Overview tab. */}
-      {!isMobile && <NextStepsGuide projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
 
       <div ref={tabsAnchorRef} className="scroll-mt-4" />
       {/* Tab strip + active panel share one wrapper with a viewport-tall min-height (desktop only)
