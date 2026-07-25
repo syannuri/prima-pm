@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Project } from '../api/types';
-import { formatIdr } from '../lib/format';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api/client';
+import type { Forecast, Project } from '../api/types';
+import { formatDateInput, formatIdr } from '../lib/format';
+import { IconWallet } from './icons';
 
 // A compact header chip that shows the project Margin at a glance and, on click, opens a small
 // popover with the full financial breakdown (Cost Baseline · Revenue · Margin). Those two base
@@ -23,6 +26,17 @@ export default function ProjectDetailsPopover({ project }: { project: Project })
   const revenue = project.totalRevenueIdr != null ? Number(project.totalRevenueIdr) : null;
   const margin = baseline != null && revenue != null ? revenue - baseline : null;
 
+  // The chip shows the PLANNED margin (Revenue − BAC), which is fixed. The popover also
+  // surfaces the PROJECTED margin (Revenue − EAC) so the user can see how the forecast erodes
+  // (or improves) the margin as actual cost accrues. Fetched only when the popover is open.
+  const { data: forecast } = useQuery({
+    queryKey: ['forecast', project.id, formatDateInput(new Date())],
+    queryFn: () => api.get<Forecast>(`/projects/${project.id}/forecast?statusDate=${formatDateInput(new Date())}`),
+    enabled: open,
+  });
+  const projected = forecast?.hasData ? forecast.margin.projected : null;
+  const projectedDelta = projected != null && margin != null ? projected - margin : null;
+
   // Nothing financial to show → render nothing (the trigger would be empty).
   if (baseline == null && revenue == null) return null;
 
@@ -43,7 +57,7 @@ export default function ProjectDetailsPopover({ project }: { project: Project })
         title="Financial details"
         className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
       >
-        <span aria-hidden>💰</span>
+        <IconWallet className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
         {margin != null ? (
           <><span className="text-slate-400 dark:text-slate-500">Margin</span><span className="font-medium text-slate-700 dark:text-slate-200">{formatIdr(margin)}</span></>
         ) : (
@@ -59,10 +73,27 @@ export default function ProjectDetailsPopover({ project }: { project: Project })
           <Row label="Revenue" value={revenue != null ? formatIdr(revenue) : '—'} />
           <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
           <Row
-            label="Margin"
+            label="Planned margin"
             value={margin != null ? formatIdr(margin) : '—'}
             tone={margin != null ? (margin < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : undefined}
           />
+          {/* Forecast margin (Revenue − EAC) — moves with progress/CPI. Only shown once there's
+              actuals to forecast from; otherwise it just equals the planned margin. */}
+          {projected != null ? (
+            <div className="flex items-baseline justify-between gap-6 py-1">
+              <span className="text-slate-500 dark:text-slate-400">
+                Projected <span className="text-slate-400 dark:text-slate-500">(forecast)</span>
+              </span>
+              <span className={`font-medium tabular-nums ${projected < 0 ? 'text-red-600 dark:text-red-400' : projected < (margin ?? 0) ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
+                {formatIdr(projected)}
+                {projectedDelta != null && projectedDelta !== 0 && (
+                  <span className="ml-1 text-[10px] font-normal">({projectedDelta < 0 ? '↓' : '↑'} {formatIdr(Math.abs(projectedDelta))})</span>
+                )}
+              </span>
+            </div>
+          ) : (
+            <div className="py-1 text-[10px] italic text-slate-400 dark:text-slate-500">Projected margin appears once progress &amp; actual cost are recorded.</div>
+          )}
         </div>
       )}
     </div>

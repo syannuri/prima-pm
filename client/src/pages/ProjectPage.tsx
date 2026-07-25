@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { Badge, Card, Spinner } from '../components/ui';
+import { IconUser, IconBuilding } from '../components/icons';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
@@ -226,12 +227,12 @@ export default function ProjectPage() {
             tight; the full chip row returns on sm+ (desktop/tablet). */}
         <div className="mt-2 hidden flex-wrap items-center gap-1.5 text-xs sm:flex">
           <span className={`inline-flex ${chipCls}`}>
-            <span aria-hidden>👤</span>
+            <IconUser className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
             <span className="font-medium text-slate-700 dark:text-slate-200">{project.pm?.name ?? '—'}</span>
             <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
           </span>
           {project.clientName && (
-            <span className={`hidden sm:inline-flex ${chipCls}`}><span aria-hidden>🏢</span>{project.clientName}</span>
+            <span className={`hidden sm:inline-flex ${chipCls}`}><IconBuilding className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />{project.clientName}</span>
           )}
           {/* Margin chip doubles as the trigger for a Cost Baseline / Revenue breakdown popover. */}
           <ProjectDetailsPopover project={project} />
