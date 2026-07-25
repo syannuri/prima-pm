@@ -7,6 +7,7 @@ import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
 import { useProjectWrite } from '../../lib/useProjectWrite';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 interface Row {
   node: GanttNode;
@@ -468,9 +469,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const [showDates, setShowDates] = useState(false);
   // Inline "add subtask" draft row (monday.com style) — rendered under its parent row.
   const [draft, setDraft] = useState<{ parentId: string; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
+  // Narrow phones (portrait) can't fit the Gantt: the frozen ✓/WBS/Task pane alone fills the
+  // viewport, so the timeline slid off-screen and columns bled under the frozen pane. On narrow
+  // we drop the timeline (+ Owner/Var/Actions, hidden via CSS below) for a clean task list; the
+  // full Gantt is one tap away via Full screen, which auto-rotates to landscape (width ≥ sm →
+  // isNarrow flips false → everything returns). Desktop/landscape are unchanged.
+  const isNarrow = useIsMobile();
+  const timelineVisible = showGantt && !isNarrow;
   // Base = ✓ WBS Task Owner % Status Var (7); +6 date/budget cols when shown; + Actions (editors)
-  // + the Gantt column (when shown).
-  const colCount = (showDates ? 13 : 7) + (canEdit ? 1 : 0) + (showGantt ? 1 : 0);
+  // + the Gantt column (when shown). Owner/Var/Actions are CSS-hidden on narrow (still counted).
+  const colCount = (showDates ? 13 : 7) + (canEdit ? 1 : 0) + (timelineVisible ? 1 : 0);
   // Resource pool for the inline owner picker + add-subtask draft (editors only).
   const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources'), enabled: canEdit });
   const resources = resourcesQ.data?.resources ?? [];
@@ -662,13 +670,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {fullscreen ? <><CollapseIcon /> Exit full screen</> : <><ExpandIcon /> Full screen</>}
             </button>
           )}
-          {rows.length > 0 && (
+          {rows.length > 0 && !isNarrow && (
             <button onClick={() => setShowGantt((g) => !g)} title={showGantt ? 'Hide the Gantt timeline (more room for the date columns)' : 'Show the Gantt timeline'}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
               {showGantt ? '📊 Hide timeline' : '📊 Show timeline'}
             </button>
           )}
-          {rows.length > 0 && (
+          {rows.length > 0 && !isNarrow && (
             <button onClick={() => setShowDates((d) => !d)} title={showDates ? 'Hide the Plan/Actual date, duration & budget columns for a wider timeline' : 'Show the Plan/Actual dates, duration & budget columns (spreadsheet view)'}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
               {showDates ? '🗓 Hide dates' : '🗓 Show dates'}
@@ -680,13 +688,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {collapsed.size > 0 ? '⊞ Expand all' : '⊟ Collapse all'}
             </button>
           )}
-          {rows.length > 0 && showGantt && axis?.todayPct != null && (
+          {rows.length > 0 && timelineVisible && axis?.todayPct != null && (
             <button onClick={scrollToToday} title="Scroll the timeline to today"
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
               ↦ Today
             </button>
           )}
-          {rows.length > 0 && showGantt && (
+          {rows.length > 0 && timelineVisible && (
             <div className="inline-flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
               <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
@@ -714,6 +722,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         </div>
       </div>
 
+      {/* Narrow portrait: the timeline is dropped for a clean task list — point the user to
+          Full screen (auto-landscape) for the actual Gantt bars. */}
+      {rows.length > 0 && isNarrow && showGantt && !fullscreen && (
+        <button onClick={enterFullscreen} className="mb-3 flex w-full items-center gap-2 rounded-lg border border-brand-200 bg-brand-50/60 px-3 py-2 text-left text-xs text-brand-700 dark:border-brand-900/50 dark:bg-brand-900/15 dark:text-brand-300">
+          <ExpandIcon /> <span>Tap for the Gantt timeline — opens full screen (rotate to landscape).</span>
+        </button>
+      )}
       {!rows.length ? (
         <div className="py-6">
           <p className="text-center text-slate-500 dark:text-slate-400">
@@ -772,9 +787,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                   then (rowSpan=hrs), 1 otherwise. */}
               <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
                 <th rowSpan={showDates ? 2 : 1} style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${FROZEN_TH}`} title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
-                <th rowSpan={showDates ? 2 : 1} style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${FROZEN_TH}`}>WBS</th>
-                <th rowSpan={showDates ? 2 : 1} style={{ left: 88 }} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${FROZEN_TH} ${FROZEN_EDGE}`}>Task</th>
-                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
+                <th rowSpan={showDates ? 2 : 1} style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`hidden border-b border-slate-200 align-bottom dark:border-slate-800 sm:table-cell ${FROZEN_TH}`}>WBS</th>
+                <th rowSpan={showDates ? 2 : 1} style={{ left: isNarrow ? 40 : 88 }} className={`min-w-[7rem] max-w-[7rem] sm:min-w-[14rem] sm:max-w-none border-b border-slate-200 align-bottom dark:border-slate-800 ${FROZEN_TH} ${FROZEN_EDGE}`}>Task</th>
+                <th rowSpan={showDates ? 2 : 1} className="hidden border-b border-slate-200 align-bottom dark:border-slate-800 sm:table-cell" title="Owner (PIC) responsible for the task">Owner</th>
                 {showDates && (
                   <>
                     <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Planned (baseline plan) dates">Plan</th>
@@ -785,10 +800,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 )}
                 <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
                 <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">Status</th>
-                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Finish variance vs baseline (days)">Var</th>
-                {canEdit && <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Actions</th>}
+                <th rowSpan={showDates ? 2 : 1} className="hidden border-b border-slate-200 text-right align-bottom dark:border-slate-800 sm:table-cell" title="Finish variance vs baseline (days)">Var</th>
+                {canEdit && <th rowSpan={showDates ? 2 : 1} className="hidden border-b border-slate-200 text-right align-bottom dark:border-slate-800 sm:table-cell">Actions</th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
-                {showGantt && (
+                {timelineVisible && (
                   <th ref={timelineRef} rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">
                     <div className="relative h-4" style={{ width: axis?.width }}>
                       {axis?.ticks.map((t) => (
@@ -873,9 +888,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
                       </div>
                     </td>
-                    <td style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${FROZEN_TD} ${rowBg} ${rowHover}`}>{wbs}</td>
-                    <td style={{ left: 88 }} className={`${FROZEN_TD} ${rowBg} ${rowHover} ${FROZEN_EDGE} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
-                      <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
+                    <td style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`hidden font-mono text-xs text-slate-500 dark:text-slate-400 sm:table-cell ${FROZEN_TD} ${rowBg} ${rowHover}`}>{wbs}</td>
+                    <td style={{ left: isNarrow ? 40 : 88 }} className={`max-w-[7rem] sm:max-w-none ${FROZEN_TD} ${rowBg} ${rowHover} ${FROZEN_EDGE} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
+                      <span style={{ paddingLeft: `${depth * 18}px` }} className="flex min-w-0 items-center gap-1">
                         {hasKids && (
                           <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
                             <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} fill="currentColor" aria-hidden><path d="M7 5l6 5-6 5V5z" /></svg>
@@ -885,12 +900,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                           {isOpen ? '▾' : 'ⓘ'}
                         </button>
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
-                        <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
+                        <span className={`truncate ${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`} title={node.name}>{node.name}</span>
                         {isCollapsed && hasKids && <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">⋯</span>}
                         {isCritical && <span className="shrink-0 text-[10px] font-bold text-red-500" title="On the critical path — a slip here delays the whole project">▲ CP</span>}
                       </span>
                     </td>
-                    <td>{canEdit
+                    <td className="hidden sm:table-cell">{canEdit
                       ? <InlineOwner name={node.picResource?.name ?? node.pic?.name} resourceId={node.picResourceId ?? null} editable resources={resources} onSave={(id) => patchTask.mutate({ node, patch: { picResourceId: id } })} />
                       : <OwnerCell name={node.picResource?.name ?? node.pic?.name} />}</td>
                     {showDates && (
@@ -941,7 +956,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     <td><Badge color={overdue ? 'red' : st.color}>{overdue ? 'Overdue' : st.label}</Badge></td>
-                    <td className="text-right tabular-nums text-xs">
+                    <td className="hidden text-right tabular-nums text-xs sm:table-cell">
                       {varDays == null ? (
                         <span className="text-slate-300 dark:text-slate-600">—</span>
                       ) : (
@@ -951,7 +966,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     {canEdit && (
-                      <td className="whitespace-nowrap text-right text-xs">
+                      <td className="hidden whitespace-nowrap text-right text-xs sm:table-cell">
                         {/* Hover-reveal to declutter the dense grid; focus-within keeps keyboard access. */}
                         <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
                           <button onClick={() => setDraft({ parentId: node.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(node.planStart)), planEnd: formatDateInput(new Date(node.planEnd)) })} className="text-brand-600 hover:underline" title="Add a subtask inline">+ Sub</button>
@@ -960,7 +975,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         </span>
                       </td>
                     )}
-                    {showGantt && (
+                    {timelineVisible && (
                     <td>
                       <div
                         ref={(el) => { if (el) barRefs.current.set(node.id, el); else barRefs.current.delete(node.id); }}
