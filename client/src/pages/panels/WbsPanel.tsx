@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CpmResult, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
@@ -7,6 +7,7 @@ import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
 import { useProjectWrite } from '../../lib/useProjectWrite';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 interface Row {
   node: GanttNode;
@@ -308,6 +309,19 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // for variance tracking, and any change must go through a change request (not a casual drag) —
   // and is off on touch devices (see isTouch above) so the timeline scrolls freely.
   const canDrag = canEdit && !baselineLocked && !baselinedAt && !isTouch;
+
+  // On narrow phones (portrait) the frozen ✓/WBS/Task pane filled the viewport and overlapped the
+  // scrolled columns. Un-freeze there: the whole Gantt becomes one wide table you swipe through
+  // (nothing sticky-left, so task names and bars scroll together — no overlap). The header row
+  // still sticks to the top for vertical scroll (its own row-level sticky). Desktop keeps the pinned
+  // pane. `frozen*` = the sticky classes only when wide; `frozenLeft()` drops the left offset on
+  // narrow so the row-level header sticky doesn't re-freeze the columns horizontally.
+  const isNarrow = useIsMobile();
+  const stickyCol = !isNarrow;
+  const frozenTh = stickyCol ? FROZEN_TH : 'bg-slate-50 dark:bg-slate-800';
+  const frozenTd = stickyCol ? FROZEN_TD : '';
+  const frozenEdge = stickyCol ? FROZEN_EDGE : '';
+  const frozenLeft = (n: number, rest: CSSProperties = {}) => (stickyCol ? { left: n, ...rest } : rest);
   const deps = ganttQ.data?.dependencies ?? [];
 
   // Overall project % complete — read from the EVM engine (the SAME weighted roll-up the
@@ -771,9 +785,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                   appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
                   then (rowSpan=hrs), 1 otherwise. */}
               <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
-                <th rowSpan={showDates ? 2 : 1} style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${FROZEN_TH}`} title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
-                <th rowSpan={showDates ? 2 : 1} style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${FROZEN_TH}`}>WBS</th>
-                <th rowSpan={showDates ? 2 : 1} style={{ left: 88 }} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${FROZEN_TH} ${FROZEN_EDGE}`}>Task</th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
                 <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
                 {showDates && (
                   <>
@@ -868,13 +882,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 return (
                   <Fragment key={node.id}>
                   <tr className={`group [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 ${alt ? 'bg-slate-50/70 dark:bg-slate-800/30' : ''} hover:bg-slate-100 dark:hover:bg-slate-800/60`}>
-                    <td style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }} className={`text-center ${FROZEN_TD} ${rowBg} ${rowHover}`}>
+                    <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
                       </div>
                     </td>
-                    <td style={{ left: 40, width: 48, minWidth: 48, maxWidth: 48 }} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${FROZEN_TD} ${rowBg} ${rowHover}`}>{wbs}</td>
-                    <td style={{ left: 88 }} className={`${FROZEN_TD} ${rowBg} ${rowHover} ${FROZEN_EDGE} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
+                    <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>
+                    <td style={frozenLeft(88)} className={`${frozenTd} ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         {hasKids && (
                           <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
