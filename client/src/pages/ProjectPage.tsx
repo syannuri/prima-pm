@@ -179,6 +179,9 @@ export default function ProjectPage() {
             <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'} solid>{project.status}</Badge>
             <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>
           </span>
+          {/* Always-visible EVM health summary (RAG + CPI/SPI/%complete), inline on the title
+              line. Full detail lives in the Monitoring → Health tab; clicking jumps there. */}
+          {chartered && <ProjectHealthStrip projectId={projectId} onOpen={() => setTab('Health')} />}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* Primary stage action stays prominent; secondary actions tuck into "⋯ More". */}
             <LifecycleActions project={project} onReview={() => setReviewOpen(true)} />
@@ -241,13 +244,6 @@ export default function ProjectPage() {
               hidden-on-phones chip row (phones lead with the graphic Overview tab instead). */}
           <NextStepChip projectId={projectId} onJump={(t) => setTab(t as Tab)} />
         </div>
-        {/* Always-visible project-health summary (EVM RAG + CPI/SPI/%complete). Full detail
-            lives in the Monitoring → Health tab; clicking here jumps there. */}
-        {chartered && (
-          <div className="mt-2">
-            <ProjectHealthStrip projectId={projectId} onOpen={() => setTab('Health')} />
-          </div>
-        )}
         {project.status === 'ON_HOLD' && (
           <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
             ⏸ On hold{project.onHoldReason && <> · <span className="italic">“{project.onHoldReason}”</span></>}

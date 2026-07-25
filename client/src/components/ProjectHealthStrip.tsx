@@ -11,6 +11,11 @@ export default function ProjectHealthStrip({ projectId, onOpen }: { projectId: s
   const { data: e } = useQuery({
     queryKey: ['evm', `/projects/${projectId}`, '', 'strip'],
     queryFn: () => api.get<Evm>(`/projects/${projectId}/evm`),
+    // Header health should track progress/cost changes without a manual reload: poll every 60s
+    // and refetch when the window regains focus (both overriding the app-wide defaults, which
+    // disable focus-refetch and don't poll). Own-mutation invalidation still refreshes it too.
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
   if (!e) return null;
 
