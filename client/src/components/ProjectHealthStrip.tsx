@@ -2,15 +2,20 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Evm } from '../api/types';
 import { Badge } from './ui';
-import { formatNum } from '../lib/format';
+import { formatNum, formatDateInput } from '../lib/format';
 
 // Compact, always-visible project-health summary for the project header: RAG badge + CPI +
 // SPI + % complete, from the methodology-dispatched EVM (/projects/:id/evm). Click to open the
 // full Health tab. Mirrors EvmHealth's metric logic so the header and the tab always agree.
 export default function ProjectHealthStrip({ projectId, onOpen }: { projectId: string; onOpen?: () => void }) {
+  // Send the CLIENT's local status date (same as the Health tab). Omitting it made the server
+  // fall back to its OWN `new Date()` — in production the server runs UTC while the user is in a
+  // +7 zone, so around the day boundary the strip and the Health tab computed EVM at different
+  // dates and disagreed (dev is fine only because server+client share a timezone there).
+  const statusDate = formatDateInput(new Date());
   const { data: e } = useQuery({
-    queryKey: ['evm', `/projects/${projectId}`, '', 'strip'],
-    queryFn: () => api.get<Evm>(`/projects/${projectId}/evm`),
+    queryKey: ['evm', `/projects/${projectId}`, '', 'strip', statusDate],
+    queryFn: () => api.get<Evm>(`/projects/${projectId}/evm?statusDate=${statusDate}`),
     // Header health should track progress/cost changes without a manual reload: poll every 60s
     // and refetch when the window regains focus (both overriding the app-wide defaults, which
     // disable focus-refetch and don't poll). Own-mutation invalidation still refreshes it too.
