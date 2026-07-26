@@ -27,3 +27,12 @@ export const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢'
 export const reactionSchema = z.object({
   emoji: z.enum(REACTION_EMOJIS),
 });
+
+// A browser Web-Push subscription posted by the client (from PushManager.subscribe()).
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().url().max(2000),
+  keys: z.object({ p256dh: z.string().max(500), auth: z.string().max(500) }),
+});
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url().max(2000),
+});

@@ -39,6 +39,14 @@ export const env = {
   // ID is not a secret (it ships in the browser), but gating on it keeps the feature opt-in
   // per deployment. New Google users are created as sandboxed GUESTs (like guest signup).
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  // Web-push (VAPID). When the keypair is set, browser push notifications are enabled; the public
+  // key ships to the client, the private key signs pushes. Empty ⇒ push is off (endpoints report
+  // unconfigured, the client hides the enable-notifications control).
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    privateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+    subject: process.env.VAPID_SUBJECT ?? 'https://prismatix.tech',
+  },
 } as const;
 
 export const isProd = env.nodeEnv === 'production';

@@ -8,7 +8,8 @@ import { requireAuth } from '../../middleware/auth.js';
 import { BadRequest, Forbidden } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
 import { addClient, removeClient, startSseHeartbeat, onlineAmong, publishToUsers } from './sse.js';
-import { sendMessageSchema, editMessageSchema, createGroupSchema, addMembersSchema, renameGroupSchema, reactionSchema } from './messages.schemas.js';
+import { sendMessageSchema, editMessageSchema, createGroupSchema, addMembersSchema, renameGroupSchema, reactionSchema, pushSubscribeSchema, pushUnsubscribeSchema } from './messages.schemas.js';
+import { getPublicKey, isPushEnabled, saveSubscription, deleteSubscription } from './push.js';
 import {
   listContacts,
   listConversations,
@@ -215,6 +216,19 @@ router.delete('/messages/:id', asyncHandler(async (req, res) => {
 // Toggle an emoji reaction on a message.
 router.post('/messages/:id/reactions', validateBody(reactionSchema), asyncHandler(async (req, res) => {
   res.json(await toggleReaction(req.user!.id, req.params.id, req.body.emoji));
+}));
+
+// Web-push: the VAPID public key + whether push is configured (client shows/hides the control).
+router.get('/push/public-key', (req, res) => {
+  res.json({ enabled: isPushEnabled(), key: isPushEnabled() ? getPublicKey() : null });
+});
+
+// Register / remove this browser's push subscription.
+router.post('/push/subscribe', validateBody(pushSubscribeSchema), asyncHandler(async (req, res) => {
+  res.json(await saveSubscription(req.user!.id, req.body));
+}));
+router.post('/push/unsubscribe', validateBody(pushUnsubscribeSchema), asyncHandler(async (req, res) => {
+  res.json(await deleteSubscription(req.user!.id, req.body.endpoint));
 }));
 
 export default router;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PanelLoading, Card } from '../components/ui';
 import { useChat, ConversationList, ContactPicker, ChatThread, SearchResults, ChatSearchBox, NewGroupForm } from '../components/chat/chatCore';
+import PushToggle from '../components/PushToggle';
 import type { ChatContact } from '../api/types';
 
 export default function MessagesPage() {
@@ -20,7 +21,8 @@ export default function MessagesPage() {
           <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 sm:text-2xl">Messages</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">Direct chat &amp; group channels for your team</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <PushToggle />
           <button onClick={() => openNew('group')} className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-semibold transition ${showNew === 'group' ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-900/20' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
             <span className="text-base leading-none">👥</span> {showNew === 'group' ? 'Close' : 'New group'}
           </button>

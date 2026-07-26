@@ -4,7 +4,8 @@ import type { Message } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
-import { publishToUsers } from './sse.js';
+import { publishToUsers, isOnline } from './sse.js';
+import { sendPushToUsers } from './push.js';
 
 // Push a real-time "poke" to a conversation's members (+ any extra users, e.g. a just-removed
 // member so their list updates). Best-effort — a delivery failure never breaks the mutation.
@@ -15,6 +16,29 @@ async function notify(conversationId: string, event: 'message' | 'conversation',
     for (const m of members) ids.add(m.userId);
     publishToUsers(ids, event, { conversationId });
   } catch { /* never let notification failure break the write */ }
+}
+
+// Web-push a new message to members who are NOT currently connected via SSE (online users get the
+// in-app toast/chime instead). Best-effort, fire-and-forget — never blocks or breaks the send.
+async function pushNewMessage(conversationId: string, senderId: string, message: Message) {
+  try {
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { members: { include: { user: { select: { id: true, name: true } } } } },
+    });
+    if (!conv) return;
+    const recipients = conv.members.filter((m) => m.userId !== senderId && !isOnline(m.userId)).map((m) => m.userId);
+    if (recipients.length === 0) return;
+    const senderName = conv.members.find((m) => m.userId === senderId)?.user.name ?? 'Someone';
+    const preview = message.body?.trim() || (message.attachmentKey ? `📎 ${message.attachmentName ?? 'file'}` : '');
+    const isGroup = conv.type === 'GROUP';
+    await sendPushToUsers(recipients, {
+      title: isGroup ? conv.title ?? 'Group' : senderName,
+      body: (isGroup ? `${senderName}: ${preview}` : preview).slice(0, 140),
+      conversationId,
+      url: '/messages',
+    });
+  } catch { /* best-effort */ }
 }
 
 // Chat = DIRECT (1-to-1) and GROUP conversations, unified by a ConversationMember join with a
@@ -247,6 +271,7 @@ async function postMessage(meId: string, conversationId: string, body: string, a
   await prisma.conversationMember.updateMany({ where: { conversationId, userId: meId }, data: { lastReadAt: now, hiddenAt: null } });
   await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } });
   await notify(conversationId, 'message');
+  void pushNewMessage(conversationId, meId, message); // fire-and-forget browser push to offline members
   return { conversationId, message: toWire(message, meId) };
 }
 

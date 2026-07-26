@@ -10,7 +10,7 @@
  * Bump CACHE when the caching strategy itself changes; old caches are pruned
  * on activate.
  */
-const CACHE = 'prima-v2';
+const CACHE = 'prima-v3';
 const SHELL = '/index.html';
 
 self.addEventListener('install', (event) => {
@@ -67,5 +67,40 @@ self.addEventListener('fetch', (event) => {
           })
           .catch(() => hit),
     ),
+  );
+});
+
+/* --- Web-push (chat notifications) ------------------------------------------------------------ */
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
+  const title = data.title || 'Prismatix';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: data.conversationId ? 'prima-chat-' + data.conversationId : 'prima-chat',
+      renotify: true,
+      data: { url: data.url || '/messages' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/messages';
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of all) {
+        if ('focus' in client) {
+          try { await client.navigate(url); } catch (e) { /* not allowed — just focus */ }
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })(),
   );
 });
