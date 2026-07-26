@@ -273,7 +273,7 @@ export default function DashboardPage() {
               </div>
               {costBaseline && revenue && (
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Projected margin: {formatIdr(Number(revenue) - Number(costBaseline))}
+                  Estimated margin: {formatIdr(Number(revenue) - Number(costBaseline))}
                   {Number(revenue) > 0 && ` (${(((Number(revenue) - Number(costBaseline)) / Number(revenue)) * 100).toFixed(1)}%)`}
                 </p>
               )}
