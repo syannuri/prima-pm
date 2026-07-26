@@ -5,6 +5,13 @@ import { prisma } from '../../lib/prisma.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
 
+// Chat = DIRECT (1-to-1) and GROUP conversations, unified by a ConversationMember join with a
+// per-member read cursor (lastReadAt). A DIRECT thread is deduped by the canonical (userAId <
+// userBId) pair; a GROUP has a title, N members, an optional linked project, and admins. A
+// member's unread = messages from OTHERS newer than their own cursor.
+
+const CONTACT = { id: true, name: true, email: true, role: true } as const;
+
 // A file to attach to an outgoing message (multer's server-generated safe name = the storage key).
 export interface OutgoingAttachment {
   filename: string;
@@ -13,12 +20,7 @@ export interface OutgoingAttachment {
   size: number;
 }
 
-// Direct 1-to-1 messaging. A Conversation stores its pair in canonical order (userAId < userBId)
-// so there is exactly one thread per pair and find-or-create is deterministic. Each side has a
-// read cursor (lastReadAAt / lastReadBAt); a user's unread = messages from the OTHER side newer
-// than their own cursor.
-
-// Canonical ordering of a user pair.
+// Canonical ordering of a user pair (for the DIRECT dedup key).
 function pair(x: string, y: string): [string, string] {
   return x < y ? [x, y] : [y, x];
 }
@@ -42,49 +44,64 @@ function toWire(m: Message) {
   };
 }
 
-// Which side of the conversation `me` is on, plus the counterpart id.
-function side(conv: { userAId: string; userBId: string; lastReadAAt: Date | null; lastReadBAt: Date | null }, me: string) {
-  const isA = conv.userAId === me;
+type Contact = { id: string; name: string; email: string; role: string };
+type MemberRow = { userId: string; isAdmin: boolean; lastReadAt: Date | null; user: Contact };
+type ConvWithMembers = {
+  id: string;
+  type: 'DIRECT' | 'GROUP';
+  title: string | null;
+  projectId: string | null;
+  createdById: string | null;
+  members: MemberRow[];
+};
+
+// The display shape of a conversation for a given viewer: a DIRECT shows the counterpart; a GROUP
+// shows its title + member list.
+function describe(conv: ConvWithMembers, meId: string) {
+  const isGroup = conv.type === 'GROUP';
+  const other = isGroup ? null : conv.members.find((m) => m.userId !== meId)?.user ?? null;
+  const me = conv.members.find((m) => m.userId === meId);
   return {
-    isA,
-    otherId: isA ? conv.userBId : conv.userAId,
-    myCursor: isA ? conv.lastReadAAt : conv.lastReadBAt,
+    id: conv.id,
+    type: conv.type,
+    title: isGroup ? conv.title ?? 'Group' : other?.name ?? 'Unknown',
+    other: other ?? null,
+    members: conv.members.map((m) => ({ ...m.user, isAdmin: m.isAdmin })),
+    projectId: conv.projectId,
+    createdById: conv.createdById,
+    iAmAdmin: !!me?.isAdmin,
   };
 }
 
-// Users the caller can start a DM with: active, non-guest, not self.
+// Users the caller can start a DM / add to a group: active, non-guest, not self.
 export async function listContacts(meId: string) {
   return prisma.user.findMany({
     where: { isActive: true, role: { not: 'GUEST' }, id: { not: meId } },
-    select: { id: true, name: true, email: true, role: true },
+    select: CONTACT,
     orderBy: { name: 'asc' },
   });
 }
 
-// The caller's conversations, newest activity first, with the counterpart, a last-message
-// preview and the caller's unread count.
+const memberInclude = { members: { include: { user: { select: CONTACT } } } } as const;
+
+// The caller's conversations, newest activity first, with display info, last-message preview and
+// the caller's unread count.
 export async function listConversations(meId: string) {
   const convs = await prisma.conversation.findMany({
-    where: { OR: [{ userAId: meId }, { userBId: meId }] },
+    where: { members: { some: { userId: meId } } },
     orderBy: { lastMessageAt: 'desc' },
-    include: {
-      userA: { select: { id: true, name: true, email: true, role: true } },
-      userB: { select: { id: true, name: true, email: true, role: true } },
-      messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-    },
+    include: { ...memberInclude, messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
   });
 
   return Promise.all(
     convs.map(async (c) => {
-      const { isA, otherId, myCursor } = side(c, meId);
-      const other = isA ? c.userB : c.userA;
+      const myCursor = c.members.find((m) => m.userId === meId)?.lastReadAt ?? null;
       const last = c.messages[0] ?? null;
       const unread = await prisma.message.count({
-        where: { conversationId: c.id, senderId: otherId, ...(myCursor ? { createdAt: { gt: myCursor } } : {}) },
+        where: { conversationId: c.id, senderId: { not: meId }, ...(myCursor ? { createdAt: { gt: myCursor } } : {}) },
       });
       return {
-        id: c.id,
-        other: { id: other.id, name: other.name, email: other.email, role: other.role },
+        ...describe(c as ConvWithMembers, meId),
         lastMessage: last
           ? {
               // Preview text: a file-only message shows its filename with a paperclip.
@@ -103,37 +120,32 @@ export async function listConversations(meId: string) {
 
 // Total unread across all the caller's conversations — drives the header badge (polled).
 export async function getUnreadCount(meId: string): Promise<number> {
-  const convs = await prisma.conversation.findMany({
-    where: { OR: [{ userAId: meId }, { userBId: meId }] },
-    select: { id: true, userAId: true, userBId: true, lastReadAAt: true, lastReadBAt: true },
-  });
-  let total = 0;
-  for (const c of convs) {
-    const { otherId, myCursor } = side(c, meId);
-    total += await prisma.message.count({
-      where: { conversationId: c.id, senderId: otherId, ...(myCursor ? { createdAt: { gt: myCursor } } : {}) },
-    });
-  }
-  return total;
+  const mems = await prisma.conversationMember.findMany({ where: { userId: meId }, select: { conversationId: true, lastReadAt: true } });
+  const counts = await Promise.all(
+    mems.map((mem) =>
+      prisma.message.count({
+        where: { conversationId: mem.conversationId, senderId: { not: meId }, ...(mem.lastReadAt ? { createdAt: { gt: mem.lastReadAt } } : {}) },
+      }),
+    ),
+  );
+  return counts.reduce((a, b) => a + b, 0);
 }
 
-// Verify the caller belongs to the conversation and return it (with the counterpart).
-async function requireParticipant(meId: string, conversationId: string) {
-  const conv = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    include: {
-      userA: { select: { id: true, name: true, email: true, role: true } },
-      userB: { select: { id: true, name: true, email: true, role: true } },
-    },
-  });
-  if (!conv || (conv.userAId !== meId && conv.userBId !== meId)) throw NotFound('Conversation not found');
+// Verify the caller is a member and return the conversation (with members). Optionally require the
+// caller be a GROUP admin (for management actions).
+async function requireMember(meId: string, conversationId: string, opts: { admin?: boolean; group?: boolean } = {}) {
+  const conv = await prisma.conversation.findUnique({ where: { id: conversationId }, include: memberInclude });
+  const me = conv?.members.find((m) => m.userId === meId);
+  if (!conv || !me) throw NotFound('Conversation not found');
+  if (opts.group && conv.type !== 'GROUP') throw BadRequest('Not a group conversation');
+  if (opts.admin && !me.isAdmin) throw Forbidden('Only a group admin can do that');
   return conv;
 }
 
 // Messages in a conversation (optionally only those after `afterId`, for lightweight polling).
 // Reading marks the caller's cursor so their unread resets.
 export async function getConversationMessages(meId: string, conversationId: string, afterId?: string) {
-  const conv = await requireParticipant(meId, conversationId);
+  const conv = await requireMember(meId, conversationId);
 
   let after: Date | undefined;
   if (afterId) {
@@ -148,56 +160,136 @@ export async function getConversationMessages(meId: string, conversationId: stri
   });
 
   await markRead(meId, conversationId);
-
-  const { isA, otherId } = side(conv, meId);
-  const other = isA ? conv.userB : conv.userA;
-  return { conversationId, other: { id: other.id, name: other.name, email: other.email, role: other.role }, messages: messages.map(toWire) };
+  return { conversationId, ...describe(conv as ConvWithMembers, meId), messages: messages.map(toWire) };
 }
 
 // Advance the caller's read cursor to now.
 export async function markRead(meId: string, conversationId: string) {
-  const conv = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { userAId: true, userBId: true } });
-  if (!conv || (conv.userAId !== meId && conv.userBId !== meId)) throw NotFound('Conversation not found');
-  const field = conv.userAId === meId ? 'lastReadAAt' : 'lastReadBAt';
-  await prisma.conversation.update({ where: { id: conversationId }, data: { [field]: new Date() } });
+  const updated = await prisma.conversationMember.updateMany({
+    where: { conversationId, userId: meId },
+    data: { lastReadAt: new Date() },
+  });
+  if (updated.count === 0) throw NotFound('Conversation not found');
   return { ok: true };
 }
 
-// Send a message to a user, creating the (canonical) conversation if needed. An optional file may
-// be attached; a message must carry text OR a file. The sender's own cursor is advanced.
+function attachmentData(attachment?: OutgoingAttachment) {
+  return attachment
+    ? { attachmentKey: attachment.filename, attachmentName: attachment.originalname, attachmentMime: attachment.mimetype, attachmentSize: attachment.size }
+    : {};
+}
+
+// Create a message, bump the conversation activity time and advance the sender's own read cursor.
+async function postMessage(meId: string, conversationId: string, body: string, attachment?: OutgoingAttachment) {
+  if (!body.trim() && !attachment) throw BadRequest('Message cannot be empty');
+  const now = new Date();
+  const message = await prisma.message.create({ data: { conversationId, senderId: meId, body, ...attachmentData(attachment) } });
+  await prisma.conversationMember.updateMany({ where: { conversationId, userId: meId }, data: { lastReadAt: now } });
+  await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } });
+  return { conversationId, message: toWire(message) };
+}
+
+// Send a DM to a user, creating the canonical conversation (+ both memberships) if needed.
 export async function sendMessageTo(meId: string, toUserId: string, body: string, attachment?: OutgoingAttachment) {
   if (toUserId === meId) throw BadRequest('Cannot message yourself');
   if (!body.trim() && !attachment) throw BadRequest('Message cannot be empty');
-  const recipient = await prisma.user.findFirst({
-    where: { id: toUserId, isActive: true, role: { not: 'GUEST' } },
-    select: { id: true },
-  });
+  const recipient = await prisma.user.findFirst({ where: { id: toUserId, isActive: true, role: { not: 'GUEST' } }, select: { id: true } });
   if (!recipient) throw NotFound('Recipient not found');
 
   const [aId, bId] = pair(meId, toUserId);
   const now = new Date();
   const conv = await prisma.conversation.upsert({
     where: { userAId_userBId: { userAId: aId, userBId: bId } },
-    create: { userAId: aId, userBId: bId, lastMessageAt: now },
+    create: { type: 'DIRECT', userAId: aId, userBId: bId, lastMessageAt: now, members: { create: [{ userId: aId }, { userId: bId }] } },
     update: {},
-    select: { id: true, userAId: true },
+    select: { id: true },
   });
+  return postMessage(meId, conv.id, body, attachment);
+}
 
-  const message = await prisma.message.create({
+// Send a message to an existing conversation the caller belongs to (DIRECT or GROUP).
+export async function sendToConversation(meId: string, conversationId: string, body: string, attachment?: OutgoingAttachment) {
+  await requireMember(meId, conversationId);
+  return postMessage(meId, conversationId, body, attachment);
+}
+
+// Create a GROUP conversation. The creator is an admin; `memberIds` are the other members (deduped,
+// must be active non-guests). `projectId` optionally links it to a project (display only).
+export async function createGroup(meId: string, rawTitle: string, memberIds: string[], projectId?: string) {
+  const title = rawTitle.trim();
+  if (!title) throw BadRequest('A group needs a name');
+  if (title.length > 120) throw BadRequest('Group name is too long');
+  const others = [...new Set(memberIds)].filter((id) => id !== meId);
+  if (others.length < 2) throw BadRequest('Add at least two other people to start a group');
+
+  const valid = await prisma.user.findMany({ where: { id: { in: others }, isActive: true, role: { not: 'GUEST' } }, select: { id: true } });
+  if (valid.length !== others.length) throw BadRequest('One or more members are not valid');
+
+  const now = new Date();
+  const conv = await prisma.conversation.create({
     data: {
-      conversationId: conv.id,
-      senderId: meId,
-      body,
-      ...(attachment
-        ? { attachmentKey: attachment.filename, attachmentName: attachment.originalname, attachmentMime: attachment.mimetype, attachmentSize: attachment.size }
-        : {}),
+      type: 'GROUP',
+      title,
+      projectId: projectId || null,
+      createdById: meId,
+      lastMessageAt: now,
+      members: { create: [{ userId: meId, isAdmin: true, lastReadAt: now }, ...others.map((id) => ({ userId: id }))] },
     },
+    include: memberInclude,
   });
-  // Bump activity + advance the sender's own read cursor.
-  const senderField = conv.userAId === meId ? 'lastReadAAt' : 'lastReadBAt';
-  await prisma.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: now, [senderField]: now } });
+  return describe(conv as ConvWithMembers, meId);
+}
 
-  return { conversationId: conv.id, message: toWire(message) };
+// Add members to a group (admin only). Silently skips users who are already members.
+export async function addGroupMembers(meId: string, conversationId: string, userIds: string[]) {
+  const conv = await requireMember(meId, conversationId, { group: true, admin: true });
+  const existing = new Set(conv.members.map((m) => m.userId));
+  const toAdd = [...new Set(userIds)].filter((id) => !existing.has(id));
+  if (toAdd.length) {
+    const valid = await prisma.user.findMany({ where: { id: { in: toAdd }, isActive: true, role: { not: 'GUEST' } }, select: { id: true } });
+    await prisma.conversationMember.createMany({ data: valid.map((u) => ({ conversationId, userId: u.id })), skipDuplicates: true });
+  }
+  const fresh = await prisma.conversation.findUnique({ where: { id: conversationId }, include: memberInclude });
+  return describe(fresh as ConvWithMembers, meId);
+}
+
+// Remove a member from a group (admin only). Use leaveGroup to remove yourself.
+export async function removeGroupMember(meId: string, conversationId: string, userId: string) {
+  await requireMember(meId, conversationId, { group: true, admin: true });
+  if (userId === meId) throw BadRequest('Use "leave group" to remove yourself');
+  await prisma.conversationMember.deleteMany({ where: { conversationId, userId } });
+  const fresh = await prisma.conversation.findUnique({ where: { id: conversationId }, include: memberInclude });
+  return describe(fresh as ConvWithMembers, meId);
+}
+
+// Rename a group (admin only).
+export async function renameGroup(meId: string, conversationId: string, rawTitle: string) {
+  await requireMember(meId, conversationId, { group: true, admin: true });
+  const title = rawTitle.trim();
+  if (!title) throw BadRequest('A group needs a name');
+  if (title.length > 120) throw BadRequest('Group name is too long');
+  const conv = await prisma.conversation.update({ where: { id: conversationId }, data: { title }, include: memberInclude });
+  return describe(conv as ConvWithMembers, meId);
+}
+
+// Leave a group. If the caller was the last admin, the earliest remaining member is promoted so the
+// group is never adminless. If no members remain, the conversation (and its files) are removed.
+export async function leaveGroup(meId: string, conversationId: string) {
+  const conv = await requireMember(meId, conversationId, { group: true });
+  await prisma.conversationMember.deleteMany({ where: { conversationId, userId: meId } });
+
+  const remaining = await prisma.conversationMember.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } });
+  if (remaining.length === 0) {
+    // Purge any attached files, then the conversation (messages cascade).
+    const withFiles = await prisma.message.findMany({ where: { conversationId, attachmentKey: { not: null } }, select: { attachmentKey: true } });
+    for (const m of withFiles) {
+      try { fs.unlinkSync(path.join(UPLOAD_DIR, m.attachmentKey!)); } catch { /* already gone */ }
+    }
+    await prisma.conversation.delete({ where: { id: conversationId } });
+  } else if (!remaining.some((m) => m.isAdmin)) {
+    await prisma.conversationMember.update({ where: { id: remaining[0].id }, data: { isAdmin: true } });
+  }
+  return { ok: true };
 }
 
 // Load a message the caller OWNS and can still act on (not already deleted). Only the sender may
@@ -224,11 +316,7 @@ export async function editMessage(meId: string, messageId: string, body: string)
 export async function deleteMessage(meId: string, messageId: string) {
   const m = await requireOwnMessage(meId, messageId);
   if (m.attachmentKey) {
-    try {
-      fs.unlinkSync(path.join(UPLOAD_DIR, m.attachmentKey));
-    } catch {
-      /* file already gone — proceed */
-    }
+    try { fs.unlinkSync(path.join(UPLOAD_DIR, m.attachmentKey)); } catch { /* file already gone — proceed */ }
   }
   const updated = await prisma.message.update({
     where: { id: messageId },
@@ -242,57 +330,53 @@ export async function deleteMessage(meId: string, messageId: string) {
 export async function getMessageFile(meId: string, messageId: string) {
   const m = await prisma.message.findUnique({ where: { id: messageId } });
   if (!m || m.deletedAt || !m.attachmentKey) throw NotFound('Attachment not found');
-  const conv = await prisma.conversation.findUnique({ where: { id: m.conversationId }, select: { userAId: true, userBId: true } });
-  if (!conv || (conv.userAId !== meId && conv.userBId !== meId)) throw NotFound('Attachment not found');
+  const member = await prisma.conversationMember.findUnique({ where: { conversationId_userId: { conversationId: m.conversationId, userId: meId } }, select: { id: true } });
+  if (!member) throw NotFound('Attachment not found');
   const absPath = path.join(UPLOAD_DIR, m.attachmentKey);
   if (!fs.existsSync(absPath)) throw NotFound('File missing on storage');
   return { absPath, name: m.attachmentName ?? 'file', mime: m.attachmentMime ?? 'application/octet-stream' };
 }
 
-// Full-text-ish search over the caller's own conversations (case-insensitive substring on body),
-// optionally scoped to one conversation. Deleted messages are excluded. Each hit carries its
-// conversation + counterpart so the client can deep-link straight into the thread.
+// Case-insensitive substring search over the caller's conversations (body OR attachment filename),
+// optionally scoped to one conversation. Deleted messages excluded. Each hit carries its
+// conversation's display info + the sender name so the client can deep-link into the thread.
 export async function searchMessages(meId: string, rawQuery: string, conversationId?: string) {
   const q = rawQuery.trim();
   if (q.length < 2) return { query: q, results: [] as unknown[] };
 
   const convs = await prisma.conversation.findMany({
-    where: {
-      OR: [{ userAId: meId }, { userBId: meId }],
-      ...(conversationId ? { id: conversationId } : {}),
-    },
-    include: {
-      userA: { select: { id: true, name: true, email: true, role: true } },
-      userB: { select: { id: true, name: true, email: true, role: true } },
-    },
+    where: { members: { some: { userId: meId } }, ...(conversationId ? { id: conversationId } : {}) },
+    include: memberInclude,
   });
   if (convs.length === 0) return { query: q, results: [] };
 
-  const otherById = new Map(convs.map((c) => [c.id, c.userAId === meId ? c.userB : c.userA]));
+  const displayById = new Map(convs.map((c) => [c.id, describe(c as ConvWithMembers, meId)]));
 
   const hits = await prisma.message.findMany({
     where: {
       conversationId: { in: convs.map((c) => c.id) },
       deletedAt: null,
-      OR: [
-        { body: { contains: q, mode: 'insensitive' } },
-        { attachmentName: { contains: q, mode: 'insensitive' } },
-      ],
+      OR: [{ body: { contains: q, mode: 'insensitive' } }, { attachmentName: { contains: q, mode: 'insensitive' } }],
     },
     orderBy: { createdAt: 'desc' },
     take: 50,
+    include: { sender: { select: { name: true } } },
   });
 
   return {
     query: q,
-    results: hits.map((m) => ({
-      id: m.id,
-      conversationId: m.conversationId,
-      senderId: m.senderId,
-      // Fall back to the filename so a file-only hit still shows something meaningful.
-      body: m.body || (m.attachmentName ? `📎 ${m.attachmentName}` : ''),
-      createdAt: m.createdAt,
-      other: otherById.get(m.conversationId)!,
-    })),
+    results: hits.map((m) => {
+      const d = displayById.get(m.conversationId)!;
+      return {
+        id: m.id,
+        conversationId: m.conversationId,
+        senderId: m.senderId,
+        senderName: m.sender.name,
+        // Fall back to the filename so a file-only hit still shows something meaningful.
+        body: m.body || (m.attachmentName ? `📎 ${m.attachmentName}` : ''),
+        createdAt: m.createdAt,
+        conversation: { id: d.id, type: d.type, title: d.title, other: d.other },
+      };
+    }),
   };
 }

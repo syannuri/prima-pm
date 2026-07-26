@@ -7,7 +7,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { BadRequest, Forbidden } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
-import { sendMessageSchema, editMessageSchema } from './messages.schemas.js';
+import { sendMessageSchema, editMessageSchema, createGroupSchema, addMembersSchema, renameGroupSchema } from './messages.schemas.js';
 import {
   listContacts,
   listConversations,
@@ -15,10 +15,16 @@ import {
   getConversationMessages,
   markRead,
   sendMessageTo,
+  sendToConversation,
   editMessage,
   deleteMessage,
   searchMessages,
   getMessageFile,
+  createGroup,
+  addGroupMembers,
+  removeGroupMember,
+  renameGroup,
+  leaveGroup,
 } from './messages.service.js';
 
 // Chat file uploads reuse the shared uploads/ dir + the same document/image whitelist and 10 MB
@@ -86,6 +92,43 @@ router.get('/conversations/:id', asyncHandler(async (req, res) => {
 // Mark a conversation read.
 router.post('/conversations/:id/read', asyncHandler(async (req, res) => {
   res.json(await markRead(req.user!.id, req.params.id));
+}));
+
+// Send a message to an existing conversation the caller belongs to (DIRECT or GROUP).
+router.post('/conversations/:id/messages', validateBody(sendMessageSchema), asyncHandler(async (req, res) => {
+  res.status(201).json(await sendToConversation(req.user!.id, req.params.id, req.body.body));
+}));
+
+// Send a message with a file to an existing conversation (multipart: file + optional body).
+router.post('/conversations/:id/messages/attachment', upload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) throw BadRequest('file is required');
+  const body = typeof req.body.body === 'string' ? req.body.body.slice(0, 4000) : '';
+  res.status(201).json(await sendToConversation(req.user!.id, req.params.id, body, req.file));
+}));
+
+// Create a group conversation.
+router.post('/groups', validateBody(createGroupSchema), asyncHandler(async (req, res) => {
+  res.status(201).json({ conversation: await createGroup(req.user!.id, req.body.title, req.body.memberIds, req.body.projectId) });
+}));
+
+// Rename a group (admin only).
+router.patch('/conversations/:id', validateBody(renameGroupSchema), asyncHandler(async (req, res) => {
+  res.json({ conversation: await renameGroup(req.user!.id, req.params.id, req.body.title) });
+}));
+
+// Add members to a group (admin only).
+router.post('/conversations/:id/members', validateBody(addMembersSchema), asyncHandler(async (req, res) => {
+  res.json({ conversation: await addGroupMembers(req.user!.id, req.params.id, req.body.userIds) });
+}));
+
+// Remove a member from a group (admin only).
+router.delete('/conversations/:id/members/:userId', asyncHandler(async (req, res) => {
+  res.json({ conversation: await removeGroupMember(req.user!.id, req.params.id, req.params.userId) });
+}));
+
+// Leave a group.
+router.post('/conversations/:id/leave', asyncHandler(async (req, res) => {
+  res.json(await leaveGroup(req.user!.id, req.params.id));
 }));
 
 // Send a message to a user (find-or-create the conversation).

@@ -7,3 +7,17 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
 // Editing reuses the same body constraints as sending.
 export const editMessageSchema = sendMessageSchema;
+
+export const createGroupSchema = z.object({
+  title: z.string().trim().min(1, 'A group needs a name').max(120),
+  memberIds: z.array(z.string()).min(2, 'Add at least two other people'),
+  projectId: z.string().optional(),
+});
+
+export const addMembersSchema = z.object({
+  userIds: z.array(z.string()).min(1),
+});
+
+export const renameGroupSchema = z.object({
+  title: z.string().trim().min(1, 'A group needs a name').max(120),
+});

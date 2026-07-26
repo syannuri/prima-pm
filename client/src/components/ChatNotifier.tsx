@@ -40,7 +40,7 @@ export default function ChatNotifier() {
       if (first) continue;
       const lm = c.lastMessage;
       const isNew = lm && lm.senderId !== me && c.unread > 0 && (!prev || new Date(c.lastMessageAt) > new Date(prev));
-      if (isNew) alertNew(c.other.name, lm!.body);
+      if (isNew) alertNew(c.title, lm!.body);
     }
     init.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps

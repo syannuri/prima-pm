@@ -230,6 +230,7 @@ model User {
   sentMessages      Message[]       @relation("MessageSender")
   conversationsA    Conversation[]  @relation("ConvUserA")
   conversationsB    Conversation[]  @relation("ConvUserB")
+  conversationMemberships ConversationMember[] @relation("ConvMemberUser")
 
   @@index([role])
 }
@@ -1078,21 +1079,51 @@ model Notification {
 // enforced by storing the pair in canonical order (userAId < userBId string compare) with a
 // unique constraint — so find-or-create is deterministic. `lastReadA/BAt` are each side's read
 // cursor: a user's unread count = messages from the OTHER side newer than their own cursor.
+enum ConversationType {
+  DIRECT
+  GROUP
+}
+
 model Conversation {
-  id            String    @id @default(uuid())
-  userAId       String
-  userBId       String
-  userA         User      @relation("ConvUserA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB         User      @relation("ConvUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  id            String           @id @default(uuid())
+  type          ConversationType @default(DIRECT)
+  // DIRECT only: the canonical (userAId < userBId) pair — the dedup key so a 1-1 thread is unique.
+  // NULL for GROUP conversations. lastReadA/BAt are legacy per-side cursors, superseded by
+  // ConversationMember.lastReadAt (kept for the backfill source; not read anymore).
+  userAId       String?
+  userBId       String?
+  userA         User?            @relation("ConvUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB         User?            @relation("ConvUserB", fields: [userBId], references: [id], onDelete: Cascade)
   lastReadAAt   DateTime?
   lastReadBAt   DateTime?
-  lastMessageAt DateTime  @default(now())
-  createdAt     DateTime  @default(now())
+  // GROUP only: display title, optional linked project (plain id, no FK — like closedById), creator.
+  title         String?
+  projectId     String?
+  createdById   String?
+  lastMessageAt DateTime         @default(now())
+  createdAt     DateTime         @default(now())
   messages      Message[]
+  members       ConversationMember[]
 
   @@unique([userAId, userBId])
   @@index([userAId, lastMessageAt])
   @@index([userBId, lastMessageAt])
+}
+
+// Membership + per-member read cursor for a conversation. Unifies DIRECT (2 members) and GROUP
+// (N members): a member's unread = messages from OTHERS newer than their lastReadAt.
+model ConversationMember {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("ConvMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+  isAdmin        Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId])
 }
 
 // A single chat message within a Conversation.

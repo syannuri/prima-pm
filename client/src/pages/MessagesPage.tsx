@@ -1,34 +1,46 @@
 import { useState } from 'react';
 import { PanelLoading, Card } from '../components/ui';
-import { useChat, ConversationList, ContactPicker, ChatThread, SearchResults, ChatSearchBox } from '../components/chat/chatCore';
+import { useChat, ConversationList, ContactPicker, ChatThread, SearchResults, ChatSearchBox, NewGroupForm } from '../components/chat/chatCore';
 import type { ChatContact } from '../api/types';
 
 export default function MessagesPage() {
   const chat = useChat();
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useState<null | 'dm' | 'group'>(null);
 
-  const toggleNew = () => { setShowNew((s) => { if (!s) chat.loadContacts(); return !s; }); };
-  const pick = (c: ChatContact) => { setShowNew(false); chat.openContact(c); };
+  const openNew = (mode: 'dm' | 'group') => { setShowNew((s) => (s === mode ? null : mode)); if (mode === 'dm') chat.loadContacts(); };
+  const pick = (c: ChatContact) => { setShowNew(null); chat.openContact(c); };
 
   if (chat.loading) return <PanelLoading />;
   const active = chat.active;
 
   return (
     <div className="space-y-4">
-      <div className={`items-center justify-between ${active ? 'hidden sm:flex' : 'flex'}`}>
+      <div className={`items-center justify-between gap-2 ${active ? 'hidden sm:flex' : 'flex'}`}>
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 sm:text-2xl">Messages</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Private 1-to-1 chat with your team</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Direct chat &amp; group channels for your team</p>
         </div>
-        <button onClick={toggleNew} className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700">
-          <span className="text-base leading-none">＋</span> {showNew ? 'Close' : 'New message'}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button onClick={() => openNew('group')} className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-semibold transition ${showNew === 'group' ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-900/20' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+            <span className="text-base leading-none">👥</span> {showNew === 'group' ? 'Close' : 'New group'}
+          </button>
+          <button onClick={() => openNew('dm')} className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700">
+            <span className="text-base leading-none">＋</span> {showNew === 'dm' ? 'Close' : 'New message'}
+          </button>
+        </div>
       </div>
 
-      {showNew && (
+      {showNew === 'dm' && (
         <Card className="!p-0 overflow-hidden !rounded-2xl">
           <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800">Start a conversation</div>
           <div className="max-h-72 overflow-y-auto"><ContactPicker contacts={chat.contacts} loading={chat.contactsLoading} onPick={pick} /></div>
+        </Card>
+      )}
+
+      {showNew === 'group' && (
+        <Card className="!p-0 overflow-hidden !rounded-2xl">
+          <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800">New group channel</div>
+          <NewGroupForm chat={chat} onCreated={() => setShowNew(null)} />
         </Card>
       )}
 

@@ -834,9 +834,22 @@ export interface ChatMessage {
   deleted?: boolean;
   attachment?: ChatAttachment | null;
 }
-export interface ChatConversation {
+export type ChatConversationType = 'DIRECT' | 'GROUP';
+export interface ChatMember extends ChatContact {
+  isAdmin: boolean;
+}
+// Common display fields for a conversation (DIRECT shows the counterpart, GROUP a title + members).
+export interface ChatConversationBase {
   id: string;
-  other: ChatContact;
+  type: ChatConversationType;
+  title: string;
+  other: ChatContact | null;
+  members: ChatMember[];
+  projectId?: string | null;
+  createdById?: string | null;
+  iAmAdmin?: boolean;
+}
+export interface ChatConversation extends ChatConversationBase {
   lastMessage: { body: string; senderId: string; createdAt: string; deleted?: boolean } | null;
   lastMessageAt: string;
   unread: number;
@@ -845,12 +858,12 @@ export interface ChatSearchResult {
   id: string;
   conversationId: string;
   senderId: string;
+  senderName: string;
   body: string;
   createdAt: string;
-  other: ChatContact;
+  conversation: { id: string; type: ChatConversationType; title: string; other: ChatContact | null };
 }
-export interface ChatThread {
+export interface ChatThread extends ChatConversationBase {
   conversationId: string;
-  other: ChatContact;
   messages: ChatMessage[];
 }
