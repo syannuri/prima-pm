@@ -10,6 +10,7 @@ import CommandPalette from './CommandPalette';
 import MobileTabBar from './MobileTabBar';
 import ChatWidget from './ChatWidget';
 import ChatNotifier from './ChatNotifier';
+import ChatStream from './ChatStream';
 import AvatarMenu from './AvatarMenu';
 import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
@@ -187,6 +188,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       <InstallPrompt />
+      <ChatStream />
       <ChatNotifier />
       <ChatWidget />
       <MobileTabBar />

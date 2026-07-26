@@ -7,6 +7,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { BadRequest, Forbidden } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
+import { addClient, removeClient, startSseHeartbeat } from './sse.js';
 import { sendMessageSchema, editMessageSchema, createGroupSchema, addMembersSchema, renameGroupSchema } from './messages.schemas.js';
 import {
   listContacts,
@@ -74,6 +75,24 @@ router.get('/conversations', asyncHandler(async (req, res) => {
 router.get('/unread-count', asyncHandler(async (req, res) => {
   res.json({ unread: await getUnreadCount(req.user!.id) });
 }));
+
+// Real-time event stream (SSE). Pushes tiny { conversationId } pokes on `message`/`conversation`
+// events so the client refetches instantly instead of waiting for the poll. `X-Accel-Buffering: no`
+// disables nginx buffering for this response; the shared 25s heartbeat keeps it alive.
+startSseHeartbeat();
+router.get('/stream', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+  res.write('retry: 5000\n\n'); // client reconnect backoff hint
+  const userId = req.user!.id;
+  addClient(userId, res);
+  req.on('close', () => removeClient(userId, res));
+});
 
 // Search the caller's messages (optionally within one conversation via ?conversationId=).
 router.get('/search', asyncHandler(async (req, res) => {

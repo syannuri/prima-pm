@@ -4,6 +4,18 @@ import type { Message } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
+import { publishToUsers } from './sse.js';
+
+// Push a real-time "poke" to a conversation's members (+ any extra users, e.g. a just-removed
+// member so their list updates). Best-effort — a delivery failure never breaks the mutation.
+async function notify(conversationId: string, event: 'message' | 'conversation', extraUserIds: string[] = []) {
+  try {
+    const members = await prisma.conversationMember.findMany({ where: { conversationId }, select: { userId: true } });
+    const ids = new Set<string>(extraUserIds);
+    for (const m of members) ids.add(m.userId);
+    publishToUsers(ids, event, { conversationId });
+  } catch { /* never let notification failure break the write */ }
+}
 
 // Chat = DIRECT (1-to-1) and GROUP conversations, unified by a ConversationMember join with a
 // per-member read cursor (lastReadAt). A DIRECT thread is deduped by the canonical (userAId <
@@ -186,6 +198,7 @@ async function postMessage(meId: string, conversationId: string, body: string, a
   const message = await prisma.message.create({ data: { conversationId, senderId: meId, body, ...attachmentData(attachment) } });
   await prisma.conversationMember.updateMany({ where: { conversationId, userId: meId }, data: { lastReadAt: now } });
   await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } });
+  await notify(conversationId, 'message');
   return { conversationId, message: toWire(message) };
 }
 
@@ -237,6 +250,7 @@ export async function createGroup(meId: string, rawTitle: string, memberIds: str
     },
     include: memberInclude,
   });
+  await notify(conv.id, 'conversation');
   return describe(conv as ConvWithMembers, meId);
 }
 
@@ -250,6 +264,7 @@ export async function addGroupMembers(meId: string, conversationId: string, user
     await prisma.conversationMember.createMany({ data: valid.map((u) => ({ conversationId, userId: u.id })), skipDuplicates: true });
   }
   const fresh = await prisma.conversation.findUnique({ where: { id: conversationId }, include: memberInclude });
+  await notify(conversationId, 'conversation');
   return describe(fresh as ConvWithMembers, meId);
 }
 
@@ -259,6 +274,7 @@ export async function removeGroupMember(meId: string, conversationId: string, us
   if (userId === meId) throw BadRequest('Use "leave group" to remove yourself');
   await prisma.conversationMember.deleteMany({ where: { conversationId, userId } });
   const fresh = await prisma.conversation.findUnique({ where: { id: conversationId }, include: memberInclude });
+  await notify(conversationId, 'conversation', [userId]); // include the removed user so their list drops it
   return describe(fresh as ConvWithMembers, meId);
 }
 
@@ -269,6 +285,7 @@ export async function renameGroup(meId: string, conversationId: string, rawTitle
   if (!title) throw BadRequest('A group needs a name');
   if (title.length > 120) throw BadRequest('Group name is too long');
   const conv = await prisma.conversation.update({ where: { id: conversationId }, data: { title }, include: memberInclude });
+  await notify(conversationId, 'conversation');
   return describe(conv as ConvWithMembers, meId);
 }
 
@@ -276,6 +293,7 @@ export async function renameGroup(meId: string, conversationId: string, rawTitle
 // group is never adminless. If no members remain, the conversation (and its files) are removed.
 export async function leaveGroup(meId: string, conversationId: string) {
   const conv = await requireMember(meId, conversationId, { group: true });
+  const audience = conv.members.map((m) => m.userId); // capture BEFORE leaving (incl. the leaver)
   await prisma.conversationMember.deleteMany({ where: { conversationId, userId: meId } });
 
   const remaining = await prisma.conversationMember.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } });
@@ -289,6 +307,7 @@ export async function leaveGroup(meId: string, conversationId: string) {
   } else if (!remaining.some((m) => m.isAdmin)) {
     await prisma.conversationMember.update({ where: { id: remaining[0].id }, data: { isAdmin: true } });
   }
+  try { publishToUsers(audience, 'conversation', { conversationId }); } catch { /* best-effort */ }
   return { ok: true };
 }
 
@@ -305,8 +324,9 @@ async function requireOwnMessage(meId: string, messageId: string) {
 // Edit the body of one's own message. Stamps editedAt; does NOT reorder the conversation
 // (lastMessageAt is unchanged) so an edit never bumps a thread to the top.
 export async function editMessage(meId: string, messageId: string, body: string) {
-  await requireOwnMessage(meId, messageId);
+  const existing = await requireOwnMessage(meId, messageId);
   const updated = await prisma.message.update({ where: { id: messageId }, data: { body, editedAt: new Date() } });
+  await notify(existing.conversationId, 'message');
   return { message: toWire(updated) };
 }
 
@@ -322,6 +342,7 @@ export async function deleteMessage(meId: string, messageId: string) {
     where: { id: messageId },
     data: { deletedAt: new Date(), attachmentKey: null, attachmentName: null, attachmentMime: null, attachmentSize: null },
   });
+  await notify(m.conversationId, 'message');
   return { message: toWire(updated) };
 }
 
