@@ -1104,6 +1104,8 @@ model Message {
   sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   body           String       @db.Text
   createdAt      DateTime     @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
 
   @@index([conversationId, createdAt])
 }

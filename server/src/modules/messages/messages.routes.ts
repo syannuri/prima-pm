@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { Forbidden } from '../../lib/errors.js';
-import { sendMessageSchema } from './messages.schemas.js';
+import { sendMessageSchema, editMessageSchema } from './messages.schemas.js';
 import {
   listContacts,
   listConversations,
@@ -11,6 +11,9 @@ import {
   getConversationMessages,
   markRead,
   sendMessageTo,
+  editMessage,
+  deleteMessage,
+  searchMessages,
 } from './messages.service.js';
 
 // Private 1-to-1 direct messaging. Mounted at /api/v1/messages. Sandboxed GUEST accounts are
@@ -37,6 +40,13 @@ router.get('/unread-count', asyncHandler(async (req, res) => {
   res.json({ unread: await getUnreadCount(req.user!.id) });
 }));
 
+// Search the caller's messages (optionally within one conversation via ?conversationId=).
+router.get('/search', asyncHandler(async (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  const conversationId = typeof req.query.conversationId === 'string' ? req.query.conversationId : undefined;
+  res.json(await searchMessages(req.user!.id, q, conversationId));
+}));
+
 // Messages in a conversation (optionally only those after ?after=<messageId>, for polling).
 // Reading marks the caller's cursor.
 router.get('/conversations/:id', asyncHandler(async (req, res) => {
@@ -53,6 +63,16 @@ router.post('/conversations/:id/read', asyncHandler(async (req, res) => {
 router.post('/to/:userId', validateBody(sendMessageSchema), asyncHandler(async (req, res) => {
   const result = await sendMessageTo(req.user!.id, req.params.userId, req.body.body);
   res.status(201).json(result);
+}));
+
+// Edit one's own message.
+router.patch('/messages/:id', validateBody(editMessageSchema), asyncHandler(async (req, res) => {
+  res.json(await editMessage(req.user!.id, req.params.id, req.body.body));
+}));
+
+// Soft-delete one's own message.
+router.delete('/messages/:id', asyncHandler(async (req, res) => {
+  res.json(await deleteMessage(req.user!.id, req.params.id));
 }));
 
 export default router;

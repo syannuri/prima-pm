@@ -1,5 +1,6 @@
+import type { Message } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { BadRequest, NotFound } from '../../lib/errors.js';
+import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 
 // Direct 1-to-1 messaging. A Conversation stores its pair in canonical order (userAId < userBId)
 // so there is exactly one thread per pair and find-or-create is deterministic. Each side has a
@@ -9,6 +10,21 @@ import { BadRequest, NotFound } from '../../lib/errors.js';
 // Canonical ordering of a user pair.
 function pair(x: string, y: string): [string, string] {
   return x < y ? [x, y] : [y, x];
+}
+
+// A message as sent to the client. A soft-deleted message keeps its row (so runs/threads stay
+// consistent) but its body is never serialized — the UI renders a "message was deleted" tombstone.
+function toWire(m: Message) {
+  const deleted = m.deletedAt !== null;
+  return {
+    id: m.id,
+    conversationId: m.conversationId,
+    senderId: m.senderId,
+    body: deleted ? '' : m.body,
+    createdAt: m.createdAt,
+    editedAt: m.editedAt,
+    deleted,
+  };
 }
 
 // Which side of the conversation `me` is on, plus the counterpart id.
@@ -54,7 +70,9 @@ export async function listConversations(meId: string) {
       return {
         id: c.id,
         other: { id: other.id, name: other.name, email: other.email, role: other.role },
-        lastMessage: last ? { body: last.body, senderId: last.senderId, createdAt: last.createdAt } : null,
+        lastMessage: last
+          ? { body: last.deletedAt ? '' : last.body, senderId: last.senderId, createdAt: last.createdAt, deleted: last.deletedAt !== null }
+          : null,
         lastMessageAt: c.lastMessageAt,
         unread,
       };
@@ -112,7 +130,7 @@ export async function getConversationMessages(meId: string, conversationId: stri
 
   const { isA, otherId } = side(conv, meId);
   const other = isA ? conv.userB : conv.userA;
-  return { conversationId, other: { id: other.id, name: other.name, email: other.email, role: other.role }, messages };
+  return { conversationId, other: { id: other.id, name: other.name, email: other.email, role: other.role }, messages: messages.map(toWire) };
 }
 
 // Advance the caller's read cursor to now.
@@ -148,5 +166,75 @@ export async function sendMessageTo(meId: string, toUserId: string, body: string
   const senderField = conv.userAId === meId ? 'lastReadAAt' : 'lastReadBAt';
   await prisma.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: now, [senderField]: now } });
 
-  return { conversationId: conv.id, message };
+  return { conversationId: conv.id, message: toWire(message) };
+}
+
+// Load a message the caller OWNS and can still act on (not already deleted). Only the sender may
+// edit or delete their own messages.
+async function requireOwnMessage(meId: string, messageId: string) {
+  const m = await prisma.message.findUnique({ where: { id: messageId } });
+  if (!m) throw NotFound('Message not found');
+  if (m.senderId !== meId) throw Forbidden('You can only change your own messages');
+  if (m.deletedAt) throw BadRequest('Message was deleted');
+  return m;
+}
+
+// Edit the body of one's own message. Stamps editedAt; does NOT reorder the conversation
+// (lastMessageAt is unchanged) so an edit never bumps a thread to the top.
+export async function editMessage(meId: string, messageId: string, body: string) {
+  await requireOwnMessage(meId, messageId);
+  const updated = await prisma.message.update({ where: { id: messageId }, data: { body, editedAt: new Date() } });
+  return { message: toWire(updated) };
+}
+
+// Soft-delete one's own message: the row stays (thread/cursor consistency) but the body is never
+// served again — the UI shows a "message was deleted" tombstone in its place.
+export async function deleteMessage(meId: string, messageId: string) {
+  await requireOwnMessage(meId, messageId);
+  const updated = await prisma.message.update({ where: { id: messageId }, data: { deletedAt: new Date() } });
+  return { message: toWire(updated) };
+}
+
+// Full-text-ish search over the caller's own conversations (case-insensitive substring on body),
+// optionally scoped to one conversation. Deleted messages are excluded. Each hit carries its
+// conversation + counterpart so the client can deep-link straight into the thread.
+export async function searchMessages(meId: string, rawQuery: string, conversationId?: string) {
+  const q = rawQuery.trim();
+  if (q.length < 2) return { query: q, results: [] as unknown[] };
+
+  const convs = await prisma.conversation.findMany({
+    where: {
+      OR: [{ userAId: meId }, { userBId: meId }],
+      ...(conversationId ? { id: conversationId } : {}),
+    },
+    include: {
+      userA: { select: { id: true, name: true, email: true, role: true } },
+      userB: { select: { id: true, name: true, email: true, role: true } },
+    },
+  });
+  if (convs.length === 0) return { query: q, results: [] };
+
+  const otherById = new Map(convs.map((c) => [c.id, c.userAId === meId ? c.userB : c.userA]));
+
+  const hits = await prisma.message.findMany({
+    where: {
+      conversationId: { in: convs.map((c) => c.id) },
+      deletedAt: null,
+      body: { contains: q, mode: 'insensitive' },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+
+  return {
+    query: q,
+    results: hits.map((m) => ({
+      id: m.id,
+      conversationId: m.conversationId,
+      senderId: m.senderId,
+      body: m.body,
+      createdAt: m.createdAt,
+      other: otherById.get(m.conversationId)!,
+    })),
+  };
 }

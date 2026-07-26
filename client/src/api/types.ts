@@ -825,13 +825,23 @@ export interface ChatMessage {
   senderId: string;
   body: string;
   createdAt: string;
+  editedAt?: string | null;
+  deleted?: boolean;
 }
 export interface ChatConversation {
   id: string;
   other: ChatContact;
-  lastMessage: { body: string; senderId: string; createdAt: string } | null;
+  lastMessage: { body: string; senderId: string; createdAt: string; deleted?: boolean } | null;
   lastMessageAt: string;
   unread: number;
+}
+export interface ChatSearchResult {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+  other: ChatContact;
 }
 export interface ChatThread {
   conversationId: string;
