@@ -210,6 +210,26 @@ export function useChat() {
       }).catch((e) => toast.error(e instanceof ApiError ? e.message : 'Failed to leave'));
     }
   };
+  // Per-user "delete conversation" = hide it from my list (reappears on a new message).
+  const hideConversation = () => {
+    const id = active?.convId;
+    if (!id || !window.confirm('Delete this conversation? It disappears from your list — it comes back if a new message arrives.')) return;
+    api.post(`/messages/conversations/${id}/hide`).then(() => {
+      setActive(null);
+      qc.invalidateQueries({ queryKey: ['chat-conversations'] });
+      qc.invalidateQueries({ queryKey: ['chat-unread'] });
+    }).catch((e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete conversation'));
+  };
+  // Admin: delete a group for everyone (destructive).
+  const deleteGroup = () => {
+    const id = active?.convId;
+    if (!id || !window.confirm('Delete this group for everyone? All messages and files are permanently removed.')) return;
+    api.del(`/messages/conversations/${id}`).then(() => {
+      setActive(null);
+      qc.invalidateQueries({ queryKey: ['chat-conversations'] });
+      qc.invalidateQueries({ queryKey: ['chat-unread'] });
+    }).catch((e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete group'));
+  };
 
   // Debounce the search box so we don't hit the API on every keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -293,7 +313,7 @@ export function useChat() {
     searchQuery, setSearchQuery, searchResults: searchQ.data ?? [], searchActive: debouncedQuery.length >= 2, searchLoading: searchQ.isFetching, openSearchResult,
     createGroup: (title: string, memberIds: string[], projectId?: string) => createGroupMut.mutate({ title, memberIds, projectId }),
     creatingGroup: createGroupMut.isPending,
-    renameGroup, addMembers, removeMember, leaveGroup,
+    renameGroup, addMembers, removeMember, leaveGroup, hideConversation, deleteGroup,
   };
 }
 
@@ -470,9 +490,10 @@ function ReactButton({ onPick }: { onPick: (emoji: string) => void }) {
 // supplies the sized/positioned container; this fills it (h-full flex-col). `safeArea` adds
 // top/bottom safe-area padding for the phone full-screen surface.
 export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = false, safeArea = false, headerRight }: { chat: ChatState; onBack: () => void; showBack?: boolean; backMobileOnly?: boolean; safeArea?: boolean; headerRight?: ReactNode }) {
-  const { active, header, grouped, me, draft, setDraft, submit, sending, endRef, editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing, removeMessage, attachFile, attaching, notifyTyping, toggleReaction } = chat;
+  const { active, header, grouped, me, draft, setDraft, submit, sending, endRef, editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing, removeMessage, attachFile, attaching, notifyTyping, toggleReaction, hideConversation, deleteGroup } = chat;
   const fileRef = useRef<HTMLInputElement>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const onlineSet = useOnline();
   const typingMap = useTypingMap();
   if (!active || !header) return null;
@@ -498,6 +519,18 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
           </span>
         </button>
         {isGroup && <button onClick={() => setShowInfo(true)} aria-label="Group info" title="Group info" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white/70 dark:hover:bg-slate-700"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 16v-4M12 8h.01" /></svg></button>}
+        <span className="relative shrink-0">
+          <button onClick={() => setMenuOpen((o) => !o)} aria-label="Conversation menu" title="More" className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-white/70 dark:hover:bg-slate-700"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg></button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
+              <div className="absolute right-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-left shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                <button onClick={() => { setMenuOpen(false); hideConversation(); }} className="block w-full px-3.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/60">Delete conversation</button>
+                {isGroup && header.iAmAdmin && <button onClick={() => { setMenuOpen(false); deleteGroup(); }} className="block w-full px-3.5 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Delete group for everyone</button>}
+              </div>
+            </>
+          )}
+        </span>
         {headerRight && <span className="flex shrink-0 items-center gap-1">{headerRight}</span>}
       </div>
       {showInfo && isGroup && <GroupInfoPanel chat={chat} onClose={() => setShowInfo(false)} />}

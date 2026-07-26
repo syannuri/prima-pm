@@ -1121,6 +1121,9 @@ model ConversationMember {
   user           User         @relation("ConvMemberUser", fields: [userId], references: [id], onDelete: Cascade)
   lastReadAt     DateTime?
   isAdmin        Boolean      @default(false)
+  // Per-user "delete conversation" = hide from my list; it reappears when a message arrives after
+  // hiddenAt (or when I reopen/post). NULL = visible.
+  hiddenAt       DateTime?
   createdAt      DateTime     @default(now())
 
   @@unique([conversationId, userId])

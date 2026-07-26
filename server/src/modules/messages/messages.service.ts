@@ -124,8 +124,14 @@ export async function listConversations(meId: string) {
     include: { ...memberInclude, messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
   });
 
+  // Hide conversations the caller "deleted" — unless a message arrived after they hid it.
+  const visible = convs.filter((c) => {
+    const mine = c.members.find((m) => m.userId === meId);
+    return !(mine?.hiddenAt && c.lastMessageAt <= mine.hiddenAt);
+  });
+
   return Promise.all(
-    convs.map(async (c) => {
+    visible.map(async (c) => {
       const myCursor = c.members.find((m) => m.userId === meId)?.lastReadAt ?? null;
       const last = c.messages[0] ?? null;
       const unread = await prisma.message.count({
@@ -199,7 +205,7 @@ export async function getConversationMessages(meId: string, conversationId: stri
 export async function markRead(meId: string, conversationId: string) {
   const updated = await prisma.conversationMember.updateMany({
     where: { conversationId, userId: meId },
-    data: { lastReadAt: new Date() },
+    data: { lastReadAt: new Date(), hiddenAt: null }, // reading a conversation un-hides it
   });
   if (updated.count === 0) throw NotFound('Conversation not found');
   return { ok: true };
@@ -216,7 +222,7 @@ async function postMessage(meId: string, conversationId: string, body: string, a
   if (!body.trim() && !attachment) throw BadRequest('Message cannot be empty');
   const now = new Date();
   const message = await prisma.message.create({ data: { conversationId, senderId: meId, body, ...attachmentData(attachment) } });
-  await prisma.conversationMember.updateMany({ where: { conversationId, userId: meId }, data: { lastReadAt: now } });
+  await prisma.conversationMember.updateMany({ where: { conversationId, userId: meId }, data: { lastReadAt: now, hiddenAt: null } });
   await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } });
   await notify(conversationId, 'message');
   return { conversationId, message: toWire(message, meId) };
@@ -327,6 +333,29 @@ export async function leaveGroup(meId: string, conversationId: string) {
   } else if (!remaining.some((m) => m.isAdmin)) {
     await prisma.conversationMember.update({ where: { id: remaining[0].id }, data: { isAdmin: true } });
   }
+  try { publishToUsers(audience, 'conversation', { conversationId }); } catch { /* best-effort */ }
+  return { ok: true };
+}
+
+// "Delete conversation" for the caller only (DM or group): hide it from their list + clear unread.
+// It reappears when a new message arrives (lastMessageAt > hiddenAt) or when they reopen/post.
+export async function hideConversation(meId: string, conversationId: string) {
+  const now = new Date();
+  const updated = await prisma.conversationMember.updateMany({ where: { conversationId, userId: meId }, data: { hiddenAt: now, lastReadAt: now } });
+  if (updated.count === 0) throw NotFound('Conversation not found');
+  return { ok: true };
+}
+
+// Delete a GROUP for EVERYONE (admin only): purge attachment files, cascade-delete the conversation
+// (members + messages + reactions), and notify all members so it drops from their lists.
+export async function deleteGroup(meId: string, conversationId: string) {
+  const conv = await requireMember(meId, conversationId, { group: true, admin: true });
+  const audience = conv.members.map((m) => m.userId);
+  const withFiles = await prisma.message.findMany({ where: { conversationId, attachmentKey: { not: null } }, select: { attachmentKey: true } });
+  for (const m of withFiles) {
+    try { fs.unlinkSync(path.join(UPLOAD_DIR, m.attachmentKey!)); } catch { /* already gone */ }
+  }
+  await prisma.conversation.delete({ where: { id: conversationId } });
   try { publishToUsers(audience, 'conversation', { conversationId }); } catch { /* best-effort */ }
   return { ok: true };
 }

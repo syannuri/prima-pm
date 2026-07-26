@@ -29,6 +29,8 @@ import {
   getConversationPartnerIds,
   typingSignal,
   toggleReaction,
+  hideConversation,
+  deleteGroup,
 } from './messages.service.js';
 
 // Chat file uploads reuse the shared uploads/ dir + the same document/image whitelist and 10 MB
@@ -166,6 +168,16 @@ router.delete('/conversations/:id/members/:userId', asyncHandler(async (req, res
 // Leave a group.
 router.post('/conversations/:id/leave', asyncHandler(async (req, res) => {
   res.json(await leaveGroup(req.user!.id, req.params.id));
+}));
+
+// "Delete conversation" for me only — hide it from my list (DM or group).
+router.post('/conversations/:id/hide', asyncHandler(async (req, res) => {
+  res.json(await hideConversation(req.user!.id, req.params.id));
+}));
+
+// Delete a group for everyone (admin only).
+router.delete('/conversations/:id', asyncHandler(async (req, res) => {
+  res.json(await deleteGroup(req.user!.id, req.params.id));
 }));
 
 // Send a message to a user (find-or-create the conversation).
