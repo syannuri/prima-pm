@@ -409,7 +409,10 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
     // Freeze the whole tab strip at the top of the scroll area so it stays visible while the
     // panel content scrolls under it. Negative insets let the opaque bg span edge-to-edge under
     // <main>'s padding; a hairline + shadow separate it from the scrolling content beneath.
-    <div className="sticky -top-6 z-20 -mx-4 border-b border-slate-200 bg-slate-50 px-4 pb-1 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:-mx-6 sm:px-6">
+    // z-[31] beats the WBS/Gantt sticky header (frozen th is !z-30) so, when the WBS box scrolls
+    // up under the strip, its column header tucks *behind* the opaque strip instead of painting
+    // over the tabs. Kept below the mobile drawer (z-40).
+    <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-50 px-4 pb-1 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:-mx-6 sm:px-6">
       {/* Level 1 — domain groups. Scrolls horizontally on narrow screens; a right-edge fade
           hints there are more groups to swipe to (hidden on md+ where they all fit). */}
       <div className="relative">
