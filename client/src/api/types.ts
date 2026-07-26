@@ -819,6 +819,11 @@ export interface ChatContact {
   email: string;
   role: Role;
 }
+export interface ChatAttachment {
+  name: string;
+  mime: string;
+  size: number;
+}
 export interface ChatMessage {
   id: string;
   conversationId: string;
@@ -827,6 +832,7 @@ export interface ChatMessage {
   createdAt: string;
   editedAt?: string | null;
   deleted?: boolean;
+  attachment?: ChatAttachment | null;
 }
 export interface ChatConversation {
   id: string;

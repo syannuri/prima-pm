@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError } from '../../api/client';
+import { api, ApiError, fileUrl } from '../../api/client';
 import type { ChatContact, ChatConversation, ChatMessage, ChatSearchResult, ChatThread } from '../../api/types';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../Toast';
@@ -111,6 +111,22 @@ export function useChat() {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete'),
   });
 
+  const sendFile = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (draft.trim()) fd.append('body', draft.trim()); // optional caption from the composer
+      return api.upload<{ conversationId: string }>(`/messages/to/${active!.contact.id}/attachment`, fd);
+    },
+    onSuccess: (res) => {
+      setDraft('');
+      if (!active?.convId) setActive((a) => (a ? { ...a, convId: res.conversationId } : a));
+      qc.invalidateQueries({ queryKey: ['chat-thread', res.conversationId] });
+      qc.invalidateQueries({ queryKey: ['chat-conversations'] });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to send file'),
+  });
+
   // Debounce the search box so we don't hit the API on every keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState('');
   useEffect(() => {
@@ -148,6 +164,7 @@ export function useChat() {
   };
   const closeThread = () => { setEditingId(null); setActive(null); };
   const submit = () => { const b = draft.trim(); if (b && !send.isPending) send.mutate(b); };
+  const attachFile = (file: File | null | undefined) => { if (file && !sendFile.isPending) sendFile.mutate(file); };
 
   const startEdit = (m: ChatMessage) => { setEditingId(m.id); setEditDraft(m.body); };
   const cancelEdit = () => { setEditingId(null); setEditDraft(''); };
@@ -166,6 +183,7 @@ export function useChat() {
     contacts: contactsQ.data ?? [], contactsLoading: contactsQ.isLoading, loadContacts: () => contactsQ.refetch(),
     active, openConversation, openContact, closeThread,
     grouped, draft, setDraft, submit, sending: send.isPending, endRef,
+    attachFile, attaching: sendFile.isPending,
     editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing: editMut.isPending, removeMessage,
     searchQuery, setSearchQuery, searchResults: searchQ.data ?? [], searchActive: debouncedQuery.length >= 2, searchLoading: searchQ.isFetching, openSearchResult,
   };
@@ -259,11 +277,38 @@ export function ChatSearchBox({ value, onChange }: { value: string; onChange: (v
   );
 }
 
+const humanSize = (b: number) => (b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`);
+
+// An attachment inside a bubble: images render inline (tap → open full size); other files show a
+// download chip. The <img>/download both ride the same-origin session cookie.
+function MessageAttachment({ m, mine }: { m: ChatMessage; mine: boolean }) {
+  if (!m.attachment) return null;
+  const url = fileUrl(`/messages/messages/${m.id}/file`);
+  if (m.attachment.mime.startsWith('image/')) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="mt-0.5 block overflow-hidden rounded-xl">
+        <img src={url} alt={m.attachment.name} loading="lazy" className="max-h-64 w-auto max-w-full rounded-xl object-cover" />
+      </a>
+    );
+  }
+  const download = () => { api.download(`/messages/messages/${m.id}/file`, m.attachment!.name).catch(() => {}); };
+  return (
+    <button onClick={download} className={`mt-0.5 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition ${mine ? 'bg-white/15 hover:bg-white/25' : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/60 dark:hover:bg-slate-700'}`}>
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-lg ${mine ? 'bg-white/20' : 'bg-white dark:bg-slate-800'}`}>📎</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-semibold">{m.attachment.name}</span>
+        <span className={`block text-[10px] ${mine ? 'text-white/70' : 'text-slate-400'}`}>{humanSize(m.attachment.size)} · tap to download</span>
+      </span>
+    </button>
+  );
+}
+
 // The thread body: sticky header (+ optional back), grouped messages, pinned composer. The parent
 // supplies the sized/positioned container; this fills it (h-full flex-col). `safeArea` adds
 // top/bottom safe-area padding for the phone full-screen surface.
 export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = false, safeArea = false, headerRight }: { chat: ChatState; onBack: () => void; showBack?: boolean; backMobileOnly?: boolean; safeArea?: boolean; headerRight?: ReactNode }) {
-  const { active, grouped, me, draft, setDraft, submit, sending, endRef, editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing, removeMessage } = chat;
+  const { active, grouped, me, draft, setDraft, submit, sending, endRef, editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing, removeMessage, attachFile, attaching } = chat;
+  const fileRef = useRef<HTMLInputElement>(null);
   if (!active) return null;
   return (
     <div className="flex h-full flex-col bg-[#f6f7fb] dark:bg-slate-950">
@@ -330,7 +375,8 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
               <div className={`max-w-[78%] px-3.5 py-2 text-sm shadow-sm ${mine
                 ? `rounded-2xl ${it.firstOfRun ? 'rounded-tr-md' : ''} bg-[#0073ea] text-white`
                 : `rounded-2xl ${it.firstOfRun ? 'rounded-tl-md' : ''} bg-white text-slate-700 ring-1 ring-slate-100 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700`}`}>
-                <div className="whitespace-pre-wrap break-words leading-snug">{m.body}</div>
+                {m.body && <div className="whitespace-pre-wrap break-words leading-snug">{m.body}</div>}
+                <MessageAttachment m={m} mine={mine} />
                 <div className={`mt-0.5 text-right text-[10px] ${mine ? 'text-white/70' : 'text-slate-400'}`}>{m.editedAt ? 'edited · ' : ''}{timeOf(m.createdAt)}</div>
               </div>
             </div>
@@ -340,7 +386,13 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
       </div>
 
       <div className={`border-t border-slate-100 bg-white px-3 pt-3 dark:border-slate-800 dark:bg-slate-900 ${safeArea ? 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]' : 'pb-3'}`}>
-        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 py-1.5 pl-4 pr-1.5 focus-within:border-[#0073ea] focus-within:bg-white dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 py-1.5 pl-2 pr-1.5 focus-within:border-[#0073ea] focus-within:bg-white dark:border-slate-700 dark:bg-slate-800">
+          <input ref={fileRef} type="file" className="hidden" accept=".pdf,.xlsx,.docx,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf" onChange={(e) => { attachFile(e.target.files?.[0]); if (fileRef.current) fileRef.current.value = ''; }} />
+          <button onClick={() => fileRef.current?.click()} disabled={attaching} aria-label="Attach file" title="Attach file" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-600 disabled:opacity-40 dark:hover:bg-slate-700 dark:hover:text-slate-200">
+            {attaching
+              ? <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" d="M12 3a9 9 0 1 0 9 9" /></svg>
+              : <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>}
+          </button>
           <input aria-label="Message" placeholder="Type a message…" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none dark:text-slate-100" />
           <button onClick={submit} disabled={!draft.trim() || sending} aria-label="Send" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#0073ea] text-white transition enabled:hover:bg-[#0060b9] disabled:opacity-40">
             <svg viewBox="0 0 24 24" className="h-4 w-4 -ml-px" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>

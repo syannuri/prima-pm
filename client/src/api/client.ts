@@ -199,6 +199,10 @@ async function upload<T>(path: string, formData: FormData, retried = false): Pro
   return data as T;
 }
 
+// Absolute URL for a same-origin API resource — for <img>/<a> that carry the session cookie
+// automatically (e.g. inline chat image attachments).
+export const fileUrl = (path: string) => `${API_URL}${path}`;
+
 export const api = {
   download,
   upload,

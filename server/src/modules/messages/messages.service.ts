@@ -1,6 +1,17 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Message } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
+import { UPLOAD_DIR } from '../attachment/attachment.service.js';
+
+// A file to attach to an outgoing message (multer's server-generated safe name = the storage key).
+export interface OutgoingAttachment {
+  filename: string;
+  originalname: string;
+  mimetype: string;
+  size: number;
+}
 
 // Direct 1-to-1 messaging. A Conversation stores its pair in canonical order (userAId < userBId)
 // so there is exactly one thread per pair and find-or-create is deterministic. Each side has a
@@ -24,6 +35,10 @@ function toWire(m: Message) {
     createdAt: m.createdAt,
     editedAt: m.editedAt,
     deleted,
+    attachment:
+      !deleted && m.attachmentKey
+        ? { name: m.attachmentName ?? 'file', mime: m.attachmentMime ?? 'application/octet-stream', size: m.attachmentSize ?? 0 }
+        : null,
   };
 }
 
@@ -71,7 +86,13 @@ export async function listConversations(meId: string) {
         id: c.id,
         other: { id: other.id, name: other.name, email: other.email, role: other.role },
         lastMessage: last
-          ? { body: last.deletedAt ? '' : last.body, senderId: last.senderId, createdAt: last.createdAt, deleted: last.deletedAt !== null }
+          ? {
+              // Preview text: a file-only message shows its filename with a paperclip.
+              body: last.deletedAt ? '' : last.body || (last.attachmentKey ? `📎 ${last.attachmentName ?? 'file'}` : ''),
+              senderId: last.senderId,
+              createdAt: last.createdAt,
+              deleted: last.deletedAt !== null,
+            }
           : null,
         lastMessageAt: c.lastMessageAt,
         unread,
@@ -142,10 +163,11 @@ export async function markRead(meId: string, conversationId: string) {
   return { ok: true };
 }
 
-// Send a message to a user, creating the (canonical) conversation if needed. The sender's own
-// cursor is advanced (their own message is "read").
-export async function sendMessageTo(meId: string, toUserId: string, body: string) {
+// Send a message to a user, creating the (canonical) conversation if needed. An optional file may
+// be attached; a message must carry text OR a file. The sender's own cursor is advanced.
+export async function sendMessageTo(meId: string, toUserId: string, body: string, attachment?: OutgoingAttachment) {
   if (toUserId === meId) throw BadRequest('Cannot message yourself');
+  if (!body.trim() && !attachment) throw BadRequest('Message cannot be empty');
   const recipient = await prisma.user.findFirst({
     where: { id: toUserId, isActive: true, role: { not: 'GUEST' } },
     select: { id: true },
@@ -161,7 +183,16 @@ export async function sendMessageTo(meId: string, toUserId: string, body: string
     select: { id: true, userAId: true },
   });
 
-  const message = await prisma.message.create({ data: { conversationId: conv.id, senderId: meId, body } });
+  const message = await prisma.message.create({
+    data: {
+      conversationId: conv.id,
+      senderId: meId,
+      body,
+      ...(attachment
+        ? { attachmentKey: attachment.filename, attachmentName: attachment.originalname, attachmentMime: attachment.mimetype, attachmentSize: attachment.size }
+        : {}),
+    },
+  });
   // Bump activity + advance the sender's own read cursor.
   const senderField = conv.userAId === meId ? 'lastReadAAt' : 'lastReadBAt';
   await prisma.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: now, [senderField]: now } });
@@ -188,11 +219,34 @@ export async function editMessage(meId: string, messageId: string, body: string)
 }
 
 // Soft-delete one's own message: the row stays (thread/cursor consistency) but the body is never
-// served again — the UI shows a "message was deleted" tombstone in its place.
+// served again — the UI shows a "message was deleted" tombstone in its place. Any attached file's
+// bytes are purged from disk (best-effort) and its metadata cleared, reclaiming storage.
 export async function deleteMessage(meId: string, messageId: string) {
-  await requireOwnMessage(meId, messageId);
-  const updated = await prisma.message.update({ where: { id: messageId }, data: { deletedAt: new Date() } });
+  const m = await requireOwnMessage(meId, messageId);
+  if (m.attachmentKey) {
+    try {
+      fs.unlinkSync(path.join(UPLOAD_DIR, m.attachmentKey));
+    } catch {
+      /* file already gone — proceed */
+    }
+  }
+  const updated = await prisma.message.update({
+    where: { id: messageId },
+    data: { deletedAt: new Date(), attachmentKey: null, attachmentName: null, attachmentMime: null, attachmentSize: null },
+  });
   return { message: toWire(updated) };
+}
+
+// Resolve an attachment's file for a participant to download/view. Verifies the caller belongs to
+// the conversation, the message isn't deleted, and it actually carries a file that exists on disk.
+export async function getMessageFile(meId: string, messageId: string) {
+  const m = await prisma.message.findUnique({ where: { id: messageId } });
+  if (!m || m.deletedAt || !m.attachmentKey) throw NotFound('Attachment not found');
+  const conv = await prisma.conversation.findUnique({ where: { id: m.conversationId }, select: { userAId: true, userBId: true } });
+  if (!conv || (conv.userAId !== meId && conv.userBId !== meId)) throw NotFound('Attachment not found');
+  const absPath = path.join(UPLOAD_DIR, m.attachmentKey);
+  if (!fs.existsSync(absPath)) throw NotFound('File missing on storage');
+  return { absPath, name: m.attachmentName ?? 'file', mime: m.attachmentMime ?? 'application/octet-stream' };
 }
 
 // Full-text-ish search over the caller's own conversations (case-insensitive substring on body),
@@ -220,7 +274,10 @@ export async function searchMessages(meId: string, rawQuery: string, conversatio
     where: {
       conversationId: { in: convs.map((c) => c.id) },
       deletedAt: null,
-      body: { contains: q, mode: 'insensitive' },
+      OR: [
+        { body: { contains: q, mode: 'insensitive' } },
+        { attachmentName: { contains: q, mode: 'insensitive' } },
+      ],
     },
     orderBy: { createdAt: 'desc' },
     take: 50,
@@ -232,7 +289,8 @@ export async function searchMessages(meId: string, rawQuery: string, conversatio
       id: m.id,
       conversationId: m.conversationId,
       senderId: m.senderId,
-      body: m.body,
+      // Fall back to the filename so a file-only hit still shows something meaningful.
+      body: m.body || (m.attachmentName ? `📎 ${m.attachmentName}` : ''),
       createdAt: m.createdAt,
       other: otherById.get(m.conversationId)!,
     })),

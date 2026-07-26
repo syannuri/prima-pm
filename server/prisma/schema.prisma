@@ -1106,6 +1106,12 @@ model Message {
   createdAt      DateTime     @default(now())
   editedAt       DateTime?
   deletedAt      DateTime?
+  // Optional single file attachment. storageKey is the multer-generated safe name in the shared
+  // uploads/ dir (same storage as project Attachments, so it's covered by backups).
+  attachmentKey  String?
+  attachmentName String?
+  attachmentMime String?
+  attachmentSize Int?
 
   @@index([conversationId, createdAt])
 }
