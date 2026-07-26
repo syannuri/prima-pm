@@ -51,6 +51,14 @@ function typingLabel(names: string[]): string {
   return 'Several people are typing…';
 }
 
+// Read-receipt ticks on one's own messages: single ✓ = sent (no-one read yet), ✓✓ = read
+// (bright when everyone has read; medium when some members have, for groups).
+function ReadTicks({ read }: { read?: { count: number; all: boolean } | null }) {
+  if (!read) return null;
+  const cls = read.all ? 'text-sky-200' : read.count > 0 ? 'text-white/80' : 'text-white/45';
+  return <span className={`ml-1 font-semibold ${cls}`} title={read.all ? 'Read' : read.count > 0 ? `Read by ${read.count}` : 'Sent'}>{read.count > 0 ? '✓✓' : '✓'}</span>;
+}
+
 // Animated three-dot "typing" glyph.
 function TypingDots() {
   return (
@@ -601,7 +609,7 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
                   {isGroup && !mine && it.firstOfRun && <div className="mb-0.5 text-[11px] font-semibold" style={{ color: personColor(m.senderId) }}>{senderOf(m.senderId).name}</div>}
                   {m.body && <div className="whitespace-pre-wrap break-words leading-snug">{m.body}</div>}
                   <MessageAttachment m={m} mine={mine} />
-                  <div className={`mt-0.5 text-right text-[10px] ${mine ? 'text-white/70' : 'text-slate-400'}`}>{m.editedAt ? 'edited · ' : ''}{timeOf(m.createdAt)}</div>
+                  <div className={`mt-0.5 text-right text-[10px] ${mine ? 'text-white/70' : 'text-slate-400'}`}>{m.editedAt ? 'edited · ' : ''}{timeOf(m.createdAt)}{mine && <ReadTicks read={m.read} />}</div>
                 </div>
                 <ReactionBar message={m} onToggle={toggleReaction} />
               </div>

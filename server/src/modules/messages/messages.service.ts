@@ -57,7 +57,10 @@ function summarizeReactions(rows: ReactionRow[] | undefined, meId: string): Reac
 
 // A message as sent to the client. A soft-deleted message keeps its row (so runs/threads stay
 // consistent) but its body is never serialized — the UI renders a "message was deleted" tombstone.
-function toWire(m: Message & { reactions?: ReactionRow[] }, meId: string) {
+// `read` = a read-receipt summary for one's OWN messages (how many other members have read it,
+// and whether ALL have). null for others' messages / where not computed.
+type ReadInfo = { count: number; all: boolean };
+function toWire(m: Message & { reactions?: ReactionRow[] }, meId: string, read: ReadInfo | null = null) {
   const deleted = m.deletedAt !== null;
   return {
     id: m.id,
@@ -72,6 +75,7 @@ function toWire(m: Message & { reactions?: ReactionRow[] }, meId: string) {
         ? { name: m.attachmentName ?? 'file', mime: m.attachmentMime ?? 'application/octet-stream', size: m.attachmentSize ?? 0 }
         : null,
     reactions: deleted ? [] : summarizeReactions(m.reactions, meId),
+    read,
   };
 }
 
@@ -198,16 +202,34 @@ export async function getConversationMessages(meId: string, conversationId: stri
   });
 
   await markRead(meId, conversationId);
-  return { conversationId, ...describe(conv as ConvWithMembers, meId), messages: messages.map((m) => toWire(m, meId)) };
+
+  // Read receipts on MY messages: how many other members' read cursors have reached each message.
+  const otherCursors = (conv as ConvWithMembers).members.filter((mm) => mm.userId !== meId).map((mm) => mm.lastReadAt);
+  const readOf = (m: Message): ReadInfo | null => {
+    if (m.senderId !== meId || m.deletedAt || otherCursors.length === 0) return null;
+    const count = otherCursors.filter((c) => c !== null && c >= m.createdAt).length;
+    return { count, all: count === otherCursors.length };
+  };
+
+  return { conversationId, ...describe(conv as ConvWithMembers, meId), messages: messages.map((m) => toWire(m, meId, readOf(m))) };
 }
 
 // Advance the caller's read cursor to now.
 export async function markRead(meId: string, conversationId: string) {
-  const updated = await prisma.conversationMember.updateMany({
-    where: { conversationId, userId: meId },
-    data: { lastReadAt: new Date(), hiddenAt: null }, // reading a conversation un-hides it
+  const member = await prisma.conversationMember.findUnique({
+    where: { conversationId_userId: { conversationId, userId: meId } },
+    select: { id: true, lastReadAt: true },
   });
-  if (updated.count === 0) throw NotFound('Conversation not found');
+  if (!member) throw NotFound('Conversation not found');
+
+  // Did my cursor actually move past unread messages from others? Only then poke the senders so
+  // their read receipts update — this keeps the 4s thread poll (which re-marks read but sees
+  // nothing new) from spamming SSE events.
+  const newlyRead = await prisma.message.count({
+    where: { conversationId, senderId: { not: meId }, ...(member.lastReadAt ? { createdAt: { gt: member.lastReadAt } } : {}) },
+  });
+  await prisma.conversationMember.update({ where: { id: member.id }, data: { lastReadAt: new Date(), hiddenAt: null } });
+  if (newlyRead > 0) await notify(conversationId, 'message');
   return { ok: true };
 }
 

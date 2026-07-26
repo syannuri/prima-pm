@@ -45,9 +45,11 @@ export default function MessagesPage() {
       )}
 
       <Card className="!p-0 overflow-hidden shadow-sm -mx-4 !rounded-none sm:mx-0 sm:!rounded-2xl">
-        <div className="grid sm:grid-cols-[20rem_1fr]" style={{ height: 'calc(100vh - 11rem)' }}>
+        {/* Bound the single row to the container height (minmax(0,1fr)) so a long thread scrolls
+            INSIDE its cell instead of growing the grid and pushing the composer out of view. */}
+        <div className="grid sm:grid-cols-[20rem_1fr]" style={{ height: 'calc(100vh - 11rem)', gridTemplateRows: 'minmax(0, 1fr)' }}>
           {/* Conversation list (or search results while searching) */}
-          <div className={`flex flex-col border-r border-slate-100 dark:border-slate-800 sm:flex ${active ? 'hidden' : 'flex'} bg-white dark:bg-slate-900`}>
+          <div className={`min-h-0 flex-col overflow-hidden border-r border-slate-100 dark:border-slate-800 sm:flex ${active ? 'hidden' : 'flex'} bg-white dark:bg-slate-900`}>
             <div className="border-b border-slate-100 p-3 dark:border-slate-800">
               <ChatSearchBox value={chat.searchQuery} onChange={chat.setSearchQuery} />
             </div>
@@ -60,11 +62,11 @@ export default function MessagesPage() {
 
           {/* Thread — phones: immersive full-screen overlay (covers app header + tab bar); sm+: grid cell. */}
           {active ? (
-            <div className="fixed inset-0 z-50 sm:static sm:z-auto sm:h-full">
+            <div className="fixed inset-0 z-50 sm:static sm:z-auto sm:h-full sm:min-h-0 sm:overflow-hidden">
               <ChatThread chat={chat} onBack={chat.closeThread} backMobileOnly safeArea />
             </div>
           ) : (
-            <div className="hidden bg-[#f6f7fb] dark:bg-slate-950 sm:grid sm:place-items-center">
+            <div className="hidden min-h-0 bg-[#f6f7fb] dark:bg-slate-950 sm:grid sm:place-items-center">
               <div className="p-6 text-center text-sm text-slate-400">
                 <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-2xl dark:bg-slate-800">💬</div>Select a conversation to start chatting.
               </div>

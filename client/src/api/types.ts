@@ -840,6 +840,7 @@ export interface ChatMessage {
   deleted?: boolean;
   attachment?: ChatAttachment | null;
   reactions?: ChatReaction[];
+  read?: { count: number; all: boolean } | null;
 }
 export type ChatConversationType = 'DIRECT' | 'GROUP';
 export interface ChatMember extends ChatContact {
