@@ -21,3 +21,9 @@ export const addMembersSchema = z.object({
 export const renameGroupSchema = z.object({
   title: z.string().trim().min(1, 'A group needs a name').max(120),
 });
+
+// Curated reaction emoji — the only ones the picker offers and the server accepts.
+export const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🙏', '🔥', '✅', '👀'] as const;
+export const reactionSchema = z.object({
+  emoji: z.enum(REACTION_EMOJIS),
+});

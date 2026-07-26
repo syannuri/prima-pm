@@ -824,6 +824,12 @@ export interface ChatAttachment {
   mime: string;
   size: number;
 }
+export interface ChatReaction {
+  emoji: string;
+  count: number;
+  mine: boolean;
+  users: string[];
+}
 export interface ChatMessage {
   id: string;
   conversationId: string;
@@ -833,6 +839,7 @@ export interface ChatMessage {
   editedAt?: string | null;
   deleted?: boolean;
   attachment?: ChatAttachment | null;
+  reactions?: ChatReaction[];
 }
 export type ChatConversationType = 'DIRECT' | 'GROUP';
 export interface ChatMember extends ChatContact {

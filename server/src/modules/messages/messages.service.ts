@@ -37,9 +37,27 @@ function pair(x: string, y: string): [string, string] {
   return x < y ? [x, y] : [y, x];
 }
 
+// One emoji's reaction summary on a message: how many reacted, whether I did, and who (names).
+type ReactionSummary = { emoji: string; count: number; mine: boolean; users: string[] };
+type ReactionRow = { emoji: string; userId: string; user: { name: string } };
+
+// Group a message's raw reaction rows into per-emoji summaries (stable order = first reaction seen).
+function summarizeReactions(rows: ReactionRow[] | undefined, meId: string): ReactionSummary[] {
+  if (!rows || rows.length === 0) return [];
+  const byEmoji = new Map<string, ReactionSummary>();
+  for (const r of rows) {
+    let s = byEmoji.get(r.emoji);
+    if (!s) { s = { emoji: r.emoji, count: 0, mine: false, users: [] }; byEmoji.set(r.emoji, s); }
+    s.count += 1;
+    s.users.push(r.user.name);
+    if (r.userId === meId) s.mine = true;
+  }
+  return [...byEmoji.values()];
+}
+
 // A message as sent to the client. A soft-deleted message keeps its row (so runs/threads stay
 // consistent) but its body is never serialized — the UI renders a "message was deleted" tombstone.
-function toWire(m: Message) {
+function toWire(m: Message & { reactions?: ReactionRow[] }, meId: string) {
   const deleted = m.deletedAt !== null;
   return {
     id: m.id,
@@ -53,6 +71,7 @@ function toWire(m: Message) {
       !deleted && m.attachmentKey
         ? { name: m.attachmentName ?? 'file', mime: m.attachmentMime ?? 'application/octet-stream', size: m.attachmentSize ?? 0 }
         : null,
+    reactions: deleted ? [] : summarizeReactions(m.reactions, meId),
   };
 }
 
@@ -169,10 +188,11 @@ export async function getConversationMessages(meId: string, conversationId: stri
     where: { conversationId, ...(after ? { createdAt: { gt: after } } : {}) },
     orderBy: { createdAt: 'asc' },
     take: 200,
+    include: { reactions: { include: { user: { select: { name: true } } } } },
   });
 
   await markRead(meId, conversationId);
-  return { conversationId, ...describe(conv as ConvWithMembers, meId), messages: messages.map(toWire) };
+  return { conversationId, ...describe(conv as ConvWithMembers, meId), messages: messages.map((m) => toWire(m, meId)) };
 }
 
 // Advance the caller's read cursor to now.
@@ -199,7 +219,7 @@ async function postMessage(meId: string, conversationId: string, body: string, a
   await prisma.conversationMember.updateMany({ where: { conversationId, userId: meId }, data: { lastReadAt: now } });
   await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } });
   await notify(conversationId, 'message');
-  return { conversationId, message: toWire(message) };
+  return { conversationId, message: toWire(message, meId) };
 }
 
 // Send a DM to a user, creating the canonical conversation (+ both memberships) if needed.
@@ -327,7 +347,7 @@ export async function editMessage(meId: string, messageId: string, body: string)
   const existing = await requireOwnMessage(meId, messageId);
   const updated = await prisma.message.update({ where: { id: messageId }, data: { body, editedAt: new Date() } });
   await notify(existing.conversationId, 'message');
-  return { message: toWire(updated) };
+  return { message: toWire(updated, meId) };
 }
 
 // Soft-delete one's own message: the row stays (thread/cursor consistency) but the body is never
@@ -343,7 +363,25 @@ export async function deleteMessage(meId: string, messageId: string) {
     data: { deletedAt: new Date(), attachmentKey: null, attachmentName: null, attachmentMime: null, attachmentSize: null },
   });
   await notify(m.conversationId, 'message');
-  return { message: toWire(updated) };
+  return { message: toWire(updated, meId) };
+}
+
+// Toggle the caller's emoji reaction on a message (add if absent, remove if present). The caller
+// must belong to the message's conversation and the message must not be deleted. Returns the fresh
+// reaction summary and pushes a `message` poke so every member re-renders.
+export async function toggleReaction(meId: string, messageId: string, emoji: string) {
+  const m = await prisma.message.findUnique({ where: { id: messageId }, select: { id: true, conversationId: true, deletedAt: true } });
+  if (!m || m.deletedAt) throw NotFound('Message not found');
+  const member = await prisma.conversationMember.findUnique({ where: { conversationId_userId: { conversationId: m.conversationId, userId: meId } }, select: { id: true } });
+  if (!member) throw NotFound('Message not found');
+
+  const existing = await prisma.messageReaction.findUnique({ where: { messageId_userId_emoji: { messageId, userId: meId, emoji } }, select: { id: true } });
+  if (existing) await prisma.messageReaction.delete({ where: { id: existing.id } });
+  else await prisma.messageReaction.create({ data: { messageId, userId: meId, emoji } });
+
+  const rows = await prisma.messageReaction.findMany({ where: { messageId }, include: { user: { select: { name: true } } } });
+  await notify(m.conversationId, 'message');
+  return { messageId, reactions: summarizeReactions(rows, meId) };
 }
 
 // Resolve an attachment's file for a participant to download/view. Verifies the caller belongs to

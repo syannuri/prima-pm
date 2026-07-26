@@ -162,6 +162,12 @@ export function useChat() {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete'),
   });
 
+  const reactMut = useMutation({
+    mutationFn: ({ messageId, emoji }: { messageId: string; emoji: string }) => api.post(`/messages/messages/${messageId}/reactions`, { emoji }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['chat-thread', active?.convId] }); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to react'),
+  });
+
   const sendFile = useMutation({
     mutationFn: (file: File) => {
       const fd = new FormData();
@@ -268,6 +274,7 @@ export function useChat() {
   const removeMessage = (m: ChatMessage) => {
     if (!delMut.isPending && window.confirm('Delete this message? This cannot be undone.')) delMut.mutate(m.id);
   };
+  const toggleReaction = (messageId: string, emoji: string) => reactMut.mutate({ messageId, emoji });
   // Deep-link a search hit into its thread.
   const openSearchResult = (r: ChatSearchResult) => {
     setSearchQuery(''); setEditingId(null);
@@ -282,7 +289,7 @@ export function useChat() {
     active, header, openConversation, openContact, closeThread,
     grouped, draft, setDraft, submit, sending: send.isPending, endRef, notifyTyping,
     attachFile, attaching: sendFile.isPending,
-    editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing: editMut.isPending, removeMessage,
+    editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing: editMut.isPending, removeMessage, toggleReaction,
     searchQuery, setSearchQuery, searchResults: searchQ.data ?? [], searchActive: debouncedQuery.length >= 2, searchLoading: searchQ.isFetching, openSearchResult,
     createGroup: (title: string, memberIds: string[], projectId?: string) => createGroupMut.mutate({ title, memberIds, projectId }),
     creatingGroup: createGroupMut.isPending,
@@ -419,11 +426,51 @@ function MessageAttachment({ m, mine }: { m: ChatMessage; mine: boolean }) {
   );
 }
 
+// Curated reaction set — must match the server's REACTION_EMOJIS whitelist.
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🙏', '🔥', '✅', '👀'];
+
+// The emoji chips under a message; tapping one toggles your own reaction. Title = who reacted.
+function ReactionBar({ message, onToggle }: { message: ChatMessage; onToggle: (messageId: string, emoji: string) => void }) {
+  if (!message.reactions?.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {message.reactions.map((r) => (
+        <button key={r.emoji} onClick={() => onToggle(message.id, r.emoji)} title={r.users.join(', ')}
+          className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${r.mine ? 'border-[#0073ea] bg-[#0073ea]/10 text-[#0073ea]' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+          <span className="text-sm leading-none">{r.emoji}</span><span className="font-semibold tabular-nums">{r.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// The "add reaction" button with a self-contained emoji-picker popover.
+function ReactButton({ onPick }: { onPick: (emoji: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative">
+      <button onClick={() => setOpen((o) => !o)} aria-label="Add reaction" title="React" className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" /></svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 gap-0.5 rounded-full border border-slate-200 bg-white px-1.5 py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+            {REACTION_EMOJIS.map((e) => (
+              <button key={e} onClick={() => { onPick(e); setOpen(false); }} className="grid h-7 w-7 place-items-center rounded-full text-lg transition hover:scale-125 hover:bg-slate-100 dark:hover:bg-slate-700">{e}</button>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
 // The thread body: sticky header (+ optional back), grouped messages, pinned composer. The parent
 // supplies the sized/positioned container; this fills it (h-full flex-col). `safeArea` adds
 // top/bottom safe-area padding for the phone full-screen surface.
 export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = false, safeArea = false, headerRight }: { chat: ChatState; onBack: () => void; showBack?: boolean; backMobileOnly?: boolean; safeArea?: boolean; headerRight?: ReactNode }) {
-  const { active, header, grouped, me, draft, setDraft, submit, sending, endRef, editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing, removeMessage, attachFile, attaching, notifyTyping } = chat;
+  const { active, header, grouped, me, draft, setDraft, submit, sending, endRef, editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing, removeMessage, attachFile, attaching, notifyTyping, toggleReaction } = chat;
   const fileRef = useRef<HTMLInputElement>(null);
   const [showInfo, setShowInfo] = useState(false);
   const onlineSet = useOnline();
@@ -495,27 +542,37 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
             );
           }
 
+          const actions = (
+            <span className="flex shrink-0 items-center gap-0.5 self-center opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+              <ReactButton onPick={(e) => toggleReaction(m.id, e)} />
+              {mine && (
+                <button onClick={() => startEdit(m)} aria-label="Edit message" title="Edit" className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
+                </button>
+              )}
+              {mine && (
+                <button onClick={() => removeMessage(m)} aria-label="Delete message" title="Delete" className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/40 dark:hover:text-red-400">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>
+                </button>
+              )}
+            </span>
+          );
           return (
             <div key={m.id} className={`group flex items-end gap-2 ${mine ? 'justify-end' : 'justify-start'} ${it.firstOfRun ? 'mt-2' : ''}`}>
               {!mine && (it.firstOfRun ? <Avatar id={senderOf(m.senderId).id} name={senderOf(m.senderId).name} size={28} /> : <span className="w-7 shrink-0" />)}
-              {mine && (
-                <span className="flex shrink-0 items-center gap-0.5 self-center opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
-                  <button onClick={() => startEdit(m)} aria-label="Edit message" title="Edit" className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200">
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
-                  </button>
-                  <button onClick={() => removeMessage(m)} aria-label="Delete message" title="Delete" className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/40 dark:hover:text-red-400">
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>
-                  </button>
-                </span>
-              )}
-              <div className={`max-w-[78%] px-3.5 py-2 text-sm shadow-sm ${mine
-                ? `rounded-2xl ${it.firstOfRun ? 'rounded-tr-md' : ''} bg-[#0073ea] text-white`
-                : `rounded-2xl ${it.firstOfRun ? 'rounded-tl-md' : ''} bg-white text-slate-700 ring-1 ring-slate-100 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700`}`}>
-                {isGroup && !mine && it.firstOfRun && <div className="mb-0.5 text-[11px] font-semibold" style={{ color: personColor(m.senderId) }}>{senderOf(m.senderId).name}</div>}
-                {m.body && <div className="whitespace-pre-wrap break-words leading-snug">{m.body}</div>}
-                <MessageAttachment m={m} mine={mine} />
-                <div className={`mt-0.5 text-right text-[10px] ${mine ? 'text-white/70' : 'text-slate-400'}`}>{m.editedAt ? 'edited · ' : ''}{timeOf(m.createdAt)}</div>
+              {mine && actions}
+              <div className={`flex min-w-0 max-w-[78%] flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
+                <div className={`px-3.5 py-2 text-sm shadow-sm ${mine
+                  ? `rounded-2xl ${it.firstOfRun ? 'rounded-tr-md' : ''} bg-[#0073ea] text-white`
+                  : `rounded-2xl ${it.firstOfRun ? 'rounded-tl-md' : ''} bg-white text-slate-700 ring-1 ring-slate-100 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700`}`}>
+                  {isGroup && !mine && it.firstOfRun && <div className="mb-0.5 text-[11px] font-semibold" style={{ color: personColor(m.senderId) }}>{senderOf(m.senderId).name}</div>}
+                  {m.body && <div className="whitespace-pre-wrap break-words leading-snug">{m.body}</div>}
+                  <MessageAttachment m={m} mine={mine} />
+                  <div className={`mt-0.5 text-right text-[10px] ${mine ? 'text-white/70' : 'text-slate-400'}`}>{m.editedAt ? 'edited · ' : ''}{timeOf(m.createdAt)}</div>
+                </div>
+                <ReactionBar message={m} onToggle={toggleReaction} />
               </div>
+              {!mine && actions}
             </div>
           );
         })())}

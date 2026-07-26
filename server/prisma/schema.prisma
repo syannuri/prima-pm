@@ -231,6 +231,7 @@ model User {
   conversationsA    Conversation[]  @relation("ConvUserA")
   conversationsB    Conversation[]  @relation("ConvUserB")
   conversationMemberships ConversationMember[] @relation("ConvMemberUser")
+  messageReactions  MessageReaction[] @relation("ReactionUser")
 
   @@index([role])
 }
@@ -1143,8 +1144,23 @@ model Message {
   attachmentName String?
   attachmentMime String?
   attachmentSize Int?
+  reactions      MessageReaction[]
 
   @@index([conversationId, createdAt])
+}
+
+// An emoji reaction on a message. A user may add each distinct emoji once per message.
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("ReactionUser", fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 // A product-backlog work item (epic/story/task/bug). `sprintId` null = product

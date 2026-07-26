@@ -8,7 +8,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { BadRequest, Forbidden } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
 import { addClient, removeClient, startSseHeartbeat, onlineAmong, publishToUsers } from './sse.js';
-import { sendMessageSchema, editMessageSchema, createGroupSchema, addMembersSchema, renameGroupSchema } from './messages.schemas.js';
+import { sendMessageSchema, editMessageSchema, createGroupSchema, addMembersSchema, renameGroupSchema, reactionSchema } from './messages.schemas.js';
 import {
   listContacts,
   listConversations,
@@ -28,6 +28,7 @@ import {
   leaveGroup,
   getConversationPartnerIds,
   typingSignal,
+  toggleReaction,
 } from './messages.service.js';
 
 // Chat file uploads reuse the shared uploads/ dir + the same document/image whitelist and 10 MB
@@ -197,6 +198,11 @@ router.patch('/messages/:id', validateBody(editMessageSchema), asyncHandler(asyn
 // Soft-delete one's own message.
 router.delete('/messages/:id', asyncHandler(async (req, res) => {
   res.json(await deleteMessage(req.user!.id, req.params.id));
+}));
+
+// Toggle an emoji reaction on a message.
+router.post('/messages/:id/reactions', validateBody(reactionSchema), asyncHandler(async (req, res) => {
+  res.json(await toggleReaction(req.user!.id, req.params.id, req.body.emoji));
 }));
 
 export default router;
