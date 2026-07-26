@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Response } from 'express';
-import { addClient, removeClient, publishToUsers, connectedClientCount } from './sse.js';
+import { addClient, removeClient, publishToUsers, connectedClientCount, isOnline, onlineAmong } from './sse.js';
 
 // The SSE hub is pure in-memory plumbing — no DB. A "response" here is a tiny stub that records
 // what was written to it.
@@ -52,5 +52,19 @@ describe('SSE hub', () => {
 
   it('publishing to an unknown user is a no-op', () => {
     expect(() => publishToUsers(['nobody'], 'message', { conversationId: 'x' })).not.toThrow();
+  });
+
+  it('reports online transitions: first stream = came online, last close = went offline', () => {
+    const t1 = stubRes();
+    const t2 = stubRes();
+    expect(isOnline('u-dave')).toBe(false);
+    expect(addClient('u-dave', t1.res)).toBe(true); // first stream → came online
+    expect(addClient('u-dave', t2.res)).toBe(false); // second tab → no transition
+    expect(isOnline('u-dave')).toBe(true);
+    expect(onlineAmong(['u-dave', 'ghost'])).toEqual(['u-dave']);
+
+    expect(removeClient('u-dave', t1.res)).toBe(false); // still one tab open
+    expect(removeClient('u-dave', t2.res)).toBe(true); // last stream → went offline
+    expect(isOnline('u-dave')).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ import { api, ApiError, fileUrl } from '../../api/client';
 import type { ChatContact, ChatConversation, ChatConversationBase, ChatMember, ChatMessage, ChatSearchResult, ChatThread } from '../../api/types';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../Toast';
+import { useOnline, useTypingMap } from '../../lib/chatLive';
 
 // ---- Shared bits for the chat surfaces (full Messages page + the floating widget) ----
 
@@ -16,10 +17,14 @@ export function personColor(id: string): string {
 }
 const initials = (name: string) => name.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
-export function Avatar({ id, name, size = 40 }: { id: string; name: string; size?: number }) {
+export function Avatar({ id, name, size = 40, online }: { id: string; name: string; size?: number; online?: boolean }) {
+  const dot = Math.max(8, Math.round(size * 0.28));
   return (
-    <span className="grid shrink-0 place-items-center rounded-full font-semibold text-white" style={{ width: size, height: size, background: personColor(id), fontSize: size * 0.36 }}>
-      {initials(name)}
+    <span className="relative shrink-0" style={{ width: size, height: size }}>
+      <span className="grid h-full w-full place-items-center rounded-full font-semibold text-white" style={{ background: personColor(id), fontSize: size * 0.36 }}>
+        {initials(name)}
+      </span>
+      {online && <span className="absolute bottom-0 right-0 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" style={{ width: dot, height: dot }} title="Online" />}
     </span>
   );
 }
@@ -33,9 +38,26 @@ export function GroupAvatar({ id, size = 40 }: { id: string; size?: number }) {
   );
 }
 
-// Avatar for a conversation: a person (DIRECT) or a group tile (GROUP).
-function ConvAvatar({ conv, size = 44 }: { conv: { id: string; type: 'DIRECT' | 'GROUP'; title: string; other: ChatContact | null }; size?: number }) {
-  return conv.type === 'GROUP' || !conv.other ? <GroupAvatar id={conv.id} size={size} /> : <Avatar id={conv.other.id} name={conv.other.name} size={size} />;
+// Avatar for a conversation: a person (DIRECT, with presence dot) or a group tile (GROUP).
+function ConvAvatar({ conv, size = 44, online }: { conv: { id: string; type: 'DIRECT' | 'GROUP'; title: string; other: ChatContact | null }; size?: number; online?: boolean }) {
+  return conv.type === 'GROUP' || !conv.other ? <GroupAvatar id={conv.id} size={size} /> : <Avatar id={conv.other.id} name={conv.other.name} size={size} online={online} />;
+}
+
+// "Alice is typing", "Alice & Bob are typing", or "Several people are typing".
+function typingLabel(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return `${names[0]} is typing…`;
+  if (names.length === 2) return `${names[0]} & ${names[1]} are typing…`;
+  return 'Several people are typing…';
+}
+
+// Animated three-dot "typing" glyph.
+function TypingDots() {
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {[0, 150, 300].map((d) => <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${d}ms` }} />)}
+    </span>
+  );
 }
 
 export const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -226,6 +248,17 @@ export function useChat() {
   const submit = () => { const b = draft.trim(); if (b && !send.isPending) send.mutate(b); };
   const attachFile = (file: File | null | undefined) => { if (file && !sendFile.isPending) sendFile.mutate(file); };
 
+  // Fire a "typing" ping at most once every 3s while composing (only for an existing conversation).
+  const lastTyping = useRef(0);
+  const notifyTyping = () => {
+    const convId = active?.convId;
+    if (!convId) return;
+    const now = Date.now();
+    if (now - lastTyping.current < 3000) return;
+    lastTyping.current = now;
+    api.post(`/messages/conversations/${convId}/typing`).catch(() => {});
+  };
+
   const startEdit = (m: ChatMessage) => { setEditingId(m.id); setEditDraft(m.body); };
   const cancelEdit = () => { setEditingId(null); setEditDraft(''); };
   const submitEdit = () => {
@@ -247,7 +280,7 @@ export function useChat() {
     me, loading: convsQ.isLoading, conversations,
     contacts: contactsQ.data ?? [], contactsLoading: contactsQ.isLoading, loadContacts: () => contactsQ.refetch(),
     active, header, openConversation, openContact, closeThread,
-    grouped, draft, setDraft, submit, sending: send.isPending, endRef,
+    grouped, draft, setDraft, submit, sending: send.isPending, endRef, notifyTyping,
     attachFile, attaching: sendFile.isPending,
     editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing: editMut.isPending, removeMessage,
     searchQuery, setSearchQuery, searchResults: searchQ.data ?? [], searchActive: debouncedQuery.length >= 2, searchLoading: searchQ.isFetching, openSearchResult,
@@ -262,6 +295,8 @@ export type ChatState = ReturnType<typeof useChat>;
 // ---- Presentational pieces ----
 
 export function ConversationList({ conversations, me, activeConvId, onOpen }: { conversations: ChatConversation[]; me: string; activeConvId?: string; onOpen: (c: ChatConversation) => void }) {
+  const online = useOnline();
+  const typingMap = useTypingMap();
   if (conversations.length === 0) {
     return <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">No conversations yet.<br />Tap “New message” to start one.</div>;
   }
@@ -269,10 +304,12 @@ export function ConversationList({ conversations, me, activeConvId, onOpen }: { 
     <>
       {conversations.map((c) => {
         const isActive = activeConvId === c.id;
+        const isOnline = c.type === 'DIRECT' && !!c.other && online.has(c.other.id);
+        const someoneTyping = [...(typingMap.get(c.id) ?? [])].some((id) => id !== me);
         return (
           <button key={c.id} onClick={() => onOpen(c)} className={`relative flex w-full items-center gap-3 px-4 py-3 text-left transition ${isActive ? 'bg-brand-50/70 dark:bg-brand-900/15' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
             {isActive && <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-brand-500" />}
-            <ConvAvatar conv={c} size={44} />
+            <ConvAvatar conv={c} size={44} online={isOnline} />
             <span className="min-w-0 flex-1">
               <span className="flex items-center justify-between gap-2">
                 <span className={`flex min-w-0 items-center gap-1 truncate text-sm ${c.unread > 0 ? 'font-bold text-slate-900 dark:text-white' : 'font-semibold text-slate-800 dark:text-slate-100'}`}>
@@ -282,7 +319,9 @@ export function ConversationList({ conversations, me, activeConvId, onOpen }: { 
                 <span className="shrink-0 text-[10px] text-slate-400">{c.lastMessage ? dayLabel(c.lastMessage.createdAt).replace('Today', timeOf(c.lastMessage.createdAt)) : ''}</span>
               </span>
               <span className="mt-0.5 flex items-center justify-between gap-2">
-                <span className={`truncate text-xs ${c.lastMessage?.deleted ? 'italic text-slate-400 dark:text-slate-500' : c.unread > 0 ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'}`}>{c.lastMessage ? (c.lastMessage.deleted ? 'Message deleted' : (c.lastMessage.senderId === me ? 'You: ' : '') + c.lastMessage.body) : 'No messages yet'}</span>
+                {someoneTyping
+                  ? <span className="truncate text-xs font-medium text-[#0073ea]">typing…</span>
+                  : <span className={`truncate text-xs ${c.lastMessage?.deleted ? 'italic text-slate-400 dark:text-slate-500' : c.unread > 0 ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'}`}>{c.lastMessage ? (c.lastMessage.deleted ? 'Message deleted' : (c.lastMessage.senderId === me ? 'You: ' : '') + c.lastMessage.body) : 'No messages yet'}</span>}
                 {c.unread > 0 && <span className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-brand-600 px-1.5 text-[10px] font-bold text-white">{c.unread}</span>}
               </span>
             </span>
@@ -294,13 +333,14 @@ export function ConversationList({ conversations, me, activeConvId, onOpen }: { 
 }
 
 export function ContactPicker({ contacts, loading, onPick }: { contacts: ChatContact[]; loading: boolean; onPick: (c: ChatContact) => void }) {
+  const online = useOnline();
   if (loading) return <div className="p-4 text-sm text-slate-500">Loading contacts…</div>;
   if (contacts.length === 0) return <div className="p-4 text-sm text-slate-500">No contacts available.</div>;
   return (
     <>
       {contacts.map((c) => (
         <button key={c.id} onClick={() => onPick(c)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
-          <Avatar id={c.id} name={c.name} size={36} />
+          <Avatar id={c.id} name={c.name} size={36} online={online.has(c.id)} />
           <span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-700 dark:text-slate-200">{c.name}</span><span className="block truncate text-xs text-slate-400">{c.role.replace(/_/g, ' ').toLowerCase()}</span></span>
         </button>
       ))}
@@ -383,23 +423,31 @@ function MessageAttachment({ m, mine }: { m: ChatMessage; mine: boolean }) {
 // supplies the sized/positioned container; this fills it (h-full flex-col). `safeArea` adds
 // top/bottom safe-area padding for the phone full-screen surface.
 export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = false, safeArea = false, headerRight }: { chat: ChatState; onBack: () => void; showBack?: boolean; backMobileOnly?: boolean; safeArea?: boolean; headerRight?: ReactNode }) {
-  const { active, header, grouped, me, draft, setDraft, submit, sending, endRef, editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing, removeMessage, attachFile, attaching } = chat;
+  const { active, header, grouped, me, draft, setDraft, submit, sending, endRef, editingId, editDraft, setEditDraft, startEdit, cancelEdit, submitEdit, editing, removeMessage, attachFile, attaching, notifyTyping } = chat;
   const fileRef = useRef<HTMLInputElement>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const onlineSet = useOnline();
+  const typingMap = useTypingMap();
   if (!active || !header) return null;
   const isGroup = header.type === 'GROUP';
   const members = header.members ?? [];
   // Resolve a message sender to a contact (for the incoming avatar + group sender label).
   const senderOf = (id: string): ChatContact => members.find((mm) => mm.id === id) ?? header.other ?? { id, name: '?', email: '', role: 'TEAM_MEMBER' as ChatContact['role'] };
+  const typerIds = header.convId ? [...(typingMap.get(header.convId) ?? [])].filter((id) => id !== me) : [];
+  const typerNames = typerIds.map((id) => senderOf(id).name);
+  const otherOnline = !isGroup && !!header.other && onlineSet.has(header.other.id);
+  const subtitle = typerIds.length
+    ? (isGroup ? typingLabel(typerNames) : 'typing…')
+    : (isGroup ? `${members.length} member${members.length === 1 ? '' : 's'} · tap for info` : otherOnline ? 'Online' : header.other?.role.replace(/_/g, ' ').toLowerCase());
   return (
     <div className="relative flex h-full flex-col bg-[#f6f7fb] dark:bg-slate-950">
       <div className={`flex items-center gap-3 border-b border-blue-100 bg-blue-50 px-4 pb-3 dark:border-slate-800 dark:bg-slate-800/60 ${safeArea ? 'pt-[calc(env(safe-area-inset-top)+0.75rem)]' : 'pt-3'}`}>
         {showBack && <button onClick={onBack} className={`-ml-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xl text-slate-500 hover:bg-white/70 dark:hover:bg-slate-700 ${backMobileOnly ? 'sm:hidden' : ''}`} aria-label="Back">←</button>}
         <button onClick={() => isGroup && setShowInfo(true)} className={`flex min-w-0 flex-1 items-center gap-3 text-left ${isGroup ? '' : 'cursor-default'}`}>
-          <ConvAvatar conv={{ id: header.convId ?? '', type: header.type, title: header.title, other: header.other }} size={38} />
+          <ConvAvatar conv={{ id: header.convId ?? '', type: header.type, title: header.title, other: header.other }} size={38} online={otherOnline} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">{header.title}</span>
-            <span className="block truncate text-xs text-slate-400">{isGroup ? `${members.length} member${members.length === 1 ? '' : 's'} · tap for info` : header.other?.role.replace(/_/g, ' ').toLowerCase()}</span>
+            <span className={`block truncate text-xs ${typerIds.length ? 'font-medium text-[#0073ea]' : otherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>{subtitle}</span>
           </span>
         </button>
         {isGroup && <button onClick={() => setShowInfo(true)} aria-label="Group info" title="Group info" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white/70 dark:hover:bg-slate-700"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 16v-4M12 8h.01" /></svg></button>}
@@ -471,6 +519,12 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
             </div>
           );
         })())}
+        {typerIds.length > 0 && (
+          <div className="flex items-end gap-2">
+            <Avatar id={typerIds[0]} name={senderOf(typerIds[0]).name} size={28} />
+            <div className="rounded-2xl rounded-tl-md bg-white px-3.5 py-2.5 shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700"><TypingDots /></div>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 
@@ -482,7 +536,7 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
               ? <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" d="M12 3a9 9 0 1 0 9 9" /></svg>
               : <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>}
           </button>
-          <input aria-label="Message" placeholder="Type a message…" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none dark:text-slate-100" />
+          <input aria-label="Message" placeholder="Type a message…" value={draft} onChange={(e) => { setDraft(e.target.value); if (e.target.value.trim()) notifyTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none dark:text-slate-100" />
           <button onClick={submit} disabled={!draft.trim() || sending} aria-label="Send" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#0073ea] text-white transition enabled:hover:bg-[#0060b9] disabled:opacity-40">
             <svg viewBox="0 0 24 24" className="h-4 w-4 -ml-px" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
           </button>
@@ -496,6 +550,7 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
 // anyone can leave. Reads live member state from chat.header.
 export function GroupInfoPanel({ chat, onClose }: { chat: ChatState; onClose: () => void }) {
   const { header, me, contacts, loadContacts, renameGroup, addMembers, removeMember, leaveGroup } = chat;
+  const online = useOnline();
   const members = header?.members ?? [];
   const iAmAdmin = !!header?.iAmAdmin;
   const [title, setTitle] = useState(header?.title ?? '');
@@ -545,7 +600,7 @@ export function GroupInfoPanel({ chat, onClose }: { chat: ChatState; onClose: ()
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {members.map((m) => (
               <li key={m.id} className="flex items-center gap-3 py-2">
-                <Avatar id={m.id} name={m.name} size={34} />
+                <Avatar id={m.id} name={m.name} size={34} online={m.id !== me && online.has(m.id)} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-slate-700 dark:text-slate-200">{m.name}{m.id === me ? ' (you)' : ''}</span>
                   <span className="block truncate text-xs text-slate-400">{m.role.replace(/_/g, ' ').toLowerCase()}</span>

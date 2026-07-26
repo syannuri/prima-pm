@@ -8,17 +8,34 @@ import type { Response } from 'express';
 type Res = Response;
 const clients = new Map<string, Set<Res>>();
 
-export function addClient(userId: string, res: Res): void {
+// Register a stream. Returns true if this is the user's FIRST stream (they just came online).
+export function addClient(userId: string, res: Res): boolean {
   let set = clients.get(userId);
+  const wasOffline = !set || set.size === 0;
   if (!set) { set = new Set(); clients.set(userId, set); }
   set.add(res);
+  return wasOffline;
 }
 
-export function removeClient(userId: string, res: Res): void {
+// Deregister a stream. Returns true if this was the user's LAST stream (they just went offline).
+export function removeClient(userId: string, res: Res): boolean {
   const set = clients.get(userId);
-  if (!set) return;
+  if (!set) return false;
   set.delete(res);
-  if (set.size === 0) clients.delete(userId);
+  if (set.size === 0) { clients.delete(userId); return true; }
+  return false;
+}
+
+// Whether a user currently has at least one open stream (i.e. is "online").
+export function isOnline(userId: string): boolean {
+  return clients.has(userId);
+}
+
+// Of the given user ids, those currently online.
+export function onlineAmong(userIds: Iterable<string>): string[] {
+  const out: string[] = [];
+  for (const id of userIds) if (clients.has(id)) out.push(id);
+  return out;
 }
 
 function writeEvent(res: Res, event: string, data: unknown): void {

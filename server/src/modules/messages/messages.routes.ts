@@ -7,7 +7,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { BadRequest, Forbidden } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
-import { addClient, removeClient, startSseHeartbeat } from './sse.js';
+import { addClient, removeClient, startSseHeartbeat, onlineAmong, publishToUsers } from './sse.js';
 import { sendMessageSchema, editMessageSchema, createGroupSchema, addMembersSchema, renameGroupSchema } from './messages.schemas.js';
 import {
   listContacts,
@@ -26,6 +26,8 @@ import {
   removeGroupMember,
   renameGroup,
   leaveGroup,
+  getConversationPartnerIds,
+  typingSignal,
 } from './messages.service.js';
 
 // Chat file uploads reuse the shared uploads/ dir + the same document/image whitelist and 10 MB
@@ -80,7 +82,7 @@ router.get('/unread-count', asyncHandler(async (req, res) => {
 // events so the client refetches instantly instead of waiting for the poll. `X-Accel-Buffering: no`
 // disables nginx buffering for this response; the shared 25s heartbeat keeps it alive.
 startSseHeartbeat();
-router.get('/stream', (req, res) => {
+router.get('/stream', asyncHandler(async (req, res) => {
   res.set({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -90,9 +92,24 @@ router.get('/stream', (req, res) => {
   res.flushHeaders();
   res.write('retry: 5000\n\n'); // client reconnect backoff hint
   const userId = req.user!.id;
-  addClient(userId, res);
-  req.on('close', () => removeClient(userId, res));
-});
+  const cameOnline = addClient(userId, res);
+
+  // Presence: tell this client who among its conversation partners is already online, and (if this
+  // is the user's first stream) announce them online to those partners.
+  const partners = await getConversationPartnerIds(userId);
+  res.write(`event: presence-init\ndata: ${JSON.stringify({ online: onlineAmong(partners) })}\n\n`);
+  if (cameOnline) publishToUsers(partners, 'presence', { userId, online: true });
+
+  req.on('close', () => {
+    const wentOffline = removeClient(userId, res);
+    if (wentOffline) getConversationPartnerIds(userId).then((ps) => publishToUsers(ps, 'presence', { userId, online: false })).catch(() => {});
+  });
+}));
+
+// Ephemeral "I'm typing" ping to the conversation's other members (throttled client-side).
+router.post('/conversations/:id/typing', asyncHandler(async (req, res) => {
+  res.json(await typingSignal(req.user!.id, req.params.id));
+}));
 
 // Search the caller's messages (optionally within one conversation via ?conversationId=).
 router.get('/search', asyncHandler(async (req, res) => {

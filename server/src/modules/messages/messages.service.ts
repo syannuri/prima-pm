@@ -358,6 +358,28 @@ export async function getMessageFile(meId: string, messageId: string) {
   return { absPath, name: m.attachmentName ?? 'file', mime: m.attachmentMime ?? 'application/octet-stream' };
 }
 
+// Distinct users who share at least one conversation with `userId` — the audience for that user's
+// presence (online/offline) broadcasts.
+export async function getConversationPartnerIds(userId: string): Promise<string[]> {
+  const mine = await prisma.conversationMember.findMany({ where: { userId }, select: { conversationId: true } });
+  if (mine.length === 0) return [];
+  const others = await prisma.conversationMember.findMany({
+    where: { conversationId: { in: mine.map((m) => m.conversationId) }, userId: { not: userId } },
+    select: { userId: true },
+    distinct: ['userId'],
+  });
+  return others.map((o) => o.userId);
+}
+
+// Broadcast an ephemeral "typing" ping to the OTHER members of a conversation the caller belongs to.
+// Not persisted; the client resolves the userId to a name from its own member list and auto-expires.
+export async function typingSignal(meId: string, conversationId: string) {
+  const members = await prisma.conversationMember.findMany({ where: { conversationId }, select: { userId: true } });
+  if (!members.some((m) => m.userId === meId)) throw NotFound('Conversation not found');
+  publishToUsers(members.filter((m) => m.userId !== meId).map((m) => m.userId), 'typing', { conversationId, userId: meId });
+  return { ok: true };
+}
+
 // Case-insensitive substring search over the caller's conversations (body OR attachment filename),
 // optionally scoped to one conversation. Deleted messages excluded. Each hit carries its
 // conversation's display info + the sender name so the client can deep-link into the thread.
