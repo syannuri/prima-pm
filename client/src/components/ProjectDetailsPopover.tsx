@@ -66,8 +66,11 @@ export default function ProjectDetailsPopover({ project }: { project: Project })
         <span aria-hidden className="text-[9px] text-slate-400 dark:text-slate-500">▾</span>
       </button>
 
+      {/* z-40 clears the sticky tab strip (z-[31]) below the header — the popover opens
+          downward into that band, so z-30 let the strip paint over its lower rows. Stays
+          below modals (z-50+); the drawer (z-40) is mobile-only, this chip row is desktop-only. */}
       {open && (
-        <div role="dialog" aria-label="Financial details" className="absolute left-0 z-30 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg dark:border-slate-700 dark:bg-slate-900">
+        <div role="dialog" aria-label="Financial details" className="absolute left-0 z-40 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg dark:border-slate-700 dark:bg-slate-900">
           <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Financials</div>
           <Row label="Cost Baseline" value={baseline != null ? formatIdr(baseline) : '—'} />
           <Row label="Revenue" value={revenue != null ? formatIdr(revenue) : '—'} />
