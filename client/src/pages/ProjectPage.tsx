@@ -188,9 +188,6 @@ export default function ProjectPage() {
             <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'} solid>{project.status}</Badge>
             <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>
           </span>
-          {/* Always-visible EVM health summary (RAG + CPI/SPI/%complete), inline on the title
-              line. Full detail lives in the Monitoring → Health tab; clicking jumps there. */}
-          {chartered && <ProjectHealthStrip projectId={projectId} onOpen={() => setTab('Health')} />}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* Primary stage action stays prominent; secondary actions tuck into "⋯ More". */}
             <LifecycleActions project={project} onReview={() => setReviewOpen(true)} />
@@ -234,6 +231,9 @@ export default function ProjectPage() {
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
+        {/* EVM health summary (RAG + CPI/SPI/%complete) on its own row under the title. Full
+            detail lives in the Monitoring → Health tab; clicking jumps there. */}
+        {chartered && <div className="mt-2"><ProjectHealthStrip projectId={projectId} onOpen={() => setTab('Health')} /></div>}
         {/* Compact meta chips (PM · Client · Margin · Next steps). Hidden entirely on
             phones — the mobile Overview tab carries the health/financials, so the header stays
             tight; the full chip row returns on sm+ (desktop/tablet). */}
