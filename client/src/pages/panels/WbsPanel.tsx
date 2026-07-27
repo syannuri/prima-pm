@@ -66,6 +66,14 @@ const day = 86_400_000;
 type Scale = 'day' | 'week' | 'month';
 const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
 
+// Timeline scale options. 'width' fits the whole timeline to the visible width (no horizontal
+// scroll); 'fit' auto-picks a legible day/week/month by span; day/week/month are explicit and
+// accept continuous zoom (±). Ticks are always chosen from the resulting px/day for legibility.
+type ScaleOpt = Scale | 'fit' | 'width';
+const SCALE_OPTS: ScaleOpt[] = ['width', 'fit', 'day', 'week', 'month'];
+const SCALE_LABEL: Record<ScaleOpt, string> = { width: 'Fit', fit: 'Auto', day: 'Day', week: 'Week', month: 'Month' };
+const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
+
 // Frozen identity pane — ✓ · WBS · Task stay pinned while the timeline (and any date columns)
 // scroll horizontally, so a bar is always readable next to its task name. Cumulative left
 // offsets = the preceding sticky widths: ✓ w-8 (2rem) → WBS left-8; +WBS w-12 (3rem) → Task
@@ -384,9 +392,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     return { late, worst, baselined };
   }, [rows, rolled]);
 
-  // 'fit' = auto — the axis picks day/week/month from the project span so bars are legible on
-  // first load; Day/Week/Month override manually, and 'fit' returns to auto.
-  const [scale, setScale] = useState<Scale | 'fit'>('fit');
+  // Timeline zoom/scale. 'fit' auto-picks a legible discrete scale; 'width' fits the visible width;
+  // day/week/month are explicit and multiplied by `zoom` (± buttons / ⌘-scroll). `fitW` is the
+  // measured available timeline width for 'width' mode; `overflowX` drives the right-edge scroll hint.
+  const [scale, setScale] = useState<ScaleOpt>('fit');
+  const [zoom, setZoom] = useState(1);
+  const [fitW, setFitW] = useState<number | null>(null);
+  const [overflowX, setOverflowX] = useState(false);
+  const axisRef = useRef<{ width: number; effScale: Scale } | null>(null);
+  const preserveRef = useRef<number | null>(null); // timeline-centre fraction to restore across a zoom
 
   // Timeline axis: span of all (rolled) plan dates → a pixel width + ticks for the
   // chosen scale, plus a "today" marker. Bars are positioned by % of the span, so
@@ -416,9 +430,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     const max = Math.max(...hi, anyActive ? now : -Infinity);
     const span = Math.max(max - min, day);
     const spanDays = span / day;
-    // Fit = auto-pick the scale from the span so bars are legible without manual zooming.
-    const effScale: Scale = scale === 'fit' ? (spanDays <= 45 ? 'day' : spanDays <= 400 ? 'week' : 'month') : scale;
-    const width = Math.round(Math.min(11000, Math.max(300, spanDays * PX_PER_DAY[effScale])));
+    // Base pixels-per-day: 'width' fits the measured visible width; otherwise the discrete scale
+    // (auto-picked for 'fit') × zoom. Ticks are chosen from the RESULTING px/day so zooming into a
+    // month view still reveals week/day gridlines.
+    const autoScale: Scale = spanDays <= 45 ? 'day' : spanDays <= 400 ? 'week' : 'month';
+    let pxPerDay: number;
+    if (scale === 'width') pxPerDay = (fitW ?? 900) / spanDays;
+    else pxPerDay = PX_PER_DAY[scale === 'fit' ? autoScale : scale] * zoom;
+    let width = Math.max(300, Math.round(spanDays * pxPerDay));
+    if (scale !== 'width') width = Math.min(11000, width); // 'width' is already ≤ viewport
+    const effScale: Scale = pxPerDay >= 13 ? 'day' : pxPerDay >= 3.2 ? 'week' : 'month';
     const pct = (t: number) => Math.max(0, ((t - min) / span) * 100);
 
     const ticks: { key: string; label: string; leftPct: number; major: boolean }[] = [];
@@ -436,7 +457,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     const todayPct = now >= min && now <= max ? pct(now) : null;
     const minBarPct = (6 / width) * 100; // keep tiny tasks/milestones visible at any scale
     return { min, span, width, ticks, todayPct, minBarPct, effScale };
-  }, [rows, rolled, scale]);
+  }, [rows, rolled, scale, zoom, fitW]);
+  // Mirror the live axis into a ref so the (once-bound) wheel/zoom handlers never read a stale copy.
+  axisRef.current = axis ? { width: axis.width, effScale: axis.effScale } : null;
 
   // Jump the horizontal scroll so the Today marker is centered (measured from the live layout so
   // it's robust to the frozen pane + whatever columns precede the timeline).
@@ -445,6 +468,28 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     if (!sc || !tl || !axis || axis.todayPct == null) return;
     const todayX = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft + (axis.todayPct / 100) * axis.width;
     sc.scrollTo({ left: Math.max(0, todayX - sc.clientWidth / 2), behavior: 'smooth' });
+  };
+
+  // Zoom while keeping the timeline centre stable: capture the centre fraction before the width
+  // changes, restore the scroll after the re-render (reuses the frozen-pane offset math above).
+  const captureCenter = () => {
+    const sc = scrollRef.current, tl = timelineRef.current, a = axisRef.current;
+    if (!sc || !tl || !a) return;
+    const left = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
+    preserveRef.current = (sc.scrollLeft - left + sc.clientWidth / 2) / a.width;
+  };
+  useLayoutEffect(() => {
+    const sc = scrollRef.current, tl = timelineRef.current, a = axisRef.current;
+    if (preserveRef.current == null || !sc || !tl || !a) return;
+    const left = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
+    sc.scrollLeft = left + preserveRef.current * a.width - sc.clientWidth / 2;
+    preserveRef.current = null;
+  }, [axis?.width]);
+  // Continuous zoom. From an auto mode ('fit'/'width') it first locks to the current discrete scale.
+  const zoomBy = (f: number) => {
+    captureCenter();
+    setScale((s) => (s === 'fit' || s === 'width' ? (axisRef.current?.effScale ?? 'week') : s));
+    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * f)));
   };
 
   const [form, setForm] = useState<{ parentId: string | null; edit?: GanttNode } | null>(null);
@@ -458,6 +503,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // so it just gets the overlay + a "rotate your device" hint (see the header below).
   const enterFullscreen = async () => {
     setFullscreen(true);
+    // Re-centre on today once the overlay has laid out (the timeline just got the full width).
+    requestAnimationFrame(() => requestAnimationFrame(scrollToToday));
     const el = fsRef.current;
     if (el?.requestFullscreen) {
       try {
@@ -480,6 +527,47 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // frozen ✓/WBS/Task pane + the timeline get the room — the Gantt bars already encode the
   // plan-vs-actual dates. Toggle on for the full spreadsheet view.
   const [showDates, setShowDates] = useState(false);
+
+  // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
+  // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
+  // container resize, window resize, and layout-affecting toggles.
+  useLayoutEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    const measure = () => {
+      const s = scrollRef.current, t = timelineRef.current;
+      if (!s) return;
+      if (t) {
+        const left = t.getBoundingClientRect().left - s.getBoundingClientRect().left + s.scrollLeft;
+        setFitW(Math.max(300, s.clientWidth - left - 6));
+      }
+      setOverflowX(s.scrollWidth > s.clientWidth + 2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(sc);
+    window.addEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [rows.length, fullscreen, showDates, showGantt]);
+  // Refresh the overflow flag when the width changes via zoom/scale (no container resize fires).
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (sc) setOverflowX(sc.scrollWidth > sc.clientWidth + 2);
+  }, [axis?.width, showDates, showGantt]);
+  // ⌘/Ctrl + wheel zooms the timeline (bound once; zoomBy reads the axis via a ref, never stale).
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15);
+    };
+    sc.addEventListener('wheel', onWheel, { passive: false });
+    return () => sc.removeEventListener('wheel', onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length]);
+
   // Inline "add subtask" draft row (monday.com style) — rendered under its parent row.
   const [draft, setDraft] = useState<{ parentId: string; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
   // Base = ✓ WBS Task Owner % Status Var (7); +6 date/budget cols when shown; + Actions (editors)
@@ -655,8 +743,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
   return (
-    <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 overflow-auto bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
-    <Card className={fullscreen ? 'min-h-full' : ''}>
+    <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
+    {/* In full view the card is a flex column: header stays put, the timeline gets ALL remaining
+        height (no magic max-h that breaks when the toolbar wraps or a banner appears). */}
+    <Card className={fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}>
       {/* iOS (and any platform where orientation-lock isn't available) can't auto-rotate — nudge
           the user to turn the device so the timeline gets the full landscape width. */}
       {fullscreen && isTouch && portrait && (
@@ -704,13 +794,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             <div className="inline-flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
               <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-                {(['fit', 'day', 'week', 'month'] as (Scale | 'fit')[]).map((s) => (
-                  <button key={s} onClick={() => setScale(s)}
-                    title={s === 'fit' ? `Auto-fit the scale to the project span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : undefined}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-                    {s}
+                {SCALE_OPTS.map((s) => (
+                  <button key={s} onClick={() => { setScale(s); if (s !== 'fit' && s !== 'width') setZoom(1); }}
+                    title={s === 'width' ? 'Fit the whole timeline to the screen width' : s === 'fit' ? `Auto-pick a legible scale for the span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : undefined}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+                    {SCALE_LABEL[s]}
                   </button>
                 ))}
+              </div>
+              {/* Continuous zoom — also ⌘/Ctrl + scroll on the timeline. Disabled in Fit-to-width. */}
+              <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                <button onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">−</button>
+                <button onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">+</button>
               </div>
             </div>
           )}
@@ -745,7 +840,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             {criticalIds.size > 0 && <span className="ml-1 text-red-600 dark:text-red-400">· {criticalIds.size} on the critical path</span>}
           </div>
         )}
-        <div ref={scrollRef} className={`touch-pan-x touch-pan-y overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'max-h-[calc(100vh-9rem)]' : 'max-h-[65vh]'}`}>
+        <div className={`relative ${fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}`}>
+        <div ref={scrollRef} className={`touch-pan-x touch-pan-y overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'h-full' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
@@ -1090,6 +1186,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </tbody>
           </table>
           </div>
+        </div>
+        {/* Right-edge fade — hints that the timeline scrolls horizontally past the frozen pane. */}
+        {overflowX && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-white to-transparent dark:from-slate-900" />}
         </div>
           {/* Tracking-Gantt legend — outside the scroll box (kept in the card) so it stays visible without scrolling the table. */}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
