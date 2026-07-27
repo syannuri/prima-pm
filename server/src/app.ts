@@ -69,6 +69,12 @@ export function createApp() {
                 ...(env.googleClientId ? { frameSrc: ['https://accounts.google.com/gsi/'] } : {}),
                 objectSrc: ["'none'"],
                 baseUri: ["'self'"],
+                // Clickjacking (CWE-1021): only same-origin pages may frame the app. This is the
+                // modern CSP control browsers prioritise over the legacy X-Frame-Options: SAMEORIGIN
+                // (which helmet still sets as a fallback for older UAs). 'self' matches that policy.
+                frameAncestors: ["'self'"],
+                // Restrict where forms may submit — the SPA only posts to its own /api/v1 origin.
+                formAction: ["'self'"],
                 // Force sub-resources to HTTPS only when we're actually on HTTPS —
                 // on a plain-http LAN this directive would blank the page.
                 ...(env.secure ? { upgradeInsecureRequests: [] } : {}),
