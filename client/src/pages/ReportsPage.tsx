@@ -294,9 +294,9 @@ function ReportBody({ r }: { r: ProjectReportData }) {
       <Card>
         <SectionHead title="Forecast" sub="Estimate at completion, schedule projection & margin" />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <Kpi label="EAC — optimistic" value={formatIdrShort(f.eac.optimistic)} sub="remaining to plan" />
+          <Kpi label="EAC — best case" value={formatIdrShort(f.eac.optimistic)} sub="most favourable" />
           <Kpi label="EAC — likely" value={formatIdrShort(f.eac.likely)} sub="BAC ÷ CPI" warn={f.eac.likely > e.bac} />
-          <Kpi label="EAC — pessimistic" value={formatIdrShort(f.eac.pessimistic)} sub="cost + schedule drag" />
+          <Kpi label="EAC — worst case" value={formatIdrShort(f.eac.pessimistic)} sub="cost + schedule drag" />
           <Kpi label="ETC" value={formatIdrShort(f.etc)} sub="est. to complete" />
           <Kpi label="VAC" value={formatIdrShort(f.vac)} sub="variance at completion" warn={f.vac < 0} good={f.vac > 0} />
           <Kpi label="TCPI" value={f.bac > f.ac ? f.tcpi.toFixed(2) : '—'} sub="to-complete index" warn={f.bac > f.ac && f.tcpi > 1} />

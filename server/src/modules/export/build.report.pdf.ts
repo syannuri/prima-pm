@@ -222,9 +222,9 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
   table(
     [{ title: 'Forecast', w: 240 }, { title: 'Value', w: 275, align: 'right' }],
     [
-      ['EAC — optimistic (to plan)', formatIdr(f.eac.optimistic)],
+      ['EAC — best case', formatIdr(f.eac.optimistic)],
       ['EAC — likely (BAC / CPI)', formatIdr(f.eac.likely)],
-      ['EAC — pessimistic (cost+schedule drag)', formatIdr(f.eac.pessimistic)],
+      ['EAC — worst case (cost+schedule drag)', formatIdr(f.eac.pessimistic)],
       ['Estimate to Complete (ETC)', formatIdr(f.etc)],
       ['Variance at Completion (VAC)', formatIdr(f.vac)],
       ['To-Complete Performance Index (TCPI)', f.bac > f.ac ? f.tcpi.toFixed(3) : '—'],

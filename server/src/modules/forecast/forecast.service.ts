@@ -10,6 +10,25 @@ import { evmPvSeries } from '../schedule/evm.batch.js';
 const DAY = 86_400_000;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * The three EAC scenarios from different assumptions, clamped to a guaranteed
+ * best ≤ likely ≤ worst band. They are NOT inherently ordered: when the project runs UNDER budget
+ * (CPI>1) the "remaining-at-plan" figure exceeds the trend figure, so a naive best=plan-revert /
+ * worst=trend labelling would show "best case" as the MORE expensive number. `likely` stays the
+ * canonical BAC/CPI (also used by margin.projected); optimistic/pessimistic are the min/max.
+ */
+export function eacScenarios(bac: number, ev: number, ac: number, cpi: number, spi: number) {
+  const eacPlanRest = ac + (bac - ev);                          // remaining work reverts to plan
+  const eacTrend = cpi > 0 ? bac / cpi : bac;                   // current cost trend continues
+  const scpi = cpi * spi;
+  const eacBoth = scpi > 0 ? ac + (bac - ev) / scpi : eacTrend; // cost + schedule drag both continue
+  return {
+    optimistic: r2(Math.min(eacPlanRest, eacTrend, eacBoth)),
+    likely: r2(eacTrend),
+    pessimistic: r2(Math.max(eacPlanRest, eacTrend, eacBoth)),
+  };
+}
+
 // Project-level EVM forecast: EAC scenarios, schedule/date forecast, projected
 // margin and an S-curve (planned PV, actual AC to date, forecast cost to EAC).
 export async function getProjectForecast(projectId: string, statusDate: Date) {
@@ -28,13 +47,8 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
 
   const { bac, ev, ac, cpi, spi } = evm;
 
-  // --- EAC scenarios (best / likely / worst) ---
-  // Optimistic: remaining work goes to plan.  Likely: current cost trend continues
-  // (BAC/CPI).  Pessimistic: both cost AND schedule drag continue.
-  const optimistic = r2(ac + (bac - ev));
-  const likely = cpi > 0 ? r2(bac / cpi) : bac;
-  const scpi = cpi * spi;
-  const pessimistic = scpi > 0 ? r2(ac + (bac - ev) / scpi) : likely;
+  // --- EAC scenarios (best ≤ likely ≤ worst) ---
+  const { optimistic, likely, pessimistic } = eacScenarios(bac, ev, ac, cpi, spi);
 
   // --- Planned window (schedule tasks, else charter high-level dates) ---
   const plannedStart = tasks.length ? Math.min(...tasks.map((t) => +t.planStart)) : charter ? +charter.hiScheduleStart : null;
@@ -64,9 +78,13 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
     // PV per methodology (points-based for agile); batched (predictive loads WBS/cost rows once
     // and evaluates each date in memory). Identical to getProjectEvm(projectId, 0, d).pv.
     const pvs = await evmPvSeries(projectId, dates);
+    // The forecast cost line runs from today's AC up to the likely EAC. It ends at the forecast
+    // finish when schedule performance is known (SPI>0); otherwise fall back to the planned finish
+    // so a project with cost recorded but no schedule signal still gets a cost projection.
+    const fcEnd = forecastFinish ?? (plannedFinish != null && plannedFinish > now ? plannedFinish : null);
     dates.forEach((d, i) => {
-      const forecast = forecastFinish && forecastFinish > now && d >= now
-        ? r2(ac + (likely - ac) * ((d - now) / (forecastFinish - now)))
+      const forecast = fcEnd != null && fcEnd > now && d >= now
+        ? r2(ac + (likely - ac) * ((d - now) / (fcEnd - now)))
         : null;
       sCurve.push({ t: new Date(d).toISOString(), pv: r2(pvs[i]), ac: d <= now ? r2(acAsOf(d)) : null, forecast });
     });
