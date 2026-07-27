@@ -58,8 +58,10 @@ export default function NextStepChip({ projectId, onJump }: { projectId: string;
         <span aria-hidden className="text-[9px] text-indigo-400 dark:text-indigo-500">▾</span>
       </button>
 
+      {/* z-40 clears the sticky project tab strip (z-[31]) — the popover opens downward into that
+          band, so z-30 let the strip paint over it (same fix as the header Margin popover). */}
       {open && (
-        <div role="dialog" aria-label="Next steps" className="absolute left-0 z-30 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg dark:border-slate-700 dark:bg-slate-900">
+        <div role="dialog" aria-label="Next steps" className="absolute left-0 z-40 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg dark:border-slate-700 dark:bg-slate-900">
           <div className="mb-2 flex items-center gap-1.5">
             <IconCompass className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
             <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500 dark:text-indigo-400">Next steps</span>
