@@ -48,6 +48,10 @@ import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels'
 
 type Tab = 'Overview' | 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Health' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
+// Tabs hidden on phones (kept on tablet/desktop). Data-entry / governance surfaces that don't suit
+// a small screen; excluded from the tab bar and never resolved as the active tab on mobile.
+const MOBILE_HIDDEN: Tab[] = ['Timesheet', 'Change Req'];
+
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -138,7 +142,7 @@ export default function ProjectPage() {
   // Agile tab for agile/hybrid; the predictive Schedule (WBS/Gantt) is hidden for pure
   // Agile (its scheduling lives in sprints/board) but kept for predictive & hybrid.
   const showSchedule = project.deliveryApproach !== 'AGILE';
-  const tabs: Tab[] = [
+  const tabs: Tab[] = ([
     // Graphic Overview is a MOBILE-ONLY tab — a visual EVM/health summary so the phone lands
     // on charts, not a wall of tabs. On the web/desktop it's hidden (the health strip, Next-steps
     // guide and the dedicated Health/EVM tabs already cover this on a wide screen). DRAFT projects
@@ -148,7 +152,9 @@ export default function ProjectPage() {
     ...(isAgile ? (['Agile'] as Tab[]) : []),
     'Cost', 'Procurement', 'Timesheet', 'Health', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
     'Charter', 'Stakeholders', 'Requirements', 'UAT', 'Closeout', 'Audit',
-  ];
+    // Timesheet & Change Req are data-entry/governance tabs kept to desktop/tablet — hidden on
+    // phones to keep the two-level tab bar lean (they're still fully reachable on a wide screen).
+  ] as Tab[]).filter((t) => !(isMobile && MOBILE_HIDDEN.includes(t)));
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once chartered,
   // phones land on the graphic Overview; desktop keeps the first working tab (Schedule/Agile/Cost).
   const landingTab: Tab = chartered ? (showSchedule ? 'Schedule' : isAgile ? 'Agile' : 'Cost') : 'Charter';
@@ -157,8 +163,14 @@ export default function ProjectPage() {
       : chartered && isMobile ? 'Overview'
       : landingTab);
   // Overview is mobile-only: never resolve to it on desktop (e.g. a phone→desktop resize while it
-  // was open, or a stale ?tab=Overview deep link) — fall back to the normal landing tab.
-  const activeTab: Tab = chosenTab === 'Overview' && !isMobile ? landingTab : chosenTab;
+  // was open, or a stale ?tab=Overview deep link) — fall back to the normal landing tab. Likewise
+  // the mobile-hidden tabs (Timesheet/Change Req) never resolve on a phone — whether reached via a
+  // ?tab= deep link, a resize, or a jump (e.g. the CR banner) — so the panel can't show behind a
+  // hidden tab.
+  const activeTab: Tab =
+    chosenTab === 'Overview' && !isMobile ? landingTab
+    : isMobile && MOBILE_HIDDEN.includes(chosenTab) ? landingTab
+    : chosenTab;
 
   // Shared pill style for the compact header meta chips (add the display util per use so
   // the conditionally-hidden chips can toggle with `hidden sm:inline-flex`).
@@ -257,7 +269,8 @@ export default function ProjectPage() {
         )}
       </div>
 
-      <CrDecisionBanner projectId={projectId} onJump={(t) => setTab(t as Tab)} />
+      {/* CR banner jumps to the Change Req tab — hidden on phones where that tab is hidden. */}
+      {!isMobile && <CrDecisionBanner projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
 
       <ActivationReviewBanner project={project} />
       {reviewOpen && canEdit && <ActivationReviewModal projectId={projectId} onClose={closeReview} />}
