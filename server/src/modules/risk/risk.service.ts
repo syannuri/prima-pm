@@ -90,8 +90,16 @@ export async function updateRisk(
   const existing = await prisma.risk.findFirst({ where: { id: riskId, projectId } });
   if (!existing) throw NotFound('Risk not found');
 
+  // The raw residual P%/cost aren't persisted (only residualEmv), so the edit form can't prefill
+  // them. When the caller omits the residual pair, KEEP the existing residualEmv instead of nulling
+  // it — otherwise editing just the Status/Response would silently wipe the residual and shift the
+  // contingency reserve. To change residual, the form sends a fresh pair (buildRiskData recomputes).
+  const keepResidual = input.residualProbabilityPct == null && input.residualImpactCost == null;
   const risk = await prisma.$transaction(async (tx) => {
-    const updated = await tx.risk.update({ where: { id: riskId }, data: buildRiskData(input) });
+    const updated = await tx.risk.update({
+      where: { id: riskId },
+      data: { ...buildRiskData(input), ...(keepResidual ? { residualEmv: existing.residualEmv } : {}) },
+    });
     await recomputeBaseline(projectId, tx);
     return updated;
   });

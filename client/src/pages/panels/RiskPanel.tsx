@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Risk, RiskAnalysis } from '../../api/types';
@@ -10,9 +10,23 @@ import Attachments from '../../components/Attachments';
 
 const SEV_COLOR: Record<string, string> = { LOW: 'green', MEDIUM: 'amber', HIGH: 'red', CRITICAL: 'red' };
 
+// Lifecycle status of a risk. Colour signals where it sits: grey (logged/being analysed), blue
+// (a response is planned), amber (open/active), green (closed), red (it occurred).
+const RISK_STATUSES = ['IDENTIFIED', 'ANALYZING', 'PLANNED', 'OPEN', 'CLOSED', 'OCCURRED'] as const;
+const STATUS_COLOR: Record<string, string> = {
+  IDENTIFIED: 'slate', ANALYZING: 'indigo', PLANNED: 'sky', OPEN: 'amber', CLOSED: 'green', OCCURRED: 'red',
+};
+// Valid response strategies per kind (PMBOK). THREAT and OPPORTUNITY share only ACCEPT.
+const RESPONSES_BY_KIND: Record<string, string[]> = {
+  THREAT: ['AVOID', 'MITIGATE', 'TRANSFER', 'ACCEPT'],
+  OPPORTUNITY: ['EXPLOIT', 'ENHANCE', 'SHARE', 'ACCEPT'],
+};
+const cap = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : s);
+
 export default function RiskPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const [filesFor, setFilesFor] = useState<{ id: string; code: string } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const base = `/projects/${projectId}/risk`;
   const risksQ = useQuery({ queryKey: ['risks', projectId], queryFn: () => api.get<{ risks: Risk[] }>(base) });
   const analysisQ = useQuery({ queryKey: ['risk-analysis', projectId], queryFn: () => api.get<RiskAnalysis>(`${base}/analysis`) });
@@ -70,32 +84,49 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
           <table className="prima-rows w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-                <th className="py-2">Code</th><th>Title</th><th>Kind</th><th>P×I</th><th>Severity</th>
+                <th className="py-2">Code</th><th>Title</th><th>Kind</th><th>P×I</th><th>Severity</th><th>Status</th><th>Response</th>
                 <th className="text-right">EMV</th><th className="text-right">Residual</th><th></th>
               </tr>
             </thead>
             <tbody>
               {risksQ.data?.risks.map((r) => (
-                <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800">
-                  <td className="py-2 font-mono text-xs">{r.code}</td>
-                  <td>{r.title}</td>
-                  <td><Badge color={r.kind === 'THREAT' ? 'red' : 'green'}>{r.kind}</Badge></td>
-                  <td>{r.probabilityScore}×{r.impactScore}={r.riskScore}</td>
-                  <td><Badge color={SEV_COLOR[r.severity]}>{r.severity}</Badge></td>
-                  <td className="text-right">{formatIdr(r.emv)}</td>
-                  <td className="text-right text-slate-500 dark:text-slate-400">{r.residualEmv ? formatIdr(r.residualEmv) : '—'}</td>
-                  <td className="text-right">
-                    <button
-                      onClick={() => setFilesFor((f) => (f?.id === r.id ? null : { id: r.id, code: r.code }))}
-                      className="mr-2 text-xs text-brand-600 hover:underline"
-                    >
-                      📎 files
-                    </button>
-                    <DeleteRisk base={base} id={r.id} title={r.title} onDone={invalidate} />
-                  </td>
-                </tr>
+                <Fragment key={r.id}>
+                  <tr className="border-b border-slate-100 dark:border-slate-800">
+                    <td className="py-2 font-mono text-xs">{r.code}</td>
+                    <td>{r.title}</td>
+                    <td><Badge color={r.kind === 'THREAT' ? 'red' : 'green'}>{r.kind}</Badge></td>
+                    <td>{r.probabilityScore}×{r.impactScore}={r.riskScore}</td>
+                    <td><Badge color={SEV_COLOR[r.severity]}>{r.severity}</Badge></td>
+                    <td><Badge color={STATUS_COLOR[r.status] ?? 'slate'}>{cap(r.status)}</Badge></td>
+                    <td className="text-slate-500 dark:text-slate-400">{r.responseStrategy ? cap(r.responseStrategy) : '—'}</td>
+                    <td className="text-right">{formatIdr(r.emv)}</td>
+                    <td className="text-right text-slate-500 dark:text-slate-400">{r.residualEmv ? formatIdr(r.residualEmv) : '—'}</td>
+                    <td className="whitespace-nowrap text-right">
+                      <button
+                        onClick={() => setEditingId((id) => (id === r.id ? null : r.id))}
+                        className="mr-2 text-xs text-brand-600 hover:underline"
+                      >
+                        {editingId === r.id ? 'close' : 'edit'}
+                      </button>
+                      <button
+                        onClick={() => setFilesFor((f) => (f?.id === r.id ? null : { id: r.id, code: r.code }))}
+                        className="mr-2 text-xs text-brand-600 hover:underline"
+                      >
+                        📎 files
+                      </button>
+                      <DeleteRisk base={base} id={r.id} title={r.title} onDone={invalidate} />
+                    </td>
+                  </tr>
+                  {editingId === r.id && (
+                    <tr className="border-b border-slate-100 dark:border-slate-800">
+                      <td colSpan={10} className="p-0">
+                        <RiskForm base={base} existing={r} onDone={invalidate} onCancel={() => setEditingId(null)} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
-              {!risksQ.data?.risks.length && <tr><td colSpan={8} className="py-3 text-center text-slate-500 dark:text-slate-400">No risks yet.</td></tr>}
+              {!risksQ.data?.risks.length && <tr><td colSpan={10} className="py-3 text-center text-slate-500 dark:text-slate-400">No risks yet.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -126,8 +157,22 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
                   <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Residual</dt>
                   <dd className="tabular-nums text-slate-500 dark:text-slate-400">{r.residualEmv ? formatIdr(r.residualEmv) : '—'}</dd>
                 </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</dt>
+                  <dd><Badge color={STATUS_COLOR[r.status] ?? 'slate'}>{cap(r.status)}</Badge></dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Response</dt>
+                  <dd className="text-slate-600 dark:text-slate-300">{r.responseStrategy ? cap(r.responseStrategy) : '—'}</dd>
+                </div>
               </dl>
               <div className="mt-2 flex justify-end gap-4 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <button
+                  onClick={() => setEditingId((id) => (id === r.id ? null : r.id))}
+                  className="text-xs font-medium text-brand-600 hover:underline"
+                >
+                  {editingId === r.id ? 'close' : 'edit'}
+                </button>
                 <button
                   onClick={() => setFilesFor((f) => (f?.id === r.id ? null : { id: r.id, code: r.code }))}
                   className="text-xs font-medium text-brand-600 hover:underline"
@@ -136,6 +181,11 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
                 </button>
                 <DeleteRisk base={base} id={r.id} title={r.title} onDone={invalidate} />
               </div>
+              {editingId === r.id && (
+                <div className="mt-2">
+                  <RiskForm base={base} existing={r} onDone={invalidate} onCancel={() => setEditingId(null)} />
+                </div>
+              )}
             </div>
           ))}
           {!risksQ.data?.risks.length && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">No risks yet.</p>}
@@ -147,7 +197,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
           </div>
         )}
 
-        <AddRisk base={base} onDone={invalidate} />
+        <RiskForm base={base} onDone={invalidate} />
       </Card>
     </div>
   );
@@ -196,18 +246,35 @@ function Heatmap({ cells }: { cells: RiskAnalysis['heatmap'] }) {
   );
 }
 
-function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
+function RiskForm({ base, existing, onDone, onCancel }: { base: string; existing?: Risk; onDone: () => void; onCancel?: () => void }) {
+  const toast = useToast();
+  const isEdit = !!existing;
   const [f, setF] = useState({
-    title: '', kind: 'THREAT', probabilityScore: '3', impactScore: '3',
-    probabilityPct: '0.3', impactCostIdr: '', responseStrategy: '', residualProbabilityPct: '', residualImpactCost: '',
+    title: existing?.title ?? '', kind: (existing?.kind ?? 'THREAT') as string,
+    status: existing?.status ?? 'IDENTIFIED', responseStrategy: existing?.responseStrategy ?? '',
+    probabilityScore: String(existing?.probabilityScore ?? 3), impactScore: String(existing?.impactScore ?? 3),
+    probabilityPct: existing ? String(existing.probabilityPct) : '0.3', impactCostIdr: existing ? String(existing.impactCostIdr) : '',
+    residualProbabilityPct: '', residualImpactCost: '',
   });
   const [err, setErr] = useState('');
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+  // Switching kind drops a response that's no longer valid (THREAT/OPPORTUNITY share only ACCEPT).
+  const setKind = (kind: string) => setF((p) => ({
+    ...p, kind,
+    responseStrategy: (RESPONSES_BY_KIND[kind] ?? []).includes(p.responseStrategy) ? p.responseStrategy : '',
+  }));
+  // Coherence: picking a response while the risk is still just identified/analysed advances the
+  // status to PLANNED (a response is now planned). The user can still override it afterwards.
+  const setResponse = (rs: string) => setF((p) => ({
+    ...p, responseStrategy: rs,
+    status: rs && (p.status === 'IDENTIFIED' || p.status === 'ANALYZING') ? 'PLANNED' : p.status,
+  }));
+  const allowedResponses = RESPONSES_BY_KIND[f.kind] ?? [];
 
-  const add = useMutation({
+  const save = useMutation({
     mutationFn: () => {
       const body: Record<string, unknown> = {
-        title: f.title, kind: f.kind,
+        title: f.title, kind: f.kind, status: f.status,
         probabilityScore: Number(f.probabilityScore), impactScore: Number(f.impactScore),
         probabilityPct: Number(f.probabilityPct), impactCostIdr: Number(f.impactCostIdr),
       };
@@ -216,9 +283,13 @@ function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
         body.residualProbabilityPct = Number(f.residualProbabilityPct);
         body.residualImpactCost = Number(f.residualImpactCost);
       }
-      return api.post(`${base}`, body);
+      return isEdit ? api.put(`${base}/${existing!.id}`, body) : api.post(`${base}`, body);
     },
-    onSuccess: () => { setF((p) => ({ ...p, title: '', impactCostIdr: '', residualProbabilityPct: '', residualImpactCost: '' })); setErr(''); onDone(); },
+    onSuccess: () => {
+      setErr('');
+      if (isEdit) { toast.success('Risk updated'); onDone(); onCancel?.(); }
+      else { setF((p) => ({ ...p, title: '', impactCostIdr: '', residualProbabilityPct: '', residualImpactCost: '' })); onDone(); }
+    },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed'),
   });
 
@@ -230,6 +301,9 @@ function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
   const hasResidual = f.residualProbabilityPct !== '' && f.residualImpactCost !== '';
   const residualEmvPreview = hasResidual ? sign * clamp01(Number(f.residualProbabilityPct)) * Math.abs(Number(f.residualImpactCost) || 0) : null;
   const reserveEmv = residualEmvPreview ?? emvPreview;
+  // Non-blocking coherence hints.
+  const responseButNotPlanned = !!f.responseStrategy && (f.status === 'IDENTIFIED' || f.status === 'ANALYZING');
+  const resolvedNoResponse = (f.status === 'CLOSED' || f.status === 'OCCURRED') && !f.responseStrategy;
 
   return (
     <div className="mt-4 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
@@ -237,10 +311,21 @@ function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <div className="col-span-2 md:col-span-1"><Field label="Title"><Input value={f.title} onChange={(e) => set('title', e.target.value)} /></Field></div>
         <div className="col-span-2 md:col-span-1"><Field label="Kind">
-          <Select value={f.kind} onChange={(e) => set('kind', e.target.value)}>
+          <Select value={f.kind} onChange={(e) => setKind(e.target.value)}>
             <option value="THREAT">Threat</option><option value="OPPORTUNITY">Opportunity</option>
           </Select>
         </Field></div>
+        <Field label="Response">
+          <Select value={f.responseStrategy} onChange={(e) => setResponse(e.target.value)}>
+            <option value="">— none —</option>
+            {allowedResponses.map((rs) => <option key={rs} value={rs}>{cap(rs)}</option>)}
+          </Select>
+        </Field>
+        <Field label="Status">
+          <Select value={f.status} onChange={(e) => set('status', e.target.value)}>
+            {RISK_STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
+          </Select>
+        </Field>
         <Field label="Probability (1-5)" hint="Qualitative — heatmap & severity">
           <Input type="number" min={1} max={5} value={f.probabilityScore} onChange={(e) => set('probabilityScore', e.target.value)} title="Likelihood score 1–5 (qualitative). Sets the risk's row on the 5×5 heatmap and its severity — separate from Probability %." />
         </Field>
@@ -275,8 +360,21 @@ function AddRisk({ base, onDone }: { base: string; onDone: () => void }) {
         </span>
       </div>
 
+      {/* On edit the raw residual P%/cost aren't stored, so the fields start blank — the server keeps
+          the current residual EMV unless a fresh pair is entered here. */}
+      {isEdit && existing?.residualEmv && !hasResidual && (
+        <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">Current residual EMV {formatIdr(existing.residualEmv)} is kept — enter a new Residual P% + Impact to change it.</p>
+      )}
+      {responseButNotPlanned && (
+        <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">A response is set but status is still “{cap(f.status)}” — consider moving it to Planned.</p>
+      )}
+      {resolvedNoResponse && (
+        <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">Status is “{cap(f.status)}” with no response strategy recorded.</p>
+      )}
+
       <div className="mt-2 flex items-center gap-2">
-        <Button onClick={() => add.mutate()} disabled={!f.title || !f.impactCostIdr || add.isPending}>Add Risk</Button>
+        <Button onClick={() => save.mutate()} disabled={!f.title || !f.impactCostIdr || save.isPending}>{isEdit ? 'Save changes' : 'Add Risk'}</Button>
+        {isEdit && onCancel && <Button variant="ghost" onClick={onCancel}>Cancel</Button>}
         {err && <span className="text-sm text-red-600">{err}</span>}
       </div>
     </div>
