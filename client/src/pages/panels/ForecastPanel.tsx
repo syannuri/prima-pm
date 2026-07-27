@@ -9,8 +9,9 @@ import ForecastChart from '../../components/ForecastChart';
 const money = (n: number) => formatIdr(n);
 
 export default function ForecastPanel({ projectId }: { projectId: string }) {
-  const [statusDate, setStatusDate] = useState(formatDateInput(new Date()));
-  const { data, isLoading } = useQuery({
+  const today = formatDateInput(new Date());
+  const [statusDate, setStatusDate] = useState(today);
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['forecast', projectId, statusDate],
     queryFn: () => api.get<Forecast>(`/projects/${projectId}/forecast?statusDate=${statusDate}`),
   });
@@ -20,7 +21,17 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
 
   const f = data;
   const costDelta = f.eac.likely - f.bac; // + = projected over budget
-  const over = costDelta > 0.5;
+  const isOver = costDelta > 0.5; // wording: over vs under budget
+  // Three-state verdict so a marginal overrun isn't alarmist red: within 2% of BAC = "watch"
+  // (amber), beyond that = "over" (red), on/under budget = "ok" (green).
+  const overPct = f.bac > 0 ? costDelta / f.bac : (isOver ? 1 : 0);
+  const status: 'over' | 'watch' | 'ok' = overPct > 0.02 ? 'over' : isOver ? 'watch' : 'ok';
+  const cardTone = status === 'over' ? 'border-red-200 bg-red-50/50 dark:border-red-900/40 dark:bg-red-900/10'
+    : status === 'watch' ? 'border-amber-200 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-900/10'
+    : 'border-green-200 bg-green-50/50 dark:border-green-900/40 dark:bg-green-900/10';
+  const figTone = status === 'over' ? 'text-red-600 dark:text-red-400'
+    : status === 'watch' ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400';
+  const statusIcon = status === 'ok' ? '✓' : '⚠'; // shape cue independent of colour
   const marginDrop = f.margin.planned - f.margin.projected;
   const days = f.schedule.varianceDays;
 
@@ -28,9 +39,12 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <SectionTitle sub="Where this project is heading, from current cost & schedule performance (EVM).">Forecast at Completion</SectionTitle>
-        <label className="text-xs text-slate-500 dark:text-slate-400">
+        <label className="flex items-center text-xs text-slate-500 dark:text-slate-400">
+          {isFetching && !isLoading && <span className="mr-2 animate-pulse text-[11px] text-slate-400 dark:text-slate-500">updating…</span>}
           <span className="mr-2 uppercase tracking-wide">Status date</span>
-          <Input type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="!w-40 !py-1.5" />
+          {/* Cap at today — a future status date advances PV while AC stays flat, faking an
+              "under budget / ahead" forecast. */}
+          <Input type="date" max={today} value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="!w-40 !py-1.5" />
         </label>
       </div>
 
@@ -39,11 +53,12 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
       ) : (
         <>
           {/* Plain-language verdict */}
-          <Card className={`!p-3 ${over ? 'border-red-200 bg-red-50/50 dark:border-red-900/40 dark:bg-red-900/10' : 'border-green-200 bg-green-50/50 dark:border-green-900/40 dark:bg-green-900/10'}`}>
+          <Card className={`!p-3 ${cardTone}`}>
             <p className="text-sm text-slate-700 dark:text-slate-200">
+              <span aria-hidden className={`mr-1 ${figTone}`}>{statusIcon}</span>
               At the current pace this project is forecast to finish at{' '}
-              <strong className={over ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>{money(f.eac.likely)}</strong>{' '}
-              — <strong>{over ? `over budget by ${money(Math.abs(costDelta))}` : `under budget by ${money(Math.abs(costDelta))}`}</strong>
+              <strong className={figTone}>{money(f.eac.likely)}</strong>{' '}
+              — <strong>{isOver ? `over budget by ${money(Math.abs(costDelta))}` : `under budget by ${money(Math.abs(costDelta))}`}</strong>
               {days != null && (
                 <> and <strong>{days > 0 ? `${days} day${days === 1 ? '' : 's'} late` : days < 0 ? `${-days} day${days === -1 ? '' : 's'} early` : 'on schedule'}</strong></>
               )}. Projected margin: <strong className={f.margin.projected < 0 ? 'text-red-600 dark:text-red-400' : ''}>{money(f.margin.projected)}</strong>
@@ -53,9 +68,9 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
 
           {/* EAC scenarios */}
           <div className="grid gap-3 sm:grid-cols-3">
-            <Scenario label="Best case" hint="If remaining work goes to plan" value={f.eac.optimistic} bac={f.bac} />
+            <Scenario label="Best case" hint="Most favourable of the EVM scenarios" value={f.eac.optimistic} bac={f.bac} />
             <Scenario label="Likely (BAC ÷ CPI)" hint="If the current cost trend continues" value={f.eac.likely} bac={f.bac} emphasise />
-            <Scenario label="Worst case" hint="If cost & schedule trends both continue" value={f.eac.pessimistic} bac={f.bac} />
+            <Scenario label="Worst case" hint="If cost & schedule drag both continue" value={f.eac.pessimistic} bac={f.bac} />
           </div>
 
           {/* Metrics + schedule + margin */}
@@ -110,8 +125,40 @@ function Row({ label, value, tone, strong, hint }: { label: string; value: strin
   const c = tone === 'red' ? 'text-red-600 dark:text-red-400' : tone === 'green' ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-100';
   return (
     <div className="flex items-center justify-between gap-2 border-b border-slate-100 py-1.5 last:border-0 dark:border-slate-800">
-      <span className="text-xs text-slate-500 dark:text-slate-400" title={hint}>{label}{hint && <span className="ml-0.5 text-slate-300 dark:text-slate-600">ⓘ</span>}</span>
-      <span className={`text-sm tabular-nums ${strong ? 'font-bold' : 'font-medium'} ${c}`}>{value}</span>
+      <span className="flex items-center text-xs text-slate-500 dark:text-slate-400">{label}{hint && <InfoTip text={hint} />}</span>
+      <span className={`text-sm tabular-nums ${strong ? 'font-bold' : 'font-medium'} ${c}`}>
+        {/* Shape cue so status doesn't rely on colour alone (▲ worse · ▼ better). */}
+        {tone && <span aria-hidden className="mr-1 text-[9px]">{tone === 'red' ? '▲' : '▼'}</span>}
+        {value}
+      </span>
     </div>
+  );
+}
+
+// Accessible info tooltip: works on hover (mouse), focus (keyboard) AND tap (touch, where :hover
+// and the native title= attribute don't fire). The trigger carries the text as its aria-label so
+// screen readers get it without opening the popover.
+function InfoTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative ml-0.5 inline-flex">
+      <button
+        type="button"
+        aria-label={text}
+        onClick={() => setOpen((o) => !o)}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-300 text-[8px] font-semibold leading-none text-slate-400 hover:border-slate-400 hover:text-slate-500 dark:border-slate-600 dark:text-slate-500"
+      >
+        i
+      </button>
+      {open && (
+        <span role="tooltip" className="absolute bottom-full left-1/2 z-20 mb-1 w-48 -translate-x-1/2 rounded-lg bg-slate-800 px-2 py-1 text-[11px] font-normal leading-snug text-white shadow-lg dark:bg-slate-700">
+          {text}
+        </span>
+      )}
+    </span>
   );
 }

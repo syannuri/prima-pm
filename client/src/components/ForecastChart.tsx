@@ -19,10 +19,13 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
   }
 
   const t0 = +new Date(pts[0].t), t1 = +new Date(pts[pts.length - 1].t);
+  // Scale to what is actually drawn (BAC, the likely EAC, and the PV/AC/forecast points) — NOT the
+  // pessimistic EAC, which isn't plotted and (when CPI·SPI is small) would inflate the axis and
+  // squash the visible curves. A little headroom keeps the top line off the frame edge.
   const maxY = Math.max(
-    data.bac, data.eac.pessimistic, data.eac.likely,
+    data.bac, data.eac.likely,
     ...pts.map((p) => Math.max(p.pv, p.ac ?? 0, p.forecast ?? 0)),
-  ) || 1;
+  ) * 1.06 || 1;
   const y = (v: number) => padT + (1 - v / maxY) * (H - padT - padB);
   const bacY = y(data.bac);
   const eacY = y(data.eac.likely);
@@ -69,12 +72,24 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
         const tickX = (ms: number) => Math.max(padL, Math.min(W - padR, x(ms)));
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
-            <line x1={padL} x2={W - padR} y1={bacY} y2={bacY} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth="1" strokeDasharray="2 3" />
-            <line x1={padL} x2={W - padR} y1={eacY} y2={eacY} stroke={FC} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
-            <line x1={nowX} x2={nowX} y1={padT} y2={H - padB} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" />
-            <path d={line((p) => p.pv)} fill="none" stroke={PV} strokeWidth="2" />
-            <path d={line((p) => p.ac)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" />
-            <path d={line((p) => p.forecast)} fill="none" stroke={FC} strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" />
+            {/* Faint horizontal gridlines + IDR-short labels so intermediate cost values are readable
+                without hovering. vector-effect keeps strokes an even 1px despite the non-uniform
+                stretch (preserveAspectRatio=none fills the width but would otherwise distort them). */}
+            {[0.25, 0.5, 0.75].map((fr) => {
+              const gy = y(maxY * fr);
+              return (
+                <g key={fr}>
+                  <line x1={padL} x2={W - padR} y1={gy} y2={gy} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                  <text x={padL + 1} y={gy - 2} className="fill-slate-300 text-[9px] dark:fill-slate-600">{formatIdrShort(maxY * fr)}</text>
+                </g>
+              );
+            })}
+            <line x1={padL} x2={W - padR} y1={bacY} y2={bacY} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+            <line x1={padL} x2={W - padR} y1={eacY} y2={eacY} stroke={FC} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" vectorEffect="non-scaling-stroke" />
+            <line x1={nowX} x2={nowX} y1={padT} y2={H - padB} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+            <path d={line((p) => p.pv)} fill="none" stroke={PV} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+            <path d={line((p) => p.ac)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            <path d={line((p) => p.forecast)} fill="none" stroke={FC} strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
             <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeWidth="1" />
             {ticks.map((tk) => (
               <line key={tk.ms} x1={tickX(tk.ms)} x2={tickX(tk.ms)} y1={H - padB} y2={H - padB + 4} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" />
