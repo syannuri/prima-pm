@@ -7,7 +7,8 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { BadRequest, Forbidden } from '../../lib/errors.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
-import { addClient, removeClient, startSseHeartbeat, onlineAmong, publishToUsers } from './sse.js';
+import { addClient, removeClient, startSseHeartbeat, onlineAmong, publishToUsers, setOfflineHandler, sseStats } from './sse.js';
+import { requireRole } from '../../middleware/rbac.js';
 import { sendMessageSchema, editMessageSchema, createGroupSchema, addMembersSchema, renameGroupSchema, reactionSchema, pushSubscribeSchema, pushUnsubscribeSchema } from './messages.schemas.js';
 import { getPublicKey, isPushEnabled, saveSubscription, deleteSubscription } from './push.js';
 import {
@@ -86,6 +87,23 @@ router.get('/unread-count', asyncHandler(async (req, res) => {
 // events so the client refetches instantly instead of waiting for the poll. `X-Accel-Buffering: no`
 // disables nginx buffering for this response; the shared 25s heartbeat keeps it alive.
 startSseHeartbeat();
+
+// Announce a user offline to their conversation partners. Extracted so both the connection-close
+// handler and the hub's dead-socket eviction (via setOfflineHandler) share one path. Best-effort.
+function announceOffline(userId: string): void {
+  getConversationPartnerIds(userId)
+    .then((ps) => publishToUsers(ps, 'presence', { userId, online: false }))
+    .catch(() => {});
+}
+// When the hub evicts a dead half-open stream (write failed, no 'close' fired), it can't derive the
+// offline audience itself (DB-free) — so it calls back here.
+setOfflineHandler(announceOffline);
+
+// SSE connection diagnostics (ADMIN/PMO): open stream count + distinct online users. Lets an
+// operator confirm stale connections aren't accumulating (the count should be flat at rest).
+router.get('/admin/sse-stats', requireRole('ADMIN', 'PMO'), (_req, res) => {
+  res.json(sseStats());
+});
 router.get('/stream', asyncHandler(async (req, res) => {
   res.set({
     'Content-Type': 'text/event-stream',
@@ -95,6 +113,10 @@ router.get('/stream', asyncHandler(async (req, res) => {
   });
   res.flushHeaders();
   res.write('retry: 5000\n\n'); // client reconnect backoff hint
+  // Probe the socket so a half-open connection (laptop sleep / network drop with no FIN) is
+  // eventually errored by the OS → 'error'/'close' fires → the stream is cleaned up instead of
+  // lingering in the hub. Without this the entry could survive until TCP's own (minutes-long) timeout.
+  req.socket.setKeepAlive(true, 30_000);
   const userId = req.user!.id;
   const cameOnline = addClient(userId, res);
 
@@ -104,10 +126,12 @@ router.get('/stream', asyncHandler(async (req, res) => {
   res.write(`event: presence-init\ndata: ${JSON.stringify({ online: onlineAmong(partners) })}\n\n`);
   if (cameOnline) publishToUsers(partners, 'presence', { userId, online: true });
 
-  req.on('close', () => {
-    const wentOffline = removeClient(userId, res);
-    if (wentOffline) getConversationPartnerIds(userId).then((ps) => publishToUsers(ps, 'presence', { userId, online: false })).catch(() => {});
-  });
+  // Clean up on either a graceful close or a socket error. removeClient is idempotent (returns true
+  // only for the last stream), so firing both events — or racing the hub's own eviction — never
+  // double-announces offline.
+  const cleanup = () => { if (removeClient(userId, res)) announceOffline(userId); };
+  req.on('close', cleanup);
+  res.on('error', cleanup);
 }));
 
 // Ephemeral "I'm typing" ping to the conversation's other members (throttled client-side).
