@@ -743,7 +743,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
   return (
-    <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
+    <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
     {/* In full view the card is a flex column: header stays put, the timeline gets ALL remaining
         height (no magic max-h that breaks when the toolbar wraps or a banner appears). */}
     <Card className={fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}>
@@ -754,12 +754,20 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           <span aria-hidden>↻</span> Rotate your device to landscape for the full timeline.
         </div>
       )}
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete">
-          Work Breakdown Structure
-        </SectionTitle>
-        <div className="flex items-center gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className={`flex flex-wrap items-end justify-between gap-2 ${fullscreen ? 'mb-2' : 'mb-3'}`}>
+        {/* In full view the title block is dropped so the header chrome stays short — on a
+            landscape PHONE (~390px tall) it otherwise eats the whole height and collapses the
+            timeline to nothing. */}
+        {!fullscreen && (
+          <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete">
+            Work Breakdown Structure
+          </SectionTitle>
+        )}
+        <div className={`flex items-center gap-3 ${fullscreen ? 'w-full min-w-0' : ''}`}>
+        {/* In full view the controls collapse to ONE horizontally-scrollable row (never wrap into
+            3 rows) so they don't eat the timeline's height on a landscape phone. [&>*]:shrink-0
+            keeps each control full-size; the row scrolls instead of squishing. */}
+        <div className={`flex items-center gap-2 ${fullscreen ? 'min-w-0 flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0' : 'flex-wrap'}`}>
           {rows.length > 0 && (
             <button onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
@@ -819,7 +827,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           )}
           {canEdit && <Button onClick={() => setForm({ parentId: null })}>+ Add Task</Button>}
         </div>
-        {rows.length > 0 && <ProgressRing pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
+        {!fullscreen && rows.length > 0 && <ProgressRing pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
         </div>
       </div>
 
@@ -840,8 +848,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             {criticalIds.size > 0 && <span className="ml-1 text-red-600 dark:text-red-400">· {criticalIds.size} on the critical path</span>}
           </div>
         )}
-        <div className={`relative ${fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}`}>
-        <div ref={scrollRef} className={`touch-pan-x touch-pan-y overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'h-full' : 'max-h-[65vh]'}`}>
+        <div className={`relative w-full min-w-0 ${fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}`}>
+        {/* w-full clamps the scroll box to the viewport so the wide table scrolls INSIDE it (never
+            pushes the page); in full view flex-1/min-h-0 fills the remaining height robustly — a %
+            `h-full` resolved to 0 inside the native-fullscreen element on mobile, so a rotate left
+            the timeline collapsed/stuck. */}
+        <div ref={scrollRef} className={`touch-pan-x touch-pan-y w-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'min-h-0 flex-1' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
@@ -1190,8 +1202,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         {/* Right-edge fade — hints that the timeline scrolls horizontally past the frozen pane. */}
         {overflowX && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-white to-transparent dark:from-slate-900" />}
         </div>
-          {/* Tracking-Gantt legend — outside the scroll box (kept in the card) so it stays visible without scrolling the table. */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          {/* Tracking-Gantt legend — outside the scroll box (kept in the card) so it stays visible
+              without scrolling the table. Hidden in full view: it's tall (2 rows) and would steal
+              the height the timeline needs on a landscape phone. */}
+          <div className={`mt-3 flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400 ${fullscreen ? 'hidden' : 'flex'}`}>
             <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" />Baseline</span>
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full bg-slate-300/50 ring-1 ring-inset ring-black/5 dark:bg-slate-600/40 dark:ring-white/10" />Plan</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-emerald-500" />Actual · done</span>
