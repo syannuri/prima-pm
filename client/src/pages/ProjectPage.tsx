@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
@@ -177,15 +177,12 @@ export default function ProjectPage() {
   const chipCls = 'items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div>
-        {/* On phones the top-bar "Projects" title + back arrow carry this context, so the
-            in-page breadcrumb link and project code are desktop-only. */}
-        <Link to="/" className="hidden text-sm text-brand-600 hover:underline sm:inline-block">
-          ← All projects
-        </Link>
-        <div className="mt-1 flex flex-wrap items-center gap-3">
-          <span className="hidden font-mono text-sm text-slate-500 dark:text-slate-400 sm:inline">{project.code}</span>
+        {/* Header leads straight with the project name — the in-page breadcrumb link and the
+            project-code chip were dropped to keep the top tight and lift the tab bar up. The
+            top-bar (and browser back) already carry the "back to projects" affordance. */}
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="min-w-0 break-words text-xl font-bold text-slate-800 dark:text-slate-100 sm:text-2xl">{project.name}</h1>
           <span className="flex items-center gap-2">
             <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'} solid>{project.status}</Badge>
