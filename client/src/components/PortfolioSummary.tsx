@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
-import HealthGauge from './HealthGauge';
+import EvmRings from './EvmRings';
 import { Badge, Card, Skeleton } from './ui';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
 import { computeMargin, likelyEac } from '../lib/margin';
@@ -170,8 +170,8 @@ export default function PortfolioSummary() {
           </div>
         </div>
         <div className="relative flex flex-col items-center gap-3 lg:flex-row lg:items-center lg:gap-5">
-          <div className="w-full max-w-[200px] shrink-0">
-            <HealthGauge compact spi={t.spi} cpi={t.cpi} pct={Math.round(t.scheduleProgress * 100)} status={gaugeStatus} statusLabel={HEALTH_META[gaugeStatus].label} />
+          <div className="shrink-0">
+            <EvmRings compact spi={t.spi} cpi={t.cpi} pct={Math.round(t.scheduleProgress * 100)} status={gaugeStatus} statusLabel={HEALTH_META[gaugeStatus].label} />
           </div>
           <div className="w-full flex-1">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
