@@ -763,11 +763,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             Work Breakdown Structure
           </SectionTitle>
         )}
-        <div className={`flex items-center gap-3 ${fullscreen ? 'w-full min-w-0' : ''}`}>
+        {/* Non-full view: min-w-0 + flex-wrap so the control cluster + progress ring can wrap
+            below each other on a narrow phone instead of pushing the row wider than the viewport
+            (iOS Safari won't shrink an inline-flex group → it overflowed sideways). */}
+        <div className={`flex min-w-0 items-center gap-3 ${fullscreen ? 'w-full' : 'flex-wrap'}`}>
         {/* In full view the controls collapse to ONE horizontally-scrollable row (never wrap into
             3 rows) so they don't eat the timeline's height on a landscape phone. [&>*]:shrink-0
             keeps each control full-size; the row scrolls instead of squishing. */}
-        <div className={`flex items-center gap-2 ${fullscreen ? 'min-w-0 flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0' : 'flex-wrap'}`}>
+        <div className={`flex min-w-0 items-center gap-2 ${fullscreen ? 'min-w-0 flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0' : 'flex-wrap'}`}>
           {rows.length > 0 && (
             <button onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
@@ -799,7 +802,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </button>
           )}
           {rows.length > 0 && showGantt && (
-            <div className="inline-flex items-center gap-1.5">
+            <div className="inline-flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
               <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
                 {SCALE_OPTS.map((s) => (
