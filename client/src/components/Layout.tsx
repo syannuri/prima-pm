@@ -1,9 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet } from '../context/LanguageContext';
 import { useOnboarding } from '../context/OnboardingContext';
-import { Button } from './ui';
 import NotificationBell from './NotificationBell';
 import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
@@ -16,7 +15,7 @@ import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { logout, user } = useAuth();
+  const { user } = useAuth();
   const { lang } = useLang();
   const { start: startTour } = useOnboarding();
   const navigate = useNavigate();
@@ -123,6 +122,11 @@ export default function Layout({ children }: { children: ReactNode }) {
               <path d="M9 4v16" />
             </svg>
           </button>
+          {/* Desktop: the current section name (mirrors the sidebar menu) so the top bar
+              isn't a blank strip and users always know where they are. */}
+          {pageTitle && (
+            <div className="ml-1 hidden min-w-0 truncate text-base font-semibold text-slate-800 dark:text-slate-100 md:block">{pageTitle}</div>
+          )}
           {/* Command palette trigger — pill on desktop, icon on mobile */}
           <button
             onClick={() => setCmdOpen(true)}
@@ -156,30 +160,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               </svg>
             </button>
           )}
-          <Link
-            to="/manual"
-            title="Manual / Help"
-            aria-label="Manual"
-            className="hidden h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 md:grid"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </Link>
-          <Link
-            to="/settings"
-            title="Settings"
-            aria-label="Settings"
-            className="hidden h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 md:grid"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </Link>
-          <Button variant="secondary" onClick={logout} className="hidden md:inline-flex">Logout</Button>
+          {/* Desktop: Settings, Manual, admin links, theme + Logout all live in one avatar menu
+              (declutters the top bar). Phones keep the top-left AvatarMenu above. */}
+          <div className="ml-1 hidden md:block"><AvatarMenu align="right" /></div>
         </header>
 
         <main className="flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-6">

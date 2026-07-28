@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { useAuth } from '../context/AuthContext';
 import { projectAccent } from '../lib/projectColor';
+import AvatarMenu from './AvatarMenu';
 
 function Icon({ path }: { path: string }) {
   return (
@@ -31,6 +32,8 @@ const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medi
 const linkIdle = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white';
 // Active item: soft coral wash + a crisp coral left accent bar.
 const linkActive = 'bg-brand-50 text-brand-700 shadow-[inset_2px_0_0_#f4675f] dark:bg-brand-600/15 dark:text-white';
+// Small uppercase group heading between nav sections (Workspace / Manage / Projects).
+const sectionLabel = 'px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500';
 
 // `drawer` = rendered as the mobile slide-over (not the fixed web sidebar). The Manual/Settings
 // footer is drawer-only: on the web those live in the header top-bar, so the sidebar hides them.
@@ -68,7 +71,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
   const cx = (active: boolean) => `${linkBase} ${collapsed ? 'justify-center px-0' : ''} ${active ? linkActive : linkIdle}`;
 
   return (
-    <div className={`flex h-full flex-col border-r border-slate-200 bg-white text-slate-600 transition-[width] duration-200 dark:border-transparent dark:bg-slate-900 dark:text-slate-300 ${collapsed ? 'w-16' : 'w-60'}`}>
+    <div className={`flex h-full flex-col border-r border-slate-200 bg-white text-slate-600 shadow-[6px_0_24px_-18px_rgba(15,23,42,0.35)] transition-[width] duration-200 dark:border-transparent dark:bg-slate-900 dark:text-slate-300 dark:shadow-none ${collapsed ? 'w-16' : 'w-60'}`}>
       <div className={`flex h-14 items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
         <span className={`relative inline-block border-[3px] border-slate-900 font-brand font-bold tracking-wide text-slate-900 dark:border-white dark:text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
           {collapsed ? 'P' : 'PRISMATIX'}
@@ -77,6 +80,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
+        {!collapsed && <div className={sectionLabel}>Workspace</div>}
         <NavLink to="/" end onClick={onNavigate} title={unread > 0 ? `Dashboard — ${unread} unread changes` : 'Dashboard'} className={({ isActive }) => `relative ${cx(isActive)}`}>
           <Icon path={ICONS.home} /> {!collapsed && 'Dashboard'}
           {unread > 0 && (collapsed ? (
@@ -109,6 +113,17 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
             <Icon path={ICONS.clock} /> {!collapsed && 'My Timesheet'}
           </NavLink>
         )}
+        {/* Resource Pool sits with the daily-work items — Finance & Guests use it too, so it's
+            not an admin-only tool. */}
+        {!!user && ['ADMIN', 'PMO', 'FINANCE', 'GUEST'].includes(user.role) && (
+          <NavLink to="/admin/resources" onClick={onNavigate} title={user.role === 'GUEST' ? 'My Resource Pool' : 'Resource Pool'} className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.resources} /> {!collapsed && (user.role === 'GUEST' ? 'My Resources' : 'Resource Pool')}
+          </NavLink>
+        )}
+        {/* MANAGE — admin/PMO governance (project registry, users, audit). */}
+        {isAdminPmo && (!collapsed
+          ? <div className={sectionLabel}>Manage</div>
+          : <div className="my-2 border-t border-slate-200 dark:border-slate-800" />)}
         {isAdminPmo && (
           <NavLink to="/admin/projects" onClick={onNavigate} title="Project Database" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.database} /> {!collapsed && 'Project Database'}
@@ -124,12 +139,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
             <Icon path={ICONS.changeLog} /> {!collapsed && 'Audit trail'}
           </NavLink>
         )}
-        {!!user && ['ADMIN', 'PMO', 'FINANCE', 'GUEST'].includes(user.role) && (
-          <NavLink to="/admin/resources" onClick={onNavigate} title={user.role === 'GUEST' ? 'My Resource Pool' : 'Resource Pool'} className={({ isActive }) => cx(isActive)}>
-            <Icon path={ICONS.resources} /> {!collapsed && (user.role === 'GUEST' ? 'My Resources' : 'Resource Pool')}
-          </NavLink>
-        )}
-        {!collapsed && <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Projects</div>}
+        {!collapsed && <div className={sectionLabel}>Projects</div>}
         {collapsed && <div className="my-2 border-t border-slate-200 dark:border-slate-800" />}
         {/* Don't flash "No projects yet" while the list is still loading (looks like the
             projects vanished on a slow first paint). */}
@@ -172,16 +182,10 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         </div>
       )}
 
-      <div className={`flex items-center gap-3 border-t border-slate-200 dark:border-slate-800 py-3 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600/80 text-sm font-semibold text-white" title={user?.name}>
-          {user?.name?.[0]?.toUpperCase() ?? '?'}
-        </span>
-        {!collapsed && (
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-slate-800 dark:text-white">{user?.name}</div>
-            <div className="truncate text-xs text-slate-500 dark:text-slate-400">{user?.role}</div>
-          </div>
-        )}
+      {/* Profile footer doubles as the account menu (Settings / Manual / theme / Logout),
+          opening upward so it clears the bottom of the viewport. */}
+      <div className={`border-t border-slate-200 py-2 dark:border-slate-800 ${collapsed ? 'flex justify-center px-2' : 'px-2'}`}>
+        <AvatarMenu variant="row" direction="up" collapsed={collapsed} />
       </div>
     </div>
   );

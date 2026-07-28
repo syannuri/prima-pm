@@ -18,15 +18,29 @@ const I = {
   install: 'M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14',
   moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
   sun: 'M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4 7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  caretV: 'M8 9l4-4 4 4M8 15l4 4 4-4',
 };
 
 const Ico = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
 );
 
-// Round user-initials button (top-right) that opens an account/settings sheet — the mobile
-// home for Settings, Manual and Logout (replacing the separate header buttons).
-export default function AvatarMenu() {
+// User button that opens an account/settings sheet — the home for Settings, Manual, admin
+// links and Logout (replacing the separate header buttons). `variant="avatar"` is the round
+// initials button (phones top-left, desktop top bar); `variant="row"` is a full-width profile
+// row (avatar + name + role) used in the sidebar footer, where the menu opens upward
+// (direction="up"). `align` picks which edge the dropdown hangs from.
+export default function AvatarMenu({
+  align = 'left',
+  direction = 'down',
+  variant = 'avatar',
+  collapsed = false,
+}: {
+  align?: 'left' | 'right';
+  direction?: 'up' | 'down';
+  variant?: 'avatar' | 'row';
+  collapsed?: boolean;
+}) {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const dark = theme === 'dark';
@@ -59,21 +73,45 @@ export default function AvatarMenu() {
   };
   const itemCls = 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800';
 
+  // The round-avatar dot, shared by both trigger variants.
+  const avatarDot = (
+    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-xs font-bold text-white shadow-sm ring-1 ring-black/5">
+      {initials(user?.name)}
+    </span>
+  );
+
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label={t.account}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-xs font-bold text-white shadow-sm ring-1 ring-black/5 transition active:scale-95"
-      >
-        {initials(user?.name)}
-      </button>
+    <div className={`relative ${variant === 'row' && !collapsed ? 'w-full' : ''}`}>
+      {variant === 'row' && !collapsed ? (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          aria-label={t.account}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          {avatarDot}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-slate-800 dark:text-white">{user?.name}</span>
+            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{user?.role}</span>
+          </span>
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={I.caretV} /></svg>
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          aria-label={t.account}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-xs font-bold text-white shadow-sm ring-1 ring-black/5 transition active:scale-95"
+        >
+          {initials(user?.name)}
+        </button>
+      )}
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={close} />
-          <div className="absolute left-0 z-40 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          <div className={`absolute z-40 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 ${align === 'right' ? 'right-0' : 'left-0'} ${direction === 'up' ? 'bottom-full mb-2' : 'mt-2'}`}>
             <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-sm font-bold text-white">{initials(user?.name)}</span>
               <div className="min-w-0">
