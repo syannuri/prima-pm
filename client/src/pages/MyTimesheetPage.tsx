@@ -193,12 +193,12 @@ export default function MyTimesheetPage() {
                   </div>
                   <div className="space-y-2">
                     {g.lines.map((l) => (
-                      <div key={l.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                      <div key={l.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-transparent dark:shadow-none">
                         <div className="font-medium text-slate-700 dark:text-slate-200">{l.taskName ?? <span className="italic text-slate-400">unlinked</span>}</div>
                         <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                          <div><div className="text-slate-400">Plan</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.planMandays, 0)}</div></div>
-                          <div><div className="text-slate-400">Earned</div><div className="tabular-nums text-slate-600 dark:text-slate-300">{formatNum(l.earnedMandays, 1)} <span className="text-slate-400">({l.progressPct}%)</span></div></div>
-                          <div><div className="text-slate-400">Logged</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.consumedMandays, 1)}</div></div>
+                          <div><div className="text-slate-500 dark:text-slate-400">Plan</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.planMandays, 0)}</div></div>
+                          <div><div className="text-slate-500 dark:text-slate-400">Earned</div><div className="tabular-nums text-slate-600 dark:text-slate-300">{formatNum(l.earnedMandays, 1)} <span className="text-slate-500 dark:text-slate-400">({l.progressPct}%)</span></div></div>
+                          <div><div className="text-slate-500 dark:text-slate-400">Logged</div><div className="tabular-nums font-medium text-slate-700 dark:text-slate-200">{formatNum(l.consumedMandays, 1)}</div></div>
                         </div>
                       </div>
                     ))}
@@ -224,7 +224,7 @@ export default function MyTimesheetPage() {
                   {es.map((e) => (
                     <div key={e.id} className="flex flex-wrap items-center gap-2 py-1.5 text-sm">
                       <span className="w-24 shrink-0 text-slate-500 dark:text-slate-400">{new Date(e.date).toLocaleDateString()}</span>
-                      <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{e.lineLabel}{e.note ? <span className="text-slate-400"> — {e.note}</span> : null}</span>
+                      <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{e.lineLabel}{e.note ? <span className="text-slate-500 dark:text-slate-400"> — {e.note}</span> : null}</span>
                       <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{formatNum(e.mandays, 1)} md</span>
                       <button disabled={del.isPending} onClick={async () => { if (await confirm({ title: 'Delete entry?', message: <>Delete this <strong>{formatNum(e.mandays, 1)} md</strong> log for {new Date(e.date).toLocaleDateString()}?</>, confirmLabel: 'Delete', danger: true })) del.mutate(e.id); }} className="text-xs text-red-500 hover:underline disabled:opacity-40">delete</button>
                     </div>
