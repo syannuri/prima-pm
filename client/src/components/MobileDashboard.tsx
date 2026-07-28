@@ -134,10 +134,12 @@ export default function MobileDashboard() {
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-3">
-        <KpiTile label="Total budget" value={formatIdrShort(t.bac)} tint="from-indigo-500/20 to-blue-600/10" />
-        <KpiTile label="Earned value" value={formatIdrShort(t.ev)} tint="from-emerald-500/20 to-teal-600/10" />
-        <KpiTile label="Actual cost" value={formatIdrShort(t.ac)} tint="from-amber-500/20 to-orange-600/10" />
-        <KpiTile label="Cost variance" value={formatIdrShort(cv)} tone={cv < 0 ? 'red' : 'green'} tint="from-rose-500/20 to-pink-600/10" />
+        <KpiTile label="Total budget" value={formatIdrShort(t.bac)} tint="from-indigo-500/25 to-blue-600/12" />
+        <KpiTile label="Earned value" value={formatIdrShort(t.ev)} tint="from-emerald-500/25 to-teal-600/12" />
+        <KpiTile label="Actual cost" value={formatIdrShort(t.ac)} tint="from-amber-500/25 to-orange-600/12" />
+        {/* Cost variance is the one KPI with a good/bad meaning — colour the wash by it (green =
+            favorable EV≥AC, red = over budget) instead of an arbitrary pink. */}
+        <KpiTile label="Cost variance" value={formatIdrShort(cv)} tone={cv < 0 ? 'red' : 'green'} tint={cv < 0 ? 'from-red-500/25 to-rose-600/12' : 'from-emerald-500/25 to-green-600/12'} />
       </div>
 
       {/* Needs attention — the action queues (each renders nothing when empty) */}
@@ -154,7 +156,7 @@ export default function MobileDashboard() {
           <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
             {([['all', 'All'], ['active', 'Active'], ['closed', 'Closed']] as const).map(([key, label]) => (
               <button key={key} onClick={() => { haptic(); setFilter(key); }}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${filter === key ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${filter === key ? 'bg-brand-500 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>
                 {label} <span className="tabular-nums opacity-60">{counts[key]}</span>
               </button>
             ))}
@@ -169,7 +171,7 @@ export default function MobileDashboard() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className={`prima-rise relative block overflow-hidden rounded-2xl border bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm transition active:scale-[.99] dark:from-slate-800/80 dark:to-slate-900/90 ${pinned.has(p.id) ? 'border-amber-300 ring-2 ring-amber-400/50 dark:border-amber-500/40' : 'border-slate-200/70 ring-1 ring-black/[0.02] dark:border-slate-700/60 dark:ring-white/[0.03]'}`}
+                className={`prima-rise relative block overflow-hidden rounded-2xl border bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm transition active:scale-[.99] dark:from-slate-800/80 dark:to-slate-900/90 ${pinned.has(p.id) ? 'border-amber-300 ring-2 ring-amber-400/50 dark:border-amber-500/40' : 'border-slate-200 ring-1 ring-black/[0.05] dark:border-slate-700/60 dark:ring-white/[0.03]'}`}
                 style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
               >
                 {/* Top sheen — unifies with the quick-action + KPI tiles. */}
@@ -177,7 +179,7 @@ export default function MobileDashboard() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-slate-800 dark:text-slate-100">{p.name}</div>
-                    <div className="mt-0.5 truncate text-[11px] text-slate-400">{p.code}{p.pm ? ` · ${p.pm}` : ''}</div>
+                    <div className="mt-0.5 truncate text-[11px] text-slate-500 dark:text-slate-400">{p.code}{p.pm ? ` · ${p.pm}` : ''}</div>
                   </div>
                   {/* Bookmark toggle — pin a project to the top; preventDefault so it doesn't navigate. */}
                   <button
@@ -222,7 +224,7 @@ export default function MobileDashboard() {
 
 function QuickAction({ label, icon, grad, glow, halo, tint, to, onClick }: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }) {
   const cls =
-    'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.02] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]';
+    'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.05] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]';
   const inner = (
     <>
       {/* Elegant coloured wash over the whole tile (Spektrum palette, one hue per action). */}
@@ -249,12 +251,12 @@ function QuickAction({ label, icon, grad, glow, halo, tint, to, onClick }: { lab
 function KpiTile({ label, value, tone, tint }: { label: string; value: string; tone?: 'red' | 'green'; tint: string }) {
   const valClass = tone === 'red' ? 'text-red-600 dark:text-red-400' : tone === 'green' ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-white';
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]">
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]">
       {/* Elegant coloured wash (Spektrum palette, one hue per KPI). */}
       <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint}`} />
       {/* Top sheen — matches the quick-action tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
-      <div className="relative text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="relative text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`relative mt-1 text-xl font-bold tabular-nums ${valClass}`}>{value}</div>
     </div>
   );
