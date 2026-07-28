@@ -111,7 +111,11 @@ export default function AvatarMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={close} />
-          <div className={`absolute z-40 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 ${align === 'right' ? 'right-0' : 'left-0'} ${direction === 'up' ? 'bottom-full mb-2' : 'mt-2'}`}>
+          {/* Cap the height to the space between the top bar and the bottom tab bar and scroll
+              inside — on a short/landscape screen the menu otherwise ran under the fixed mobile
+              tab bar, which (in its own backdrop-blur stacking context) painted over the lower
+              items (e.g. Logout). overscroll-contain stops the scroll chaining to the page. */}
+          <div className={`absolute z-50 max-h-[calc(100dvh-8rem)] w-60 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 ${align === 'right' ? 'right-0' : 'left-0'} ${direction === 'up' ? 'bottom-full mb-2' : 'mt-2'}`}>
             <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-sm font-bold text-white">{initials(user?.name)}</span>
               <div className="min-w-0">
