@@ -143,11 +143,10 @@ export default function ProjectPage() {
   // Agile (its scheduling lives in sprints/board) but kept for predictive & hybrid.
   const showSchedule = project.deliveryApproach !== 'AGILE';
   const tabs: Tab[] = ([
-    // Graphic Overview is a MOBILE-ONLY tab — a visual EVM/health summary so the phone lands
-    // on charts, not a wall of tabs. On the web/desktop it's hidden (the health strip, Next-steps
-    // guide and the dedicated Health/EVM tabs already cover this on a wide screen). DRAFT projects
-    // have no EVM yet, so skip it there too.
-    ...(chartered && isMobile ? (['Overview'] as Tab[]) : []),
+    // Graphic Overview — a visual EVM/health cockpit. On phones it's the default landing (charts,
+    // not a wall of tabs); on the web it's a bento dashboard the PM can open as the project home.
+    // DRAFT projects have no EVM yet, so skip it there.
+    ...(chartered ? (['Overview'] as Tab[]) : []),
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
     'Cost', 'Procurement', 'Timesheet', 'Health', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
@@ -162,14 +161,11 @@ export default function ProjectPage() {
     tab ?? (requestedTab && tabs.includes(requestedTab) ? requestedTab
       : chartered && isMobile ? 'Overview'
       : landingTab);
-  // Overview is mobile-only: never resolve to it on desktop (e.g. a phone→desktop resize while it
-  // was open, or a stale ?tab=Overview deep link) — fall back to the normal landing tab. Likewise
-  // the mobile-hidden tabs (Timesheet/Change Req) never resolve on a phone — whether reached via a
+  // The mobile-hidden tabs (Timesheet/Change Req) never resolve on a phone — whether reached via a
   // ?tab= deep link, a resize, or a jump (e.g. the CR banner) — so the panel can't show behind a
-  // hidden tab.
+  // hidden tab. (Overview now resolves on desktop too — it's an available tab there.)
   const activeTab: Tab =
-    chosenTab === 'Overview' && !isMobile ? landingTab
-    : isMobile && MOBILE_HIDDEN.includes(chosenTab) ? landingTab
+    isMobile && MOBILE_HIDDEN.includes(chosenTab) ? landingTab
     : chosenTab;
 
   // Shared pill style for the compact header meta chips (add the display util per use so

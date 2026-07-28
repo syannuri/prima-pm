@@ -71,17 +71,19 @@ function Bar({ label, value, max, color, sub }: { label: string; value: number; 
 }
 
 // Card that becomes a tappable drill-down when `onClick` is set (Card itself takes no onClick).
-function Panel({ onClick, children }: { onClick?: () => void; children: ReactNode }) {
-  if (!onClick) return <Card>{children}</Card>;
+// `className` lands on the outer grid-item element so the caller can place it in the bento grid;
+// with onClick the inner Card gets `h-full` so it fills a stretched grid cell (no click dead-zone).
+function Panel({ onClick, className, children }: { onClick?: () => void; className?: string; children: ReactNode }) {
+  if (!onClick) return <Card className={className}>{children}</Card>;
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onClick(); } }}
-      className="cursor-pointer"
+      className={`cursor-pointer ${className ?? ''}`}
     >
-      <Card className="transition hover:border-brand-300 dark:hover:border-brand-700">{children}</Card>
+      <Card className="h-full transition hover:border-brand-300 dark:hover:border-brand-700">{children}</Card>
     </div>
   );
 }
@@ -244,10 +246,15 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const taskTotal = tasks ? tasks.completed + tasks.remaining : 0;
 
   return (
-    <div className="space-y-3">
+    // Mobile/tablet: a single stacked column (unchanged). Desktop (lg+): a 12-col bento so the
+    // charts sit tight side-by-side instead of a narrow centred column with big vertical gaps —
+    // gauge is the hero (left, 2 rows tall), S-curve leads the right, Margin + Tasks pair below it,
+    // key figures run full-width along the bottom. `lg:order-*` sets the desktop visual order while
+    // the DOM order stays mobile-friendly (order is ignored in the mobile block-flow layout).
+    <div className="space-y-3 lg:grid lg:grid-cols-12 lg:gap-3 lg:space-y-0">
       {/* Health gauge — compact on mobile (side-by-side: gauge left, quick KPIs right).
-          On sm+ the gauge is centred and larger with progress bar below. */}
-      <Panel onClick={onJump ? () => onJump('Cost') : undefined}>
+          On sm+ the gauge is centred and larger with progress bar below. Bento hero on lg+. */}
+      <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="lg:col-span-4 lg:row-span-2 lg:self-start lg:order-1">
         {/* Mobile: gauge (small, left) + progress bar + SPI/CPI mini tiles (right) */}
         <div className="flex items-start gap-4 sm:hidden">
           {light
@@ -283,9 +290,16 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           </div>
         </div>
 
-        {/* Desktop: gauge centred (compact — smaller than the old 250px centrepiece) */}
+        {/* Desktop: gauge centred (compact — smaller than the old 250px centrepiece). Light theme
+            uses the flat HealthArcGauge (no in-gauge margin slot) with the margin line below;
+            dark keeps the speedometer with the margin rendered inside it. */}
         <div className="hidden sm:flex sm:flex-col sm:items-center">
-          <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={marginLine} className="max-w-[200px]" />
+          {light
+            ? <HealthArcGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} className="max-w-[200px]" />
+            : <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={marginLine} className="max-w-[200px]" />}
+          {light && marginLine && (
+            <p className={`mt-1 text-xs font-semibold ${marginLine.warn ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{marginLine.text}</p>
+          )}
         </div>
         <div className="mt-1 hidden sm:block">
           <div className="mb-1 flex items-baseline justify-between text-xs">
@@ -315,7 +329,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
       {/* Margin & profit — plan vs actual */}
       {m && m.revenue > 0 && (
-        <Panel onClick={onJump ? () => onJump('Forecast') : undefined}>
+        <Panel onClick={onJump ? () => onJump('Forecast') : undefined} className="lg:col-span-4 lg:order-3">
           <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Margin & Laba — Rencana vs Proyeksi' : 'Margin & profit — plan vs projected'}</h3>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
@@ -335,7 +349,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
       {/* Completed vs remaining tasks */}
       {tasks && taskTotal > 0 && (
-        <Panel onClick={onJump ? () => onJump('Schedule') : undefined}>
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:col-span-4 lg:order-4">
           <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}</h3>
           <div className="flex items-center gap-4">
             <TaskDonut completed={tasks.completed} remaining={tasks.remaining} label={id ? 'tugas' : 'tasks'} />
@@ -358,7 +372,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* S-curve — two views (Progress % / Cost IDR) in one panel with a tab toggle.
           Saves one full card height on mobile vs the old 2-panel layout. */}
       {(hasProg || hasCost || trendQ.isLoading) && (
-        <Panel onClick={onJump ? () => onJump('EVM Trend') : undefined}>
+        <Panel onClick={onJump ? () => onJump('EVM Trend') : undefined} className="lg:col-span-8 lg:order-2">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               {sCurveTab === 'progress'
@@ -410,8 +424,8 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
         </Panel>
       )}
 
-      {/* Key figures */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {/* Key figures — full-width footer strip on the bento (6 tiles in one row on lg+) */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:col-span-12 lg:order-5 lg:grid-cols-6">
         <Tile label="EAC" value={formatIdrShort(e.eac)} tone={e.eac > e.bac ? 'warn' : undefined} hint={`Estimate at Completion — ${formatIdr(e.eac)}`} />
         <Tile label="VAC" value={formatIdrShort(e.vac)} tone={e.vac < 0 ? 'warn' : 'good'} hint={`Variance at Completion = BAC − EAC — ${formatIdr(e.vac)}`} />
         <Tile label="CV" value={formatIdrShort(e.cv)} tone={e.cv < 0 ? 'warn' : 'good'} hint={`Cost Variance = EV − AC — ${formatIdr(e.cv)}`} />
