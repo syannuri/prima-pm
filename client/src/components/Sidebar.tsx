@@ -31,7 +31,7 @@ const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medi
 // Light sidebar in light mode, dark navy in dark mode.
 const linkIdle = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white';
 // Active item: soft coral wash + a crisp coral left accent bar.
-const linkActive = 'bg-brand-50 text-brand-700 shadow-[inset_2px_0_0_#f4675f] dark:bg-brand-600/15 dark:text-white';
+const linkActive = 'bg-brand-50 text-brand-700 shadow-[inset_2px_0_0_theme(colors.brand.500)] dark:bg-brand-600/15 dark:text-white';
 // Small uppercase group heading between nav sections (Workspace / Manage / Projects).
 const sectionLabel = 'px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500';
 
@@ -75,7 +75,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
       <div className={`flex h-14 items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
         <span className={`relative inline-block border-[3px] border-slate-900 font-brand font-bold tracking-wide text-slate-900 dark:border-white dark:text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
           {collapsed ? 'P' : 'PRISMATIX'}
-          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-slate-900 dark:bg-white" />
+          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
         </span>
       </div>
 
