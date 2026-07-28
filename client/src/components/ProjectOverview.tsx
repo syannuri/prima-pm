@@ -48,7 +48,7 @@ function TaskDonut({ completed, remaining, label }: { completed: number; remaini
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-lg font-bold tabular-nums leading-none text-slate-800 dark:text-slate-100">{Math.round(frac * 100)}%</span>
-        <span className="mt-0.5 text-[9px] font-medium tabular-nums tracking-wide text-slate-400 dark:text-slate-500">{total} {label}</span>
+        <span className="mt-0.5 text-[9px] font-medium tabular-nums tracking-wide text-slate-500 dark:text-slate-400">{total} {label}</span>
       </div>
     </div>
   );
@@ -90,7 +90,7 @@ function Tile({ label, value, tone, hint }: { label: string; value: string; tone
   const c = tone === 'warn' ? 'text-red-600 dark:text-red-400' : tone === 'good' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100';
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 dark:border-slate-800 dark:bg-slate-800/40" title={hint}>
-      <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</div>
+      <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`text-sm font-semibold tabular-nums ${c}`}>{value}</div>
     </div>
   );
@@ -265,13 +265,13 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-800/40">
-                <div className="text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">SPI</div>
+                <div className="text-[9px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">SPI</div>
                 <div className={`text-sm font-bold tabular-nums ${e.pv > 0 && e.spi < 1 ? 'text-red-600 dark:text-red-400' : e.pv > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100'}`}>
                   {e.pv > 0 ? formatNum(e.spi, 2) : '—'}
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-800/40">
-                <div className="text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">CPI</div>
+                <div className="text-[9px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">CPI</div>
                 <div className={`text-sm font-bold tabular-nums ${e.ac > 0 && e.cpi < 1 ? 'text-red-600 dark:text-red-400' : e.ac > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100'}`}>
                   {e.ac > 0 ? formatNum(e.cpi, 2) : '—'}
                 </div>
@@ -319,17 +319,17 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Margin & Laba — Rencana vs Proyeksi' : 'Margin & profit — plan vs projected'}</h3>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
-              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{id ? 'Laba rencana' : 'Plan profit'}</div>
+              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Laba rencana' : 'Plan profit'}</div>
               <div className={`text-sm font-semibold tabular-nums ${profitTone(plan.profit)}`}>{formatIdrShort(plan.profit)}</div>
-              <div className="text-[11px] text-slate-400 dark:text-slate-500">{id ? 'Margin' : 'Margin'} {plan.marginPct != null ? `${plan.marginPct.toFixed(1)}%` : '—'}</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">{id ? 'Margin' : 'Margin'} {plan.marginPct != null ? `${plan.marginPct.toFixed(1)}%` : '—'}</div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
-              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{id ? 'Laba proyeksi' : 'Projected profit'}</div>
+              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Laba proyeksi' : 'Projected profit'}</div>
               <div className={`text-sm font-semibold tabular-nums ${profitTone(projected.profit)}`}>{formatIdrShort(projected.profit)}</div>
-              <div className="text-[11px] text-slate-400 dark:text-slate-500">{id ? 'Margin' : 'Margin'} {projected.marginPct != null ? `${projected.marginPct.toFixed(1)}%` : '—'}</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">{id ? 'Margin' : 'Margin'} {projected.marginPct != null ? `${projected.marginPct.toFixed(1)}%` : '—'}</div>
             </div>
           </div>
-          <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">{id ? 'Rencana = Pendapatan − BAC · Proyeksi = Pendapatan − EAC (perkiraan biaya saat selesai).' : 'Plan = Revenue − BAC · Projected = Revenue − EAC (forecast cost at completion).'}</p>
+          <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">{id ? 'Rencana = Pendapatan − BAC · Proyeksi = Pendapatan − EAC (perkiraan biaya saat selesai).' : 'Plan = Revenue − BAC · Projected = Revenue − EAC (forecast cost at completion).'}</p>
         </Panel>
       )}
 
