@@ -292,7 +292,7 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle, target, 
       {/* Mobile card list — table hidden < sm. */}
       <div className="space-y-2 sm:hidden">
         {data.actualCosts.map((a) => (
-          <div key={a.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+          <div key={a.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-transparent dark:shadow-none">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-slate-700 dark:text-slate-200">
@@ -707,10 +707,10 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
             </div>
           );
           return (
-            <div key={d.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+            <div key={d.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-transparent dark:shadow-none">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-400">{typeLabel(DIRECT_LABEL, d.type, d.subCategory)}</div>
+                  <div className="mb-0.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">{typeLabel(DIRECT_LABEL, d.type, d.subCategory)}</div>
                   <div className="font-medium text-slate-700 dark:text-slate-200">{d.label}</div>
                 </div>
                 <div className="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{formatIdr(isMp ? d.manpowerCost : d.amount)}</div>
@@ -965,10 +965,10 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
             </div>
           );
           return (
-            <div key={i.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+            <div key={i.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-transparent dark:shadow-none">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-400">{typeLabel(INDIRECT_LABEL, i.type, i.subCategory)}</div>
+                  <div className="mb-0.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">{typeLabel(INDIRECT_LABEL, i.type, i.subCategory)}</div>
                   <div className="font-medium text-slate-700 dark:text-slate-200">{i.description}</div>
                 </div>
                 <div className="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{formatIdr(i.amount)}</div>
