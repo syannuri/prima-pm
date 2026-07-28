@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -49,12 +50,32 @@ export default function AvatarMenu({
   const { canInstall, promptInstall } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
-  // Keyboard dismissal: Escape closes the open menu.
+  // The dropdown is PORTALED to <body> so it escapes the app-shell stacking context — the fixed
+  // bottom tab bar (its own backdrop-blur context) otherwise painted OVER the menu no matter its
+  // z-index. Portaled + z-50 it sits in the root layer, reliably above the tab bar. Position is
+  // computed as fixed coords from the trigger's rect (anchored to whichever edge/direction).
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<CSSProperties>({});
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const gap = 8, W = 240, m = 8; // w-60 = 240px
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const s: CSSProperties = { position: 'fixed' };
+    if (align === 'right') s.right = Math.max(m, vw - r.right);
+    else s.left = Math.min(Math.max(m, r.left), Math.max(m, vw - W - m));
+    if (direction === 'up') { s.bottom = vh - r.top + gap; s.maxHeight = r.top - gap - m; }
+    else { s.top = r.bottom + gap; s.maxHeight = vh - (r.bottom + gap) - m; }
+    setPos(s);
+  }, [open, align, direction]);
+  // Keyboard dismissal + close on resize/orientation change (the fixed position would go stale).
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onResize = () => setOpen(false);
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    return () => { document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
   }, [open]);
   // Labels follow the selected language (like the dashboard) so the account
   // menu isn't a half-English/half-Indonesian mix when the toggle is flipped.
@@ -84,6 +105,7 @@ export default function AvatarMenu({
     <div className={`relative ${variant === 'row' && !collapsed ? 'w-full' : ''}`}>
       {variant === 'row' && !collapsed ? (
         <button
+          ref={btnRef}
           onClick={() => setOpen((o) => !o)}
           aria-label={t.account}
           aria-haspopup="menu"
@@ -99,6 +121,7 @@ export default function AvatarMenu({
         </button>
       ) : (
         <button
+          ref={btnRef}
           onClick={() => setOpen((o) => !o)}
           aria-label={t.account}
           aria-haspopup="menu"
@@ -108,14 +131,13 @@ export default function AvatarMenu({
           {initials(user?.name)}
         </button>
       )}
-      {open && (
+      {open && createPortal(
         <>
-          <div className="fixed inset-0 z-30" onClick={close} />
-          {/* Cap the height to the space between the top bar and the bottom tab bar and scroll
-              inside — on a short/landscape screen the menu otherwise ran under the fixed mobile
-              tab bar, which (in its own backdrop-blur stacking context) painted over the lower
-              items (e.g. Logout). overscroll-contain stops the scroll chaining to the page. */}
-          <div className={`absolute z-50 max-h-[calc(100dvh-8rem)] w-60 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 ${align === 'right' ? 'right-0' : 'left-0'} ${direction === 'up' ? 'bottom-full mb-2' : 'mt-2'}`}>
+          <div className="fixed inset-0 z-[60]" onClick={close} />
+          {/* Portaled to <body> + fixed coords (see btnRef effect) so it escapes the app-shell
+              stacking context and sits above the bottom tab bar. maxHeight (from the effect) keeps
+              it on-screen; it scrolls internally when the menu is taller than the space. */}
+          <div style={pos} className="z-[61] w-60 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-sm font-bold text-white">{initials(user?.name)}</span>
               <div className="min-w-0">
@@ -147,7 +169,8 @@ export default function AvatarMenu({
               <button onClick={() => { close(); logout(); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"><Ico d={I.logout} /> {t.logout}</button>
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
