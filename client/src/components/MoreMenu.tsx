@@ -55,7 +55,9 @@ export default function MoreMenu({ children, title, label = '⋯ More' }: { chil
       {open && !isMobile && (
         // ── Desktop: anchored dropdown ──
         <div role="menu" onClick={() => setOpen(false)}
-          className="absolute right-0 z-30 mt-1 max-h-[70vh] min-w-[14rem] overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          // z-40 clears the sticky tab strip (z-[31]) so the dropdown paints over it instead of
+          // tucking behind — matches the mobile drawer/sheet layer.
+          className="absolute right-0 z-40 mt-1 max-h-[70vh] min-w-[14rem] overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
           {children}
         </div>
       )}
