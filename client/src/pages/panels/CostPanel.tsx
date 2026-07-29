@@ -605,6 +605,88 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
       <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Material (qty × unit cost) and Manpower (rate × mandays)</p>
+      {/* Always-visible "add line" toolbar — one chip per family, so ANY family (incl. empty ones
+          and a brand-new project) can be added to. Clicking opens the add-form at the top below. */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <span className="mr-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Add line</span>
+        {DIRECT_FAMILIES.map((fam) => (
+          <button key={fam.key} onClick={() => openAdd(fam)} title={`Add a ${fam.label} line`}
+            className={`rounded-md border px-2 py-0.5 text-[11px] font-medium transition ${addingFamily === fam.key ? 'border-brand-400 bg-brand-50 text-brand-700 dark:border-brand-500 dark:bg-brand-900/30 dark:text-brand-200' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+            <span aria-hidden>{fam.icon}</span> {fam.label}
+          </button>
+        ))}
+      </div>
+      {/* Add-line form — rendered at the TOP of the section (right under the header) so it's
+          visible immediately when a family's "+ Add" is clicked, instead of hidden below the list. */}
+      {addFamilyDef && (<>
+      <div className="mb-4 rounded-lg border border-brand-200 bg-slate-50 p-3 dark:border-brand-900/40 dark:bg-slate-800">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"><span aria-hidden>{addFamilyDef.icon}</span> Add {addFamilyDef.label}</span>
+        <button onClick={() => setAddingFamily(null)} className="text-xs text-slate-400 hover:underline">close</button>
+      </div>
+      <div className="grid gap-2 md:grid-cols-8">
+        {addFamilyDef.types.length > 1
+          ? <Select aria-label="Direct cost type" value={type} onChange={(e) => setType(e.target.value)}>{addFamilyDef.types.map((tv) => <option key={tv} value={tv}>{DIRECT_LABEL[tv]}</option>)}</Select>
+          : <div className="hidden md:block" />}
+        <Input aria-label="Cost line label" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
+        {isManpower ? (
+          <>
+            {/* Wider (2 cols) so the "<name> · <role> · <rate>" option shows without truncating. */}
+            <Select className="md:col-span-2" aria-label="Pick resource from pool" value={resourceId} onChange={(e) => setResourceId(e.target.value)} title="Pick from the resource pool">
+              <option value="">Resource…</option>
+              {resourcesQ.data?.resources.map((r) => (
+                <option key={r.id} value={r.id}>{r.name} · {r.roleTitle || (r.personnelRole === 'PM' ? 'Project Manager' : 'Project Personnel')} · {formatIdr(Number(r.unitCostPerManday))}/md</option>
+              ))}
+            </Select>
+            <MoneyInput
+              aria-label="Rate override (IDR per manday)"
+              placeholder={picked ? `${formatIdr(Number(picked.unitCostPerManday))} (rate)` : 'Rate override'}
+              value={rateOverride}
+              onValueChange={setRateOverride}
+              title="Leave blank to use the resource's rate"
+            />
+            <Input
+              type="number"
+              aria-label="Planned mandays"
+              placeholder="Plan mandays"
+              value={planMandays}
+              onChange={(e) => setMandays(e.target.value)}
+              title={picked && planMandays ? `= ${formatIdr((rateOverride === '' ? Number(picked.unitCostPerManday) : Number(rateOverride)) * Number(planMandays))}` : 'rate × mandays'}
+            />
+            <Select aria-label="Link to a task" value={taskId} onChange={(e) => setTaskId(e.target.value)} title="Link to a task (work package)">
+              <option value="">Task… (optional)</option>
+              {leafTasks.map((t) => (
+                <option key={t.id} value={t.id}>{t.wbsCode} {t.name}</option>
+              ))}
+            </Select>
+          </>
+        ) : (
+          <>
+            <Input type="number" aria-label="Quantity" placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
+            <MoneyInput aria-label="Unit cost (IDR)" placeholder="Unit cost" value={unitCost} onValueChange={setUnitCost} />
+            {isOther ? (
+              <Input aria-label="Sub-category" placeholder="Specify category *" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} title="Name the kind of cost (e.g. Insurance, Legal)" />
+            ) : <div />}
+            <div />
+            <div />
+          </>
+        )}
+        <Button
+          onClick={() => add.mutate()}
+          disabled={add.isPending || (isManpower ? !resourceId || !planMandays : !label || (isOther && !subCategory.trim()))}
+          title={isManpower ? (!resourceId ? 'Pick a Resource from the pool first' : !planMandays ? 'Enter Plan mandays' : 'Add manpower line') : !label ? 'Enter a label first' : 'Add cost line'}
+        >
+          Add
+        </Button>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-sm">
+        <span className="text-slate-500 dark:text-slate-400">Amount (auto): <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(addAmount)}</span></span>
+        <span className="text-slate-300 dark:text-slate-600">·</span>
+        <span className="text-slate-500 dark:text-slate-400" title="Recorded direct total + this new line">New Direct total: <span className="font-bold tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal + addAmount)}</span></span>
+      </div>
+      <FormError className="mt-2">{err}</FormError>
+      </div>
+      </>)}
       {data.directCosts.length > 0 && (
         <UntouchedNote count={directUntouched.length} total={data.directCosts.length} remaining={directRemaining} names={directUntouched.map((d) => d.label)} />
       )}
@@ -883,75 +965,6 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
         )}
       </div>
 
-      {addFamilyDef && (<>
-      <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"><span aria-hidden>{addFamilyDef.icon}</span> Add {addFamilyDef.label}</span>
-        <button onClick={() => setAddingFamily(null)} className="text-xs text-slate-400 hover:underline">close</button>
-      </div>
-      <div className="grid gap-2 md:grid-cols-8">
-        {addFamilyDef.types.length > 1
-          ? <Select aria-label="Direct cost type" value={type} onChange={(e) => setType(e.target.value)}>{addFamilyDef.types.map((tv) => <option key={tv} value={tv}>{DIRECT_LABEL[tv]}</option>)}</Select>
-          : <div className="hidden md:block" />}
-        <Input aria-label="Cost line label" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
-        {isManpower ? (
-          <>
-            {/* Wider (2 cols) so the "<name> · <role> · <rate>" option shows without truncating. */}
-            <Select className="md:col-span-2" aria-label="Pick resource from pool" value={resourceId} onChange={(e) => setResourceId(e.target.value)} title="Pick from the resource pool">
-              <option value="">Resource…</option>
-              {resourcesQ.data?.resources.map((r) => (
-                <option key={r.id} value={r.id}>{r.name} · {r.roleTitle || (r.personnelRole === 'PM' ? 'Project Manager' : 'Project Personnel')} · {formatIdr(Number(r.unitCostPerManday))}/md</option>
-              ))}
-            </Select>
-            <MoneyInput
-              aria-label="Rate override (IDR per manday)"
-              placeholder={picked ? `${formatIdr(Number(picked.unitCostPerManday))} (rate)` : 'Rate override'}
-              value={rateOverride}
-              onValueChange={setRateOverride}
-              title="Leave blank to use the resource's rate"
-            />
-            <Input
-              type="number"
-              aria-label="Planned mandays"
-              placeholder="Plan mandays"
-              value={planMandays}
-              onChange={(e) => setMandays(e.target.value)}
-              title={picked && planMandays ? `= ${formatIdr((rateOverride === '' ? Number(picked.unitCostPerManday) : Number(rateOverride)) * Number(planMandays))}` : 'rate × mandays'}
-            />
-            <Select aria-label="Link to a task" value={taskId} onChange={(e) => setTaskId(e.target.value)} title="Link to a task (work package)">
-              <option value="">Task… (optional)</option>
-              {leafTasks.map((t) => (
-                <option key={t.id} value={t.id}>{t.wbsCode} {t.name}</option>
-              ))}
-            </Select>
-          </>
-        ) : (
-          <>
-            <Input type="number" aria-label="Quantity" placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
-            <MoneyInput aria-label="Unit cost (IDR)" placeholder="Unit cost" value={unitCost} onValueChange={setUnitCost} />
-            {isOther ? (
-              <Input aria-label="Sub-category" placeholder="Specify category *" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} title="Name the kind of cost (e.g. Insurance, Legal)" />
-            ) : <div />}
-            <div />
-            <div />
-          </>
-        )}
-        <Button
-          onClick={() => add.mutate()}
-          disabled={add.isPending || (isManpower ? !resourceId || !planMandays : !label || (isOther && !subCategory.trim()))}
-          title={isManpower ? (!resourceId ? 'Pick a Resource from the pool first' : !planMandays ? 'Enter Plan mandays' : 'Add manpower line') : !label ? 'Enter a label first' : 'Add cost line'}
-        >
-          Add
-        </Button>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-sm">
-        <span className="text-slate-500 dark:text-slate-400">Amount (auto): <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatIdr(addAmount)}</span></span>
-        <span className="text-slate-300 dark:text-slate-600">·</span>
-        <span className="text-slate-500 dark:text-slate-400" title="Recorded direct total + this new line">New Direct total: <span className="font-bold tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal + addAmount)}</span></span>
-      </div>
-      <FormError className="mt-2">{err}</FormError>
-      </div>
-      </>)}
       </div>)}
     </Card>
   );
