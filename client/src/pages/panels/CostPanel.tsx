@@ -584,6 +584,20 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
     if (src && familyOf(src.type) === familyOf(target.type)) moveWithinFamily(familyOf(target.type), src.id, target.id);
     setDragId(null);
   };
+  // Keyboard-accessible reorder (drag alternative): move a line up/down one slot within its family.
+  const nudge = (d: DirectCost, dir: -1 | 1) => {
+    const fam = grouped[familyOf(d.type)] ?? [];
+    const i = fam.findIndex((x) => x.id === d.id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= fam.length) return;
+    moveWithinFamily(familyOf(d.type), d.id, fam[j].id);
+  };
+  // Position of a line within its family (for disabling the up/down controls at the ends).
+  const famPos = (d: DirectCost) => {
+    const fam = grouped[familyOf(d.type)] ?? [];
+    const i = fam.findIndex((x) => x.id === d.id);
+    return { first: i <= 0, last: i >= fam.length - 1 };
+  };
 
   return (
     <Card>
@@ -712,6 +726,8 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
                     </>
                   ) : (
                     <>
+                      <button onClick={() => nudge(d, -1)} disabled={reorder.isPending || famPos(d).first} aria-label={`Move ${d.label} up`} title="Move up" className="mr-0.5 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 dark:hover:bg-slate-800">▲</button>
+                      <button onClick={() => nudge(d, 1)} disabled={reorder.isPending || famPos(d).last} aria-label={`Move ${d.label} down`} title="Move down" className="mr-2 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 dark:hover:bg-slate-800">▼</button>
                       {isMp
                         ? (onNavigateTab && d.actualToDate === 0
                             ? <button onClick={() => onNavigateTab('Timesheet')} className="mr-2 text-[11px] font-medium text-amber-600 hover:underline dark:text-amber-400" title="No man-days logged yet — spend stays Rp 0. Log this person's effort in the Timesheet tab to populate Spent.">🕒 Log timesheet →</button>
@@ -834,6 +850,10 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
                   : <button onClick={() => onBookAc(`d:${d.id}`)} className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400">+ Record AC</button>}
                 <button onClick={() => startEdit(d)} className="text-xs text-brand-600 hover:underline">edit</button>
                 <button onClick={() => confirmDelete(d)} className="text-xs text-red-500 hover:underline">delete</button>
+                <span className="ml-auto flex items-center gap-1">
+                  <button onClick={() => nudge(d, -1)} disabled={reorder.isPending || famPos(d).first} aria-label={`Move ${d.label} up`} title="Move up" className="rounded px-1.5 py-0.5 text-slate-400 disabled:opacity-25">▲</button>
+                  <button onClick={() => nudge(d, 1)} disabled={reorder.isPending || famPos(d).last} aria-label={`Move ${d.label} down`} title="Move down" className="rounded px-1.5 py-0.5 text-slate-400 disabled:opacity-25">▼</button>
+                </span>
               </div>
             </div>
           );
