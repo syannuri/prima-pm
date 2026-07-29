@@ -27,6 +27,9 @@ function buildData(input: UpsertProcurementInput) {
     endDate: input.endDate ?? null,
     scope: input.scope ?? null,
     notes: input.notes ?? null,
+    // XOR enforced by the schema; a null explicitly clears the link.
+    costDirectLineId: input.costDirectLineId ?? null,
+    costIndirectLineId: input.costIndirectLineId ?? null,
   };
 }
 

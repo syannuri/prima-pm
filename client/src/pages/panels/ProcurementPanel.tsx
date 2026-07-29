@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { Procurement, ContractType, ProcurementStatus } from '../../api/types';
+import type { Procurement, ContractType, ProcurementStatus, CostSummary } from '../../api/types';
 import { Badge, Button, Card, Field, FormError, Input, Modal, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -24,7 +24,11 @@ export default function ProcurementPanel({ projectId }: { projectId: string }) {
   const [creating, setCreating] = useState(false);
 
   const q = useQuery({ queryKey: ['procurements', projectId], queryFn: () => api.get<{ procurements: Procurement[] }>(base) });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['procurements', projectId] });
+  // Also refresh the Cost tab: a procurement's value/status/link drives per-line "Committed".
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['procurements', projectId] });
+    qc.invalidateQueries({ queryKey: ['cost'] });
+  };
 
   if (q.isLoading) return <PanelLoading />;
   const list = q.data?.procurements ?? [];
@@ -174,9 +178,15 @@ function ProcurementForm({ base, procurement, onClose, onDone }: { base: string;
     endDate: toDateInput(procurement?.endDate),
     scope: procurement?.scope ?? '',
     notes: procurement?.notes ?? '',
+    // Combined budget-line key: '' | 'd:<id>' | 'i:<id>' → committed-cost link on save.
+    costLine: procurement?.costDirectLineId ? `d:${procurement.costDirectLineId}` : procurement?.costIndirectLineId ? `i:${procurement.costIndirectLineId}` : '',
   });
   const [err, setErr] = useState('');
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+
+  // Budget lines to charge this contract against (committed cost). Cost lives next to procurement.
+  const costBase = base.replace(/\/procurement$/, '/cost');
+  const costQ = useQuery({ queryKey: ['cost', costBase], queryFn: () => api.get<CostSummary>(costBase) });
 
   const save = useMutation({
     mutationFn: () => {
@@ -189,6 +199,10 @@ function ProcurementForm({ base, procurement, onClose, onDone }: { base: string;
       if (f.endDate) body.endDate = f.endDate;
       if (f.scope.trim()) body.scope = f.scope.trim();
       if (f.notes.trim()) body.notes = f.notes.trim();
+      // Always send both link fields (value or null) so clearing the picker unlinks the line.
+      const id = f.costLine ? f.costLine.slice(2) : '';
+      body.costDirectLineId = f.costLine.startsWith('d:') ? id : null;
+      body.costIndirectLineId = f.costLine.startsWith('i:') ? id : null;
       return procurement ? api.put(`${base}/${procurement.id}`, body) : api.post(base, body);
     },
     onSuccess: () => { toast.success(procurement ? 'Procurement updated' : 'Procurement added'); onDone(); onClose(); },
@@ -210,6 +224,21 @@ function ProcurementForm({ base, procurement, onClose, onDone }: { base: string;
           <Field label="Start date"><Input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
           <Field label="End / delivery date"><Input type="date" value={f.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
         </div>
+        <Field label="Charge to budget line" hint="Links this contract's value to a Cost line as “Committed” (shown on the Cost tab). Optional.">
+          <Select value={f.costLine} onChange={(e) => set('costLine', e.target.value)}>
+            <option value="">— not charged to a budget line —</option>
+            {costQ.data && costQ.data.directCosts.length > 0 && (
+              <optgroup label="Direct lines">
+                {costQ.data.directCosts.map((d) => <option key={d.id} value={`d:${d.id}`}>{d.label} · {formatIdr(Number(d.type === 'MANPOWER' ? d.manpowerCost : d.amount) || 0)}</option>)}
+              </optgroup>
+            )}
+            {costQ.data && costQ.data.indirectCosts.length > 0 && (
+              <optgroup label="Indirect lines">
+                {costQ.data.indirectCosts.map((i) => <option key={i.id} value={`i:${i.id}`}>{i.description} · {formatIdr(Number(i.amount) || 0)}</option>)}
+              </optgroup>
+            )}
+          </Select>
+        </Field>
         <Field label="Scope / SOW"><Textarea rows={2} value={f.scope} onChange={(e) => set('scope', e.target.value)} placeholder="What the contract covers…" /></Field>
         <Field label="Notes"><Textarea rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Terms, risks, dependencies…" /></Field>
         <FormError>{err}</FormError>

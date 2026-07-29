@@ -447,6 +447,9 @@ model CostItemDirect {
   // draw their actual from timesheets instead, so this is used for non-MANPOWER lines.
   actuals ActualCostEntry[] @relation("DirectLineActuals")
 
+  // Contracts/POs charged to this budget line (committed cost — obligated but not necessarily paid).
+  procurements Procurement[] @relation("ProcurementDirect")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -465,6 +468,9 @@ model CostItemIndirect {
 
   // Actual spend attributed to THIS indirect line (per-component drawdown).
   actuals ActualCostEntry[] @relation("IndirectLineActuals")
+
+  // Contracts/POs charged to this budget line (committed cost).
+  procurements Procurement[] @relation("ProcurementIndirect")
 
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
@@ -785,6 +791,13 @@ model Procurement {
   endDate       DateTime?
   scope         String?           @db.Text // SOW / what is procured
   notes         String?           @db.Text
+
+  // Committed-cost link: charge this contract/PO to ONE budget line (direct XOR indirect), so the
+  // Cost tab can show Budget → Committed → Actual → Remaining. Optional; SetNull if the line is deleted.
+  costDirectLineId   String?
+  costDirectLine     CostItemDirect?   @relation("ProcurementDirect", fields: [costDirectLineId], references: [id], onDelete: SetNull)
+  costIndirectLineId String?
+  costIndirectLine   CostItemIndirect? @relation("ProcurementIndirect", fields: [costIndirectLineId], references: [id], onDelete: SetNull)
 
   createdById String? // FK-less (kept light)
   createdAt   DateTime @default(now())

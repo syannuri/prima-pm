@@ -132,8 +132,9 @@ export default function CostPanel({ projectId, onNavigateTab }: { projectId: str
         <Stat label="BAC (PMB)" value={formatIdr(b?.costBaseline)} hint="Budget at Completion = direct + indirect + contingency (excl. mgmt reserve)" strong />
         <Stat label="Total Budget" value={formatIdr(b?.budgetAtCompletion)} hint="BAC + management reserve" />
       </div>
-      {/* Overall drawdown across Direct + Indirect: total spent so far and budget still remaining. */}
+      {/* Overall drawdown across Direct + Indirect: committed via contracts, total spent, remaining. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Stat label="Committed" value={formatIdr(data?.committedTotal ?? 0)} hint="Awarded→delivered contracts charged to budget lines (Procurement). Obligated, not necessarily paid." />
         <Stat label="Spent to date" value={formatIdr(totalSpent)} hint="Direct + Indirect actuals (manpower from timesheet)" />
         <Stat label="Remaining budget" value={formatIdr(totalRemaining)} hint="Direct + Indirect budget − spent" strong valueClass={totalRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} />
       </div>
@@ -715,7 +716,10 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
                     </div>
                   )}
                 </td>
-                <td className="text-right font-medium tabular-nums">{formatIdr(editing ? efAmount : (isMp ? d.manpowerCost : d.amount))}</td>
+                <td className="text-right font-medium tabular-nums">
+                  {formatIdr(editing ? efAmount : (isMp ? d.manpowerCost : d.amount))}
+                  {!editing && d.committed > 0 && <div className="text-[10px] font-normal text-indigo-500 dark:text-indigo-400" title="Committed via awarded contracts (Procurement)">⛓ {formatIdr(d.committed)}</div>}
+                </td>
                 <td className="text-right tabular-nums text-slate-500 dark:text-slate-400" title={isMp ? 'From timesheet (consumed man-days × rate)' : 'Actual Cost booked to this line'}>{formatIdr(d.actualToDate)}</td>
                 <td className={`text-right tabular-nums font-medium ${d.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`} title={d.remaining < 0 ? 'Over budget' : 'Budget still available'}>{formatIdr(d.remaining)}</td>
                 <td className="text-right whitespace-nowrap">
@@ -821,7 +825,10 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
                   <div className="mb-0.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">{typeLabel(DIRECT_LABEL, d.type, d.subCategory)}</div>
                   <div className="font-medium text-slate-700 dark:text-slate-200">{d.label}</div>
                 </div>
-                <div className="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">{formatIdr(isMp ? d.manpowerCost : d.amount)}</div>
+                <div className="shrink-0 text-right font-semibold tabular-nums text-slate-900 dark:text-white">
+                  {formatIdr(isMp ? d.manpowerCost : d.amount)}
+                  {d.committed > 0 && <div className="text-[10px] font-normal text-indigo-500 dark:text-indigo-400" title="Committed via awarded contracts">⛓ {formatIdr(d.committed)}</div>}
+                </div>
               </div>
               <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {isMp ? `${d.personnelRole} · ${formatIdr(d.unitCostPerManday)}/md × ${d.planMandays} md` : `${d.qty} × ${formatIdr(d.unitCost)}`}

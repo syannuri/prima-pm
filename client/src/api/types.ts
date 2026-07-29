@@ -295,6 +295,8 @@ export interface DirectCost {
   // Manpower draws actualToDate from the timesheet; material lines from attributed Actual Cost.
   actualToDate: number;
   remaining: number;
+  // Committed cost: value of awarded→delivered contracts charged to this line.
+  committed: number;
 }
 
 export interface IndirectCost {
@@ -306,6 +308,8 @@ export interface IndirectCost {
   // Per-component drawdown: spend booked to this line and what's left of its budget.
   actualToDate: number;
   remaining: number;
+  // Committed cost: value of awarded→delivered contracts charged to this line.
+  committed: number;
 }
 
 export interface ActualCostEntry {
@@ -337,6 +341,10 @@ export interface CostSummary {
   // Spend not booked to any specific line (rolls up to the category bucket only).
   unattributedDirectActual: number;
   unattributedIndirectActual: number;
+  // Committed cost: value of awarded→delivered contracts charged to budget lines.
+  committedDirect: number;
+  committedIndirect: number;
+  committedTotal: number;
   // When true, each man-day mutation auto-refreshes the labour AC entry (no manual "Fill AC").
   autoPostLabourAc: boolean;
 }
@@ -505,6 +513,9 @@ export interface Procurement {
   endDate: string | null;
   scope: string | null;
   notes: string | null;
+  // Committed-cost link: charged to one budget line (direct XOR indirect), or null.
+  costDirectLineId: string | null;
+  costIndirectLineId: string | null;
   createdAt: string;
   updatedAt: string;
 }

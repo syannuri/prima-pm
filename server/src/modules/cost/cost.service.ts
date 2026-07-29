@@ -482,7 +482,7 @@ export async function setAutoPostLabourAc(projectId: string, enabled: boolean, a
 }
 
 export async function getCostSummary(projectId: string) {
-  const [directCosts, indirectCosts, baseline, charter, actualCosts, mandaySums, project] = await Promise.all([
+  const [directCosts, indirectCosts, baseline, charter, actualCosts, mandaySums, project, committedProcurements] = await Promise.all([
     prisma.costItemDirect.findMany({
       where: { projectId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -497,7 +497,24 @@ export async function getCostSummary(projectId: string) {
     prisma.actualCostEntry.findMany({ where: { projectId }, orderBy: { date: 'asc' } }),
     prisma.mandayEntry.groupBy({ by: ['costItemId'], where: { projectId }, _sum: { mandays: true } }),
     prisma.project.findUnique({ where: { id: projectId }, select: { autoPostLabourAc: true } }),
+    // Committed cost = value of contracts/POs charged to a budget line and currently obligated
+    // (awarded → delivered). PLANNED/SOLICITATION aren't committed yet; CLOSED/CANCELLED are done.
+    prisma.procurement.findMany({
+      where: { projectId, status: { in: ['AWARDED', 'IN_PROGRESS', 'DELIVERED'] } },
+      select: { amount: true, costDirectLineId: true, costIndirectLineId: true },
+    }),
   ]);
+
+  const directLineCommitted = new Map<string, number>();
+  const indirectLineCommitted = new Map<string, number>();
+  let committedDirect = 0;
+  let committedIndirect = 0;
+  for (const pc of committedProcurements) {
+    const amt = dec(pc.amount);
+    if (amt <= 0) continue;
+    if (pc.costDirectLineId) { directLineCommitted.set(pc.costDirectLineId, (directLineCommitted.get(pc.costDirectLineId) ?? 0) + amt); committedDirect += amt; }
+    else if (pc.costIndirectLineId) { indirectLineCommitted.set(pc.costIndirectLineId, (indirectLineCommitted.get(pc.costIndirectLineId) ?? 0) + amt); committedIndirect += amt; }
+  }
 
   const actualCostTotal = actualCosts.reduce((s, a) => s + dec(a.amount), 0);
 
@@ -546,11 +563,11 @@ export async function getCostSummary(projectId: string) {
     const actualToDate = d.type === 'MANPOWER'
       ? round2((consumedByLine.get(d.id) ?? 0) * dec(d.unitCostPerManday))
       : round2(directLineActual.get(d.id) ?? 0);
-    return { ...d, actualToDate, remaining: round2(budget - actualToDate) };
+    return { ...d, actualToDate, remaining: round2(budget - actualToDate), committed: round2(directLineCommitted.get(d.id) ?? 0) };
   });
   const indirectCostsWithSpend = indirectCosts.map((i) => {
     const actualToDate = round2(indirectLineActual.get(i.id) ?? 0);
-    return { ...i, actualToDate, remaining: round2(dec(i.amount) - actualToDate) };
+    return { ...i, actualToDate, remaining: round2(dec(i.amount) - actualToDate), committed: round2(indirectLineCommitted.get(i.id) ?? 0) };
   });
 
   return {
@@ -567,6 +584,10 @@ export async function getCostSummary(projectId: string) {
     // Spend not booked against any specific line — rolls up to the category bucket only.
     unattributedDirectActual: round2(directMaterialActual - attributedDirect),
     unattributedIndirectActual: round2(indirectActual - attributedIndirect),
+    // Committed cost = obligated via awarded→delivered contracts charged to budget lines.
+    committedDirect: round2(committedDirect),
+    committedIndirect: round2(committedIndirect),
+    committedTotal: round2(committedDirect + committedIndirect),
     autoPostLabourAc: project?.autoPostLabourAc ?? false,
   };
 }
