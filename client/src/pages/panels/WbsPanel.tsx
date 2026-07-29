@@ -371,6 +371,19 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     walk(ganttQ.data?.tree ?? []);
     return ids;
   }, [ganttQ.data]);
+  // Tree navigation for indent/outdent (MS-Project style): each node's parent, its ordered
+  // siblings (the parent's child list), and an id→node map. Children arrive already sorted.
+  const nav = useMemo(() => {
+    const parentOf = new Map<string, string | null>();
+    const kidsOf = new Map<string | null, GanttNode[]>();
+    const nodeById = new Map<string, GanttNode>();
+    const walk = (ns: GanttNode[], parent: string | null) => {
+      kidsOf.set(parent, ns);
+      ns.forEach((n) => { parentOf.set(n.id, parent); nodeById.set(n.id, n); if (n.children?.length) walk(n.children, n.id); });
+    };
+    walk(ganttQ.data?.tree ?? [], null);
+    return { parentOf, kidsOf, nodeById };
+  }, [ganttQ.data]);
   const rolled = useMemo(() => {
     const m = new Map<string, Roll>();
     (ganttQ.data?.tree ?? []).forEach((n) => rollup(n, m));
@@ -497,6 +510,29 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [fullscreen, setFullscreen] = useState(false);
   const fsRef = useRef<HTMLDivElement>(null);
+  // Resizable Gantt box (normal view only) — drag the bottom handle to grow/shrink the timeline.
+  // null = default (max-h-[65vh]); a px height once the user drags. Persisted per project.
+  const HKEY = `wbs-h:${projectId}`;
+  const [panelH, setPanelH] = useState<number | null>(() => {
+    const s = Number(localStorage.getItem(HKEY));
+    return Number.isFinite(s) && s >= 220 ? s : null;
+  });
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = scrollRef.current?.getBoundingClientRect().height ?? 400;
+    const onMove = (ev: PointerEvent) => {
+      const h = Math.max(220, Math.min(window.innerHeight * 0.92, startH + (ev.clientY - startY)));
+      setPanelH(h);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setPanelH((h) => { if (h) localStorage.setItem(HKEY, String(Math.round(h))); return h; });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
   // Fullscreen = a CSS overlay always; on top of that, where the platform supports it
   // (Android/desktop Chrome) we request the real Fullscreen API and lock landscape so the
   // timeline gets max width. iOS Safari supports neither element-fullscreen nor orientation.lock,
@@ -676,6 +712,29 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     onSuccess: () => { invalidate(); toast.success('Dependency removed'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to remove dependency'),
   });
+
+  // Indent / outdent (MS-Project style) — re-parent a task within the WBS hierarchy via patchTask.
+  // canIndent: has a previous sibling (which becomes the new parent). canOutdent: has a parent
+  // (promotes to sit just after that parent under the grandparent). Blocked once the baseline locks.
+  const prevSibling = (node: GanttNode): GanttNode | null => {
+    const sibs = nav.kidsOf.get(nav.parentOf.get(node.id) ?? null) ?? [];
+    const i = sibs.findIndex((s) => s.id === node.id);
+    return i > 0 ? sibs[i - 1] : null;
+  };
+  const canIndent = (node: GanttNode) => !!prevSibling(node);
+  const canOutdent = (node: GanttNode) => (nav.parentOf.get(node.id) ?? null) !== null;
+  const indentTask = (node: GanttNode) => {
+    const parent = prevSibling(node);
+    if (!parent) return;
+    patchTask.mutate({ node, patch: { parentTaskId: parent.id, sortOrder: parent.children?.length ?? 0 } });
+  };
+  const outdentTask = (node: GanttNode) => {
+    const parentId = nav.parentOf.get(node.id) ?? null;
+    if (!parentId) return;
+    const parent = nav.nodeById.get(parentId);
+    const grandparent = nav.parentOf.get(parentId) ?? null;
+    patchTask.mutate({ node, patch: { parentTaskId: grandparent, sortOrder: (parent?.sortOrder ?? 0) + 1 } });
+  };
 
   // Chart interactions: drag a bar to reschedule; click a link handle then another bar to connect them.
   const [drag, setDrag] = useState<{ id: string; mode: 'move' | 'start' | 'end'; dx: number } | null>(null);
@@ -870,7 +929,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             pushes the page); in full view flex-1/min-h-0 fills the remaining height robustly — a %
             `h-full` resolved to 0 inside the native-fullscreen element on mobile, so a rotate left
             the timeline collapsed/stuck. */}
-        <div ref={scrollRef} className={`touch-pan-x touch-pan-y w-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'min-h-0 flex-1' : 'max-h-[65vh]'}`}>
+        <div ref={scrollRef}
+          style={!fullscreen && panelH ? { height: panelH } : undefined}
+          className={`touch-pan-x touch-pan-y w-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'min-h-0 flex-1' : panelH ? '' : 'max-h-[65vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
@@ -1093,6 +1154,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       <td className="whitespace-nowrap text-right text-xs">
                         {/* Hover-reveal to declutter the dense grid; focus-within keeps keyboard access. */}
                         <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
+                          {canPlan && (
+                            <>
+                              <button onClick={() => outdentTask(node)} disabled={!canOutdent(node)} className="mr-1 rounded px-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-default disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800" title="Outdent — promote one level (←)">⇤</button>
+                              <button onClick={() => indentTask(node)} disabled={!canIndent(node)} className="mr-2 rounded px-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-default disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800" title="Indent — make a subtask of the task above (→)">⇥</button>
+                            </>
+                          )}
                           <button onClick={() => setDraft({ parentId: node.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(node.planStart)), planEnd: formatDateInput(new Date(node.planEnd)) })} className="text-brand-600 hover:underline" title="Add a subtask inline">+ Sub</button>
                           <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400" title="Full editor (dictionary, scope, acceptance)">Edit</button>
                           <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true, container: modalContainer })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
@@ -1219,6 +1286,19 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         {/* Right-edge fade — hints that the timeline scrolls horizontally past the frozen pane. */}
         {overflowX && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-white to-transparent dark:from-slate-900" />}
         </div>
+          {/* Drag handle — grow/shrink the timeline box in the normal view (fullscreen already fills
+              the screen). Height persists per project; double-click resets to the default cap. */}
+          {!fullscreen && rows.length > 0 && (
+            <div
+              onPointerDown={startResize}
+              onDoubleClick={() => { setPanelH(null); localStorage.removeItem(HKEY); }}
+              role="separator" aria-orientation="horizontal" aria-label="Resize the timeline height"
+              title="Drag to resize the timeline · double-click to reset"
+              className="group mt-1 flex h-3.5 cursor-row-resize touch-none select-none items-center justify-center"
+            >
+              <span className="h-1 w-10 rounded-full bg-slate-300 transition group-hover:bg-brand-400 dark:bg-slate-600 dark:group-hover:bg-brand-500" />
+            </div>
+          )}
           {/* Tracking-Gantt legend — outside the scroll box (kept in the card) so it stays visible
               without scrolling the table. Hidden in full view: it's tall (2 rows) and would steal
               the height the timeline needs on a landscape phone. */}
