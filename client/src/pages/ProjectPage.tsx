@@ -143,9 +143,9 @@ export default function ProjectPage() {
   // Agile (its scheduling lives in sprints/board) but kept for predictive & hybrid.
   const showSchedule = project.deliveryApproach !== 'AGILE';
   const tabs: Tab[] = ([
-    // Graphic Overview — a visual EVM/health cockpit. On phones it's the default landing (charts,
-    // not a wall of tabs); on the web it's a bento dashboard the PM can open as the project home.
-    // DRAFT projects have no EVM yet, so skip it there.
+    // Graphic Overview — a visual EVM/health cockpit and the default landing on every device:
+    // a bento dashboard on the web, a charts-first home on phones. DRAFT projects have no EVM
+    // yet, so skip it there.
     ...(chartered ? (['Overview'] as Tab[]) : []),
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
@@ -155,11 +155,12 @@ export default function ProjectPage() {
     // phones to keep the two-level tab bar lean (they're still fully reachable on a wide screen).
   ] as Tab[]).filter((t) => !(isMobile && MOBILE_HIDDEN.includes(t)));
   // Fresh (DRAFT) projects land on Charter — commit it to unlock the rest. Once chartered,
-  // phones land on the graphic Overview; desktop keeps the first working tab (Schedule/Agile/Cost).
+  // every device lands on the graphic Overview (the project home); the first working tab
+  // (Schedule/Agile/Cost) is only the fallback for the mobile-hidden-tab guard below.
   const landingTab: Tab = chartered ? (showSchedule ? 'Schedule' : isAgile ? 'Agile' : 'Cost') : 'Charter';
   const chosenTab: Tab =
     tab ?? (requestedTab && tabs.includes(requestedTab) ? requestedTab
-      : chartered && isMobile ? 'Overview'
+      : chartered ? 'Overview'
       : landingTab);
   // The mobile-hidden tabs (Timesheet/Change Req) never resolve on a phone — whether reached via a
   // ?tab= deep link, a resize, or a jump (e.g. the CR banner) — so the panel can't show behind a
