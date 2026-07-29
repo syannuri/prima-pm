@@ -13,6 +13,9 @@ export type ConfirmOptions = {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  // Portal target for the dialog — pass a fullscreen element so confirms opened from a
+  // fullscreen view (e.g. the WBS Gantt) stay visible under the native Fullscreen API.
+  container?: Element | null;
 };
 
 type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
@@ -43,7 +46,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {pending && (
-        <Modal onClose={() => settle(false)} title={pending.title} size="sm">
+        <Modal onClose={() => settle(false)} title={pending.title} size="sm" container={pending.container}>
           <div className="text-sm text-slate-600 dark:text-slate-300">{pending.message}</div>
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => settle(false)}>

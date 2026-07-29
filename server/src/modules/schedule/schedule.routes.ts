@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
-import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema, applyTemplateSchema } from './schedule.schemas.js';
+import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema, taskActualsSchema, applyTemplateSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
 
@@ -73,6 +73,12 @@ router.post('/baseline', ...canWrite, asyncHandler(async (req, res) => {
 // Progress-only update (WBS % complete / status).
 router.patch('/tasks/:taskId/progress', ...canWrite, validateBody(progressSchema), asyncHandler(async (req, res) => {
   const task = await svc.setTaskProgress(req.params.projectId, req.params.taskId, req.body.progressPct, req.user!.id);
+  res.json({ task });
+}));
+
+// Actual-date tracking — editable during execution even under a locked baseline (see service).
+router.patch('/tasks/:taskId/actuals', ...canWrite, validateBody(taskActualsSchema), asyncHandler(async (req, res) => {
+  const task = await svc.setTaskActuals(req.params.projectId, req.params.taskId, req.body, req.user!.id);
   res.json({ task });
 }));
 

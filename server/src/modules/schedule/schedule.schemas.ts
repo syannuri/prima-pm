@@ -48,6 +48,22 @@ export const progressSchema = z.object({
   progressPct: z.coerce.number().int().min(0).max(100),
 });
 
+// Actual-date tracking update — execution data that keeps evolving during delivery, so it's
+// editable even under a locked baseline (unlike plan dates / structure). Either field may be
+// sent; a null clears it, an omitted field is left untouched. At least one must be present.
+export const taskActualsSchema = z
+  .object({
+    actualStart: z.coerce.date().nullable().optional(),
+    actualFinish: z.coerce.date().nullable().optional(),
+  })
+  .refine((d) => d.actualStart !== undefined || d.actualFinish !== undefined, {
+    message: 'Provide actualStart and/or actualFinish',
+  })
+  .refine(
+    (d) => !d.actualFinish || !d.actualStart || d.actualFinish.getTime() >= d.actualStart.getTime(),
+    { message: 'actualFinish must be on/after actualStart', path: ['actualFinish'] },
+  );
+
 export const applyTemplateSchema = z.object({
   templateId: z.string().min(1),
   startDate: z.coerce.date().optional(),
@@ -56,3 +72,4 @@ export const applyTemplateSchema = z.object({
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
 export type ProgressInput = z.infer<typeof progressSchema>;
+export type TaskActualsInput = z.infer<typeof taskActualsSchema>;

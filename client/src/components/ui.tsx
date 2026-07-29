@@ -246,6 +246,7 @@ export function Modal({
   size = 'md',
   panelClassName = '',
   closeOnBackdrop = true,
+  container,
 }: {
   onClose: () => void;
   title: ReactNode;
@@ -253,6 +254,9 @@ export function Modal({
   size?: keyof typeof MODAL_SIZE;
   panelClassName?: string;
   closeOnBackdrop?: boolean;
+  // Portal target. Defaults to <body>; pass the element that's under the native Fullscreen API
+  // (only that subtree renders in fullscreen) so dialogs opened from a fullscreen view stay visible.
+  container?: Element | null;
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -327,6 +331,6 @@ export function Modal({
         {children}
       </div>
     </div>,
-    document.body,
+    container ?? document.body,
   );
 }

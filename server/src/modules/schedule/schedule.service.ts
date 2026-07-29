@@ -17,7 +17,7 @@ import {
   type DependencyEdge,
   type CpmDepType,
 } from './schedule.helpers.js';
-import type { DependencyInput, UpsertTaskInput } from './schedule.schemas.js';
+import type { DependencyInput, TaskActualsInput, UpsertTaskInput } from './schedule.schemas.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
   v == null ? 0 : Number(v);
@@ -293,22 +293,62 @@ export async function updateTask(
   return task;
 }
 
-// Update only a task's progress (% complete). Actual-date stamping is ADDITIVE-ONLY: the first
-// progress stamps actualStart, reaching 100% stamps actualFinish, but an already-recorded actual
-// date is NEVER auto-cleared or overwritten. This locks the real start/finish once set, so an
-// accidental un-check (100→0) and re-check doesn't wipe the original dates or re-stamp them to
-// "today". To genuinely change an actual date, edit it via the inline date field.
+// Update only a task's progress (% complete). Actual dates track progress the way MS Project
+// does, so an accidental check is fully reversible by un-checking:
+//   • progress > 0  → stamp actualStart (only if not already set — a manual start is kept)
+//   • progress = 100 → stamp actualFinish (only if not already set)
+//   • progress < 100 → clear actualFinish (the task is no longer finished)
+//   • progress ≤ 0  → clear BOTH actuals (the task hasn't started; reverts a mis-click to "—")
+// Progress/actuals aren't gated by the baseline lock (they legitimately evolve in execution), so
+// this recovery works even after the baseline is locked. To set an actual date to a *specific*
+// day, use the inline date field / task editor (setTaskActuals).
 export async function setTaskProgress(projectId: string, taskId: string, progressPct: number, actorId: string) {
   const existing = await prisma.task.findFirst({ where: { id: taskId, projectId } });
   if (!existing) throw NotFound('Task not found');
 
   const now = new Date();
   const data: { progressPct: number; actualStart?: Date | null; actualFinish?: Date | null } = { progressPct };
-  if (progressPct > 0 && !existing.actualStart) data.actualStart = now;
-  if (progressPct >= 100 && !existing.actualFinish) data.actualFinish = now;
+  if (progressPct <= 0) {
+    if (existing.actualStart) data.actualStart = null;
+    if (existing.actualFinish) data.actualFinish = null;
+  } else {
+    if (!existing.actualStart) data.actualStart = now;
+    if (progressPct >= 100) {
+      if (!existing.actualFinish) data.actualFinish = now;
+    } else if (existing.actualFinish) {
+      data.actualFinish = null;
+    }
+  }
 
   const task = await prisma.task.update({ where: { id: taskId }, data });
   await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: taskId, action: 'UPDATE', before: { progressPct: existing.progressPct }, after: { progressPct } });
+  return task;
+}
+
+// Edit a task's ACTUAL start/finish to a specific date (or clear it with null). This is execution
+// tracking, not a baseline change, so — unlike updateTask — it is NOT gated by the baseline lock:
+// a PM must be able to correct real dates while the plan stays frozen. Only the fields provided are
+// touched; the other is left as-is.
+export async function setTaskActuals(projectId: string, taskId: string, input: TaskActualsInput, actorId: string) {
+  const existing = await prisma.task.findFirst({ where: { id: taskId, projectId } });
+  if (!existing) throw NotFound('Task not found');
+
+  const nextStart = input.actualStart !== undefined ? input.actualStart : existing.actualStart;
+  const nextFinish = input.actualFinish !== undefined ? input.actualFinish : existing.actualFinish;
+  if (nextStart && nextFinish && nextFinish.getTime() < nextStart.getTime()) {
+    throw BadRequest('Actual finish cannot be before actual start');
+  }
+
+  const data: { actualStart?: Date | null; actualFinish?: Date | null } = {};
+  if (input.actualStart !== undefined) data.actualStart = input.actualStart;
+  if (input.actualFinish !== undefined) data.actualFinish = input.actualFinish;
+
+  const task = await prisma.task.update({ where: { id: taskId }, data });
+  await writeAudit({
+    projectId, userId: actorId, entity: 'Task', entityId: taskId, action: 'UPDATE',
+    before: { actualStart: existing.actualStart, actualFinish: existing.actualFinish },
+    after: { actualStart: task.actualStart, actualFinish: task.actualFinish },
+  });
   return task;
 }
 

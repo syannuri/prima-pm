@@ -645,6 +645,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     onSuccess: invalidate,
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to save'); },
   });
+  // Actual-date tracking edit (set to a specific day, or null to clear). Hits the dedicated
+  // /actuals endpoint so it keeps working under a locked baseline — actuals evolve in execution
+  // even when the plan is frozen (unlike patchTask, which the API blocks once the baseline locks).
+  const setActuals = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: { actualStart?: string | null; actualFinish?: string | null } }) =>
+      api.patch(`${base}/tasks/${id}/actuals`, patch),
+    onSuccess: invalidate,
+    onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to save actual date'); },
+  });
   // Inline add-subtask (keeps the draft open for the next sibling on success).
   const createSub = useMutation({
     mutationFn: ({ parentId, name, picResourceId, planStart, planEnd, sortOrder }:
@@ -742,6 +751,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
 
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
+  // Dialogs opened from the fullscreen Gantt must portal INTO the fullscreen element — under the
+  // native Fullscreen API only that subtree paints, so a <body>-level modal would be invisible
+  // (the "can't add a task in full screen" bug). Outside fullscreen: default portal (undefined).
+  const modalContainer = fullscreen ? fsRef.current : undefined;
+
   return (
     <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
     {/* In full view the card is a flex column: header stays put, the timeline gets ALL remaining
@@ -824,7 +838,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             {baselinedAt ? `Baselined ${formatDate(baselinedAt)}` : 'No baseline set'}
           </span>
           {canEdit && rows.length > 0 && (
-            <Button data-tour="schedule-baseline" variant="secondary" disabled={baseline.isPending} onClick={async () => { if (await confirm({ title: baselinedAt ? 'Re-capture baseline?' : 'Set schedule baseline?', message: baselinedAt ? 'Re-capture the schedule baseline from the current plan dates? This overwrites the existing baseline used for variance.' : 'Capture the current plan dates as the schedule baseline?', confirmLabel: baselinedAt ? 'Re-baseline' : 'Set baseline' })) baseline.mutate(); }}>
+            <Button data-tour="schedule-baseline" variant="secondary" disabled={baseline.isPending} onClick={async () => { if (await confirm({ title: baselinedAt ? 'Re-capture baseline?' : 'Set schedule baseline?', message: baselinedAt ? 'Re-capture the schedule baseline from the current plan dates? This overwrites the existing baseline used for variance.' : 'Capture the current plan dates as the schedule baseline?', confirmLabel: baselinedAt ? 'Re-baseline' : 'Set baseline', container: modalContainer })) baseline.mutate(); }}>
               {baseline.isPending ? 'Saving…' : baselinedAt ? 'Re-baseline' : 'Set Baseline'}
             </Button>
           )}
@@ -1036,13 +1050,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <td className="whitespace-nowrap text-right">
                           {r.isParent
                             ? <span className="text-slate-300 dark:text-slate-600">—</span>
-                            : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => patchTask.mutate({ node, patch: { actualStart: v } })} title="Actual start — click to set" />}
+                            : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualStart: v } })} title="Actual start — click to set (blank to clear)" />}
                         </td>
                         {/* Actual Finish */}
                         <td className="whitespace-nowrap text-right">
                           {r.isParent
                             ? <span className="text-slate-300 dark:text-slate-600">—</span>
-                            : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => patchTask.mutate({ node, patch: { actualFinish: v } })} title="Actual finish — click to set" />}
+                            : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualFinish: v } })} title="Actual finish — click to set (blank to clear)" />}
                         </td>
                         <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
                         <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
@@ -1081,7 +1095,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
                           <button onClick={() => setDraft({ parentId: node.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(node.planStart)), planEnd: formatDateInput(new Date(node.planEnd)) })} className="text-brand-600 hover:underline" title="Add a subtask inline">+ Sub</button>
                           <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400" title="Full editor (dictionary, scope, acceptance)">Edit</button>
-                          <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
+                          <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true, container: modalContainer })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
                         </span>
                       </td>
                     )}
@@ -1235,6 +1249,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           edit={form.edit}
           siblingCount={rows.filter((r) => r.node.parentTaskId === form.parentId).length}
           defaultStart={nextTaskStart(rows, form.parentId)}
+          container={modalContainer}
           onClose={() => setForm(null)}
           onSaved={() => { setForm(null); invalidate(); }}
         />
@@ -1361,8 +1376,8 @@ function DraftRow({ draft, depth, colCount, showDates, resources, saving, onChan
 // Default duration (days) for a brand-new task when we auto-continue the schedule.
 const DEFAULT_TASK_DAYS = 7;
 
-function TaskForm({ base, parentId, edit, siblingCount, defaultStart, onClose, onSaved }: {
-  base: string; parentId: string | null; edit?: GanttNode; siblingCount: number; defaultStart?: Date | null; onClose: () => void; onSaved: () => void;
+function TaskForm({ base, parentId, edit, siblingCount, defaultStart, container, onClose, onSaved }: {
+  base: string; parentId: string | null; edit?: GanttNode; siblingCount: number; defaultStart?: Date | null; container?: Element | null; onClose: () => void; onSaved: () => void;
 }) {
   // New tasks default to continue from where the schedule currently ends (defaultStart =
   // the latest existing task's planEnd) so dates run sequentially instead of all starting
@@ -1373,6 +1388,10 @@ function TaskForm({ base, parentId, edit, siblingCount, defaultStart, onClose, o
   const [planStart, setStart] = useState(formatDateInput(edit?.planStart ?? newStart));
   const [planEnd, setEnd] = useState(formatDateInput(edit?.planEnd ?? newEnd));
   const [progressPct, setProgress] = useState(edit?.progressPct ?? 0);
+  // Actual (real) dates — MS-Project-style tracking; blank = not yet recorded. Editing an existing
+  // task lets the PM correct an auto-stamped / mis-clicked actual (or clear it back to "—").
+  const [actualStart, setActualStart] = useState(edit?.actualStart ? formatDateInput(edit.actualStart) : '');
+  const [actualFinish, setActualFinish] = useState(edit?.actualFinish ? formatDateInput(edit.actualFinish) : '');
   const [isMilestone, setMilestone] = useState(edit?.isMilestone ?? false);
   const [description, setDescription] = useState(edit?.description ?? '');
   const [deliverable, setDeliverable] = useState(edit?.deliverable ?? '');
@@ -1397,8 +1416,8 @@ function TaskForm({ base, parentId, edit, siblingCount, defaultStart, onClose, o
         description: description || null,
         deliverable: deliverable || null,
         acceptanceCriteria: acceptanceCriteria || null,
-        actualStart: edit?.actualStart ?? undefined,
-        actualFinish: edit?.actualFinish ?? undefined,
+        actualStart: actualStart || null,
+        actualFinish: actualFinish || null,
       };
       return edit ? api.put(`${base}/tasks/${edit.id}`, body) : api.post(`${base}/tasks`, body);
     },
@@ -1411,7 +1430,7 @@ function TaskForm({ base, parentId, edit, siblingCount, defaultStart, onClose, o
   const isParent = !!edit?.children?.length;
 
   return (
-    <Modal onClose={onClose} title={title} size="lg">
+    <Modal onClose={onClose} title={title} size="lg" container={container}>
         <div className="space-y-3">
           <Field label="Task name">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Requirements gathering" />
@@ -1429,6 +1448,16 @@ function TaskForm({ base, parentId, edit, siblingCount, defaultStart, onClose, o
               <Field label={`% Complete (${progressPct}%)`}>
                 <input type="range" min={0} max={100} value={progressPct} onChange={(e) => setProgress(Number(e.target.value))} className="w-full accent-brand-600" />
               </Field>
+              {/* Actual (tracking) dates — the real start/finish, independent of the plan. Blank = not
+                  recorded yet; clearing them reverts an accidental completion. */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Actual start">
+                  <Input type="date" value={actualStart} onChange={(e) => setActualStart(e.target.value)} />
+                </Field>
+                <Field label="Actual finish">
+                  <Input type="date" value={actualFinish} onChange={(e) => setActualFinish(e.target.value)} />
+                </Field>
+              </div>
             </>
           )}
           <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
