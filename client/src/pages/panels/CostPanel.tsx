@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
@@ -34,6 +34,20 @@ const INDIRECT_TYPES = [
   { value: 'ENTERTAINMENT', label: 'Entertainment' },
   { value: 'OTHER', label: 'Other' },
 ];
+
+// Cost families — group the direct types into readable categories (Manpower on its own, then
+// Hardware, Software/Licenses, Technology, Services, Other). Grouping is derived from `type`, so
+// no per-line category field is needed; the order here is the display order of the sections.
+const DIRECT_FAMILIES = [
+  { key: 'MANPOWER', label: 'Manpower', icon: '👷', types: ['MANPOWER'] },
+  { key: 'HARDWARE', label: 'Hardware & Equipment', icon: '🖥️', types: ['HARDWARE_EQUIPMENT', 'HARDWARE_LICENSE'] },
+  { key: 'SOFTWARE', label: 'Software & Licenses', icon: '💿', types: ['SOFTWARE_LICENSE'] },
+  { key: 'TECHNOLOGY', label: 'Technology / Infrastructure', icon: '☁️', types: ['TECHNOLOGY_CLOUD', 'TECHNOLOGY_ONPREM'] },
+  { key: 'SERVICES', label: 'Services', icon: '🤝', types: ['SUBCONTRACTOR', 'TRAINING_CERTIFICATION', 'SUPPORT_MAINTENANCE'] },
+  { key: 'OTHER', label: 'Other', icon: '📦', types: ['OTHER'] },
+] as const;
+const FAMILY_OF: Record<string, string> = Object.fromEntries(DIRECT_FAMILIES.flatMap((f) => f.types.map((t) => [t, f.key])));
+const familyOf = (type: string) => FAMILY_OF[type] ?? 'OTHER';
 
 // Enum value → friendly label lookup (falls back to a humanized enum for any unknown/legacy value).
 const DIRECT_LABEL: Record<string, string> = Object.fromEntries(DIRECT_TYPES.map((t) => [t.value, t.label]));
@@ -430,6 +444,18 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
   const [err, setErr] = useState('');
   const isManpower = type === 'MANPOWER';
   const isOther = type === 'OTHER';
+  // Per-family UI: which category sub-sections are collapsed, which one has its add-form open, and
+  // the row currently being dragged (drag-to-reorder within a family).
+  const [collapsedFam, setCollapsedFam] = useState<Set<string>>(new Set());
+  const [addingFamily, setAddingFamily] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const toggleFam = (k: string) => setCollapsedFam((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  // Open a family's inline add-form, presetting the type to that family's first (or only) type.
+  const openAdd = (fam: typeof DIRECT_FAMILIES[number]) => {
+    setType(fam.types[0]); setLabel(''); setSubCategory(''); setUnitCost(''); setQty('1'); setMandays(''); setResourceId(''); setRateOverride(''); setTaskId(''); setErr('');
+    setCollapsedFam((s) => { const n = new Set(s); n.delete(fam.key); return n; });
+    setAddingFamily(fam.key);
+  };
 
   // Manpower is loaded from the resource master pool (rate & role come from it).
   const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources') });
@@ -452,6 +478,12 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
     mutationFn: (id: string) => api.del(`${base}/direct/${id}`),
     onSuccess: () => { onChange(); toast.success('Cost line deleted'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete cost line'),
+  });
+  // Drag-to-reorder: send the full ordered id list; server re-numbers sortOrder.
+  const reorder = useMutation({
+    mutationFn: (ids: string[]) => api.patch(`${base}/direct/reorder`, { ids }),
+    onSuccess: onChange,
+    onError: (e) => { onChange(); toast.error(e instanceof ApiError ? e.message : 'Failed to reorder'); },
   });
   const confirmDelete = async (d: DirectCost) => {
     if (await confirm({ title: 'Delete cost line?', message: <>Delete <strong>{d.label}</strong> from direct costs? This recalculates the cost baseline.</>, confirmLabel: 'Delete', danger: true })) del.mutate(d.id);
@@ -532,6 +564,27 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
   const directRemaining = data.directCosts.reduce((s, d) => s + d.remaining, 0);
   const directUntouched = data.directCosts.filter((d) => d.actualToDate === 0);
 
+  // Group the lines into their category families (already sorted by sortOrder from the API).
+  const grouped: Record<string, DirectCost[]> = Object.fromEntries(DIRECT_FAMILIES.map((f) => [f.key, [] as DirectCost[]]));
+  for (const d of data.directCosts) (grouped[familyOf(d.type)] ??= []).push(d);
+  const lineAmount = (d: DirectCost) => Number((d.type === 'MANPOWER' ? d.manpowerCost : d.amount) ?? 0);
+  const addFamilyDef = DIRECT_FAMILIES.find((f) => f.key === addingFamily) ?? null;
+
+  // Drag-to-reorder within a family: move `fromId` before `toId`, then persist the full new order.
+  const moveWithinFamily = (familyKey: string, fromId: string, toId: string) => {
+    const ids = (grouped[familyKey] ?? []).map((d) => d.id);
+    const from = ids.indexOf(fromId), to = ids.indexOf(toId);
+    if (from < 0 || to < 0 || from === to) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    const globalIds = DIRECT_FAMILIES.flatMap((f) => (f.key === familyKey ? ids : (grouped[f.key] ?? []).map((d) => d.id)));
+    reorder.mutate(globalIds);
+  };
+  const onRowDrop = (target: DirectCost) => {
+    const src = dragId ? data.directCosts.find((x) => x.id === dragId) : null;
+    if (src && familyOf(src.type) === familyOf(target.type)) moveWithinFamily(familyOf(target.type), src.id, target.id);
+    setDragId(null);
+  };
+
   return (
     <Card>
       <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} />
@@ -549,11 +602,31 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
             </tr>
           </thead>
           <tbody>
-            {data.directCosts.map((d) => {
+            {DIRECT_FAMILIES.map((fam) => {
+              const lines = grouped[fam.key];
+              if (!lines.length) return null;
+              const famCollapsed = collapsedFam.has(fam.key);
+              const subtotal = lines.reduce((s, d) => s + lineAmount(d), 0);
+              return (
+              <Fragment key={fam.key}>
+                <tr className="bg-slate-50/70 dark:bg-slate-800/40">
+                  <td colSpan={7} className="py-1.5">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => toggleFam(fam.key)} aria-expanded={!famCollapsed} className="flex min-w-0 items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                        <svg viewBox="0 0 24 24" className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${famCollapsed ? '' : 'rotate-90'}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                        <span aria-hidden>{fam.icon}</span>{fam.label}
+                        <span className="rounded-full bg-slate-200 px-1.5 text-[10px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">{lines.length}</span>
+                      </button>
+                      <span className="ml-auto shrink-0 tabular-nums text-xs font-bold text-slate-800 dark:text-slate-100">{formatIdr(subtotal)}</span>
+                      <button onClick={() => openAdd(fam)} className="shrink-0 rounded-md border border-brand-200 px-2 py-0.5 text-[11px] font-medium text-brand-600 hover:bg-brand-50 dark:border-brand-900/50 dark:text-brand-300 dark:hover:bg-brand-900/20" title={`Add a ${fam.label} line`}>+ Add</button>
+                    </div>
+                  </td>
+                </tr>
+                {!famCollapsed && lines.map((d) => {
               const editing = editId === d.id;
               const isMp = d.type === 'MANPOWER';
               return (
-              <tr key={d.id} className="border-b border-slate-100 align-top dark:border-slate-800">
+              <tr key={d.id} draggable={!editing} onDragStart={() => setDragId(d.id)} onDragOver={(e) => { if (dragId) e.preventDefault(); }} onDrop={() => onRowDrop(d)} onDragEnd={() => setDragId(null)} className={`border-b border-slate-100 align-top dark:border-slate-800 ${dragId === d.id ? 'opacity-40' : ''} ${!editing ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                 <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
                   {editing && !isMp ? (
                     <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
@@ -652,6 +725,9 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
               </tr>
               );
             })}
+              </Fragment>
+              );
+            })}
             {!data.directCosts.length && <tr><td colSpan={7} className="py-3 text-center text-slate-500 dark:text-slate-400">No direct costs yet.</td></tr>}
           </tbody>
           {data.directCosts.length > 0 && (
@@ -670,7 +746,23 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
 
       {/* Mobile card list — the table above is hidden < sm. Reuses the same edit/reassign/delete handlers. */}
       <div className="space-y-2 sm:hidden">
-        {data.directCosts.map((d) => {
+        {DIRECT_FAMILIES.map((fam) => {
+          const lines = grouped[fam.key];
+          if (!lines.length) return null;
+          const famCollapsed = collapsedFam.has(fam.key);
+          const subtotal = lines.reduce((s, d) => s + lineAmount(d), 0);
+          return (
+          <Fragment key={fam.key}>
+            <div className="flex items-center gap-2 pt-2">
+              <button onClick={() => toggleFam(fam.key)} aria-expanded={!famCollapsed} className="flex min-w-0 items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                <svg viewBox="0 0 24 24" className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${famCollapsed ? '' : 'rotate-90'}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                <span aria-hidden>{fam.icon}</span>{fam.label}
+                <span className="rounded-full bg-slate-200 px-1.5 text-[10px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">{lines.length}</span>
+              </button>
+              <span className="ml-auto shrink-0 tabular-nums text-xs font-bold text-slate-800 dark:text-slate-100">{formatIdr(subtotal)}</span>
+              <button onClick={() => openAdd(fam)} className="shrink-0 rounded-md border border-brand-200 px-2 py-0.5 text-[11px] font-medium text-brand-600 dark:border-brand-900/50 dark:text-brand-300">+ Add</button>
+            </div>
+            {!famCollapsed && lines.map((d) => {
           const editing = editId === d.id;
           const isMp = d.type === 'MANPOWER';
           if (editing) return (
@@ -746,6 +838,9 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
             </div>
           );
         })}
+          </Fragment>
+          );
+        })}
         {!data.directCosts.length && <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">No direct costs yet.</div>}
         {data.directCosts.length > 0 && (
           <div className="border-t-2 border-slate-200 pt-2 text-sm font-semibold dark:border-slate-700">
@@ -761,10 +856,16 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
         )}
       </div>
 
-      <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-8">
-        <Select aria-label="Direct cost type" value={type} onChange={(e) => setType(e.target.value)}>
-          {DIRECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </Select>
+      {addFamilyDef && (<>
+      <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"><span aria-hidden>{addFamilyDef.icon}</span> Add {addFamilyDef.label}</span>
+        <button onClick={() => setAddingFamily(null)} className="text-xs text-slate-400 hover:underline">close</button>
+      </div>
+      <div className="grid gap-2 md:grid-cols-8">
+        {addFamilyDef.types.length > 1
+          ? <Select aria-label="Direct cost type" value={type} onChange={(e) => setType(e.target.value)}>{addFamilyDef.types.map((tv) => <option key={tv} value={tv}>{DIRECT_LABEL[tv]}</option>)}</Select>
+          : <div className="hidden md:block" />}
         <Input aria-label="Cost line label" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
         {isManpower ? (
           <>
@@ -822,6 +923,8 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
         <span className="text-slate-500 dark:text-slate-400" title="Recorded direct total + this new line">New Direct total: <span className="font-bold tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal + addAmount)}</span></span>
       </div>
       <FormError className="mt-2">{err}</FormError>
+      </div>
+      </>)}
       </div>)}
     </Card>
   );

@@ -412,6 +412,9 @@ model CostItemDirect {
   label     String
   // Free-text classification for type = OTHER (e.g. "Insurance", "Legal"); null otherwise.
   subCategory String?
+  // Manual display order within the cost list / its category family (drag-to-reorder in the UI).
+  // New lines append (max+1); grouping by family is derived from `type`, order within by this.
+  sortOrder Int @default(0)
 
   // --- Material fields (every non-MANPOWER type: TECHNOLOGY_*, HARDWARE_*, SOFTWARE_LICENSE, SUBCONTRACTOR, TRAINING_CERTIFICATION, SUPPORT_MAINTENANCE, OTHER) ---
   qty       Decimal?       @db.Decimal(18, 2)

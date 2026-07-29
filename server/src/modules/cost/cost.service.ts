@@ -173,6 +173,9 @@ export async function addDirectLine(projectId: string, input: DirectLineInput, a
   }
 
   const { line, ownerSetTaskId } = await prisma.$transaction(async (tx) => {
+    // Append after the current lines (max sortOrder + 1) so new entries land at the end of their list.
+    const agg = await tx.costItemDirect.aggregate({ where: { projectId }, _max: { sortOrder: true } });
+    data.sortOrder = (agg._max.sortOrder ?? 0) + 1;
     const created = await tx.costItemDirect.create({ data });
     await recomputeBaseline(projectId, tx);
     const ownerSetTaskId = input.type === 'MANPOWER' ? await prefillTaskOwner(tx, created.taskId, created.resourceId) : null;
@@ -255,6 +258,18 @@ export async function deleteDirectLine(projectId: string, itemId: string, actorI
     await recomputeBaseline(projectId, tx);
   });
   await writeAudit({ projectId, userId: actorId, entity: 'CostItemDirect', entityId: itemId, action: 'DELETE', before: existing });
+}
+
+// Reorder direct cost lines (drag-to-reorder within a category). Presentational only — it never
+// touches amounts, so it's allowed even when the baseline is locked. The client sends the FULL
+// ordered id list of all direct lines; each gets sortOrder = its 1-based index in that list.
+export async function reorderDirectLines(projectId: string, ids: string[], actorId: string) {
+  const lines = await prisma.costItemDirect.findMany({ where: { projectId }, select: { id: true } });
+  const known = new Set(lines.map((l) => l.id));
+  const clean = ids.filter((id) => known.has(id));
+  if (clean.length === 0) return;
+  await prisma.$transaction(clean.map((id, i) => prisma.costItemDirect.update({ where: { id }, data: { sortOrder: i + 1 } })));
+  await writeAudit({ projectId, userId: actorId, entity: 'CostItemDirect', entityId: clean[0], action: 'UPDATE', after: { reordered: clean } });
 }
 
 // --- INDIRECT COST ---
@@ -470,7 +485,7 @@ export async function getCostSummary(projectId: string) {
   const [directCosts, indirectCosts, baseline, charter, actualCosts, mandaySums, project] = await Promise.all([
     prisma.costItemDirect.findMany({
       where: { projectId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: {
         resource: { select: { id: true, name: true } },
         resourceRef: { select: { id: true, name: true, resourceType: true } },

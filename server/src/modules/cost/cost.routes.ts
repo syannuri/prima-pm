@@ -3,6 +3,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
 import {
   directLineSchema,
+  reorderDirectSchema,
   indirectLineSchema,
   managementReserveSchema,
   actualCostSchema,
@@ -47,6 +48,17 @@ router.post(
   asyncHandler(async (req, res) => {
     const line = await svc.addDirectLine(req.params.projectId, req.body, req.user!.id);
     res.status(201).json({ line });
+  }),
+);
+
+// Drag-to-reorder direct lines (presentational — allowed even when the baseline is locked).
+router.patch(
+  '/direct/reorder',
+  ...canWrite,
+  validateBody(reorderDirectSchema),
+  asyncHandler(async (req, res) => {
+    await svc.reorderDirectLines(req.params.projectId, req.body.ids, req.user!.id);
+    res.status(204).send();
   }),
 );
 

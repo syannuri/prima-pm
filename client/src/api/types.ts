@@ -278,6 +278,7 @@ export interface DirectCost {
   type: string;
   label: string;
   subCategory: string | null;
+  sortOrder: number;
   qty: string | null;
   unitCost: string | null;
   amount: string | null;

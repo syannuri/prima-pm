@@ -91,6 +91,11 @@ export const managementReserveSchema = z.object({
   managementReserve: z.coerce.number().nonnegative(),
 });
 
+// Drag-to-reorder: the full ordered list of direct-cost line ids (see reorderDirectLines).
+export const reorderDirectSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 export const actualCostSchema = z
   .object({
     date: z.coerce.date(),
