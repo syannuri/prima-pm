@@ -7,7 +7,7 @@ import type { InputState } from '../../components/ui';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useLang } from '../../context/LanguageContext';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../../lib/labels';
-import { formatDateInput } from '../../lib/format';
+import { formatDateInput, formatDate, formatIdr } from '../../lib/format';
 
 // HYBRID is hidden from the picker (new projects use Predictive/Agile); still offered when the
 // charter's project is already HYBRID so its dropdown isn't blank (grandfathered).
@@ -152,6 +152,25 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
 
   if (charterQ.isLoading) return <PanelLoading />;
 
+  // Once committed the charter reads as a clean document (no input boxes) — the same fields in the
+  // same order, rendered as labelled text. Narrative fields keep their line breaks (whitespace).
+  const pmName = personalOwnerId ? null : (assignedPmName ?? usersQ.data?.users.find((u) => u.id === form.pmUserId)?.name ?? '—');
+  const categoryLabel = form.category === 'OTHER'
+    ? (categoryOther || t('Lainnya', 'Other'))
+    : (PROJECT_CATEGORIES.find((c) => c.value === form.category)?.label ?? form.category);
+  const docRows: { label: string; value: string; long?: boolean }[] = [
+    { label: 'Project Description', value: form.description, long: true },
+    { label: 'Project Goals', value: form.goals, long: true },
+    { label: 'High-Level Scope of Work', value: form.hiScope, long: true },
+    { label: 'Project Category', value: categoryLabel },
+    { label: 'Delivery Approach', value: DELIVERY_APPROACH_LABEL[approach] },
+    ...(pmName !== null ? [{ label: 'Project Manager', value: pmName }] : []),
+    { label: 'Project Sponsor', value: sponsor || '—' },
+    { label: 'High-Level Project Cost', value: formatIdr(form.hiCostIdr) },
+    { label: 'Project Schedule', value: `${formatDate(form.hiScheduleStart)} — ${formatDate(form.hiScheduleEnd)}` },
+    { label: 'High-Level Deliverables / Expected Outcome', value: form.hiDeliverables, long: true },
+  ];
+
   return (
     <div className="space-y-5">
     <Card>
@@ -166,6 +185,18 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         )}
       </div>
 
+      {locked ? (
+        <div data-tour="charter-form" className="max-w-3xl divide-y divide-slate-100 dark:divide-slate-800">
+          {docRows.map((r) => (
+            <div key={r.label} className="py-3 first:pt-0">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{r.label}</div>
+              <div className={`mt-1 text-sm text-slate-700 dark:text-slate-200 ${r.long ? 'whitespace-pre-wrap leading-relaxed' : 'font-medium'}`}>
+                {r.value?.trim() ? r.value : '—'}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <fieldset data-tour="charter-form" disabled={locked} className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <Field label="Project Description" required error={errText('description')}>
@@ -229,6 +260,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
           </Field>
         </div>
       </fieldset>
+      )}
 
       {msg && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{msg}</p>}
 
