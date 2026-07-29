@@ -184,8 +184,9 @@ function ProcurementForm({ base, procurement, onClose, onDone }: { base: string;
   const [err, setErr] = useState('');
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
 
-  // Budget lines to charge this contract against (committed cost). Cost lives next to procurement.
-  const costBase = base.replace(/\/procurement$/, '/cost');
+  // Budget lines to charge this contract against (committed cost). Cost lives next to procurement
+  // (base is the plural `/projects/:id/procurements`, so swap the whole segment for `/cost`).
+  const costBase = base.replace(/\/procurements$/, '/cost');
   const costQ = useQuery({ queryKey: ['cost', costBase], queryFn: () => api.get<CostSummary>(costBase) });
 
   const save = useMutation({
@@ -227,14 +228,14 @@ function ProcurementForm({ base, procurement, onClose, onDone }: { base: string;
         <Field label="Charge to budget line" hint="Links this contract's value to a Cost line as “Committed” (shown on the Cost tab). Optional.">
           <Select value={f.costLine} onChange={(e) => set('costLine', e.target.value)}>
             <option value="">— not charged to a budget line —</option>
-            {costQ.data && costQ.data.directCosts.length > 0 && (
+            {(costQ.data?.directCosts?.length ?? 0) > 0 && (
               <optgroup label="Direct lines">
-                {costQ.data.directCosts.map((d) => <option key={d.id} value={`d:${d.id}`}>{d.label} · {formatIdr(Number(d.type === 'MANPOWER' ? d.manpowerCost : d.amount) || 0)}</option>)}
+                {costQ.data!.directCosts.map((d) => <option key={d.id} value={`d:${d.id}`}>{d.label} · {formatIdr(Number(d.type === 'MANPOWER' ? d.manpowerCost : d.amount) || 0)}</option>)}
               </optgroup>
             )}
-            {costQ.data && costQ.data.indirectCosts.length > 0 && (
+            {(costQ.data?.indirectCosts?.length ?? 0) > 0 && (
               <optgroup label="Indirect lines">
-                {costQ.data.indirectCosts.map((i) => <option key={i.id} value={`i:${i.id}`}>{i.description} · {formatIdr(Number(i.amount) || 0)}</option>)}
+                {costQ.data!.indirectCosts.map((i) => <option key={i.id} value={`i:${i.id}`}>{i.description} · {formatIdr(Number(i.amount) || 0)}</option>)}
               </optgroup>
             )}
           </Select>
