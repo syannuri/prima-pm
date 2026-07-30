@@ -68,11 +68,18 @@ with every phase independently shippable and reversible.
 - Pick the **default tenant** that will own ALL current data. — `slug='default'`, `name='PRIMA'`
   in `server/src/lib/tenant/constants.ts` (the Phase-1 seed + Phase-2 backfill anchor).
 
-## Phase 1 — `Tenant` + `Membership` (additive, backfill, non-enforcing)
+## Phase 1 — `Tenant` + `Membership` (additive, backfill, non-enforcing) ✅ DONE (2026-07-30)
 - New models: `Tenant(id, name, slug @unique, status, createdAt, …)`,
   `Membership(id, userId, tenantId, role, createdAt, @@unique([userId, tenantId]))`.
+  — added to `schema.prisma` (+ `TenantStatus` enum, `User.memberships` relation); migration
+  `20260730133521_tenant_membership`.
 - Migration seeds ONE default `Tenant` and a `Membership` per existing user carrying their current
-  `User.role`. `User.role` is kept (dual-read) — nothing removed.
+  `User.role`. `User.role` is kept (dual-read) — nothing removed. — seed embedded in the migration
+  SQL (idempotent `ON CONFLICT DO NOTHING`); mirrored programmatically by
+  `lib/tenant/backfill.ts` (`backfillDefaultTenant`) and regression-tested by
+  `tenant-backfill.itest.ts`. Verified on dev (21 users → 21 memberships, 0 role mismatch) + test DB.
+- Also declared the two pre-existing `Procurement` FK indexes in the schema (drift fix) so
+  `migrate dev` stopped trying to drop them; no DB change (they already exist).
 - **No behaviour change.** Ships safely; everyone is in one tenant.
 
 ## Phase 2 — `tenantId` columns (nullable → backfill → NOT NULL)

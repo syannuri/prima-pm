@@ -30,6 +30,13 @@ enum Role {
   GUEST
 }
 
+// Lifecycle of a pooled-multitenancy organization (see docs/MULTITENANCY-POOLED-PLAN.md).
+// SUSPENDED keeps the tenant's data but bars sign-in / API access.
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 enum ProjectStatus {
   DRAFT
   CHARTERED
@@ -233,8 +240,48 @@ model User {
   conversationMemberships ConversationMember[] @relation("ConvMemberUser")
   messageReactions  MessageReaction[] @relation("ReactionUser")
   pushSubscriptions PushSubscription[]
+  memberships       Membership[]
 
   @@index([role])
+}
+
+// =====================================================================
+// MULTITENANCY (pooled) — see docs/MULTITENANCY-POOLED-PLAN.md
+// Phase 1: additive & non-enforcing. A single "default" Tenant owns all existing
+// data and every user gets a Membership carrying their current User.role. No query
+// filters anything by tenant yet (that is Phase 3), so behaviour is unchanged.
+// =====================================================================
+
+// An organization: the isolation boundary for pooled multitenancy. `slug` is the immutable
+// machine key (future subdomain/host mapping, backfill anchor); `name` is the human label.
+model Tenant {
+  id        String       @id @default(uuid())
+  name      String
+  slug      String       @unique
+  status    TenantStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  memberships Membership[]
+}
+
+// A user's membership in a tenant, carrying their per-tenant role. Identity (`User`) stays
+// global (email unique across the whole system) so one person can belong to several tenants
+// (PMO/consultants). This per-tenant role supersedes the global `User.role` in Phase 4; both
+// are kept (dual-read) until then.
+model Membership {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  role      Role     @default(VIEWER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
 }
 
 // One row per issued refresh token (id = the token's jti). Refresh tokens ROTATE:
@@ -805,6 +852,10 @@ model Procurement {
 
   @@unique([projectId, code])
   @@index([projectId, status])
+  // These FK indexes already exist in the DB (created by the procurement_cost_link migration);
+  // declared here so the schema matches reality and migrate dev stops trying to drop them.
+  @@index([costDirectLineId])
+  @@index([costIndirectLineId])
 }
 
 // =====================================================================
