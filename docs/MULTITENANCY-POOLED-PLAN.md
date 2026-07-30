@@ -101,11 +101,23 @@ Split into **2a (expand)** and **2b (contract)** per the expand-migrate-contract
 - Verified: full integration suite (235 tests) + tenancy itests green; single-tenant behaviour
   unchanged (nothing filters by tenant yet).
 
-### Phase 2b — NOT NULL + indexes + unique swaps (contract) — NEXT
+### Phase 2b — `@@index([tenantId])` on all scoped models ✅ DONE (2026-07-30)
+- Added `@@index([tenantId])` to all 41 scoped models. Migration `20260730142133_tenant_id_indexes`
+  (index-only; nothing else). tenantId stays **nullable**. Verified: full suite (235) + build green.
+
+> **Ordering correction (important).** The original plan put `NOT NULL` + the unique swaps here.
+> That is unsafe *before* the app stamps `tenantId` on inserts: making the column required broke
+> **91 `create()` call-sites** at compile time (nothing sets tenantId until the Phase-3 Prisma
+> extension does). So the contract steps below move to **Phase 3**, bundled with the create-stamping
+> extension that makes them safe. Phase 2 stays purely additive (columns + FK + index + backfill),
+> zero behaviour change.
+
+### Phase 2c / early Phase 3 — the contract (deferred, runs WITH create-stamping)
 - Straggler sweep (incl. the orphaned attachment) → default tenant; assert **zero** nulls.
-- Flip every `tenantId` to `NOT NULL`; add `@@index([tenantId])`.
-- `Project.code` → `@@unique([tenantId, code])`; `AppSetting` PK/uniqueness becomes per-tenant.
-- Still **no query enforcement** — data carries tenantId but reads don't filter. Behaviour identical.
+- Flip every `tenantId` to `NOT NULL` (+ required relation) — only after the extension stamps
+  tenantId on every create, so no insert can produce a null.
+- `Project.code` → `@@unique([tenantId, code])` (+ switch the 2 clash-checks to `findFirst`);
+  `AppSetting` gains a per-tenant unique (its singleton `id` PK stays until it's read per-tenant).
 
 ## Phase 3 — Tenant context + Prisma extension (the safety net) ⟵ hardest phase
 - **Auth:** add `tid` (active tenant) to the access-token payload (`jwt.ts` `AccessTokenPayload`).

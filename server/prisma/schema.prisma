@@ -433,6 +433,7 @@ model Project {
   // Guest-sandbox scoping filters on personalOwnerId in nearly every list/aggregate query
   // (portfolio, notifications, resource capacity, EVM trend, audit) — index the hot filter.
   @@index([personalOwnerId])
+  @@index([tenantId])
 }
 
 // Per-user project bookmark (personal "pin to top" flag). userId is stored FK-less
@@ -451,6 +452,7 @@ model ProjectBookmark {
 
   @@unique([userId, projectId])
   @@index([userId])
+  @@index([tenantId])
 }
 
 model ProjectCharter {
@@ -483,6 +485,7 @@ model ProjectCharter {
   updatedAt       DateTime        @updatedAt
 
   @@index([category])
+  @@index([tenantId])
 }
 
 // Immutable snapshot taken on each Commit (versioning + audit)
@@ -501,6 +504,7 @@ model CharterVersion {
 
   @@unique([projectId, version])
   @@index([projectId])
+  @@index([tenantId])
 }
 
 // =====================================================================
@@ -562,6 +566,7 @@ model CostItemDirect {
   updatedAt DateTime @updatedAt
 
   @@index([projectId, type])
+  @@index([tenantId])
 }
 
 model CostItemIndirect {
@@ -588,6 +593,7 @@ model CostItemIndirect {
   updatedAt   DateTime         @updatedAt
 
   @@index([projectId, type])
+  @@index([tenantId])
 }
 
 model RateCard {
@@ -612,6 +618,7 @@ model RateCard {
   resources   Resource[]
 
   @@index([personalOwnerId])
+  @@index([tenantId])
 }
 
 // ---------------------------------------------------------------------------
@@ -663,6 +670,7 @@ model Resource {
 
   @@index([isActive])
   @@index([personalOwnerId])
+  @@index([tenantId])
 }
 
 // Computed roll-up cache (1:1 with Project)
@@ -683,6 +691,7 @@ model CostBaseline {
   budgetAtCompletion Decimal  @default(0) @db.Decimal(18, 2) // costBaseline + managementReserve
 
   updatedAt          DateTime @updatedAt
+  @@index([tenantId])
 }
 
 // Time-phased Actual Cost (AC) entries — cumulative AC up to a status date
@@ -716,6 +725,7 @@ model ActualCostEntry {
   @@index([projectId, date])
   @@index([directLineId])
   @@index([indirectLineId])
+  @@index([tenantId])
 }
 
 // Timesheet: actual man-days consumed, logged against a MANPOWER cost line
@@ -739,6 +749,7 @@ model MandayEntry {
 
   @@index([projectId, date])
   @@index([costItemId])
+  @@index([tenantId])
 }
 
 // =====================================================================
@@ -787,6 +798,7 @@ model Risk {
 
   @@unique([projectId, code])
   @@index([projectId, severity])
+  @@index([tenantId])
 }
 
 enum IssueImpact {
@@ -832,6 +844,7 @@ model Issue {
 
   @@unique([projectId, code])
   @@index([projectId, status])
+  @@index([tenantId])
 }
 
 // =====================================================================
@@ -894,6 +907,7 @@ model Stakeholder {
 
   @@unique([projectId, code])
   @@index([projectId])
+  @@index([tenantId])
 }
 
 // =====================================================================
@@ -957,6 +971,7 @@ model Procurement {
   // declared here so the schema matches reality and migrate dev stops trying to drop them.
   @@index([costDirectLineId])
   @@index([costIndirectLineId])
+  @@index([tenantId])
 }
 
 // =====================================================================
@@ -994,6 +1009,7 @@ model Assumption {
 
   @@unique([projectId, code])
   @@index([projectId, status])
+  @@index([tenantId])
 }
 
 // Direction of a cross-team / external dependency.
@@ -1036,6 +1052,7 @@ model ProjectDependency {
 
   @@unique([projectId, code])
   @@index([projectId, status])
+  @@index([tenantId])
 }
 
 // =====================================================================
@@ -1094,6 +1111,7 @@ model Task {
   updatedAt DateTime @updatedAt
 
   @@index([projectId, parentTaskId])
+  @@index([tenantId])
 }
 
 model TaskDependency {
@@ -1110,6 +1128,7 @@ model TaskDependency {
   lagDays       Int            @default(0)
 
   @@unique([predecessorId, successorId])
+  @@index([tenantId])
 }
 
 // =====================================================================
@@ -1147,6 +1166,7 @@ model ChangeRequest {
   updatedAt   DateTime            @updatedAt
 
   @@index([projectId, status])
+  @@index([tenantId])
 }
 
 model AuditLog {
@@ -1168,6 +1188,7 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([projectId, createdAt])
   @@index([createdAt])
+  @@index([tenantId])
 }
 
 model Attachment {
@@ -1192,6 +1213,7 @@ model Attachment {
   riskRelId  String?
 
   @@index([ownerType, ownerId])
+  @@index([tenantId])
 }
 
 // ---- Agile ----
@@ -1219,6 +1241,7 @@ model Sprint {
   snapshots SprintSnapshot[]
 
   @@index([projectId])
+  @@index([tenantId])
 }
 
 // Daily snapshot of a sprint's remaining vs committed story points — powers the
@@ -1238,6 +1261,7 @@ model SprintSnapshot {
 
   @@unique([sprintId, date])
   @@index([sprintId])
+  @@index([tenantId])
 }
 
 // A point-in-time capture of a project's EVM metrics. Progress (progressPct) is only
@@ -1267,6 +1291,7 @@ model EvmSnapshot {
 
   @@unique([projectId, statusDate])
   @@index([projectId, statusDate])
+  @@index([tenantId])
 }
 
 // Persistent per-user in-app notification (inbox) — for discrete events like being
@@ -1287,6 +1312,7 @@ model Notification {
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
+  @@index([tenantId])
 }
 
 // A private 1-to-1 direct-message thread between two users. Exactly one row per pair,
@@ -1326,6 +1352,7 @@ model Conversation {
   @@unique([userAId, userBId])
   @@index([userAId, lastMessageAt])
   @@index([userBId, lastMessageAt])
+  @@index([tenantId])
 }
 
 // Membership + per-member read cursor for a conversation. Unifies DIRECT (2 members) and GROUP
@@ -1349,6 +1376,7 @@ model ConversationMember {
 
   @@unique([conversationId, userId])
   @@index([userId])
+  @@index([tenantId])
 }
 
 // A single chat message within a Conversation.
@@ -1375,6 +1403,7 @@ model Message {
   reactions      MessageReaction[]
 
   @@index([conversationId, createdAt])
+  @@index([tenantId])
 }
 
 // A browser Web-Push subscription (one per device/browser) for a user. endpoint is the push
@@ -1393,6 +1422,7 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([tenantId])
 }
 
 // An emoji reaction on a message. A user may add each distinct emoji once per message.
@@ -1411,6 +1441,7 @@ model MessageReaction {
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
+  @@index([tenantId])
 }
 
 // A product-backlog work item (epic/story/task/bug). `sprintId` null = product
@@ -1440,6 +1471,7 @@ model BacklogItem {
 
   @@index([projectId])
   @@index([sprintId])
+  @@index([tenantId])
 }
 
 // --- Closing artifacts (PMBOK Close-Project process) -------------------------
@@ -1477,6 +1509,7 @@ model LessonLearned {
   updatedAt   DateTime       @updatedAt
 
   @@index([projectId])
+  @@index([tenantId])
 }
 
 // A formal acceptance sign-off from an accepting party (sponsor, customer, …).
@@ -1500,6 +1533,7 @@ model AcceptanceSignoff {
   updatedAt    DateTime           @updatedAt
 
   @@index([projectId])
+  @@index([tenantId])
 }
 
 // User Acceptance Test case — a structured, executable UAT template per project.
@@ -1534,6 +1568,7 @@ model UatTestCase {
   updatedAt   DateTime  @updatedAt
 
   @@index([projectId])
+  @@index([tenantId])
 }
 
 // Kick-Off Meeting minutes — one structured record per project (Initiating artifact).
@@ -1557,6 +1592,7 @@ model KickoffMeeting {
   createdById String?
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
+  @@index([tenantId])
 }
 
 model KickoffAttendee {
@@ -1574,6 +1610,7 @@ model KickoffAttendee {
   createdAt DateTime       @default(now())
 
   @@index([meetingId])
+  @@index([tenantId])
 }
 
 enum KickoffActionStatus {
@@ -1598,6 +1635,7 @@ model KickoffActionItem {
   updatedAt   DateTime            @updatedAt
 
   @@index([meetingId])
+  @@index([tenantId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1657,6 +1695,7 @@ model Requirement {
 
   @@unique([projectId, code])
   @@index([projectId])
+  @@index([tenantId])
 }
 
 // Forward traceability: requirement -> the WBS task(s) that deliver it.
@@ -1675,6 +1714,7 @@ model RequirementTaskLink {
   @@unique([requirementId, taskId])
   @@index([requirementId])
   @@index([taskId])
+  @@index([tenantId])
 }
 
 // Runtime-toggleable app settings — a single row (id="singleton"). Lets an ADMIN enable/disable
@@ -1695,4 +1735,5 @@ model AppSetting {
   evmAutoCaptureLastRunAt DateTime?
   updatedById        String?
   updatedAt          DateTime @updatedAt
+  @@index([tenantId])
 }
