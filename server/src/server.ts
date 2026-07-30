@@ -2,7 +2,7 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { prisma } from './lib/prisma.js';
 import { pruneExpiredRefreshTokens } from './modules/auth/auth.service.js';
-import { runWeeklyAutoCaptureIfDue } from './modules/evm/evm.portfolio.js';
+import { runWeeklyAutoCaptureIfDueAllTenants } from './modules/evm/evm.portfolio.js';
 
 // Defense-in-depth: a stray rejection should be logged, not take down the
 // whole server for every user (the root cause is still fixed at the source).
@@ -41,7 +41,7 @@ async function main() {
   const AUTO_CAPTURE_CHECK_MS = 6 * 60 * 60 * 1000;
   const autoCapture = async () => {
     try {
-      const r = await runWeeklyAutoCaptureIfDue();
+      const r = await runWeeklyAutoCaptureIfDueAllTenants();
       if (r.ran) console.log(`[prima-pm] weekly EVM auto-capture: ${r.captured}/${r.total} project(s)${r.failed ? ` (${r.failed} skipped)` : ''}`);
     } catch (err) {
       console.error('[prima-pm] weekly EVM auto-capture failed', err);

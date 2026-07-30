@@ -167,17 +167,17 @@ side port, real dev server untouched). Findings:
   `/admin/audit`, `/admin/settings`, `/me/timesheet`, and per-project cost/risk/schedule/charter/
   stakeholders/forecast — all 200 (context established by `requireAuth`). A live risk create was
   correctly stamped with the caller's `tenantId`. **Zero** fail-closed errors on any request path.
-- ❌ **BLOCKER — the EVM auto-capture cron fail-closes.** The weekly scheduler runs OUTSIDE a request
-  (no tenant context) and its first `AppSetting.findUnique` throws `Tenant context required …
-  (fail-closed)`. It's caught (server stays up) but the cron would be non-functional under
-  enforcement. This makes the Phase-5 "cron iterates per tenant" item a **prerequisite to flip
-  enforce-on in prod**, not a later nicety: wrap the scheduler in a per-tenant `runWithTenant` loop
-  (or `runAsSystem` where genuinely global).
+- ✅ **FIXED (was a blocker) — EVM auto-capture cron.** It ran OUTSIDE any request (no tenant
+  context) so its first `AppSetting.findUnique` fail-closed. Now `runWeeklyAutoCaptureIfDueAllTenants`
+  fans out over every ACTIVE tenant inside `runWithTenant` under enforcement (single global run when
+  off — unchanged). Re-soak: startup shows **zero** fail-closed errors. Guarded by
+  `tenant-cron.itest.ts` (flag ON). This was the Phase-5 "cron iterates per tenant" item, pulled
+  forward because it gated enforce-on.
 
 ### Enforce-on prerequisites (before turning the flag on in a real deployment)
 1. Deploy code + `prisma migrate deploy` on that env (creates Tenant/Membership + tenantId columns +
    backfill) — no remote env has the tenant migrations yet.
-2. Fix the EVM auto-capture cron (above) so the scheduler runs per tenant.
+2. ~~Fix the EVM auto-capture cron~~ — DONE (per-tenant fan-out).
 3. Expect a one-time re-auth: tokens minted before this carry no `tid`, so scoped queries fail-closed
    until the 15-min access token refreshes (refresh re-mints with `tid`).
 

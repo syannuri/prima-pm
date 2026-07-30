@@ -1,5 +1,6 @@
 import { Prisma, type Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
+import { runWithTenant, multitenancyEnforced } from '../../lib/tenant/context.js';
 import { captureSnapshot } from './evm.service.js';
 import { rollupPortfolioTrend, type RollupInput } from './evm.helpers.js';
 
@@ -102,4 +103,24 @@ export async function runWeeklyAutoCaptureIfDue(now: Date = new Date()) {
   const res = await autoCaptureWeekly(now);
   await prisma.appSetting.update({ where: { id: 'singleton' }, data: { evmAutoCaptureLastRunAt: now } });
   return { ran: true as const, ...res };
+}
+
+/**
+ * Scheduler entry point. The per-tenant helper above reads AppSetting and writes EvmSnapshots —
+ * all tenant-scoped models — so under enforcement it MUST run inside a tenant context or the
+ * fail-closed extension rejects it. When enforcement is on we fan out over every ACTIVE tenant,
+ * each in its own `runWithTenant` scope (so its settings, projects and snapshots stay isolated);
+ * when off we do a single global run, exactly as before (byte-identical single-tenant behaviour).
+ */
+export async function runWeeklyAutoCaptureIfDueAllTenants(now: Date = new Date()) {
+  if (!multitenancyEnforced()) return runWeeklyAutoCaptureIfDue(now);
+
+  // Tenant is a global model, so this listing needs no context.
+  const tenants = await prisma.tenant.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
+  let ran = false, captured = 0, failed = 0, total = 0;
+  for (const t of tenants) {
+    const r = await runWithTenant(t.id, () => runWeeklyAutoCaptureIfDue(now));
+    if (r.ran) { ran = true; captured += r.captured; failed += r.failed; total += r.total; }
+  }
+  return ran ? { ran: true as const, captured, failed, total } : { ran: false as const };
 }
