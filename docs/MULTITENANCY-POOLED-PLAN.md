@@ -214,7 +214,10 @@ side port, real dev server untouched). Findings:
   (dual-write until 4c). All flag-gated: off ⇒ single-tenant behaviour unchanged.
 - **Verified:** `tenancy-http.itest.ts` — directory/list exclude a non-member, and a tenant-A admin
   gets 404 administering a tenant-B-only user. Full suite flag OFF: **253 pass**; build green.
-- **Deferred to Phase 5:** explicit invite-existing-user / remove-member endpoints + a members UI.
+- **Member-management API ✅ DONE (2026-07-30):** `/members` module (ADMIN, active tenant) —
+  `GET` list members with per-tenant role, `POST` add an existing user by email, `PATCH /:userId`
+  set role, `DELETE /:userId` remove (guards: not self, never the tenant's last admin; global `User`
+  untouched). Verified in `tenancy-http.itest.ts`. A members **UI** is still pending.
 
 ### Phase 4c — contract: drop `User.role`
 - Once no reader remains (all role checks use the membership), remove `User.role`.

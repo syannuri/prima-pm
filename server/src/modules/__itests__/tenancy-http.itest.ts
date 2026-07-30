@@ -21,7 +21,7 @@ let tenantA = '', tenantB = '';
 let projectA = '', projectB = '';
 let tokenA = '', tokenB = '';
 let tokenD_A = '', tokenD_B = '';
-let uBId = '';
+let uBId = '', uAId = '';
 
 async function mkUser(email: string) {
   return prisma.user.create({ data: { name: email, email, role: 'ADMIN', passwordHash: await hashPassword(PW), isActive: true } });
@@ -39,7 +39,7 @@ beforeAll(async () => {
   tenantA = ta.id; tenantB = tb.id;
 
   const [ua, ub, uc, ud] = await Promise.all([mkUser('a@http.test'), mkUser('b@http.test'), mkUser('c@http.test'), mkUser('d@http.test')]);
-  uBId = ub.id;
+  uBId = ub.id; uAId = ua.id;
   // uA in A, uB in B, uC in BOTH (switch-tenant). uD is ADMIN in A but VIEWER in B (per-tenant role).
   await prisma.membership.createMany({ data: [
     { userId: ua.id, tenantId: tenantA, role: 'ADMIN' },
@@ -151,5 +151,37 @@ describe('user administration is tenant-scoped (Phase 4b)', () => {
     // uB is a member of tenant B only; the tenant-A admin must not touch them.
     const res = await request(app).patch(api(`/users/${uBId}/active`)).set(bearer(tokenA)).send({ isActive: false });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('membership management for the active tenant (/members)', () => {
+  const emails = (r: { body: { members: { email: string }[] } }) => r.body.members.map((m) => m.email);
+
+  it('lists the active tenant’s members', async () => {
+    const res = await request(app).get(api('/members')).set(bearer(tokenA));
+    expect(res.status).toBe(200);
+    expect(emails(res)).toEqual(expect.arrayContaining(['a@http.test', 'c@http.test', 'd@http.test']));
+    expect(emails(res)).not.toContain('b@http.test'); // member of B only
+  });
+
+  it('adds an existing user to the tenant, changes their role, then removes them', async () => {
+    const add = await request(app).post(api('/members')).set(bearer(tokenA)).send({ email: 'b@http.test', role: 'VIEWER' });
+    expect(add.status).toBe(201);
+    expect(emails(await request(app).get(api('/members')).set(bearer(tokenA)))).toContain('b@http.test');
+
+    const patch = await request(app).patch(api(`/members/${uBId}`)).set(bearer(tokenA)).send({ role: 'FINANCE' });
+    expect(patch.status).toBe(200);
+    expect(patch.body.member.role).toBe('FINANCE');
+
+    const del = await request(app).delete(api(`/members/${uBId}`)).set(bearer(tokenA));
+    expect(del.status).toBe(204);
+    expect(emails(await request(app).get(api('/members')).set(bearer(tokenA)))).not.toContain('b@http.test');
+  });
+
+  it('rejects adding a non-existent user and removing yourself', async () => {
+    const missing = await request(app).post(api('/members')).set(bearer(tokenA)).send({ email: 'nobody@http.test', role: 'VIEWER' });
+    expect(missing.status).toBe(404);
+    const self = await request(app).delete(api(`/members/${uAId}`)).set(bearer(tokenA));
+    expect(self.status).toBe(400);
   });
 });
