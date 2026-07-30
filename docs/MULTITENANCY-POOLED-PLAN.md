@@ -159,6 +159,28 @@ Split into **3a (the extension core)**, **3b (auth + middleware wiring)**, **3c 
   what isolates), and `switch-tenant` re-scopes + rejects non-members. Full suite flag OFF: **249
   pass**, no regressions. Build green.
 
+### Staging soak (local enforce-on, 2026-07-30)
+Ran `dist/server.js` with `MULTITENANCY_ENFORCE=true` against the migrated+backfilled dev DB (on a
+side port, real dev server untouched). Findings:
+- ✅ Every authenticated request path works: `/auth/me`, `/projects`, `/portfolio`, `/users`,
+  `/users/directory`, `/ratecards`, `/resources`, `/notifications`, `/bookmarks`, `/messages`,
+  `/admin/audit`, `/admin/settings`, `/me/timesheet`, and per-project cost/risk/schedule/charter/
+  stakeholders/forecast — all 200 (context established by `requireAuth`). A live risk create was
+  correctly stamped with the caller's `tenantId`. **Zero** fail-closed errors on any request path.
+- ❌ **BLOCKER — the EVM auto-capture cron fail-closes.** The weekly scheduler runs OUTSIDE a request
+  (no tenant context) and its first `AppSetting.findUnique` throws `Tenant context required …
+  (fail-closed)`. It's caught (server stays up) but the cron would be non-functional under
+  enforcement. This makes the Phase-5 "cron iterates per tenant" item a **prerequisite to flip
+  enforce-on in prod**, not a later nicety: wrap the scheduler in a per-tenant `runWithTenant` loop
+  (or `runAsSystem` where genuinely global).
+
+### Enforce-on prerequisites (before turning the flag on in a real deployment)
+1. Deploy code + `prisma migrate deploy` on that env (creates Tenant/Membership + tenantId columns +
+   backfill) — no remote env has the tenant migrations yet.
+2. Fix the EVM auto-capture cron (above) so the scheduler runs per tenant.
+3. Expect a one-time re-auth: tokens minted before this carry no `tid`, so scoped queries fail-closed
+   until the 15-min access token refreshes (refresh re-mints with `tid`).
+
 ### Phase 3c — contract (the deferred Phase-2 steps, now safe)
 - Straggler sweep → default tenant; flip `tenantId` NOT NULL (+ required relation); `Project.code`
   → `@@unique([tenantId, code])` (+ `findFirst` clash-checks); `AppSetting` per-tenant unique.
