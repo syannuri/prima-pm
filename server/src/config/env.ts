@@ -47,6 +47,14 @@ export const env = {
     privateKey: process.env.VAPID_PRIVATE_KEY ?? '',
     subject: process.env.VAPID_SUBJECT ?? 'https://prismatix.tech',
   },
+  // Pooled-multitenancy kill-switch (see docs/MULTITENANCY-POOLED-PLAN.md). OFF by default:
+  // Phases 0–2 add tenant columns/backfill but do NOT filter queries, so single-tenant
+  // behaviour is byte-identical while this is off. Phase 3 turns on the Prisma-extension
+  // tenant scoping ONLY when this is true, dark-launched in staging first. Keep it a flag
+  // (not a hard-coded const) so enforcement stays reversible until confidence is high.
+  multitenancy: {
+    enforce: process.env.MULTITENANCY_ENFORCE === 'true',
+  },
 } as const;
 
 export const isProd = env.nodeEnv === 'production';

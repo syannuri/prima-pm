@@ -53,12 +53,20 @@ with every phase independently shippable and reversible.
 
 ---
 
-## Phase 0 — Foundations (no schema change)
-- Ratify the 5 decisions above.
+## Phase 0 — Foundations (no schema change) ✅ DONE (2026-07-30)
+- Ratify the 5 decisions above. — **Ratified as written** (global `User` + `Membership`;
+  denormalized `tenantId` everywhere; `AsyncLocalStorage` + Prisma `$extends`, fail-closed;
+  guests fold into personal tenants; existing LAN/VPS stay silo unless a later data-merge).
 - Build the **cross-tenant leakage test harness**: helper that seeds 2 tenants + data and asserts
   every list/read/mutation from tenant A cannot see/touch tenant B (starts red; becomes the gate).
-- Add a `MULTITENANCY_ENFORCE` feature flag (env) — default off.
-- Pick the **default tenant** that will own ALL current data.
+  — `server/src/test/tenancy.harness.ts` (`seedGuestOrg` + `expectIsolated`) driven by
+  `server/src/modules/__itests__/tenancy-leakage.itest.ts`. Runs GREEN today against the guest
+  sandbox (the only isolation that exists), guarding it from regression; the corporate-tenant
+  block is gated behind the flag and arms in Phase 3.
+- Add a `MULTITENANCY_ENFORCE` feature flag (env) — default off. — `env.multitenancy.enforce`
+  in `server/src/config/env.ts`.
+- Pick the **default tenant** that will own ALL current data. — `slug='default'`, `name='PRIMA'`
+  in `server/src/lib/tenant/constants.ts` (the Phase-1 seed + Phase-2 backfill anchor).
 
 ## Phase 1 — `Tenant` + `Membership` (additive, backfill, non-enforcing)
 - New models: `Tenant(id, name, slug @unique, status, createdAt, …)`,
