@@ -28,7 +28,21 @@ export function runAsSystem<T>(fn: () => Promise<T>): Promise<T> {
   return als.run({ bypass: true }, async () => await fn());
 }
 
+// Bind the tenant for a SYNCHRONOUS entry point (Express middleware): runs `fn` — typically
+// `() => next()` — inside the ALS scope and returns its result directly. Downstream async
+// handlers started under this call inherit the context. Unlike runWithTenant this does NOT await,
+// which is exactly what a middleware chain needs.
+export function bindTenantContext<T>(tenantId: string, fn: () => T): T {
+  return als.run({ tenantId }, fn);
+}
+
 // The current store, or undefined when called with no context established.
 export function getTenantStore(): TenantStore | undefined {
   return als.getStore();
+}
+
+// Whether tenant enforcement is switched on (live env read so it can be toggled in tests /
+// dark-launched per deploy). Mirrors env.multitenancy.enforce at boot.
+export function multitenancyEnforced(): boolean {
+  return process.env.MULTITENANCY_ENFORCE === 'true';
 }

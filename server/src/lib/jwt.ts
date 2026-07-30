@@ -7,6 +7,9 @@ export interface AccessTokenPayload {
   role: Role;
   email: string;
   tv?: number; // token version — see User.tokenVersion (optional for backward compat)
+  // Active tenant (pooled multitenancy, Phase 3b). The request runs scoped to this tenant.
+  // Optional for backward compat + single-tenant deploys where enforcement is off.
+  tid?: string;
 }
 
 export interface RefreshTokenPayload {

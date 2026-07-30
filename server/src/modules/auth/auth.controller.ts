@@ -51,6 +51,17 @@ export async function meHandler(req: Request, res: Response): Promise<void> {
   res.json({ user });
 }
 
+export async function myTenantsHandler(req: Request, res: Response): Promise<void> {
+  const tenants = await authService.listMyTenants(req.user!.id);
+  res.json({ tenants, active: req.user!.tid ?? null });
+}
+
+export async function switchTenantHandler(req: Request, res: Response): Promise<void> {
+  const result = await authService.switchTenant(req.user!.id, req.body.tenantId);
+  setAuthCookies(res, result); // re-mint the session pinned to the chosen tenant
+  res.json(result);
+}
+
 export async function changePasswordHandler(req: Request, res: Response): Promise<void> {
   // Returns a fresh token pair: changing the password revokes other sessions, so the
   // caller needs new tokens to keep this one alive. Refresh the cookies too.

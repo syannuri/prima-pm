@@ -50,6 +50,12 @@ export const refreshSchema = z.object({
   refreshToken: z.string().min(10).optional(),
 });
 
+// Switch the active tenant (pooled multitenancy). The service rejects a tenant the caller has no
+// membership in, so this only needs the id.
+export const switchTenantSchema = z.object({
+  tenantId: z.string().min(1),
+});
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1),

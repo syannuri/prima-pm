@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authRateLimit } from '../../middleware/rateLimit.js';
-import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, refreshSchema } from './auth.schemas.js';
+import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, refreshSchema, switchTenantSchema } from './auth.schemas.js';
 import * as ctrl from './auth.controller.js';
 
 const router = Router();
@@ -48,6 +48,9 @@ router.post('/login', loginLimiter, validateBody(loginSchema), asyncHandler(ctrl
 router.post('/google', googleLimiter, validateBody(googleLoginSchema), asyncHandler(ctrl.googleHandler));
 router.post('/refresh', refreshLimiter, validateBody(refreshSchema), asyncHandler(ctrl.refreshHandler));
 router.get('/me', requireAuth, asyncHandler(ctrl.meHandler));
+// Tenants the caller belongs to + the active one (for a tenant switcher).
+router.get('/tenants', requireAuth, asyncHandler(ctrl.myTenantsHandler));
+router.post('/switch-tenant', requireAuth, validateBody(switchTenantSchema), asyncHandler(ctrl.switchTenantHandler));
 router.post('/change-password', requireAuth, validateBody(changePasswordSchema), asyncHandler(ctrl.changePasswordHandler));
 // Logout revokes every outstanding token for the caller (tokenVersion bump).
 router.post('/logout', requireAuth, asyncHandler(ctrl.logoutHandler));

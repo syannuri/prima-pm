@@ -141,12 +141,23 @@ Split into **3a (the extension core)**, **3b (auth + middleware wiring)**, **3c 
   create-stamping incl. nested, fail-closed, `runAsSystem` bypass, global models untouched. Full
   suite with flag OFF: **243 pass** (no regressions — extension is a true no-op). Build green.
 
-### Phase 3b — auth `tid` + request middleware — NEXT
-- **Auth:** add `tid` (active tenant) to the access-token payload. Login: 1 membership → auto-select;
-  >1 → return a tenant list and require `/auth/switch-tenant` (re-mints the token with chosen `tid`).
-- **Middleware:** read `tid` from the verified token → `runWithTenant` for the request. Cron/system
-  jobs use `runAsSystem` or a per-tenant loop.
-- Turn on behind `MULTITENANCY_ENFORCE` in staging; the leakage suite's corporate block goes green.
+### Phase 3b — auth `tid` + request middleware ✅ DONE (2026-07-30)
+- **Auth:** `tid` added to the access-token payload (`jwt.ts`). `issueTokenPair` resolves the active
+  tenant (chosen tenant if a membership, else the first by createdAt) and embeds it, so login /
+  refresh / google / guest-register all mint tenant-pinned tokens. New self-service users get a
+  default-tenant `Membership` (`ensureDefaultMembership`). `GET /auth/tenants` lists memberships;
+  `POST /auth/switch-tenant` re-mints the pair pinned to another of the caller's tenants (rejects a
+  non-membership).
+- **Middleware:** `requireAuth` reads `tid` → `bindTenantContext(tid, () => next())` runs the whole
+  downstream chain in the tenant's ALS scope — but only when `MULTITENANCY_ENFORCE` is on and the
+  token carries `tid`, so single-tenant/off behaviour is unchanged.
+- **Audit fix:** `writeAudit` self-heals — stamps the ambient tenant when in a request, else
+  `runAsSystem` (so context-less auth/system audits don't hit the fail-closed extension). Cron's
+  per-tenant loop is still Phase 5.
+- **Verified:** `tenancy-http.itest.ts` (6 tests, flag ON) proves the full stack — login embeds
+  `tid`, list/read/mutate isolated between two corporate ADMIN tenants (so only the extension can be
+  what isolates), and `switch-tenant` re-scopes + rejects non-members. Full suite flag OFF: **249
+  pass**, no regressions. Build green.
 
 ### Phase 3c — contract (the deferred Phase-2 steps, now safe)
 - Straggler sweep → default tenant; flip `tenantId` NOT NULL (+ required relation); `Project.code`

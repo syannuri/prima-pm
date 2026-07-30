@@ -7,7 +7,32 @@ import { Unauthorized, Forbidden, Conflict } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled } from '../settings/settings.service.js';
+import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput } from './auth.schemas.js';
+
+// The tenant a freshly-minted token should be scoped to: the caller's chosen tenant when it is one
+// of their memberships, else their first membership (deterministic by createdAt). Undefined only if
+// the user has no membership (pre-Phase-1 data / enforcement off). Membership is a global model, so
+// this read needs no tenant context.
+async function resolveActiveTenantId(userId: string, preferred?: string): Promise<string | undefined> {
+  const memberships = await prisma.membership.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: { tenantId: true },
+  });
+  if (preferred && memberships.some((m) => m.tenantId === preferred)) return preferred;
+  return memberships[0]?.tenantId;
+}
+
+// Give a brand-new self-service user a membership in the default tenant (single-tenant world today;
+// guests become their own tenant in Phase 5). Best-effort: skipped if the default tenant is absent
+// (e.g. a test DB wiped of it) — harmless while enforcement is off.
+async function ensureDefaultMembership(userId: string, role: Role): Promise<void> {
+  const tenant = await prisma.tenant.findUnique({ where: { slug: DEFAULT_TENANT_SLUG }, select: { id: true } });
+  if (tenant) {
+    await prisma.membership.create({ data: { userId, tenantId: tenant.id, role } }).catch(() => undefined);
+  }
+}
 
 interface AuthResult {
   user: { id: string; name: string; email: string; role: Role };
@@ -16,22 +41,24 @@ interface AuthResult {
 }
 
 // Issue a fresh access token + a NEW tracked refresh token (a RefreshToken row keyed by
-// the token's jti). Optionally records that it replaces a rotated-away token.
-async function issueTokenPair(user: User, replacesJti?: string): Promise<AuthResult> {
+// the token's jti). Optionally records that it replaces a rotated-away token, and pins the
+// token to an active tenant (`preferredTid`, used by switch-tenant; else the user's default).
+async function issueTokenPair(user: User, opts: { replacesJti?: string; preferredTid?: string } = {}): Promise<AuthResult> {
   const jti = randomUUID();
   const { token: refreshToken, expiresAt } = signRefreshToken(user.id, user.tokenVersion, jti);
   await prisma.$transaction(async (tx) => {
-    if (replacesJti) {
+    if (opts.replacesJti) {
       await tx.refreshToken.update({
-        where: { id: replacesJti },
+        where: { id: opts.replacesJti },
         data: { revokedAt: new Date(), replacedById: jti },
       });
     }
     await tx.refreshToken.create({ data: { id: jti, userId: user.id, expiresAt } });
   });
+  const tid = await resolveActiveTenantId(user.id, opts.preferredTid);
   return {
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
-    accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email, tv: user.tokenVersion }),
+    accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email, tv: user.tokenVersion, tid }),
     refreshToken,
   };
 }
@@ -82,6 +109,7 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
       role: 'GUEST',
     },
   });
+  await ensureDefaultMembership(user.id, 'GUEST');
   await writeAudit({ userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
   return issueTokenPair(user);
 }
@@ -126,6 +154,7 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
   const created = await prisma.user.create({
     data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST' },
   });
+  await ensureDefaultMembership(created.id, 'GUEST');
   await writeAudit({ userId: created.id, entity: 'User', entityId: created.id, action: 'CREATE', after: { email: created.email, role: 'GUEST', via: 'google', self: true } });
   return issueTokenPair(created);
 }
@@ -157,7 +186,7 @@ export async function refresh(refreshToken: string): Promise<AuthResult> {
       await revokeAllSessions(user.id);
       throw Unauthorized('Session has been revoked');
     }
-    return issueTokenPair(user, payload.jti);
+    return issueTokenPair(user, { replacesJti: payload.jti });
   }
 
   // Legacy (pre-rotation) token: nothing to rotate away, just mint a tracked pair.
@@ -188,6 +217,32 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
 export async function logoutAll(userId: string): Promise<void> {
   await revokeAllSessions(userId);
   await writeAudit({ userId, entity: 'User', entityId: userId, action: 'LOGOUT' });
+}
+
+// The tenants this user belongs to (for a tenant switcher). Tenant/Membership are global models.
+export async function listMyTenants(userId: string) {
+  const memberships = await prisma.membership.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: { role: true, tenant: { select: { id: true, name: true, slug: true, status: true } } },
+  });
+  return memberships
+    .filter((m) => m.tenant.status === 'ACTIVE')
+    .map((m) => ({ id: m.tenant.id, name: m.tenant.name, slug: m.tenant.slug, role: m.role }));
+}
+
+// Re-mint the token pair pinned to a DIFFERENT tenant the user is a member of. Rejects a tenant
+// the user has no membership in (so a token can never be forged onto another org).
+export async function switchTenant(userId: string, tenantId: string): Promise<AuthResult> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !user.isActive) throw Unauthorized();
+  const membership = await prisma.membership.findUnique({
+    where: { userId_tenantId: { userId, tenantId } },
+    select: { id: true },
+  });
+  if (!membership) throw Forbidden('You are not a member of that tenant');
+  await writeAudit({ userId, entity: 'User', entityId: userId, action: 'LOGIN', after: { switchedTenant: tenantId } });
+  return issueTokenPair(user, { preferredTid: tenantId });
 }
 
 export async function me(userId: string) {

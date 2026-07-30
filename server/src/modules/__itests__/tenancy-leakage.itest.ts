@@ -1,6 +1,5 @@
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { createApp } from '../../app.js';
-import { env } from '../../config/env.js';
 import { prisma } from '../../lib/prisma.js';
 import { seedGuestOrg, expectIsolated, wipeDb, type OrgFixture } from '../../test/tenancy.harness.js';
 
@@ -34,14 +33,8 @@ describe('cross-tenant leakage — guest sandboxes (enforced today)', () => {
   });
 });
 
-// The real gate: two CORPORATE orgs sharing the pooled DB must be isolated too. Today the app
-// is single-tenant (ADMIN/PMO see every project), so this is RED — it only becomes meaningful
-// once MULTITENANCY_ENFORCE turns on the Prisma-extension tenant scoping (Phase 3). Gated so
-// it does not break CI while enforcement is off; flip the flag in staging to arm the gate.
-describe.skipIf(!env.multitenancy.enforce)('cross-tenant leakage — corporate tenants (Phase 3 gate)', () => {
-  it('is armed once MULTITENANCY_ENFORCE is on', () => {
-    // Placeholder: replaced with two-corporate-tenant fixtures + expectIsolated when the
-    // Tenant model + context land (Phases 1–3). Kept skipped until then so the flag has a home.
-    throw new Error('corporate-tenant isolation not implemented yet (Phases 1–3)');
-  });
-});
+// The real gate — two CORPORATE tenants sharing the pooled DB must be isolated — is now
+// IMPLEMENTED and enforced (Phase 3): the Prisma extension isolates at the query layer
+// (`tenant-extension.itest.ts`) and the full auth→context→query stack is proven end-to-end over
+// HTTP (`tenancy-http.itest.ts`). Those suites toggle MULTITENANCY_ENFORCE themselves; this file
+// keeps the always-on guard for the guest-sandbox isolation that predates tenants.
