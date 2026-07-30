@@ -69,10 +69,13 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     req.user = { id: user.id, role, email: user.email, tid: payload.tid };
 
     // Establish the request-scoped tenant context so the Prisma extension scopes every query.
-    // Only when enforcement is on AND the token carries a tenant — otherwise a plain next() keeps
-    // single-tenant behaviour (the extension is a no-op anyway). Wrapping next() runs the whole
-    // downstream handler chain inside the tenant's AsyncLocalStorage scope.
-    if (multitenancyEnforced() && payload.tid) {
+    if (multitenancyEnforced()) {
+      // A token minted before enforcement (or before a membership existed) carries no `tid`.
+      // Reject with 401 rather than proceeding context-less (which would fail-closed to a 500 on
+      // scoped routes): the client auto-refreshes on 401, and /auth/refresh re-mints a tenant-
+      // pinned token — so the transition is seamless, no forced logout. Wrapping next() runs the
+      // whole downstream chain inside the tenant's AsyncLocalStorage scope.
+      if (!payload.tid) throw Unauthorized('Session needs a tenant — refreshing');
       bindTenantContext(payload.tid, () => next());
     } else {
       next();

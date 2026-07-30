@@ -76,6 +76,14 @@ describe('auth mints tokens pinned to the active tenant', () => {
   });
 });
 
+describe('transition: pre-enforcement tokens (no tid)', () => {
+  it('a token with no tid gets 401 on a scoped route (triggers client refresh, not a 500)', async () => {
+    const noTid = signAccessToken({ sub: uAId, role: 'ADMIN', email: 'a@http.test', tv: 0 }); // real user, no tid
+    const res = await request(app).get(api('/projects')).set(bearer(noTid));
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('HTTP isolation between corporate tenants (ADMIN — only the extension isolates)', () => {
   it('project list shows only the active tenant’s projects', async () => {
     const a = await request(app).get(api('/projects')).set(bearer(tokenA));
