@@ -21,6 +21,7 @@ let tenantA = '', tenantB = '';
 let projectA = '', projectB = '';
 let tokenA = '', tokenB = '';
 let tokenD_A = '', tokenD_B = '';
+let uBId = '';
 
 async function mkUser(email: string) {
   return prisma.user.create({ data: { name: email, email, role: 'ADMIN', passwordHash: await hashPassword(PW), isActive: true } });
@@ -38,6 +39,7 @@ beforeAll(async () => {
   tenantA = ta.id; tenantB = tb.id;
 
   const [ua, ub, uc, ud] = await Promise.all([mkUser('a@http.test'), mkUser('b@http.test'), mkUser('c@http.test'), mkUser('d@http.test')]);
+  uBId = ub.id;
   // uA in A, uB in B, uC in BOTH (switch-tenant). uD is ADMIN in A but VIEWER in B (per-tenant role).
   await prisma.membership.createMany({ data: [
     { userId: ua.id, tenantId: tenantA, role: 'ADMIN' },
@@ -131,5 +133,23 @@ describe('role is per-tenant (Phase 4) — the membership role, not the token or
     expect(meA.body.user.role).toBe('ADMIN');
     const meB = await request(app).get(api('/auth/me')).set(bearer(tokenD_B));
     expect(meB.body.user.role).toBe('VIEWER');
+  });
+});
+
+describe('user administration is tenant-scoped (Phase 4b)', () => {
+  it('directory + user list return only the active tenant’s members', async () => {
+    const dir = await request(app).get(api('/users/directory')).set(bearer(tokenA));
+    const emails: string[] = dir.body.users.map((u: { email: string }) => u.email);
+    expect(emails).toContain('a@http.test'); // member of A
+    expect(emails).not.toContain('b@http.test'); // member of B only
+
+    const list = await request(app).get(api('/users')).set(bearer(tokenA));
+    expect(list.body.users.map((u: { email: string }) => u.email)).not.toContain('b@http.test');
+  });
+
+  it('an admin cannot administer a user outside their tenant', async () => {
+    // uB is a member of tenant B only; the tenant-A admin must not touch them.
+    const res = await request(app).patch(api(`/users/${uBId}/active`)).set(bearer(tokenA)).send({ isActive: false });
+    expect(res.status).toBe(404);
   });
 });

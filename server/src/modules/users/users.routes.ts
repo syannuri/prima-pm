@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { z } from 'zod';
+import type { Role } from '@prisma/client';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
@@ -8,8 +10,53 @@ import { writeAudit } from '../../lib/audit.js';
 import { Conflict, NotFound, BadRequest } from '../../lib/errors.js';
 import { hashPassword } from '../../lib/password.js';
 import { strongPassword } from '../auth/auth.schemas.js';
+import { multitenancyEnforced } from '../../lib/tenant/context.js';
+import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
 
 const router = Router();
+
+// Pooled multitenancy: user administration is scoped to a tenant. Directory/list only return the
+// active tenant's members, mutations only touch members of the active tenant, and role changes /
+// new users are mirrored into a Membership. `User` is a global identity model (not filtered by the
+// Prisma extension), so this scoping is applied explicitly here.
+
+// The tenant a membership should be attached to / filtered by: the active tenant from the token,
+// else the default tenant (single-tenant). Undefined only if the default tenant is absent.
+async function membershipTenantId(req: Request): Promise<string | undefined> {
+  if (req.user?.tid) return req.user.tid;
+  const t = await prisma.tenant.findUnique({ where: { slug: DEFAULT_TENANT_SLUG }, select: { id: true } });
+  return t?.id;
+}
+
+// Restrict listing/mutation to the active tenant's members — but ONLY under enforcement, so
+// single-tenant behaviour is byte-identical when the flag is off.
+function activeScopeTenantId(req: Request): string | undefined {
+  return multitenancyEnforced() ? req.user?.tid : undefined;
+}
+
+// Under enforcement, refuse to administer a user who is not a member of the caller's active tenant
+// (an admin of tenant A must not touch tenant B's people).
+async function assertInActiveTenant(req: Request, targetUserId: string): Promise<void> {
+  const tid = activeScopeTenantId(req);
+  if (!tid) return;
+  const m = await prisma.membership.findUnique({
+    where: { userId_tenantId: { userId: targetUserId, tenantId: tid } },
+    select: { id: true },
+  });
+  if (!m) throw NotFound('User not found');
+}
+
+// Mirror a role change / new user into the active (or default) tenant's membership so per-tenant
+// roles stay in sync with the legacy User.role (dual-write until User.role is dropped in 4c).
+async function upsertMembershipRole(req: Request, userId: string, role: Role): Promise<void> {
+  const tid = await membershipTenantId(req);
+  if (!tid) return;
+  await prisma.membership.upsert({
+    where: { userId_tenantId: { userId, tenantId: tid } },
+    update: { role },
+    create: { userId, tenantId: tid, role },
+  });
+}
 
 const roleEnum = z.enum([
   'ADMIN',
@@ -49,9 +96,14 @@ router.use(requireAuth);
 router.get(
   '/directory',
   requireRole('ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER'),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const tid = activeScopeTenantId(req);
     const users = await prisma.user.findMany({
-      where: { isActive: true, role: { not: 'GUEST' } },
+      where: {
+        isActive: true,
+        role: { not: 'GUEST' },
+        ...(tid ? { memberships: { some: { tenantId: tid } } } : {}),
+      },
       select: { id: true, name: true, email: true, role: true },
       orderBy: { name: 'asc' },
     });
@@ -62,11 +114,16 @@ router.get(
 // All remaining user-admin endpoints require ADMIN.
 router.use(requireRole('ADMIN'));
 
-// List users (full detail, admin only).
+// List users (full detail, admin only). Scoped to the active tenant's members under enforcement.
 router.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    const users = await prisma.user.findMany({ select: PUBLIC_USER, orderBy: { createdAt: 'desc' } });
+  asyncHandler(async (req, res) => {
+    const tid = activeScopeTenantId(req);
+    const users = await prisma.user.findMany({
+      where: tid ? { memberships: { some: { tenantId: tid } } } : {},
+      select: PUBLIC_USER,
+      orderBy: { createdAt: 'desc' },
+    });
     res.json({ users });
   }),
 );
@@ -88,6 +145,8 @@ router.post(
       },
       select: PUBLIC_USER,
     });
+    // Admin-created users join the active (or default) tenant with the chosen role.
+    await upsertMembershipRole(req, user.id, req.body.role);
     await writeAudit({ userId: req.user!.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: user.role } });
     res.status(201).json({ user });
   }),
@@ -100,6 +159,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!target) throw NotFound('User not found');
+    await assertInActiveTenant(req, req.params.id);
     // Bump tokenVersion AND revoke the target's refresh tokens: an admin reset must
     // invalidate every existing session (access tokens die on tv mismatch, refresh rows here).
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash: await hashPassword(req.body.newPassword), tokenVersion: { increment: 1 } } });
@@ -116,6 +176,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const before = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!before) throw NotFound('User not found');
+    await assertInActiveTenant(req, req.params.id);
     // Email is unique — block clashes with a different account.
     if (req.body.email && req.body.email !== before.email) {
       const clash = await prisma.user.findUnique({ where: { email: req.body.email } });
@@ -145,6 +206,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const before = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!before) throw NotFound('User not found');
+    await assertInActiveTenant(req, req.params.id);
     // Guard against an admin locking themselves out of admin.
     if (req.params.id === req.user!.id && req.body.role !== 'ADMIN')
       throw BadRequest('You cannot change your own admin role');
@@ -154,6 +216,9 @@ router.patch(
       data: { role: req.body.role },
       select: { id: true, name: true, email: true, role: true, isActive: true },
     });
+    // Mirror into the active tenant's membership — the per-tenant role is authoritative under
+    // enforcement (Phase 4). User.role is kept dual-written until it's dropped (4c).
+    await upsertMembershipRole(req, user.id, req.body.role);
     await writeAudit({
       userId: req.user!.id,
       entity: 'User',
@@ -174,6 +239,7 @@ router.patch(
     // Guard against an admin deactivating their own account.
     if (req.params.id === req.user!.id && !req.body.isActive)
       throw BadRequest('You cannot deactivate your own account');
+    await assertInActiveTenant(req, req.params.id);
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: { isActive: req.body.isActive },
@@ -204,6 +270,7 @@ router.delete(
       select: { id: true, name: true, email: true, role: true, isActive: true },
     });
     if (!target) throw NotFound('User not found');
+    await assertInActiveTenant(req, req.params.id);
     if (target.id === req.user!.id) throw BadRequest('You cannot delete your own account');
 
     if (target.role === 'GUEST') {

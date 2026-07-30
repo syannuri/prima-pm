@@ -180,11 +180,22 @@ Split into **3a (the extension core)**, **3b (auth + middleware wiring)**, **3c 
   (tokens forged as ADMIN in both, yet `/admin/audit` gives 200 in A, 403 in B; `/auth/me` reports
   the right role each). Full suite flag OFF: **251 pass**; build green.
 
-### Phase 4b — tenant-scoped directory + member management — NEXT
-- `/users/directory` (and user lists) return only the active tenant's members (`User` is global, so
-  this must filter by `memberships.some({ tenantId })` — otherwise pickers leak users across tenants
-  once multiple real tenants exist).
-- Admin endpoints/UI to manage members per tenant: invite, set membership role, remove.
+### Phase 4b — tenant-scoped user administration ✅ DONE (2026-07-30)
+- `/users/directory` and `GET /users` filter to the active tenant's members
+  (`memberships.some({ tenantId })`) under enforcement — closes the cross-tenant user-enumeration
+  leak (`User` is global, so the extension can't do this; scoped explicitly in the route).
+- Every mutating user-admin endpoint (`role`/`active`/`profile`/`password`/`delete`) asserts the
+  target is a member of the caller's active tenant (404 otherwise) — an admin of tenant A can't
+  touch tenant B's people.
+- Role changes and admin-created users are mirrored into the active (or default) tenant's
+  `Membership` (`upsertMembershipRole`), so the per-tenant role stays in sync with `User.role`
+  (dual-write until 4c). All flag-gated: off ⇒ single-tenant behaviour unchanged.
+- **Verified:** `tenancy-http.itest.ts` — directory/list exclude a non-member, and a tenant-A admin
+  gets 404 administering a tenant-B-only user. Full suite flag OFF: **253 pass**; build green.
+- **Deferred to Phase 5:** explicit invite-existing-user / remove-member endpoints + a members UI.
+
+### Phase 4c — contract: drop `User.role`
+- Once no reader remains (all role checks use the membership), remove `User.role`.
 
 ### Phase 4c — contract: drop `User.role`
 - Once no reader remains (all role checks use the membership), remove `User.role`.
