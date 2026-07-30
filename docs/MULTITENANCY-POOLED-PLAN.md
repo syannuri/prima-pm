@@ -120,16 +120,40 @@ Split into **2a (expand)** and **2b (contract)** per the expand-migrate-contract
   `AppSetting` gains a per-tenant unique (its singleton `id` PK stays until it's read per-tenant).
 
 ## Phase 3 — Tenant context + Prisma extension (the safety net) ⟵ hardest phase
-- **Auth:** add `tid` (active tenant) to the access-token payload (`jwt.ts` `AccessTokenPayload`).
-  Login: 1 membership → auto-select; >1 → return a tenant list and require `/auth/switch-tenant`
-  (re-mints the token with the chosen `tid` + that membership's role).
-- **Context:** middleware reads `tid` from the verified token → `AsyncLocalStorage` store.
-- **Prisma `$extends`:** for scoped models, auto-inject `where.tenantId`, stamp `tenantId` on
-  create, and **throw if no tenant context** (fail-closed). Cron/system jobs run inside an explicit
-  per-tenant context loop.
-- Turn on behind `MULTITENANCY_ENFORCE` in staging; the Phase-0 leakage suite must go green.
-- Remove the ad-hoc `personalOwnerId` filters that the extension now supersedes (carefully, one
-  module at a time, each covered by the leakage suite).
+Split into **3a (the extension core)**, **3b (auth + middleware wiring)**, **3c (contract)**,
+**3d (de-scatter personalOwnerId)**.
+
+### Phase 3a — tenant context + Prisma extension ✅ DONE (2026-07-30)
+- **Context:** `lib/tenant/context.ts` — `AsyncLocalStorage` store with `runWithTenant(tenantId, fn)`
+  and `runAsSystem(fn)` (explicit cross-tenant bypass). The callback is `await`ed *inside* the ALS
+  scope because Prisma promises are lazy (execute at await time) — otherwise the extension would see
+  no context and fail-closed.
+- **Extension:** `lib/tenant/extension.ts` — for the 41 scoped models (`lib/tenant/scopedModels.ts`)
+  it injects `where.tenantId` on read/update/delete/count/aggregate/groupBy, and stamps `tenantId` on
+  create — **including nested writes**, resolved via the DMMF relation map so only scoped children are
+  stamped (covers `Conversation.create({ members: { create } })`). By-id ops (findUnique/update/delete)
+  are scoped too — verified Prisma 6.19 honours an injected non-unique `tenantId` in a findUnique
+  `where`. **Fail-closed:** a scoped query with no context throws. Applied unconditionally in
+  `lib/prisma.ts`; gated by `MULTITENANCY_ENFORCE` (live-read) so it is a **no-op when off**.
+- The extended client changed the exported type → added `Db`/`TxClient` aliases in `lib/prisma.ts`
+  and pointed `cost`/`baseline`/`backfill` at them.
+- **Verified:** `tenant-extension.itest.ts` (8 tests, flag ON) proves read/write isolation,
+  create-stamping incl. nested, fail-closed, `runAsSystem` bypass, global models untouched. Full
+  suite with flag OFF: **243 pass** (no regressions — extension is a true no-op). Build green.
+
+### Phase 3b — auth `tid` + request middleware — NEXT
+- **Auth:** add `tid` (active tenant) to the access-token payload. Login: 1 membership → auto-select;
+  >1 → return a tenant list and require `/auth/switch-tenant` (re-mints the token with chosen `tid`).
+- **Middleware:** read `tid` from the verified token → `runWithTenant` for the request. Cron/system
+  jobs use `runAsSystem` or a per-tenant loop.
+- Turn on behind `MULTITENANCY_ENFORCE` in staging; the leakage suite's corporate block goes green.
+
+### Phase 3c — contract (the deferred Phase-2 steps, now safe)
+- Straggler sweep → default tenant; flip `tenantId` NOT NULL (+ required relation); `Project.code`
+  → `@@unique([tenantId, code])` (+ `findFirst` clash-checks); `AppSetting` per-tenant unique.
+
+### Phase 3d — remove ad-hoc `personalOwnerId` filters the extension now supersedes
+- Carefully, one module at a time, each covered by the leakage suite.
 
 ## Phase 4 — Per-tenant roles (retire global `User.role`)
 - `requireProjectAccess` / `requireProjectGovernance` / all role checks read the **membership role

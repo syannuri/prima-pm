@@ -1,9 +1,9 @@
-import type { Prisma } from '@prisma/client';
-import { prisma } from '../../lib/prisma.js';
+import { prisma, type TxClient } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 
-type Db = Prisma.TransactionClient | typeof prisma;
+// TxClient (derived from the extended client) accepts both the full client and an interactive tx.
+type Db = TxClient;
 
 // Throws if the project's baseline is locked. Called by every baseline-DEFINING mutation
 // (cost lines, management reserve, WBS tasks, schedule baseline) so the PMB/BAC cannot

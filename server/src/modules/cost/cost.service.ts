@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { prisma } from '../../lib/prisma.js';
+import { prisma, type TxClient } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { materialAmount, manpowerCost } from '../../calc/cost.js';
@@ -31,7 +31,8 @@ async function ensureChartered(projectId: string): Promise<void> {
 // Map persisted risks into the shape the contingency calculator expects.
 // `db` is the prisma client or a transaction client, so the baseline recompute
 // can run atomically inside the same transaction as the mutation that triggered it.
-type Db = Prisma.TransactionClient;
+// TxClient (extended-client-derived) accepts both the full client and an interactive tx.
+type Db = TxClient;
 
 async function loadRisksForReserve(projectId: string, db: Db = prisma): Promise<RiskForReserve[]> {
   const risks = await db.risk.findMany({

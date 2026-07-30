@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Db } from '../prisma.js';
 import { DEFAULT_TENANT_SLUG, DEFAULT_TENANT_NAME } from './constants.js';
 
 // Programmatic mirror of the Phase-1 seed embedded in the tenant_membership migration:
@@ -7,7 +7,7 @@ import { DEFAULT_TENANT_SLUG, DEFAULT_TENANT_NAME } from './constants.js';
 // (userId, tenantId) unique), so it is safe to run repeatedly — used by tests to assert the
 // invariant, and available to ops if a re-backfill is ever needed. Phase 2 extends this to
 // stamp tenantId onto the denormalized rows.
-export async function backfillDefaultTenant(prisma: PrismaClient): Promise<{ tenantId: string; memberships: number }> {
+export async function backfillDefaultTenant(prisma: Db): Promise<{ tenantId: string; memberships: number }> {
   const tenant = await prisma.tenant.upsert({
     where: { slug: DEFAULT_TENANT_SLUG },
     update: {},
