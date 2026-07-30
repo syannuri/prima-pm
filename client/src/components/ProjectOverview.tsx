@@ -8,6 +8,7 @@ import { formatNum } from '../lib/format';
 import { computeMargin } from '../lib/margin';
 import HealthGauge from './HealthGauge';
 import HealthArcGauge from './HealthArcGauge';
+import InfoTip from './InfoTip';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -206,6 +207,14 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
   const health = (e.health ?? 'NO_DATA') as Health;
   const pct = Math.round((e.scheduleProgress ?? 0) * 100);
+  // The gauge % and the Tasks donut % answer different questions — spell out the
+  // distinction so nobody reads them as the same number (see InfoTip on each).
+  const progressTip = id
+    ? 'Penyelesaian fisik tertimbang: progres tiap tugas ditimbang oleh biaya/durasinya, dan progres parsial ikut dihitung. Angka EVM resmi.'
+    : 'Weighted physical % complete: each task’s progress weighted by its cost/duration, and partial progress counts. The official EVM figure.';
+  const taskTip = id
+    ? 'Jumlah tugas yang 100% selesai dibagi total tugas — tiap tugas berbobot sama, dan progres parsial (mis. 90%) belum dihitung selesai.'
+    : 'Count of 100%-done tasks ÷ total tasks — every task counts equally, and partial progress (e.g. 90%) is not yet counted as done.';
   const ragLabel = health === 'NO_DATA' ? (id ? 'Tanpa data' : 'No data') : health.charAt(0) + health.slice(1).toLowerCase();
   const costMax = Math.max(e.bac, e.ac, e.ev, e.pv, 1);
   const overBudget = e.ac > 0 && e.cpi < 1;
@@ -263,7 +272,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           <div className="min-w-0 flex-1 space-y-2.5 pt-1">
             <div>
               <div className="mb-1 flex items-baseline justify-between text-xs">
-                <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres' : 'Progress'}</span>
+                <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres' : 'Progress'}<InfoTip text={progressTip} /></span>
                 <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
@@ -303,7 +312,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
         </div>
         <div className="mt-1 hidden sm:block">
           <div className="mb-1 flex items-baseline justify-between text-xs">
-            <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres (selesai)' : 'Progress (complete)'}</span>
+            <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres (selesai)' : 'Progress (complete)'}<InfoTip text={progressTip} /></span>
             <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
@@ -350,7 +359,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Completed vs remaining tasks */}
       {tasks && taskTotal > 0 && (
         <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:col-span-4 lg:order-4">
-          <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}</h3>
+          <h3 className="mb-2 flex items-center text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}<InfoTip text={taskTip} /></h3>
           <div className="flex items-center gap-4">
             <TaskDonut completed={tasks.completed} remaining={tasks.remaining} label={id ? 'tugas' : 'tasks'} />
             <div className="min-w-0 flex-1 space-y-1.5 text-sm">
