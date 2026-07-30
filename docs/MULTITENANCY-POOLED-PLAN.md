@@ -174,6 +174,19 @@ side port, real dev server untouched). Findings:
   `tenant-cron.itest.ts` (flag ON). This was the Phase-5 "cron iterates per tenant" item, pulled
   forward because it gated enforce-on.
 
+### 🟢 ENFORCEMENT LIVE on LAN prod (2026-07-30)
+Turned on via a **staged** rollout on the LAN box (`/home/mamed`, `prima_pm` — the live DB):
+Step 1 deployed current `master` with the flag OFF (all no-op) and verified healthy; Step 2 set
+`MULTITENANCY_ENFORCE=true` + restart. The flag is a **reversible kill-switch** (false + restart).
+- **Transition fix (found during the flip):** existing sessions carry a token with no `tid`, which
+  fail-closed to a **500** on scoped routes — and a 500 doesn't trigger the client's refresh. Fixed:
+  `requireAuth` now returns **401** for a no-`tid` token under enforcement → the client auto-refreshes
+  → `/auth/refresh` re-mints a tenant-pinned token → retry succeeds. Seamless, no forced logout.
+- **Verified live:** 15 scoped endpoints 200 with a `tid` token; no-`tid` → 401; zero fail-closed in
+  the service log. The single default tenant means AppSetting-singleton etc. behave normally.
+- **NOT yet on the VPS** (`prismatix.tech`, `/opt/prismatix`) — a separate deploy; enable there with
+  its own `update-prod.sh` + flag when ready.
+
 ### Enforce-on prerequisites (before turning the flag on in a real deployment)
 1. Deploy code + `prisma migrate deploy` on that env (creates Tenant/Membership + tenantId columns +
    backfill) — no remote env has the tenant migrations yet.
