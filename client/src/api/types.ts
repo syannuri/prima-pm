@@ -20,6 +20,25 @@ export interface AdminUser extends User {
   createdAt: string;
 }
 
+// Pooled multitenancy — a tenant the current user belongs to (GET /auth/tenants) with their
+// per-tenant role. `active` in the response marks which one the session is scoped to.
+export interface TenantSummary {
+  id: string;
+  name: string;
+  slug: string;
+  role: Role;
+}
+
+// A member of the active tenant (GET /members) — the tenant-centric view of a user.
+export interface TenantMember {
+  id: string;
+  name: string;
+  email: string;
+  isActive: boolean;
+  role: Role;
+  since: string;
+}
+
 // Admin-only global audit trail (GET /admin/audit).
 export interface AuditEntry {
   id: string;

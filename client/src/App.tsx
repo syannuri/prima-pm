@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ProjectPage from './pages/ProjectPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminMembersPage from './pages/AdminMembersPage';
 import AdminProjectDatabasePage from './pages/AdminProjectDatabasePage';
 import AdminResourcesPage from './pages/AdminResourcesPage';
 import AdminAuditPage from './pages/AdminAuditPage';
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/messages" element={<MessagesPage />} />
           <Route path="/projects/:projectId/*" element={<ProjectPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/members" element={<AdminMembersPage />} />
           <Route path="/admin/projects" element={<AdminProjectDatabasePage />} />
           <Route path="/admin/resources" element={<AdminResourcesPage />} />
           <Route path="/admin/audit" element={<AdminAuditPage />} />

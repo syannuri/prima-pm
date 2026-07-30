@@ -25,6 +25,7 @@ const ICONS = {
   reports: 'M3 3v18h18M7 15v3M12 11v7M17 7v11',
   database: 'M4 7c0 1.66 3.58 3 8 3s8-1.34 8-3-3.58-3-8-3-8 1.34-8 3zM4 7v5c0 1.66 3.58 3 8 3s8-1.34 8-3V7M4 12v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5',
   chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  org: 'M3 21h18M6 21V7l6-4 6 4v14M10 9h.01M14 9h.01M10 13h.01M14 13h.01M10 17h.01M14 17h.01',
 };
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
@@ -132,6 +133,11 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {user?.role === 'ADMIN' && (
           <NavLink to="/admin/users" onClick={onNavigate} title="Users" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.users} /> {!collapsed && 'Users'}
+          </NavLink>
+        )}
+        {user?.role === 'ADMIN' && (
+          <NavLink to="/admin/members" onClick={onNavigate} title="Members" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.org} /> {!collapsed && 'Members'}
           </NavLink>
         )}
         {user?.role === 'ADMIN' && (

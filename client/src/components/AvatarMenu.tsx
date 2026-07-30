@@ -20,6 +20,8 @@ const I = {
   moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
   sun: 'M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4 7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
   caretV: 'M8 9l4-4 4 4M8 15l4 4 4-4',
+  org: 'M3 21h18M6 21V7l6-4 6 4v14M10 9h.01M14 9h.01M10 13h.01M14 13h.01M10 17h.01M14 17h.01',
+  check: 'M20 6 9 17l-5-5',
 };
 
 const Ico = ({ d }: { d: string }) => (
@@ -42,7 +44,7 @@ export default function AvatarMenu({
   variant?: 'avatar' | 'row';
   collapsed?: boolean;
 }) {
-  const { user, logout } = useAuth();
+  const { user, logout, tenants, activeTenantId, switchTenant } = useAuth();
   const { theme, toggle } = useTheme();
   const dark = theme === 'dark';
   const { lang } = useLang();
@@ -145,10 +147,32 @@ export default function AvatarMenu({
                 <div className="truncate text-xs text-slate-500 dark:text-slate-400">{user?.email}</div>
               </div>
             </div>
+            {/* Tenant switcher — only when the user belongs to more than one org (hidden entirely
+                in single-tenant / enforcement-off deployments). */}
+            {tenants.length > 1 && (
+              <div className="border-b border-slate-100 p-1.5 dark:border-slate-800">
+                <div className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{id ? 'Organisasi' : 'Organization'}</div>
+                {tenants.map((tn) => {
+                  const active = tn.id === activeTenantId;
+                  return (
+                    <button
+                      key={tn.id}
+                      onClick={() => { if (!active) { close(); void switchTenant(tn.id); } }}
+                      disabled={active}
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm ${active ? 'font-semibold text-brand-600 dark:text-brand-400' : 'text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800'}`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2"><Ico d={I.org} /><span className="truncate">{tn.name}</span></span>
+                      {active && <Ico d={I.check} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <nav className="p-1.5 text-sm">
               <Link to="/settings" onClick={close} className={itemCls}><Ico d={I.gear} /> {t.settings}</Link>
               <Link to="/manual" onClick={close} className={itemCls}><Ico d={I.help} /> {t.manual}</Link>
               {user?.role === 'ADMIN' && <Link to="/admin/users" onClick={close} className={itemCls}><Ico d={I.users} /> {t.users}</Link>}
+              {user?.role === 'ADMIN' && <Link to="/admin/members" onClick={close} className={itemCls}><Ico d={I.org} /> {id ? 'Anggota' : 'Members'}</Link>}
               {user?.role === 'ADMIN' && <Link to="/admin/audit" onClick={close} className={itemCls}><Ico d={I.audit} /> {t.audit}</Link>}
               {/* A guest's private Resource Pool — the hamburger drawer is gone on phones, so surface
                   it here in the reachable account menu (alongside the bottom tab bar + dashboard tile). */}

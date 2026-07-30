@@ -36,6 +36,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     : path === '/my-timesheet' ? 'Timesheet'
     : path.startsWith('/admin/resources') ? (isGuest ? 'My Resources' : 'Resources')
     : path === '/admin/users' ? 'Users'
+    : path === '/admin/members' ? 'Members'
     : path === '/admin/audit' ? 'Audit trail'
     : path === '/settings' ? 'Settings'
     : path === '/manual' ? 'Manual'

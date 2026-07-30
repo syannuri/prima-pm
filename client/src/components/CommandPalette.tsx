@@ -32,6 +32,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     const nav: Cmd[] = [
       { id: 'nav-dash', group: 'Navigate', label: 'Dashboard', sub: 'Portfolio overview', keywords: 'home portfolio', run: () => go('/') },
       ...(isAdmin ? [{ id: 'nav-users', group: 'Navigate', label: 'Users', sub: 'Admin', keywords: 'accounts', run: () => go('/admin/users') } as Cmd] : []),
+      ...(isAdmin ? [{ id: 'nav-members', group: 'Navigate', label: 'Members', sub: 'Admin', keywords: 'tenant organization membership', run: () => go('/admin/members') } as Cmd] : []),
       ...(isPortfolio ? [{ id: 'nav-res', group: 'Navigate', label: 'Resource Pool', sub: 'Capacity & rates', keywords: 'resources capacity', run: () => go('/admin/resources') } as Cmd] : []),
       { id: 'nav-settings', group: 'Navigate', label: 'Settings', keywords: 'preferences theme language', run: () => go('/settings') },
       { id: 'nav-manual', group: 'Navigate', label: 'Manual', sub: 'Help & guide', keywords: 'help docs', run: () => go('/manual') },
