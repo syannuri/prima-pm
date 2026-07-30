@@ -263,6 +263,47 @@ model Tenant {
   updatedAt DateTime     @updatedAt
 
   memberships Membership[]
+  projects  Project[]
+  projectBookmarks  ProjectBookmark[]
+  rateCards  RateCard[]
+  resources  Resource[]
+  auditLogs  AuditLog[]
+  notifications  Notification[]
+  conversations  Conversation[]
+  conversationMembers  ConversationMember[]
+  messages  Message[]
+  pushSubscriptions  PushSubscription[]
+  messageReactions  MessageReaction[]
+  appSettings  AppSetting[]
+  projectCharters  ProjectCharter[]
+  charterVersions  CharterVersion[]
+  costItemDirects  CostItemDirect[]
+  costItemIndirects  CostItemIndirect[]
+  costBaselines  CostBaseline[]
+  actualCostEntrys  ActualCostEntry[]
+  mandayEntrys  MandayEntry[]
+  risks  Risk[]
+  issues  Issue[]
+  stakeholders  Stakeholder[]
+  procurements  Procurement[]
+  assumptions  Assumption[]
+  projectDependencys  ProjectDependency[]
+  tasks  Task[]
+  taskDependencys  TaskDependency[]
+  changeRequests  ChangeRequest[]
+  attachments  Attachment[]
+  sprints  Sprint[]
+  sprintSnapshots  SprintSnapshot[]
+  evmSnapshots  EvmSnapshot[]
+  backlogItems  BacklogItem[]
+  lessonLearneds  LessonLearned[]
+  acceptanceSignoffs  AcceptanceSignoff[]
+  uatTestCases  UatTestCase[]
+  kickoffMeetings  KickoffMeeting[]
+  kickoffAttendees  KickoffAttendee[]
+  kickoffActionItems  KickoffActionItem[]
+  requirements  Requirement[]
+  requirementTaskLinks  RequirementTaskLink[]
 }
 
 // A user's membership in a tenant, carrying their per-tenant role. Identity (`User`) stays
@@ -305,6 +346,10 @@ model RefreshToken {
 
 model Project {
   id        String        @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   code      String        @unique
   name      String
   clientName String?      // the client/customer the project is delivered for
@@ -395,6 +440,10 @@ model Project {
 // drops its bookmarks. One row per (user, project).
 model ProjectBookmark {
   id        String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   userId    String
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -406,6 +455,10 @@ model ProjectBookmark {
 
 model ProjectCharter {
   id              String          @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId       String          @unique
   project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -435,6 +488,10 @@ model ProjectCharter {
 // Immutable snapshot taken on each Commit (versioning + audit)
 model CharterVersion {
   id          String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   version     Int
@@ -453,6 +510,10 @@ model CharterVersion {
 // Unified Direct Cost line (Material rows + Manpower rows), discriminated by `type`
 model CostItemDirect {
   id        String         @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId String
   project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   type      DirectCostType
@@ -505,6 +566,10 @@ model CostItemDirect {
 
 model CostItemIndirect {
   id          String           @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   type        IndirectCostType
@@ -527,6 +592,10 @@ model CostItemIndirect {
 
 model RateCard {
   id                String           @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   roleName          String
   level             String?
   unitCostPerManday Decimal          @db.Decimal(18, 2)
@@ -557,6 +626,10 @@ enum ResourceType {
 
 model Resource {
   id            String        @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   name          String
   resourceType  ResourceType  @default(NAMED)
   roleTitle     String? // free-text job title, e.g. "Backend Engineer"
@@ -595,6 +668,10 @@ model Resource {
 // Computed roll-up cache (1:1 with Project)
 model CostBaseline {
   id                 String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId          String   @unique
   project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -612,6 +689,10 @@ model CostBaseline {
 // drives the Cost Performance Index (CPI) in EVM.
 model ActualCostEntry {
   id          String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   date        DateTime
@@ -642,6 +723,10 @@ model ActualCostEntry {
 // Consumed effort per resource = Σ mandays over that resource's lines.
 model MandayEntry {
   id         String         @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId  String
   project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   costItemId String
@@ -662,6 +747,10 @@ model MandayEntry {
 
 model Risk {
   id          String     @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code        String
@@ -718,6 +807,10 @@ enum IssueStatus {
 // a potential future event). Lightweight register: no EVM/reserve impact.
 model Issue {
   id          String      @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code        String
@@ -776,6 +869,10 @@ enum EngagementLevel {
 // vs desired engagement so the PM can plan engagement effort where the gap is.
 model Stakeholder {
   id                String              @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId         String
   project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code              String
@@ -824,6 +921,10 @@ enum ProcurementStatus {
 // and status through the make-or-buy → solicit → award → deliver → close lifecycle.
 model Procurement {
   id            String            @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId     String
   project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code          String
@@ -872,6 +973,10 @@ enum AssumptionStatus {
 // or invalidated over time (an invalidated assumption often becomes a risk/issue).
 model Assumption {
   id          String           @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code        String
@@ -908,6 +1013,10 @@ enum DependencyStatus {
 // distinct from TaskDependency (the intra-schedule FS/SS/FF/SF links used by CPM).
 model ProjectDependency {
   id           String              @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId    String
   project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code         String
@@ -935,6 +1044,10 @@ model ProjectDependency {
 
 model Task {
   id           String    @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId    String
   project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -985,6 +1098,10 @@ model Task {
 
 model TaskDependency {
   id            String         @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   predecessorId String
   predecessor   Task           @relation("DepPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
   successorId   String
@@ -1001,6 +1118,10 @@ model TaskDependency {
 
 model ChangeRequest {
   id          String              @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   type        String // e.g. CHARTER, COST_BASELINE, SCHEDULE, SCOPE
@@ -1030,6 +1151,10 @@ model ChangeRequest {
 
 model AuditLog {
   id        String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
   projectId String? // set for project-scoped events (enables per-project audit view)
@@ -1047,6 +1172,10 @@ model AuditLog {
 
 model Attachment {
   id         String          @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   ownerType  AttachmentOwner
   ownerId    String
   fileName   String
@@ -1071,6 +1200,10 @@ model Attachment {
 // the product backlog / on the board without a sprint).
 model Sprint {
   id        String       @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId String
   project   Project      @relation(fields: [projectId], references: [id])
   name      String
@@ -1092,6 +1225,10 @@ model Sprint {
 // burndown chart (recorded when the board is fetched, deduped per day).
 model SprintSnapshot {
   id               String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   sprintId         String
   sprint           Sprint   @relation(fields: [sprintId], references: [id], onDelete: Cascade)
   date             DateTime @db.Date
@@ -1110,6 +1247,10 @@ model SprintSnapshot {
 // One snapshot per (project, statusDate); re-capturing the same date upserts.
 model EvmSnapshot {
   id               String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId        String
   project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   statusDate       DateTime @db.Date
@@ -1132,6 +1273,10 @@ model EvmSnapshot {
 // assigned as a project's PM (not the on-demand "needs attention" alerts).
 model Notification {
   id        String    @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   userId    String
   user      User      @relation("UserNotifications", fields: [userId], references: [id])
   type      String    // e.g. PROJECT_ASSIGNED
@@ -1155,6 +1300,10 @@ enum ConversationType {
 
 model Conversation {
   id            String           @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   type          ConversationType @default(DIRECT)
   // DIRECT only: the canonical (userAId < userBId) pair — the dedup key so a 1-1 thread is unique.
   // NULL for GROUP conversations. lastReadA/BAt are legacy per-side cursors, superseded by
@@ -1183,6 +1332,10 @@ model Conversation {
 // (N members): a member's unread = messages from OTHERS newer than their lastReadAt.
 model ConversationMember {
   id             String       @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   userId         String
@@ -1201,6 +1354,10 @@ model ConversationMember {
 // A single chat message within a Conversation.
 model Message {
   id             String       @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
@@ -1224,6 +1381,10 @@ model Message {
 // service URL (unique); p256dh + auth are the client's encryption keys.
 model PushSubscription {
   id        String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   endpoint  String   @unique
@@ -1237,6 +1398,10 @@ model PushSubscription {
 // An emoji reaction on a message. A user may add each distinct emoji once per message.
 model MessageReaction {
   id        String   @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   messageId String
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   userId    String
@@ -1252,6 +1417,10 @@ model MessageReaction {
 // backlog; when in a sprint it shows on the board by `status`.
 model BacklogItem {
   id                 String        @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId          String
   project            Project       @relation(fields: [projectId], references: [id])
   sprintId           String?
@@ -1294,6 +1463,10 @@ enum AcceptanceDecision {
 // A single entry in the project's lessons-learned register.
 model LessonLearned {
   id          String         @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   category    LessonCategory @default(RECOMMENDATION)
@@ -1311,6 +1484,10 @@ model LessonLearned {
 // system user who logged the sign-off.
 model AcceptanceSignoff {
   id           String             @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId    String
   project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   party        String             // who accepts: e.g. "Sponsor", "Customer — Bank X"
@@ -1335,6 +1512,10 @@ enum UatStatus {
 
 model UatTestCase {
   id          String    @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code        String // per-project code, e.g. UAT-001
@@ -1358,6 +1539,10 @@ model UatTestCase {
 // Kick-Off Meeting minutes — one structured record per project (Initiating artifact).
 model KickoffMeeting {
   id          String              @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId   String              @unique
   project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   meetingDate DateTime?
@@ -1376,6 +1561,10 @@ model KickoffMeeting {
 
 model KickoffAttendee {
   id        String         @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   meetingId String
   meeting   KickoffMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   name      String
@@ -1394,6 +1583,10 @@ enum KickoffActionStatus {
 
 model KickoffActionItem {
   id          String              @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   meetingId   String
   meeting     KickoffMeeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   description String              @db.Text
@@ -1440,6 +1633,10 @@ enum RequirementStatus {
 
 model Requirement {
   id                 String              @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   projectId          String
   project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code               String // REQ-001, REQ-002, …
@@ -1465,6 +1662,10 @@ model Requirement {
 // Forward traceability: requirement -> the WBS task(s) that deliver it.
 model RequirementTaskLink {
   id            String      @id @default(uuid())
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   requirementId String
   requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
   taskId        String
@@ -1481,6 +1682,10 @@ model RequirementTaskLink {
 // env change + restart. Seeded from the env flags on first read so a deploy preserves behaviour.
 model AppSetting {
   id                 String   @id @default("singleton")
+  // Pooled-multitenancy scope (Phase 2). Nullable in 2a (expand+backfill);
+  // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   guestSignupEnabled Boolean  @default(false)
   googleLoginEnabled Boolean  @default(false)
   // Weekly EVM auto-capture (opt-in). Weekday: 0=Sun .. 6=Sat (default 1 = Monday).

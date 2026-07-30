@@ -83,12 +83,29 @@ with every phase independently shippable and reversible.
 - **No behaviour change.** Ships safely; everyone is in one tenant.
 
 ## Phase 2 — `tenantId` columns (nullable → backfill → NOT NULL)
-- Add **nullable** `tenantId` to every tenant-owned model (roots + denormalized children).
-- Backfill: roots → default tenant; children → their `Project.tenantId`.
-- Follow-up migration flips to `NOT NULL` + FK + index once backfilled.
-- `Project.code` → `@@unique([tenantId, code])`; `AppSetting` PK becomes `tenantId`.
-- Still **no query enforcement** — data now carries tenantId but reads don't filter. Single-tenant
-  behaviour is byte-identical. Ships safely.
+Split into **2a (expand)** and **2b (contract)** per the expand-migrate-contract rule.
+
+### Phase 2a — nullable `tenantId` + FK + backfill ✅ DONE (2026-07-30)
+- Added nullable `tenantId` + `tenant Tenant?` relation to **all 41 tenant-owned models** (12 roots
+  + 29 project-children/grandchildren) and the matching back-relations on `Tenant`. Migration
+  `20260730135548_tenant_id_columns`.
+- **Deviation (noted):** the FK is added here (nullable) rather than in 2b, so Prisma manages
+  referential integrity from the start and we declare the relation once. `@@index([tenantId])` and
+  `NOT NULL` are still deferred to 2b.
+- Backfill (in the migration): roots → default tenant; project-children → their `Project.tenantId`;
+  grandchildren (TaskDependency, Attachment, SprintSnapshot, Kickoff{Attendee,ActionItem},
+  RequirementTaskLink) → their already-stamped parent. Guarded by `IS NULL` (idempotent).
+- **Finding:** a legacy orphaned `Attachment` (owner deleted, null `projectRelId`) can't resolve via
+  FK. Since all current data belongs to the ONE existing org, 2b adds a universal *still-NULL →
+  default tenant* sweep before the NOT NULL flip. 2a leaves the column nullable, so this is fine.
+- Verified: full integration suite (235 tests) + tenancy itests green; single-tenant behaviour
+  unchanged (nothing filters by tenant yet).
+
+### Phase 2b — NOT NULL + indexes + unique swaps (contract) — NEXT
+- Straggler sweep (incl. the orphaned attachment) → default tenant; assert **zero** nulls.
+- Flip every `tenantId` to `NOT NULL`; add `@@index([tenantId])`.
+- `Project.code` → `@@unique([tenantId, code])`; `AppSetting` PK/uniqueness becomes per-tenant.
+- Still **no query enforcement** — data carries tenantId but reads don't filter. Behaviour identical.
 
 ## Phase 3 — Tenant context + Prisma extension (the safety net) ⟵ hardest phase
 - **Auth:** add `tid` (active tenant) to the access-token payload (`jwt.ts` `AccessTokenPayload`).
