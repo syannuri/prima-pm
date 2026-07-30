@@ -48,7 +48,9 @@ export async function refreshHandler(req: Request, res: Response): Promise<void>
 
 export async function meHandler(req: Request, res: Response): Promise<void> {
   const user = await authService.me(req.user!.id);
-  res.json({ user });
+  // Report the EFFECTIVE role (the active tenant's membership role under enforcement), which
+  // requireAuth already resolved — not the raw global User.role.
+  res.json({ user: { ...user, role: req.user!.role } });
 }
 
 export async function myTenantsHandler(req: Request, res: Response): Promise<void> {

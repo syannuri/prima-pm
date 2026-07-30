@@ -52,7 +52,21 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     if (!user || !user.isActive) throw Unauthorized('Session is no longer valid');
     if ((payload.tv ?? 0) !== user.tokenVersion) throw Unauthorized('Session has been revoked');
 
-    req.user = { id: user.id, role: user.role, email: user.email, tid: payload.tid };
+    // Role is resolved FRESH from the DB each request so changes apply at once. Under enforcement
+    // it's the active tenant's MEMBERSHIP role (Phase 4), not the global User.role — read here (not
+    // trusted from the token) for the same reason. A stale token whose membership was revoked is
+    // rejected. With enforcement off, the global role stands (single-tenant behaviour unchanged).
+    let role = user.role;
+    if (multitenancyEnforced() && payload.tid) {
+      const membership = await prisma.membership.findUnique({
+        where: { userId_tenantId: { userId: user.id, tenantId: payload.tid } },
+        select: { role: true },
+      });
+      if (!membership) throw Unauthorized('No membership in the active tenant');
+      role = membership.role;
+    }
+
+    req.user = { id: user.id, role, email: user.email, tid: payload.tid };
 
     // Establish the request-scoped tenant context so the Prisma extension scopes every query.
     // Only when enforcement is on AND the token carries a tenant — otherwise a plain next() keeps

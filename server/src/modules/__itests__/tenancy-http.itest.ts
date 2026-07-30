@@ -20,6 +20,7 @@ let prevFlag: string | undefined;
 let tenantA = '', tenantB = '';
 let projectA = '', projectB = '';
 let tokenA = '', tokenB = '';
+let tokenD_A = '', tokenD_B = '';
 
 async function mkUser(email: string) {
   return prisma.user.create({ data: { name: email, email, role: 'ADMIN', passwordHash: await hashPassword(PW), isActive: true } });
@@ -36,13 +37,15 @@ beforeAll(async () => {
   ]);
   tenantA = ta.id; tenantB = tb.id;
 
-  const [ua, ub, uc] = await Promise.all([mkUser('a@http.test'), mkUser('b@http.test'), mkUser('c@http.test')]);
-  // uA in A, uB in B, uC in BOTH (for switch-tenant).
+  const [ua, ub, uc, ud] = await Promise.all([mkUser('a@http.test'), mkUser('b@http.test'), mkUser('c@http.test'), mkUser('d@http.test')]);
+  // uA in A, uB in B, uC in BOTH (switch-tenant). uD is ADMIN in A but VIEWER in B (per-tenant role).
   await prisma.membership.createMany({ data: [
     { userId: ua.id, tenantId: tenantA, role: 'ADMIN' },
     { userId: ub.id, tenantId: tenantB, role: 'ADMIN' },
     { userId: uc.id, tenantId: tenantA, role: 'ADMIN' },
     { userId: uc.id, tenantId: tenantB, role: 'ADMIN' },
+    { userId: ud.id, tenantId: tenantA, role: 'ADMIN' },
+    { userId: ud.id, tenantId: tenantB, role: 'VIEWER' },
   ] });
 
   const pa = await runWithTenant(tenantA, () => prisma.project.create({ data: { code: 'PRJ-HTTP-A', name: 'A proj', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: ua.id } }));
@@ -51,6 +54,10 @@ beforeAll(async () => {
 
   tokenA = signAccessToken({ sub: ua.id, role: 'ADMIN', email: ua.email, tv: 0, tid: tenantA });
   tokenB = signAccessToken({ sub: ub.id, role: 'ADMIN', email: ub.email, tv: 0, tid: tenantB });
+  // Deliberately mint BOTH of uD's tokens with role ADMIN — requireAuth must ignore the token role
+  // and resolve the per-tenant membership role (ADMIN in A, VIEWER in B), so the token can't escalate.
+  tokenD_A = signAccessToken({ sub: ud.id, role: 'ADMIN', email: ud.email, tv: 0, tid: tenantA });
+  tokenD_B = signAccessToken({ sub: ud.id, role: 'ADMIN', email: ud.email, tv: 0, tid: tenantB });
 });
 
 afterAll(async () => {
@@ -107,5 +114,22 @@ describe('switch-tenant re-scopes a multi-tenant member', () => {
   it('rejects switching to a tenant you are not a member of', async () => {
     const res = await request(app).post(api('/auth/switch-tenant')).set(bearer(tokenA)).send({ tenantId: tenantB });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('role is per-tenant (Phase 4) — the membership role, not the token or global role', () => {
+  it('same user is ADMIN in one tenant and VIEWER in another', async () => {
+    // /admin/audit requires ADMIN. uD is ADMIN in A, VIEWER in B — despite BOTH tokens claiming ADMIN.
+    const asAdmin = await request(app).get(api('/admin/audit')).set(bearer(tokenD_A));
+    expect(asAdmin.status).toBe(200);
+    const asViewer = await request(app).get(api('/admin/audit')).set(bearer(tokenD_B));
+    expect(asViewer.status).toBe(403);
+  });
+
+  it('/auth/me reports the effective per-tenant role', async () => {
+    const meA = await request(app).get(api('/auth/me')).set(bearer(tokenD_A));
+    expect(meA.body.user.role).toBe('ADMIN');
+    const meB = await request(app).get(api('/auth/me')).set(bearer(tokenD_B));
+    expect(meB.body.user.role).toBe('VIEWER');
   });
 });

@@ -8,20 +8,25 @@ import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled } from '../settings/settings.service.js';
 import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
+import { multitenancyEnforced } from '../../lib/tenant/context.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput } from './auth.schemas.js';
 
-// The tenant a freshly-minted token should be scoped to: the caller's chosen tenant when it is one
-// of their memberships, else their first membership (deterministic by createdAt). Undefined only if
-// the user has no membership (pre-Phase-1 data / enforcement off). Membership is a global model, so
-// this read needs no tenant context.
-async function resolveActiveTenantId(userId: string, preferred?: string): Promise<string | undefined> {
+// The membership a freshly-minted token should be pinned to: the caller's chosen tenant when it is
+// one of their memberships, else their first (deterministic by createdAt). Undefined only if the
+// user has no membership (pre-Phase-1 data / enforcement off). Carries the PER-TENANT role, which
+// supersedes the global User.role once enforcement is on (Phase 4). Membership is a global model,
+// so this read needs no tenant context.
+async function resolveActiveMembership(userId: string, preferred?: string): Promise<{ tenantId: string; role: Role } | undefined> {
   const memberships = await prisma.membership.findMany({
     where: { userId },
     orderBy: { createdAt: 'asc' },
-    select: { tenantId: true },
+    select: { tenantId: true, role: true },
   });
-  if (preferred && memberships.some((m) => m.tenantId === preferred)) return preferred;
-  return memberships[0]?.tenantId;
+  if (preferred) {
+    const chosen = memberships.find((m) => m.tenantId === preferred);
+    if (chosen) return chosen;
+  }
+  return memberships[0];
 }
 
 // Give a brand-new self-service user a membership in the default tenant (single-tenant world today;
@@ -55,10 +60,13 @@ async function issueTokenPair(user: User, opts: { replacesJti?: string; preferre
     }
     await tx.refreshToken.create({ data: { id: jti, userId: user.id, expiresAt } });
   });
-  const tid = await resolveActiveTenantId(user.id, opts.preferredTid);
+  const active = await resolveActiveMembership(user.id, opts.preferredTid);
+  // Under enforcement the EFFECTIVE role is the active tenant's membership role (Phase 4); with
+  // enforcement off we keep the global User.role so single-tenant behaviour is unchanged.
+  const effectiveRole = multitenancyEnforced() && active ? active.role : user.role;
   return {
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
-    accessToken: signAccessToken({ sub: user.id, role: user.role, email: user.email, tv: user.tokenVersion, tid }),
+    user: { id: user.id, name: user.name, email: user.email, role: effectiveRole },
+    accessToken: signAccessToken({ sub: user.id, role: effectiveRole, email: user.email, tv: user.tokenVersion, tid: active?.tenantId }),
     refreshToken,
   };
 }

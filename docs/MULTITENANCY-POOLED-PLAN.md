@@ -167,11 +167,27 @@ Split into **3a (the extension core)**, **3b (auth + middleware wiring)**, **3c 
 - Carefully, one module at a time, each covered by the leakage suite.
 
 ## Phase 4 — Per-tenant roles (retire global `User.role`)
-- `requireProjectAccess` / `requireProjectGovernance` / all role checks read the **membership role
-  from tenant context**, not `User.role`.
-- Token carries the active tenant's role. Admin UI: manage members per tenant (invite, set role,
-  remove). `/users/directory` returns only the active tenant's members.
-- Contract step: drop `User.role` once no reader remains.
+
+### Phase 4a — role from the active membership ✅ DONE (2026-07-30)
+- `issueTokenPair` embeds the EFFECTIVE role: the active tenant's `Membership.role` under
+  enforcement, else the global `User.role` (single-tenant behaviour unchanged). `switch-tenant`
+  therefore also switches role.
+- `requireAuth` resolves the role FRESH from the membership for the active tenant (not trusted from
+  the token — so a token can't escalate) when enforcement is on; a token whose membership was revoked
+  is rejected. `/auth/me` reports this effective role. All existing `requireRole` /
+  `requireProjectAccess` checks now read the per-tenant role via `req.user.role` with no change.
+- **Verified:** `tenancy-http.itest.ts` — same user is ADMIN in tenant A / VIEWER in tenant B
+  (tokens forged as ADMIN in both, yet `/admin/audit` gives 200 in A, 403 in B; `/auth/me` reports
+  the right role each). Full suite flag OFF: **251 pass**; build green.
+
+### Phase 4b — tenant-scoped directory + member management — NEXT
+- `/users/directory` (and user lists) return only the active tenant's members (`User` is global, so
+  this must filter by `memberships.some({ tenantId })` — otherwise pickers leak users across tenants
+  once multiple real tenants exist).
+- Admin endpoints/UI to manage members per tenant: invite, set membership role, remove.
+
+### Phase 4c — contract: drop `User.role`
+- Once no reader remains (all role checks use the membership), remove `User.role`.
 
 ## Phase 5 — Cross-cutting & platform
 - **Per-tenant sequences:** `PRJ-YYYY-####`, `PRC-###`, etc. scoped by tenant.
