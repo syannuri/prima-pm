@@ -69,7 +69,6 @@ export async function seedGuestOrg(label: string): Promise<OrgFixture> {
         name: `Org ${label} project`,
         status: 'IN_PROGRESS',
         deliveryApproach: 'PREDICTIVE',
-        personalOwnerId: user.id,
         pmUserId: user.id,
       },
     });

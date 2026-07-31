@@ -8,7 +8,7 @@ import { runWeeklyAutoCaptureIfDue } from '../evm/evm.portfolio.js';
 let pmId = '';
 let seq = 0;
 
-async function project(opts: { status?: 'DRAFT' | 'IN_PROGRESS'; archived?: boolean; personal?: boolean } = {}) {
+async function project(opts: { status?: 'DRAFT' | 'IN_PROGRESS'; archived?: boolean } = {}) {
   seq += 1;
   return prisma.project.create({
     data: {
@@ -18,7 +18,6 @@ async function project(opts: { status?: 'DRAFT' | 'IN_PROGRESS'; archived?: bool
       deliveryApproach: 'PREDICTIVE',
       pmUserId: pmId,
       archivedAt: opts.archived ? new Date() : null,
-      personalOwnerId: opts.personal ? pmId : null,
     },
   });
 }

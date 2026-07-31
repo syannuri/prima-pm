@@ -372,10 +372,9 @@ model Project {
   mandaysPerPoint Decimal @default(1) @db.Decimal(6, 2)
   pmUserId  String?
   pm        User?         @relation("ProjectManager", fields: [pmUserId], references: [id])
-  // When set, this is a personal (guest) project owned by that user. Only the owner can see
-  // or manage it (full sandbox); the corporate portfolio excludes personalOwnerId != null.
-  // The owner self-governs it with no approval matrix. NULL = a normal corporate project.
-  personalOwnerId String?
+  // (A guest's project is a PERSONAL sandbox — self-governed with no approval matrix. This is now
+  // driven entirely by the guest's PERSONAL TENANT, not a per-project flag. The old
+  // `personalOwnerId` column was dropped in Phase 5 / de-scatter.)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   deletedAt DateTime?
@@ -437,9 +436,6 @@ model Project {
 
   @@index([status])
   @@index([pmUserId])
-  // Guest-sandbox scoping filters on personalOwnerId in nearly every list/aggregate query
-  // (portfolio, notifications, resource capacity, EVM trend, audit) — index the hot filter.
-  @@index([personalOwnerId])
   @@index([tenantId])
   @@unique([tenantId, code])
 }
@@ -617,15 +613,11 @@ model RateCard {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  // When set, this rate card is PRIVATE to a guest's personal workspace (their user id).
-  // NULL = a corporate rate card. Uniqueness of (roleName, level) is enforced per-owner in
-  // the service (a guest may reuse a role/level name that corporate also uses).
-  personalOwnerId String?
-
+  // (A guest's rate cards are PRIVATE to their personal tenant; uniqueness of (roleName, level) is
+  // enforced per-tenant in the service. The old `personalOwnerId` column was dropped in de-scatter.)
   directCosts CostItemDirect[]
   resources   Resource[]
 
-  @@index([personalOwnerId])
   @@index([tenantId])
 }
 
@@ -660,11 +652,8 @@ model Resource {
 
   department String?
 
-  // When set, this resource is PRIVATE to a guest's personal workspace (their user id).
-  // NULL = a corporate resource. A guest only ever sees/manages their own; corporate roles
-  // never see a guest's; and a resource may only be linked to a project with the same owner.
-  personalOwnerId String?
-
+  // (A guest's resources are PRIVATE to their personal tenant; the old `personalOwnerId` column was
+  // dropped in de-scatter — tenant scoping isolates them.)
   // Optional link to a system account (for resources who also log in).
   userId String?
   user   User?   @relation("ResourceUser", fields: [userId], references: [id])
@@ -677,7 +666,6 @@ model Resource {
   updatedAt DateTime @updatedAt
 
   @@index([isActive])
-  @@index([personalOwnerId])
   @@index([tenantId])
 }
 

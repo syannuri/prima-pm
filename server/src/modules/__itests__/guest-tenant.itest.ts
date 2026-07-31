@@ -3,8 +3,8 @@ import request from 'supertest';
 import { createApp } from '../../app.js';
 import { prisma } from '../../lib/prisma.js';
 import { signAccessToken, verifyAccessToken } from '../../lib/jwt.js';
-import { runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
-import { backfillDefaultTenant, backfillGuestTenants } from '../../lib/tenant/backfill.js';
+import { runAsSystem } from '../../lib/tenant/context.js';
+import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
 import { __resetSettingsCache } from '../../modules/settings/settings.service.js';
 
@@ -33,67 +33,6 @@ afterAll(async () => {
   if (prevFlag === undefined) delete process.env.MULTITENANCY_ENFORCE;
   else process.env.MULTITENANCY_ENFORCE = prevFlag;
   __resetSettingsCache();
-});
-
-describe('backfill: an existing guest sandbox moves into a personal tenant', () => {
-  it('moves the guest membership + project + child risk out of the default tenant, leaving corporate untouched', async () => {
-    // A guest who registered under the OLD flow: GUEST membership in the DEFAULT tenant, with a
-    // personal project (+ child risk) stamped to the default tenant.
-    const guest = await runAsSystem(() => prisma.user.create({ data: { name: 'Legacy Guest', email: 'legacy-guest@gt.test', role: 'GUEST', isActive: true } }));
-    await runAsSystem(() => prisma.membership.create({ data: { userId: guest.id, tenantId: defaultTenantId, role: 'GUEST' } }));
-    const gProject = await runWithTenant(defaultTenantId, () => prisma.project.create({ data: { code: 'PRJ-GT-0001', name: 'Guest sandbox', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', personalOwnerId: guest.id, pmUserId: guest.id } }));
-    const gRisk = await runWithTenant(defaultTenantId, () => prisma.risk.create({ data: { projectId: gProject.id, code: 'R-GT-01', title: 'sandbox risk', probabilityScore: 3, impactScore: 3, riskScore: 9, severity: 'MEDIUM', probabilityPct: '0.5000', impactCostIdr: '1000000.00', emv: '500000.00' } }));
-
-    // A corporate project in the default tenant that must NOT move (admin needs a default-tenant
-    // membership — under enforcement requireAuth resolves the role from it).
-    const cAdmin = await runAsSystem(() => prisma.user.create({ data: { name: 'Corp Admin', email: 'corp-admin@gt.test', role: 'ADMIN', isActive: true } }));
-    await runAsSystem(() => prisma.membership.create({ data: { userId: cAdmin.id, tenantId: defaultTenantId, role: 'ADMIN' } }));
-    const cProject = await runWithTenant(defaultTenantId, () => prisma.project.create({ data: { code: 'PRJ-GT-CORP', name: 'Corp project', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: cAdmin.id } }));
-
-    const res = await backfillGuestTenants(prisma);
-    expect(res.guests).toBe(1);
-    expect(res.movedProjects).toBe(1);
-
-    // A personal tenant now exists and everything guest-owned points at it.
-    const personal = await runAsSystem(() => prisma.tenant.findUnique({ where: { slug: `guest-${guest.id}` } }));
-    expect(personal?.isPersonal).toBe(true);
-    expect(personal!.id).not.toBe(defaultTenantId);
-
-    const [mem, movedProject, movedRisk, corp] = await runAsSystem(() => Promise.all([
-      prisma.membership.findFirst({ where: { userId: guest.id } }),
-      prisma.project.findUnique({ where: { id: gProject.id } }),
-      prisma.risk.findUnique({ where: { id: gRisk.id } }),
-      prisma.project.findUnique({ where: { id: cProject.id } }),
-    ]));
-    expect(mem?.tenantId).toBe(personal!.id);      // membership moved
-    expect(movedProject?.tenantId).toBe(personal!.id); // root moved
-    expect(movedRisk?.tenantId).toBe(personal!.id);    // child followed its parent
-    expect(corp?.tenantId).toBe(defaultTenantId);      // corporate untouched
-  });
-
-  it('is idempotent — a second run moves nothing', async () => {
-    const again = await backfillGuestTenants(prisma);
-    expect(again.movedProjects).toBe(0);
-  });
-
-  it('after backfill the guest (tid=personal) sees their project and the corporate admin (tid=default) does not', async () => {
-    const guest = await runAsSystem(() => prisma.user.findUniqueOrThrow({ where: { email: 'legacy-guest@gt.test' } }));
-    const admin = await runAsSystem(() => prisma.user.findUniqueOrThrow({ where: { email: 'corp-admin@gt.test' } }));
-    const personal = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: `guest-${guest.id}` } }));
-
-    const guestToken = signAccessToken({ sub: guest.id, role: 'GUEST', email: guest.email, tv: 0, tid: personal.id });
-    const adminToken = signAccessToken({ sub: admin.id, role: 'ADMIN', email: admin.email, tv: 0, tid: defaultTenantId });
-
-    const guestList = await request(app).get(api('/projects')).set(bearer(guestToken));
-    expect(guestList.status).toBe(200);
-    const guestCodes = (guestList.body.projects ?? guestList.body ?? []).map((p: { code: string }) => p.code);
-    expect(guestCodes).toContain('PRJ-GT-0001');
-
-    const adminList = await request(app).get(api('/projects')).set(bearer(adminToken));
-    const adminCodes = (adminList.body.projects ?? adminList.body ?? []).map((p: { code: string }) => p.code);
-    expect(adminCodes).toContain('PRJ-GT-CORP');
-    expect(adminCodes).not.toContain('PRJ-GT-0001'); // the guest sandbox is invisible to corporate
-  });
 });
 
 describe('new guest registration provisions a personal tenant', () => {

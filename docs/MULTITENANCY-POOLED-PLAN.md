@@ -284,10 +284,17 @@ non-global corporate role still sees `pmUserId = self`).
   helper) + the schema field remain. Full suite 245 green (serial — the parallel run has a pre-existing
   shared-DB/global-flag concurrency flake). Reversible (git-revert; the column data is intact and
   reconstructable from tenant slugs).
-- **Contract — part 2b-drop (the irreversible finale, next):** once BOTH prods run 2b-code (no running
-  instance references the column), drop the `personalOwnerId` column (migration) and remove
-  `backfillGuestTenants` + its personalOwnerId reads. `personalOwnerId` data isn't truly lost — each
-  personal tenant's slug is `guest-<userId>`, so the owner is recoverable.
+- **Contract — part 2b-drop ✅ DONE (2026-07-31):** dropped the `personalOwnerId` column from
+  Project/RateCard/Resource (migration `20260731130000_drop_personal_owner_id` — drops the 3 hot
+  indexes + the columns) and removed the schema field + the one-time `backfillGuestTenants` helper (its
+  migration already ran everywhere). **`personalOwnerId` is fully retired.** Guest sandboxes are
+  isolated + self-governed entirely by their PERSONAL TENANT now. Full suite 242 green.
+  Recoverability: the owner is still derivable — a project's former owner = the userId in its personal
+  tenant's slug `guest-<userId>`.
+
+**🎉 The 3d de-scatter contract is COMPLETE** (rbac pt1 → service pt2a → app reads/writes pt2b-code →
+column drop pt2b-drop). The only remaining `personalOwnerId` mentions in the tree are historical
+migration SQL files (already applied — never recompiled) and a couple of doc/comment references.
 
 > **⚠️ ORDERING CORRECTION (2026-07-31).** 3d as originally written was UNSAFE: the extension does
 > NOT supersede `personalOwnerId` while all guests share the `default` tenant — it isolates *tenants*,
