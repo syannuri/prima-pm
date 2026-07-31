@@ -373,8 +373,22 @@ The tenant-native replacement for `personalOwnerId`, and the unblocker for 3d.
   last-mile spots (effectiveRole fallback, adminAudit actor-role display, `backfillDefaultTenant`, the
   last-admin off-fallback).
 
-**4c-drop (later, irreversible):** convert those 4 last-mile readers, stop writing `User.role`, drop
-the column. Deferred so 4c-code soaks (same expand→contract discipline as the personalOwnerId retire).
+**4c-drop — DEFERRED indefinitely (deliberate decision, 2026-07-31).** Investigation showed the
+column DROP is high-churn + irreversible for a now-harmless column, and its cost/benefit doesn't
+justify it:
+- `User.role` is now a **benign, dual-written vestigial column**, kept in sync with `Membership.role`.
+  4c-code already captured the value (the `isGuest` split + the cross-tenant admin-notification fix).
+- The drop is uniquely risky to deploy: `requireAuth` + ~10 other full-row `User` fetches SELECT
+  `role` on essentially every request, so removing it couples to the schema; on the VPS,
+  `update-prod.sh` migrates-then-restarts → a window where the old process selects a dropped column →
+  **every request 500s** until restart.
+- It forces a non-trivial test refactor: with `User.role` gone, `requireAuth` off-mode + the
+  `tenantMember*` helpers can't fall back to it, so every test seeding an admin via `User.role`
+  without a membership (activation/CR notifications, last-admin guard, `backfillDefaultTenant`, audit
+  display) needs memberships wired in.
+
+So `User.role` stays as a harmless vestigial column. Revisit only if there's a concrete reason (e.g.
+a big schema cleanup); it is safe to leave indefinitely.
 
 ## Phase 5 — Cross-cutting & platform
 - **Per-tenant sequences:** `PRJ-YYYY-####`, `PRC-###`, etc. scoped by tenant.
