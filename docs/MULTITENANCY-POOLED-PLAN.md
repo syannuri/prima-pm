@@ -241,7 +241,7 @@ route that touches a scoped model must wrap the read in `runAsSystem`.** Guarded
 > for 3d** and was pulled forward. Only once every guest is their own tenant do those filters become
 > dead code that 3d can delete (then drop the column).
 
-### Phase 5 (pulled forward) — guests become personal tenants ✅ DONE (2026-07-31), enforcement pending deploy
+### Phase 5 (pulled forward) — guests become personal tenants ✅ DONE (2026-07-31); LAN prod live, VPS pending
 The tenant-native replacement for `personalOwnerId`, and the unblocker for 3d.
 - **Schema:** `Tenant.isPersonal Boolean @default(false)` marks a single-guest sandbox tenant.
 - **New guests:** `provisionPersonalTenant(user)` (auth.service) creates a `Tenant(slug='guest-<userId>',
