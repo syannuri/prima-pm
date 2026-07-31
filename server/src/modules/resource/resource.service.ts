@@ -14,12 +14,8 @@ export interface CapacityQuery {
 // Portfolio-wide manpower allocation vs. capacity, scoped to the caller's visible projects.
 export async function getResourceCapacity(userId: string, role: string, q: CapacityQuery) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
-  if (role === 'GUEST') {
-    where.personalOwnerId = userId;
-  } else {
-    where.personalOwnerId = null; // corporate capacity view excludes personal (guest) projects
-    if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
-  }
+  // Guest/corporate separation is handled by tenant scoping; only the role rule remains.
+  if (role !== 'GUEST' && !GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
 
   const projects = await prisma.project.findMany({ where, select: { id: true } });
   const projectIds = projects.map((p) => p.id);
@@ -100,7 +96,7 @@ export async function getResourceCapacity(userId: string, role: string, q: Capac
     const assigneeIds = [...new Set(agileItems.map((i) => i.assigneeUserId).filter((x): x is string => !!x))];
     const resByUser = new Map<string, { id: string; name: string; capacityPerDay: number }>();
     const resources = await prisma.resource.findMany({
-      where: { userId: { in: assigneeIds }, personalOwnerId: null },
+      where: { userId: { in: assigneeIds } }, // tenant scoping already limits to this workspace's resources
       select: { id: true, name: true, capacityPerDay: true, userId: true },
     });
     for (const r of resources) if (r.userId) resByUser.set(r.userId, { id: r.id, name: r.name, capacityPerDay: Number(r.capacityPerDay) });

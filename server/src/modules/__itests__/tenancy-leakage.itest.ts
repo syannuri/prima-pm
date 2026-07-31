@@ -6,24 +6,32 @@ import { seedGuestOrg, expectIsolated, wipeDb, type OrgFixture } from '../../tes
 // Cross-tenant leakage suite — the merge gate for the pooled-multitenancy migration
 // (see docs/MULTITENANCY-POOLED-PLAN.md, Phase 0). Two isolated orgs, and neither may see
 // nor touch the other's data.
+//
+// Post-3d: guest sandboxes are isolated by their PERSONAL TENANT (the Prisma extension), not by the
+// removed personalOwnerId filters — so this runs enforcement-ON, and it is now the extension alone
+// that must keep org A and B apart.
 const app = createApp();
 
 let a: OrgFixture;
 let b: OrgFixture;
+let prevFlag: string | undefined;
 
 beforeAll(async () => {
+  prevFlag = process.env.MULTITENANCY_ENFORCE;
+  process.env.MULTITENANCY_ENFORCE = 'true';
   await wipeDb();
   a = await seedGuestOrg('A');
   b = await seedGuestOrg('B');
 });
 
 afterAll(async () => {
+  if (prevFlag === undefined) delete process.env.MULTITENANCY_ENFORCE;
+  else process.env.MULTITENANCY_ENFORCE = prevFlag;
   await prisma.$disconnect();
 });
 
-// Guest sandboxes are the ONE isolation mechanism that exists today (personalOwnerId), so
-// these run GREEN now and guard against regressing that isolation as we migrate.
-describe('cross-tenant leakage — guest sandboxes (enforced today)', () => {
+// Two guest orgs, each its own personal tenant — the extension must keep them isolated.
+describe('cross-tenant leakage — guest sandboxes (tenant-isolated, enforced)', () => {
   it('org A cannot see or touch org B', async () => {
     await expectIsolated(app, a, b);
   });

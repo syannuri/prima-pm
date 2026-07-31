@@ -58,12 +58,9 @@ export interface PortfolioRow {
 export async function getPortfolioSummary(userId: string, role: string, statusDate: Date) {
   // Archived projects are excluded from every dashboard roll-up (KPIs, cards, alerts).
   const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null };
-  if (role === 'GUEST') {
-    where.personalOwnerId = userId;
-  } else {
-    where.personalOwnerId = null; // corporate portfolio excludes personal (guest) projects
-    if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
-  }
+  // Guest/corporate separation is handled by tenant scoping (guests are their own tenant); only the
+  // role rule remains — a non-global corporate role sees only projects they manage.
+  if (role !== 'GUEST' && !GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
 
   const projects = await prisma.project.findMany({
     where,

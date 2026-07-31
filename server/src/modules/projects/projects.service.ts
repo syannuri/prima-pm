@@ -42,14 +42,10 @@ export async function listProjects(userId: string, role: Role) {
   // Archived projects are hidden from the corporate list, sidebar and dashboard — they live only
   // in the ADMIN/PMO Project Database Archive tab (see listProjectDatabase).
   const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null };
-  if (role === 'GUEST') {
-    // Guests see ONLY their own personal projects (full sandbox).
-    where.personalOwnerId = userId;
-  } else {
-    // Corporate views never include personal (guest) projects.
-    where.personalOwnerId = null;
-    if (!GLOBAL_ROLES.includes(role)) where.pmUserId = userId;
-  }
+  // Guest-vs-corporate separation is now the tenant extension's job (guests live in their own
+  // personal tenant); the query is already scoped to the caller's tenant. All that remains here is
+  // the role rule: a non-global corporate role sees only projects they manage.
+  if (role !== 'GUEST' && !GLOBAL_ROLES.includes(role)) where.pmUserId = userId;
 
   const projects = await prisma.project.findMany({
     where,

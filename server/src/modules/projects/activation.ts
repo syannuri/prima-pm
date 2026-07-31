@@ -93,9 +93,9 @@ export async function getAwaitingActivation(role: string) {
   if (role !== 'ADMIN' && role !== 'PMO') return { items: [], count: 0 };
 
   const projects = await prisma.project.findMany({
-    // personalOwnerId: null → this corporate ADMIN/PMO queue never lists guest projects.
+    // Tenant scoping keeps this corporate ADMIN/PMO queue free of guest projects (personal tenants).
     // activationReviewStatus: null → rejected / needs-revision projects drop out until resubmitted.
-    where: { status: 'CHARTERED', deletedAt: null, personalOwnerId: null, activationReviewStatus: null },
+    where: { status: 'CHARTERED', deletedAt: null, activationReviewStatus: null },
     select: { id: true, code: true, name: true, deliveryApproach: true, baselineLockedAt: true, scheduleBaselinedAt: true, pm: { select: { name: true } } },
     orderBy: { code: 'asc' },
   });
@@ -127,12 +127,8 @@ export async function getAwaitingActivation(role: string) {
  */
 export async function getPlanningReminders(userId: string, role: string) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { in: ['DRAFT', 'CHARTERED'] } };
-  if (role === 'GUEST') {
-    where.personalOwnerId = userId; // a guest sees their own planning reminders
-  } else {
-    where.personalOwnerId = null; // corporate reminders exclude personal (guest) projects
-    if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
-  }
+  // Guest/corporate separation is handled by tenant scoping; only the role rule remains.
+  if (role !== 'GUEST' && !GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
 
   const projects = await prisma.project.findMany({
     where,

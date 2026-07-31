@@ -147,11 +147,9 @@ export interface PortfolioAlertRow {
 // Portfolio-wide alert summary for the header bell (scoped to visible projects).
 export async function getPortfolioAlerts(userId: string, role: string, now: Date) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { not: 'DRAFT' } };
-  // Corporate roles (ADMIN/PMO) see the corporate portfolio only — never a guest's personal
-  // sandbox. A PM (or a guest) sees only projects they manage (a guest's personal projects have
-  // pmUserId = self, so this scopes them to their own without leaking corporate work).
-  if (GLOBAL_ROLES.includes(role as Role)) where.personalOwnerId = null;
-  else where.pmUserId = userId;
+  // Guest sandboxes are kept out of corporate feeds by tenant scoping (guests are their own tenant);
+  // only the role rule remains — a non-global role (PM/guest) sees only projects they manage.
+  if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
 
   const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
 
@@ -234,11 +232,10 @@ export async function getRecentChanges(userId: string, role: string, limit = 25)
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { changesSeenAt: true } });
   const seenAt = me?.changesSeenAt?.getTime() ?? 0;
 
-  // Corporate-only feed: never surface a guest's personal-project activity to ADMIN/PMO.
-  const personalIds = (await prisma.project.findMany({ where: { personalOwnerId: { not: null } }, select: { id: true } })).map((p) => p.id);
-
+  // Tenant scoping keeps a guest's personal-project activity out of the corporate feed (AuditLog is
+  // tenant-scoped, and guests live in their own tenant).
   const rows = await prisma.auditLog.findMany({
-    where: { entity: { in: CHANGE_ENTITIES }, action: { in: ['CREATE', 'UPDATE', 'DELETE'] }, projectId: { not: null, notIn: personalIds } },
+    where: { entity: { in: CHANGE_ENTITIES }, action: { in: ['CREATE', 'UPDATE', 'DELETE'] }, projectId: { not: null } },
     orderBy: { createdAt: 'desc' },
     take: Math.min(limit, 100),
     include: { user: { select: { name: true, role: true } } },
@@ -287,9 +284,9 @@ export interface AttentionItem {
 
 export async function getAttentionItems(userId: string, role: string, now: Date) {
   const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { not: 'DRAFT' } };
-  // Corporate feed excludes guest sandboxes; a PM/guest sees only projects they manage.
-  if (GLOBAL_ROLES.includes(role as Role)) where.personalOwnerId = null;
-  else where.pmUserId = userId;
+  // Guest sandboxes are kept out by tenant scoping; only the role rule remains — a non-global role
+  // (PM/guest) sees only projects they manage.
+  if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
   const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
 
   // Alert inputs for ALL managed projects in one batch (5 bulk queries), derived in memory.

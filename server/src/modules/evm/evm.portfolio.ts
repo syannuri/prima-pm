@@ -16,12 +16,8 @@ const num = (d: unknown): number => (d == null ? 0 : Number(d));
 function scopeWhere(userId: string, role: string, global: Role[]): Prisma.ProjectWhereInput {
   // Archived projects are excluded from portfolio aggregates (same rule as listProjects / summary).
   const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null };
-  if (role === 'GUEST') {
-    where.personalOwnerId = userId; // guests: only their own personal projects
-  } else {
-    where.personalOwnerId = null; // corporate aggregates never include personal (guest) projects
-    if (!global.includes(role as Role)) where.pmUserId = userId;
-  }
+  // Guest/corporate separation is handled by tenant scoping; only the role rule remains.
+  if (role !== 'GUEST' && !global.includes(role as Role)) where.pmUserId = userId;
   return where;
 }
 
@@ -78,8 +74,10 @@ function dayUTC(d: Date): Date {
 }
 
 export async function autoCaptureWeekly(statusDate: Date) {
+  // Runs per corporate tenant inside the cron fan-out (which skips personal tenants), so tenant
+  // scoping already excludes guest projects — no personalOwnerId filter needed.
   const projects = await prisma.project.findMany({
-    where: { deletedAt: null, archivedAt: null, personalOwnerId: null, status: { not: 'DRAFT' } },
+    where: { deletedAt: null, archivedAt: null, status: { not: 'DRAFT' } },
     select: { id: true },
   });
   const results = await Promise.allSettled(

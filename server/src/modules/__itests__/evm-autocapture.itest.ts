@@ -64,16 +64,18 @@ describe('Weekly EVM auto-capture', () => {
     expect(await prisma.evmSnapshot.count()).toBe(0);
   });
 
-  it('captures every non-DRAFT corporate project on the configured weekday, with a system actor + marker note', async () => {
+  it('captures every non-DRAFT project on the configured weekday, with a system actor + marker note', async () => {
     const live = await project({ status: 'IN_PROGRESS' });
     await project({ status: 'DRAFT' });            // excluded (no baseline/EVM)
     await project({ archived: true });             // excluded (archived)
-    await project({ personal: true });             // excluded (personal/guest sandbox)
+    // Guest sandboxes are excluded at the TENANT fan-out (runWeeklyAutoCaptureIfDueAllTenants skips
+    // isPersonal tenants — see tenant-cron.itest), not here: this per-tenant pass captures all its
+    // non-DRAFT/non-archived projects.
     await setSettings(true, MONDAY.getUTCDay());
 
     const r = await runWeeklyAutoCaptureIfDue(MONDAY);
     expect(r.ran).toBe(true);
-    if (r.ran) expect(r.total).toBe(1); // only the one live corporate project
+    if (r.ran) expect(r.total).toBe(1); // only the one live project (DRAFT + archived excluded)
 
     const snaps = await prisma.evmSnapshot.findMany();
     expect(snaps).toHaveLength(1);

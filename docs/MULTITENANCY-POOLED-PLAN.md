@@ -230,8 +230,30 @@ route that touches a scoped model must wrap the read in `runAsSystem`.** Guarded
   change-password / switch-tenant / user-admin) were already stamped via `requireAuth`'s context.
   No-op when enforcement is off. Guarded by `tenancy-http.itest.ts`.
 
-### Phase 3d — remove ad-hoc `personalOwnerId` filters the extension now supersedes
-- Carefully, one module at a time, each covered by the leakage suite.
+### Phase 3d — remove ad-hoc `personalOwnerId` LIST/AGGREGATE filters ✅ DONE (2026-07-31)
+Now that every guest is their own tenant (Phase 5 guests, above), the tenant extension supersedes the
+guest/corporate `personalOwnerId` split. Removed the **read filters** (`where.personalOwnerId = userId`
+for guests / `= null` for corporate) across: `projects.service` (listProjects), `portfolio.service`,
+`evm.portfolio` (scopeWhere + autoCaptureWeekly), `resource.service` (capacity + agile assignees),
+`timesheet.service`, `projects/closure` + `projects/activation` queues + planning reminders,
+`notification.service` (portfolio alerts, attention, change feed). Only the role rule stays (a
+non-global corporate role still sees `pmUserId = self`).
+- **KEPT this pass (deliberately):** the `personalOwnerId` **column + writes** (project/resource/
+  ratecard creation), the **rbac.ts direct-access checks** (belt-and-suspenders 403 on a personal
+  project), the resource/ratecard/cost/schedule **workspace validators**, the cascade-delete, and the
+  admin-audit personal/corporate **scope label**. These are not leakage list-filters; they're removed
+  in a later cleanup before the column drop.
+- **⚠️ Kill-switch note:** removing the list filters means guest LIST isolation now depends on
+  `MULTITENANCY_ENFORCE=on`. Flag-OFF is now "single-tenant, NO guest sandboxes" (corporate + guest
+  lists merge). This is code-only + **reversible** (git-revert restores the filters; the column/data
+  are intact), but the kill-switch no longer preserves guest isolation. Both prods run enforce-ON.
+- **Tests:** the leakage suite (`tenancy-leakage.itest`) + `seedGuestOrg` now run **enforcement-ON**
+  with real personal tenants, so the extension ALONE isolates org A/B. The `rbac.itest` guest-workspace
+  suite (flag-off) dropped its list/feed *separation* assertions (now proven under enforcement in the
+  tenancy suites) and keeps guest self-service + rbac direct-access 403s. Cron: `tenant-cron.itest`
+  gains a personal-tenant-skip case. Full integration suite green.
+- **Remaining contract (later):** drop `personalOwnerId` writes + rbac checks + validators, then drop
+  the column (a final migration).
 
 > **⚠️ ORDERING CORRECTION (2026-07-31).** 3d as originally written was UNSAFE: the extension does
 > NOT supersede `personalOwnerId` while all guests share the `default` tenant — it isolates *tenants*,

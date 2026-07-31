@@ -117,9 +117,9 @@ export async function deleteMandayEntry(projectId: string, entryId: string, acto
 // or via the resource master (resource.userId). Excludes soft-deleted projects.
 const mineWhere = (userId: string): Prisma.CostItemDirectWhereInput => ({
   type: 'MANPOWER',
-  // My Timesheet is a corporate-member feature — personal (guest) projects must never surface in
-  // anyone's timesheet (defence in depth: guest lines never link a login account anyway).
-  project: { deletedAt: null, personalOwnerId: null },
+  // Tenant scoping keeps guest sandboxes out of a corporate member's timesheet (CostItemDirect is
+  // tenant-scoped); guest lines never link a login account anyway.
+  project: { deletedAt: null },
   OR: [{ resourceUserId: userId }, { resourceRef: { userId } }],
 });
 

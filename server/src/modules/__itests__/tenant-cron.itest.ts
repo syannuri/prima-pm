@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '../../lib/prisma.js';
-import { runWithTenant } from '../../lib/tenant/context.js';
+import { runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
 import { runWeeklyAutoCaptureIfDueAllTenants } from '../../modules/evm/evm.portfolio.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
 
@@ -46,5 +46,23 @@ describe('weekly auto-capture under enforcement', () => {
     // lastRunAt was stamped on A's settings (scoped read).
     const a = await runWithTenant(tenantA, () => prisma.appSetting.findUnique({ where: { id: 'singleton' } }));
     expect(a?.evmAutoCaptureLastRunAt).toBeTruthy();
+  });
+
+  it('skips PERSONAL (guest sandbox) tenants — they never run corporate auto-capture', async () => {
+    // Clear tenant A's settings from the previous test so the ONE AppSetting singleton (its id is a
+    // global PK) can belong to the personal tenant here. A personal tenant with auto-capture enabled
+    // + due must STILL be ignored by the fan-out (isPersonal=true), so its lastRunAt stays null.
+    await runAsSystem(() => prisma.appSetting.deleteMany({}));
+    const personal = await prisma.tenant.create({ data: { slug: 'cron-personal', name: 'Guest (personal)', isPersonal: true } });
+    const now = new Date();
+    await runWithTenant(personal.id, () =>
+      prisma.appSetting.create({ data: { id: 'singleton', evmAutoCaptureEnabled: true, evmAutoCaptureWeekday: now.getUTCDay() } }),
+    );
+
+    await runWeeklyAutoCaptureIfDueAllTenants(now);
+
+    // The fan-out never touched the personal tenant, so its settings were never read/stamped.
+    const p = await runWithTenant(personal.id, () => prisma.appSetting.findUnique({ where: { id: 'singleton' } }));
+    expect(p?.evmAutoCaptureLastRunAt).toBeNull();
   });
 });

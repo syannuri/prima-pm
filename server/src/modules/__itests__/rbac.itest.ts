@@ -1545,6 +1545,11 @@ describe('requirements traceability (RTM: register + WBS links + coverage)', () 
   });
 });
 
+// This suite runs flag-OFF and covers guest SELF-SERVICE + rbac ACCESS-CONTROL (direct-access 403s,
+// self-governance, module writes, owner-scoped resource/ratecard) — all still valid without tenant
+// enforcement. Cross-tenant LIST/FEED/aggregate ISOLATION moved from personalOwnerId filters to the
+// tenant extension in Phase 3d, so it is proven under enforcement in the tenancy suites
+// (tenancy-leakage / guest-tenant / tenancy-http), not here.
 describe('guest workspace (self-signup + personal-project sandbox + self-governance)', () => {
   let guestToken = '';
   let guestId = '';
@@ -1582,16 +1587,13 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
     expect(res.body.project.pmUserId).toBe(guestId);
   });
 
-  it('the personal project is invisible to corporate users (list + direct 403, even ADMIN)', async () => {
-    const list = await request(app).get(api('/projects')).set(auth(tokens.ADMIN));
-    expect(list.body.projects.find((p: { id: string }) => p.id === personalProjectId)).toBeUndefined();
+  it('a corporate user (even ADMIN) is denied DIRECT access to a guest personal project (403)', async () => {
+    // List invisibility is now enforced by tenant scoping (see the tenancy suites); the rbac
+    // owner-check still blocks direct access regardless of enforcement.
     expect((await request(app).get(api(`/projects/${personalProjectId}`)).set(auth(tokens.ADMIN))).status).toBe(403);
   });
 
-  it('a guest sees only their own projects and cannot reach corporate ones', async () => {
-    const list = await request(app).get(api('/projects')).set(auth(guestToken));
-    expect(list.body.projects.every((p: { id: string }) => p.id === personalProjectId)).toBe(true);
-    expect(list.body.projects.some((p: { id: string }) => p.id === corpProjectId)).toBe(false);
+  it('a guest is denied DIRECT access to a corporate project (403)', async () => {
     expect((await request(app).get(api(`/projects/${corpProjectId}`)).set(auth(guestToken))).status).toBe(403);
   });
 
@@ -1761,14 +1763,10 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
   });
 
   describe('security-audit fixes: guest activity never leaks into corporate feeds', () => {
-    it('a guest’s personal-project activity stays out of the ADMIN change/attention/bell feeds', async () => {
-      const changes = await request(app).get(api('/notifications/changes')).set(auth(tokens.ADMIN));
-      expect(changes.status).toBe(200);
-      expect(changes.body.changes.every((c: { projectId: string }) => c.projectId !== personalProjectId)).toBe(true);
-      expect(JSON.stringify((await request(app).get(api('/notifications/attention')).set(auth(tokens.ADMIN))).body)).not.toContain(personalProjectId);
-      expect(JSON.stringify((await request(app).get(api('/notifications')).set(auth(tokens.ADMIN))).body)).not.toContain(personalProjectId);
-    });
-
+    // NOTE: the change/attention/bell feed exclusion of guest activity is now provided by tenant
+    // scoping (AuditLog + Project are tenant-scoped; guests live in their own tenant), enforced &
+    // proven in the tenancy suites. The flag-off assertion that used the removed personalOwnerId
+    // filter no longer holds here, so it moved there.
     it('a guest cannot inject a corporate user id onto a personal-project manpower line (resourceUserId nulled)', async () => {
       const line = await request(app).post(api(`/projects/${personalProjectId}/cost/direct`)).set(auth(guestToken))
         .send({ type: 'MANPOWER', resourceUserId: ownerId, planMandays: 3, personnelRole: 'PROJECT_PERSONNEL', unitCostPerManday: 1_000_000, label: 'Freelance work' });
@@ -1783,10 +1781,11 @@ describe('guest workspace (self-signup + personal-project sandbox + self-governa
   });
 
   describe('guest report hub (scoped to personal projects)', () => {
-    it('a guest reads the scoped portfolio summary + exports + their own project report, never corporate', async () => {
+    it('a guest reads the portfolio summary + exports + their own project report, and is denied a corporate one', async () => {
+      // Summary/list scoping is now tenant-enforced (see the tenancy suites); here we assert the
+      // guest can reach their own reporting surfaces and is blocked from a corporate project report.
       const sum = await request(app).get(api('/portfolio/summary')).set(auth(guestToken));
       expect(sum.status).toBe(200);
-      expect(sum.body.projects.some((p: { id: string }) => p.id === corpProjectId)).toBe(false); // no corporate leak
       // the portfolio PDF/Excel exports work for a guest (scoped to their projects)
       expect((await request(app).get(api('/portfolio/export/pdf')).set(auth(guestToken))).status).toBe(200);
       expect((await request(app).get(api('/portfolio/export/excel')).set(auth(guestToken))).status).toBe(200);

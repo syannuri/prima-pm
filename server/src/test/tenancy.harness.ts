@@ -18,6 +18,7 @@ import type { Express } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { hashPassword } from '../lib/password.js';
 import { signAccessToken } from '../lib/jwt.js';
+import { runWithTenant } from '../lib/tenant/context.js';
 
 const PW = 'Tenancy-Harness-1';
 export const apiPath = (path: string) => `/api/v1${path}`;
@@ -43,7 +44,11 @@ export async function wipeDb(): Promise<void> {
   }
 }
 
-// Seed one isolated org: a guest user + a personal project + one Risk in that project.
+// Seed one isolated org: a guest with their OWN personal tenant (the tenant-native sandbox that
+// replaced personalOwnerId) + a project + one Risk, all stamped to that tenant. The token pins `tid`
+// to the personal tenant, so under enforcement the Prisma extension is what isolates one org from
+// the other. (personalOwnerId is still SET on the project — it's kept until the column drop — but it
+// is no longer what filters; the leakage suite runs enforcement-ON to prove tenant scoping isolates.)
 export async function seedGuestOrg(label: string): Promise<OrgFixture> {
   const user = await prisma.user.create({
     data: {
@@ -54,36 +59,42 @@ export async function seedGuestOrg(label: string): Promise<OrgFixture> {
       isActive: true,
     },
   });
-  const project = await prisma.project.create({
-    data: {
-      code: `PRJ-T${label}-0001`,
-      name: `Org ${label} project`,
-      status: 'IN_PROGRESS',
-      deliveryApproach: 'PREDICTIVE',
-      // A guest project is sandboxed by personalOwnerId — the sole isolation mechanism today.
-      personalOwnerId: user.id,
-      pmUserId: user.id,
-    },
+  const tenant = await prisma.tenant.create({ data: { slug: `guest-${user.id}`, name: `Org ${label} (personal)`, isPersonal: true } });
+  await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, role: 'GUEST' } });
+
+  const { project, risk } = await runWithTenant(tenant.id, async () => {
+    const project = await prisma.project.create({
+      data: {
+        code: `PRJ-T${label}-0001`,
+        name: `Org ${label} project`,
+        status: 'IN_PROGRESS',
+        deliveryApproach: 'PREDICTIVE',
+        personalOwnerId: user.id,
+        pmUserId: user.id,
+      },
+    });
+    const risk = await prisma.risk.create({
+      data: {
+        projectId: project.id,
+        code: `R-${label}-01`,
+        title: `Org ${label} secret risk`,
+        probabilityScore: 3,
+        impactScore: 3,
+        riskScore: 9,
+        severity: 'MEDIUM',
+        probabilityPct: '0.5000',
+        impactCostIdr: '1000000.00',
+        emv: '500000.00',
+      },
+    });
+    return { project, risk };
   });
-  const risk = await prisma.risk.create({
-    data: {
-      projectId: project.id,
-      code: `R-${label}-01`,
-      title: `Org ${label} secret risk`,
-      probabilityScore: 3,
-      impactScore: 3,
-      riskScore: 9,
-      severity: 'MEDIUM',
-      probabilityPct: '0.5000',
-      impactCostIdr: '1000000.00',
-      emv: '500000.00',
-    },
-  });
+  const token = signAccessToken({ sub: user.id, role: 'GUEST', email: user.email, tv: 0, tid: tenant.id });
   return {
     label,
     userId: user.id,
-    token: signAccessToken({ sub: user.id, role: 'GUEST', email: user.email }),
-    auth: { Authorization: `Bearer ${signAccessToken({ sub: user.id, role: 'GUEST', email: user.email })}` },
+    token,
+    auth: { Authorization: `Bearer ${token}` },
     projectId: project.id,
     riskId: risk.id,
   };
