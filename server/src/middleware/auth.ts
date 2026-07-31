@@ -16,6 +16,8 @@ export interface AuthUser {
   // project's `personalOwnerId`: in a personal tenant the sole member self-governs their own projects
   // (rbac). Resolved fresh from the membership's tenant below, only under enforcement.
   tenantIsPersonal?: boolean;
+  // True when a platform super-admin is IMPERSONATING inside this tenant (not a real member).
+  impersonating?: boolean;
 }
 
 declare global {
@@ -51,7 +53,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, email: true, isActive: true, tokenVersion: true },
+      select: { id: true, role: true, email: true, isActive: true, tokenVersion: true, isPlatformAdmin: true },
     });
     if (!user || !user.isActive) throw Unauthorized('Session is no longer valid');
     if ((payload.tv ?? 0) !== user.tokenVersion) throw Unauthorized('Session has been revoked');
@@ -62,7 +64,17 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     // rejected. With enforcement off, the global role stands (single-tenant behaviour unchanged).
     let role = user.role;
     let tenantIsPersonal = false;
-    if (multitenancyEnforced() && payload.tid) {
+    let impersonating = false;
+    if (multitenancyEnforced() && payload.imp && payload.tid) {
+      // IMPERSONATION: a platform super-admin acting inside a tenant they need not be a member of.
+      // Re-verify the caller is STILL a platform admin (a revoked flag ends impersonation at once);
+      // the role + tenant come from the gated-minted token. Corporate tenants only.
+      if (!user.isPlatformAdmin) throw Forbidden('Impersonation requires platform admin');
+      const tenant = await prisma.tenant.findUnique({ where: { id: payload.tid }, select: { isPersonal: true } });
+      if (!tenant || tenant.isPersonal) throw Forbidden('Cannot impersonate this workspace');
+      role = payload.role;
+      impersonating = true;
+    } else if (multitenancyEnforced() && payload.tid) {
       const membership = await prisma.membership.findUnique({
         where: { userId_tenantId: { userId: user.id, tenantId: payload.tid } },
         select: { role: true, tenant: { select: { isPersonal: true, status: true } } },
@@ -74,7 +86,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       tenantIsPersonal = membership.tenant.isPersonal;
     }
 
-    req.user = { id: user.id, role, email: user.email, tid: payload.tid, tenantIsPersonal };
+    req.user = { id: user.id, role, email: user.email, tid: payload.tid, tenantIsPersonal, impersonating };
 
     // Establish the request-scoped tenant context so the Prisma extension scopes every query.
     if (multitenancyEnforced()) {

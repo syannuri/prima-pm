@@ -13,6 +13,7 @@ import ChatStream from './ChatStream';
 import AvatarMenu from './AvatarMenu';
 import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
+import ImpersonationBanner from './ImpersonationBanner';
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -166,6 +167,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="ml-1 hidden md:block"><AvatarMenu align="right" /></div>
         </header>
 
+        <ImpersonationBanner />
         <main className="flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-6">
           <div className="mx-auto max-w-7xl"><PageTransition>{children}</PageTransition></div>
         </main>

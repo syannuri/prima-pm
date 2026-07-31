@@ -94,6 +94,46 @@ describe('provisioning a corporate tenant', () => {
   });
 });
 
+describe('impersonation', () => {
+  it('a platform admin gets a token to act as ADMIN inside a tenant they do not belong to', async () => {
+    const acme = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: 'acme' } }));
+    const platform = await runAsSystem(() => prisma.user.findUniqueOrThrow({ where: { email: 'platform@plat.test' } }));
+    // The platform admin is NOT a member of acme.
+    expect(await runAsSystem(() => prisma.membership.findUnique({ where: { userId_tenantId: { userId: platform.id, tenantId: acme.id } } }))).toBeNull();
+
+    const res = await request(app).post(api(`/admin/tenants/${acme.id}/impersonate`)).set(bearer(platformToken));
+    expect(res.status).toBe(200);
+    const impToken = res.body.accessToken as string;
+
+    // With the impersonation token they act as ADMIN scoped to acme: create a project there.
+    const proj = await request(app).post(api('/projects')).set(bearer(impToken)).send({ name: 'Impersonated project' });
+    expect(proj.status).toBe(201);
+    const created = await runAsSystem(() => prisma.project.findUniqueOrThrow({ where: { id: proj.body.project.id }, select: { tenantId: true } }));
+    expect(created.tenantId).toBe(acme.id); // stamped into acme, not the admin's own tenant
+
+    // The start was audited against the real platform admin.
+    const audit = await runAsSystem(() => prisma.auditLog.findFirst({ where: { entity: 'Tenant', entityId: acme.id, action: 'IMPERSONATE', userId: platform.id } }));
+    expect(audit).not.toBeNull();
+  });
+
+  it('a plain (non-platform) admin cannot impersonate, and a personal tenant is refused', async () => {
+    const acme = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: 'acme' } }));
+    expect((await request(app).post(api(`/admin/tenants/${acme.id}/impersonate`)).set(bearer(plainAdminToken))).status).toBe(403);
+    const personal = await runAsSystem(() => prisma.tenant.create({ data: { slug: 'imp-personal', name: 'Guest', isPersonal: true } }));
+    expect((await request(app).post(api(`/admin/tenants/${personal.id}/impersonate`)).set(bearer(platformToken))).status).toBe(400);
+  });
+
+  it('an impersonation token stops working the moment the platform flag is revoked', async () => {
+    const acme = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: 'acme' } }));
+    const platform = await runAsSystem(() => prisma.user.findUniqueOrThrow({ where: { email: 'platform@plat.test' } }));
+    const impToken = (await request(app).post(api(`/admin/tenants/${acme.id}/impersonate`)).set(bearer(platformToken))).body.accessToken;
+    expect((await request(app).get(api('/projects')).set(bearer(impToken))).status).toBe(200);
+    await runAsSystem(() => prisma.user.update({ where: { id: platform.id }, data: { isPlatformAdmin: false } }));
+    expect((await request(app).get(api('/projects')).set(bearer(impToken))).status).toBe(403);
+    await runAsSystem(() => prisma.user.update({ where: { id: platform.id }, data: { isPlatformAdmin: true } }));
+  });
+});
+
 describe('suspend / reactivate locks out members', () => {
   it('a suspended tenant blocks its members (403), the default tenant cannot be suspended, and reactivation restores access', async () => {
     const acme = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: 'acme' } }));

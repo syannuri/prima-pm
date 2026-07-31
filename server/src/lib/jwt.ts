@@ -10,6 +10,10 @@ export interface AccessTokenPayload {
   // Active tenant (pooled multitenancy, Phase 3b). The request runs scoped to this tenant.
   // Optional for backward compat + single-tenant deploys where enforcement is off.
   tid?: string;
+  // IMPERSONATION (Phase 5): a platform super-admin acting INSIDE `tid` (a tenant they need not be a
+  // member of). Minted only by the gated /admin/tenants/:id/impersonate endpoint; requireAuth
+  // re-verifies the caller is still a platform admin and trusts `role`+`tid` from the token.
+  imp?: boolean;
 }
 
 export interface RefreshTokenPayload {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { PlatformTenant } from '../api/types';
@@ -79,6 +80,15 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
   const id = lang === 'id';
   const toast = useToast();
   const confirm = useConfirm();
+  const { impersonate } = useAuth();
+  const navigate = useNavigate();
+  const [entering, setEntering] = useState(false);
+  const enter = async () => {
+    setEntering(true);
+    try { await impersonate(t.id, t.name); navigate('/'); }
+    catch (e) { toast.error(e instanceof ApiError ? e.message : 'Failed'); }
+    finally { setEntering(false); }
+  };
   const patch = useMutation({
     mutationFn: (body: { status?: 'ACTIVE' | 'SUSPENDED'; name?: string }) => api.patch(`/admin/tenants/${t.id}`, body),
     onSuccess: () => { onChange(); },
@@ -97,7 +107,7 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
       patch.mutate({ status: 'ACTIVE' }, { onSuccess: () => { onChange(); toast.success(id ? `${t.name} diaktifkan` : `${t.name} reactivated`); } });
     }
   };
-  return { patch, toggleSuspend };
+  return { patch, toggleSuspend, enter, entering };
 }
 
 function StatusBadge({ status }: { status: PlatformTenant['status'] }) {
@@ -112,7 +122,7 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
   const { lang } = useLang();
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
-  const { patch, toggleSuspend } = useTenantActions(t, onChange);
+  const { patch, toggleSuspend, enter, entering } = useTenantActions(t, onChange);
   return (
     <tr className="border-b last:border-0 dark:border-slate-800">
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{t.name}</td>
@@ -121,6 +131,7 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
       <td className="text-right text-slate-500 dark:text-slate-400">{t.memberCount}</td>
       <td className="text-slate-500 dark:text-slate-400">{formatDate(t.createdAt)}</td>
       <td className="text-right whitespace-nowrap">
+        <Button variant="ghost" onClick={enter} disabled={entering} title={id ? 'Masuk sebagai admin organisasi ini' : 'Act as an admin inside this tenant'}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
         <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
         <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
           {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
@@ -135,7 +146,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
   const { lang } = useLang();
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
-  const { patch, toggleSuspend } = useTenantActions(t, onChange);
+  const { patch, toggleSuspend, enter, entering } = useTenantActions(t, onChange);
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
       <div className="flex items-start justify-between gap-2">
@@ -145,7 +156,8 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
         </div>
         <StatusBadge status={t.status} />
       </div>
-      <div className="mt-2 flex justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+      <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+        <Button variant="ghost" onClick={enter} disabled={entering}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
         <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
         <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
           {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}

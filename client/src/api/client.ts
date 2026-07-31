@@ -123,8 +123,21 @@ function tryRefresh(): Promise<boolean> {
 
 // Legacy Bearer header from sessionStorage, only present for pre-cookie sessions / the
 // JWT-mint test workflow. New sessions authenticate via the httpOnly cookie instead.
+// Impersonation (platform super-admin acting inside a tenant): a bearer token that OVERRIDES the
+// normal cookie session while set. It has no refresh token, so on expiry we simply drop it and fall
+// back to the platform admin's own (still-valid) cookie session — impersonation ends gracefully.
+let impersonationToken: string | null = null;
+let onImpersonationEnd: (() => void) | null = null;
+export function setImpersonation(token: string | null, onEnd?: () => void): void {
+  impersonationToken = token;
+  if (onEnd !== undefined) onImpersonationEnd = onEnd;
+}
+export function isImpersonating(): boolean {
+  return impersonationToken != null;
+}
+
 function authHeader(base: Record<string, string> = {}): Record<string, string> {
-  const token = tokenStore.get();
+  const token = impersonationToken ?? tokenStore.get();
   return token ? { ...base, Authorization: `Bearer ${token}` } : base;
 }
 
@@ -138,6 +151,12 @@ async function request<T>(method: string, path: string, body?: unknown, retried 
 
   // Access token likely expired → refresh once and retry the original request.
   if (res.status === 401 && !retried && path !== '/auth/refresh' && path !== '/auth/login') {
+    // An expired/rejected IMPERSONATION token ends impersonation and reverts to the cookie session.
+    if (impersonationToken) {
+      impersonationToken = null;
+      onImpersonationEnd?.();
+      return request<T>(method, path, body, true);
+    }
     if (await tryRefresh()) return request<T>(method, path, body, true);
     tokenStore.clear();
   }

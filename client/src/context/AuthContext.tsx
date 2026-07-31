@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api, tokenStore, migrateLegacyTokens } from '../api/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { api, tokenStore, migrateLegacyTokens, setImpersonation } from '../api/client';
 import type { User, TenantSummary } from '../api/types';
 
 interface AuthState {
@@ -15,15 +16,22 @@ interface AuthState {
   tenants: TenantSummary[];
   activeTenantId: string | null;
   switchTenant: (tenantId: string) => Promise<void>;
+  // Platform (super-admin) impersonation: act inside another tenant. `impersonating` drives the
+  // banner; transient (in-memory bearer token) — a page reload ends it, reverting to the cookie session.
+  impersonating: { tenantId: string; name: string } | null;
+  impersonate: (tenantId: string, name: string) => Promise<void>;
+  stopImpersonating: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
+  const [impersonating, setImpersonating] = useState<{ tenantId: string; name: string } | null>(null);
 
   // The tenants the signed-in user belongs to (for the switcher). Best-effort: on any failure we
   // just leave the list empty, which hides the switcher.
@@ -65,6 +73,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.reload();
   };
 
+  // Refresh identity + tenant list + all cached data under whatever session is now active (the
+  // impersonation bearer, or the cookie session once it's cleared).
+  const reloadIdentity = async () => {
+    try { const r = await api.get<{ user: User }>('/auth/me'); setUser(r.user); } catch { /* keep prior */ }
+    await loadTenants();
+    qc.invalidateQueries();
+  };
+
+  // Enter a tenant as a platform super-admin. Sets the override bearer token FIRST so the identity +
+  // data refetch under the impersonated scope. If the token later expires, the api client auto-reverts
+  // and calls back to end it (endImpersonation).
+  const endImpersonation = () => { setImpersonating(null); void reloadIdentity(); };
+  const impersonate = async (tenantId: string, name: string) => {
+    const r = await api.post<{ accessToken: string; tenant: { id: string; name: string } }>(`/admin/tenants/${tenantId}/impersonate`);
+    setImpersonation(r.accessToken, endImpersonation);
+    setImpersonating({ tenantId, name: r.tenant.name || name });
+    await reloadIdentity();
+  };
+  const stopImpersonating = async () => {
+    setImpersonation(null);
+    setImpersonating(null);
+    await reloadIdentity();
+  };
+
   const login = async (email: string, password: string) => {
     // The server sets httpOnly auth cookies; nothing to store client-side. Clear any stale
     // legacy tokens so we don't keep sending a Bearer header.
@@ -94,6 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     // Best-effort server-side revocation (bumps tokenVersion so the tokens can't be
     // reused elsewhere); clear locally regardless of the network result.
+    setImpersonation(null);
+    setImpersonating(null);
     api.post('/auth/logout').catch(() => {});
     tokenStore.clear();
     setUser(null);
@@ -102,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, guestRegister, loginWithGoogle, logout, tenants, activeTenantId, switchTenant }}>
+    <AuthContext.Provider value={{ user, loading, login, guestRegister, loginWithGoogle, logout, tenants, activeTenantId, switchTenant, impersonating, impersonate, stopImpersonating }}>
       {children}
     </AuthContext.Provider>
   );

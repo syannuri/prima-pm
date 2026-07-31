@@ -408,7 +408,16 @@ a big schema cleanup); it is safe to leave indefinitely.
     (client `User` type). New `AdminTenantsPage.tsx` (route `/admin/tenants`) — lists corporate tenants
     (active/suspended badges, member counts, personal-sandbox tally), a create-tenant form (name→auto
     slug + first-admin email/name/password), and suspend/reactivate + rename actions. A platform-gated
-    "Tenants" Sidebar link (only for `isPlatformAdmin`). **Still TODO:** impersonation.
+    "Tenants" Sidebar link (only for `isPlatformAdmin`).
+  - **Impersonation ✅ DONE (2026-07-31):** `POST /admin/tenants/:id/impersonate` (platform-admin,
+    corporate tenants only) mints a short-lived, NO-REFRESH access token `{sub=admin, tid=target,
+    role=ADMIN, imp:true}`, audited (`IMPERSONATE`) against the real admin. `requireAuth` on an `imp`
+    token re-verifies the caller is STILL a platform admin (a revoked flag ends it instantly), trusts
+    the token's role+tid, skips the membership lookup, and flags `req.user.impersonating`. Client: the
+    api client keeps an override bearer token that supersedes the cookie session and auto-reverts on
+    401 (token expiry ends impersonation gracefully); `AuthContext.impersonate/stopImpersonating`; an
+    amber `ImpersonationBanner`; an "Enter" button per tenant. Reload ends impersonation (in-memory
+    token). Guarded by `platform.itest.ts` (9 total). **Platform super-admin console is complete.**
 - Per-tenant rate limits & quotas.
 
 ## Phase 6 — Tenant lifecycle / SaaS

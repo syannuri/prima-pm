@@ -5,6 +5,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
+import { signAccessToken } from '../../lib/jwt.js';
 import { writeAudit } from '../../lib/audit.js';
 import { Unauthorized, Forbidden, Conflict, BadRequest, NotFound } from '../../lib/errors.js';
 import { strongPassword } from '../auth/auth.schemas.js';
@@ -124,6 +125,23 @@ router.patch(
       before: { status: tenant.status, name: tenant.name }, after: { status: updated.status, name: updated.name },
     });
     res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status } });
+  }),
+);
+
+// POST /admin/tenants/:id/impersonate — mint a short-lived access token that lets the platform admin
+// ACT INSIDE this tenant as ADMIN (to support/debug), without being a member. No refresh token, so it
+// self-expires (impersonation ends); requireAuth re-verifies platform-admin on every request. Audited
+// against the real platform admin. Corporate tenants only.
+router.post(
+  '/:id/impersonate',
+  asyncHandler(async (req, res) => {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, slug: true, isPersonal: true } });
+    if (!tenant) throw NotFound('Tenant not found');
+    if (tenant.isPersonal) throw BadRequest('Personal (guest) tenants cannot be impersonated.');
+    const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { email: true, tokenVersion: true } });
+    const accessToken = signAccessToken({ sub: req.user!.id, role: 'ADMIN', email: me.email, tv: me.tokenVersion, tid: tenant.id, imp: true });
+    await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'IMPERSONATE', after: { tenant: tenant.slug } });
+    res.json({ accessToken, tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug } });
   }),
 );
 

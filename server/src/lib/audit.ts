@@ -19,7 +19,8 @@ type AuditAction =
   | 'REQUEST_ACTIVATION_REVISION'
   | 'RESUBMIT_ACTIVATION'
   | 'ARCHIVE'
-  | 'UNARCHIVE';
+  | 'UNARCHIVE'
+  | 'IMPERSONATE';
 
 interface AuditInput {
   userId?: string | null;
