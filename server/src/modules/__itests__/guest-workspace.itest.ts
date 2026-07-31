@@ -85,6 +85,15 @@ describe('a guest owns + self-governs a personal project', () => {
     const line = await request(app).post(api(`/projects/${personalProjectId}/cost/direct`)).set(auth(guestToken)).send({ type: 'MANPOWER', resourceId: res.body.resource.id, planMandays: 5 });
     expect(line.status).toBe(201);
   });
+
+  it('cannot attach a corporate login identity to a manpower line (resourceUserId nulled in a personal tenant)', async () => {
+    // activeTenantIsPersonal() → the corporate identity is stripped so a guest line never surfaces in
+    // a corporate user's timesheet / directory.
+    const line = await request(app).post(api(`/projects/${personalProjectId}/cost/direct`)).set(auth(guestToken))
+      .send({ type: 'MANPOWER', resourceUserId: corpPmId, planMandays: 3, personnelRole: 'PROJECT_PERSONNEL', unitCostPerManday: 1_000_000, label: 'Freelance work' });
+    expect(line.status).toBe(201);
+    expect(line.body.line.resourceUserId).toBeNull();
+  });
 });
 
 describe('tenant scoping isolates the guest sandbox (no personalOwnerId filter needed)', () => {

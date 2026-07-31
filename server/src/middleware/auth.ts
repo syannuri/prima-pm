@@ -82,7 +82,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       // pinned token — so the transition is seamless, no forced logout. Wrapping next() runs the
       // whole downstream chain inside the tenant's AsyncLocalStorage scope.
       if (!payload.tid) throw Unauthorized('Session needs a tenant — refreshing');
-      bindTenantContext(payload.tid, () => next());
+      bindTenantContext(payload.tid, tenantIsPersonal, () => next());
     } else {
       next();
     }

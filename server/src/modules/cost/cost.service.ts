@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma, type TxClient } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
+import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
 import { materialAmount, manpowerCost } from '../../calc/cost.js';
 import type { RiskForReserve } from '../../calc/risk.js';
 import { computeBaseline } from './cost.rollup.js';
@@ -95,40 +96,32 @@ export async function recomputeBaseline(projectId: string, db: Db = prisma) {
 // Resolve manpower role & rate, inheriting from the resource pool when a
 // resourceId is given (an explicit value on the input still wins). Also back-fills
 // the legacy resourceUserId and a default label from the resource.
-// The project's workspace owner (null = corporate, a user id = a guest's personal project).
-async function projectOwner(projectId: string): Promise<string | null> {
-  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { personalOwnerId: true } });
-  return p?.personalOwnerId ?? null;
-}
-
-async function resolveManpower(input: DirectLineInput, projectOwnerId: string | null) {
+async function resolveManpower(input: DirectLineInput) {
   let personnelRole = input.personnelRole ?? null;
   let unitCostPerManday = input.unitCostPerManday ?? null;
   let resourceUserId = input.resourceUserId ?? null;
   let label = input.label;
   if (input.resourceId) {
+    // A cross-workspace resource can't even load — tenant scoping limits this to the caller's
+    // tenant's resources — so a null result IS the isolation (no explicit workspace check needed).
     const r = await prisma.resource.findUnique({
       where: { id: input.resourceId },
-      select: { name: true, personnelRole: true, unitCostPerManday: true, userId: true, personalOwnerId: true },
+      select: { name: true, personnelRole: true, unitCostPerManday: true, userId: true },
     });
     if (!r) throw NotFound('Resource not found');
-    // Isolation: a resource may only be loaded onto a project in the SAME workspace — a guest's
-    // personal resource never reaches a corporate project, and vice versa.
-    if ((r.personalOwnerId ?? null) !== projectOwnerId) throw BadRequest('That resource is not in this project’s workspace');
     personnelRole = personnelRole ?? r.personnelRole;
     if (unitCostPerManday == null) unitCostPerManday = Number(r.unitCostPerManday);
     resourceUserId = resourceUserId ?? r.userId ?? null;
     if (!label) label = r.name;
   }
   if (input.rateCardId) {
-    const rc = await prisma.rateCard.findUnique({ where: { id: input.rateCardId }, select: { personalOwnerId: true } });
+    const rc = await prisma.rateCard.findUnique({ where: { id: input.rateCardId }, select: { id: true } });
     if (!rc) throw NotFound('Rate card not found');
-    if ((rc.personalOwnerId ?? null) !== projectOwnerId) throw BadRequest('That rate card is not in this project’s workspace');
   }
-  // A guest's personal-project line never links a corporate login account (the resourceUserId→User
-  // relation would otherwise leak a corporate identity and surface the guest line in that user's
-  // "My Timesheet"). Guest-owned resources already force userId=null; enforce the raw field too.
-  if (projectOwnerId !== null) resourceUserId = null;
+  // In a guest's PERSONAL tenant a line never links a corporate login account (the resourceUserId→User
+  // relation would otherwise attach a corporate identity to a guest's line). Guest-owned resources
+  // already force userId=null; enforce the raw field too.
+  if (activeTenantIsPersonal()) resourceUserId = null;
   return { personnelRole, unitCostPerManday: unitCostPerManday ?? 0, resourceUserId, label: label ?? '' };
 }
 
@@ -157,7 +150,7 @@ export async function addDirectLine(projectId: string, input: DirectLineInput, a
   };
 
   if (input.type === 'MANPOWER') {
-    const m = await resolveManpower(input, await projectOwner(projectId));
+    const m = await resolveManpower(input);
     data.label = m.label;
     data.personnelRole = m.personnelRole;
     data.resourceId = input.resourceId ?? null;
@@ -205,7 +198,7 @@ export async function updateDirectLine(
     subCategory: input.type === 'OTHER' ? input.subCategory?.trim() ?? null : null,
   };
   if (input.type === 'MANPOWER') {
-    const m = await resolveManpower(input, await projectOwner(projectId));
+    const m = await resolveManpower(input);
     data.label = m.label;
     data.personnelRole = m.personnelRole;
     data.resourceId = input.resourceId ?? null;

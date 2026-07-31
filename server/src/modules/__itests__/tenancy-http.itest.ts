@@ -41,13 +41,18 @@ beforeAll(async () => {
   const [ua, ub, uc, ud] = await Promise.all([mkUser('a@http.test'), mkUser('b@http.test'), mkUser('c@http.test'), mkUser('d@http.test')]);
   uBId = ub.id; uAId = ua.id;
   // uA in A, uB in B, uC in BOTH (switch-tenant). uD is ADMIN in A but VIEWER in B (per-tenant role).
+  // Explicit, distinct createdAt: `createMany` would stamp one identical now() on every row, making
+  // "first membership by createdAt" a tie (non-deterministic) — but the tests below rely on the
+  // tenant-A membership sorting first. Give the A rows an earlier timestamp than the B rows.
+  const earlier = new Date('2026-01-01T00:00:00Z');
+  const later = new Date('2026-01-02T00:00:00Z');
   await prisma.membership.createMany({ data: [
-    { userId: ua.id, tenantId: tenantA, role: 'ADMIN' },
-    { userId: ub.id, tenantId: tenantB, role: 'ADMIN' },
-    { userId: uc.id, tenantId: tenantA, role: 'ADMIN' },
-    { userId: uc.id, tenantId: tenantB, role: 'ADMIN' },
-    { userId: ud.id, tenantId: tenantA, role: 'ADMIN' },
-    { userId: ud.id, tenantId: tenantB, role: 'VIEWER' },
+    { userId: ua.id, tenantId: tenantA, role: 'ADMIN', createdAt: earlier },
+    { userId: ub.id, tenantId: tenantB, role: 'ADMIN', createdAt: earlier },
+    { userId: uc.id, tenantId: tenantA, role: 'ADMIN', createdAt: earlier },
+    { userId: uc.id, tenantId: tenantB, role: 'ADMIN', createdAt: later },
+    { userId: ud.id, tenantId: tenantA, role: 'ADMIN', createdAt: earlier },
+    { userId: ud.id, tenantId: tenantB, role: 'VIEWER', createdAt: later },
   ] });
 
   const pa = await runWithTenant(tenantA, () => prisma.project.create({ data: { code: 'PRJ-HTTP-A', name: 'A proj', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: ua.id } }));

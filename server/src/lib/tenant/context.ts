@@ -11,6 +11,11 @@ interface TenantStore {
   // Explicit opt-out: run scoped models WITHOUT tenant filtering (platform/admin, cron fan-out,
   // system maintenance). Must be a conscious choice, never the default.
   bypass?: boolean;
+  // True when the active tenant is a guest's personal sandbox — the tenant-native replacement for a
+  // project's `personalOwnerId`. Lets the SERVICE layer (which has no req.user) know it is running in
+  // a self-governed personal workspace (e.g. to suppress corporate notifications / strip a corporate
+  // identity off a guest line). Set by the auth middleware; false for system/cron/corporate contexts.
+  isPersonal?: boolean;
 }
 
 const als = new AsyncLocalStorage<TenantStore>();
@@ -32,13 +37,19 @@ export function runAsSystem<T>(fn: () => Promise<T>): Promise<T> {
 // `() => next()` — inside the ALS scope and returns its result directly. Downstream async
 // handlers started under this call inherit the context. Unlike runWithTenant this does NOT await,
 // which is exactly what a middleware chain needs.
-export function bindTenantContext<T>(tenantId: string, fn: () => T): T {
-  return als.run({ tenantId }, fn);
+export function bindTenantContext<T>(tenantId: string, isPersonal: boolean, fn: () => T): T {
+  return als.run({ tenantId, isPersonal }, fn);
 }
 
 // The current store, or undefined when called with no context established.
 export function getTenantStore(): TenantStore | undefined {
   return als.getStore();
+}
+
+// Whether the active tenant is a guest's personal sandbox. False outside a request / for
+// system/cron/corporate contexts. The service-layer replacement for a project's personalOwnerId.
+export function activeTenantIsPersonal(): boolean {
+  return als.getStore()?.isPersonal ?? false;
 }
 
 // Whether tenant enforcement is switched on (live env read so it can be toggled in tests /

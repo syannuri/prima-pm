@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
+import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
 import { computeEvm, type EvmTask } from '../../calc/evm.js';
 import { actualCostAsOf } from '../cost/cost.service.js';
 import { assertBaselineUnlocked } from '../projects/baseline.service.js';
@@ -178,28 +179,22 @@ export async function applyTemplate(projectId: string, templateId: string, start
   return { created: rows.length, template: template.name };
 }
 
-// Returns the project's workspace owner (null = corporate) and validates that the PIC resource,
-// if given, is in the SAME workspace — a guest's personal resource never owns a corporate task and
-// vice versa. The caller also uses the owner to null a corporate picUserId on a personal project
-// (a raw login-account link would otherwise leak a corporate identity into a guest's sandbox).
-async function picWorkspace(projectId: string, picResourceId: string | null | undefined): Promise<string | null> {
-  const [project, resource] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { personalOwnerId: true } }),
-    picResourceId ? prisma.resource.findUnique({ where: { id: picResourceId }, select: { personalOwnerId: true } }) : Promise.resolve(null),
-  ]);
-  const owner = project?.personalOwnerId ?? null;
-  if (picResourceId) {
-    if (!resource) throw NotFound('Resource not found');
-    if ((resource.personalOwnerId ?? null) !== owner) throw BadRequest('That resource is not in this project’s workspace');
-  }
-  return owner;
+// Validate that the PIC resource, if given, exists. Cross-workspace isolation is now the tenant
+// extension's job — a resource from another tenant simply doesn't load (null) — so no explicit
+// personalOwnerId workspace check is needed.
+async function assertPicResource(picResourceId: string | null | undefined): Promise<void> {
+  if (!picResourceId) return;
+  const resource = await prisma.resource.findUnique({ where: { id: picResourceId }, select: { id: true } });
+  if (!resource) throw NotFound('Resource not found');
 }
 
 export async function createTask(projectId: string, input: UpsertTaskInput, actorId: string) {
   await ensureChartered(projectId);
   await assertBaselineUnlocked(projectId);
-  const projectOwner = await picWorkspace(projectId, input.picResourceId);
-  const picUserId = projectOwner ? null : (input.picUserId ?? null); // guest projects never link a login account
+  await assertPicResource(input.picResourceId);
+  // In a guest's personal tenant a task never links a corporate login account (would leak a corporate
+  // identity into the sandbox).
+  const picUserId = activeTenantIsPersonal() ? null : (input.picUserId ?? null);
 
   if (input.parentTaskId) {
     const parent = await prisma.task.findFirst({
@@ -247,8 +242,8 @@ export async function updateTask(
   const existing = await prisma.task.findFirst({ where: { id: taskId, projectId } });
   if (!existing) throw NotFound('Task not found');
   await assertBaselineUnlocked(projectId);
-  const projectOwner = await picWorkspace(projectId, input.picResourceId);
-  const picUserId = projectOwner ? null : (input.picUserId ?? null); // guest projects never link a login account
+  await assertPicResource(input.picResourceId);
+  const picUserId = activeTenantIsPersonal() ? null : (input.picUserId ?? null); // guest tenant never links a login account
 
   if (input.parentTaskId) {
     if (input.parentTaskId === taskId) throw BadRequest('A task cannot be its own parent');

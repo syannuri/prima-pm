@@ -262,12 +262,21 @@ non-global corporate role still sees `pmUserId = self`).
   baseline, private resource pool, 404 cross-tenant isolation) — its list/read isolation coverage
   already lives in tenancy-leakage/guest-tenant/tenancy-http. Full suite 244 green. Code-only,
   reversible (column still written).
-- **Contract — part 2 (later):** convert the remaining SERVICE-layer `personalOwnerId` reads
-  (cost/schedule/activation workspace validators + resourceUserId-nulling, resource/ratecard
-  list-filters, adminAudit scope label, users hard-delete cascade) to tenant/`isPersonal` — needs
-  `isPersonal` plumbed into the service layer (e.g. the ALS store) — then stop WRITING
-  `personalOwnerId` and **drop the column** (final irreversible migration). Deferred deliberately so
-  the rbac change soaks first.
+- **Contract — part 2a (service de-scatter) ✅ DONE (2026-07-31):** `isPersonal` is now carried in the
+  ALS tenant store (`activeTenantIsPersonal()`), set by the auth middleware, so the SERVICE layer (no
+  `req.user`) knows it runs in a personal sandbox. Converted the `isPersonal`-dependent reads:
+  `cost.service` (dropped the resource/ratecard workspace validators — a cross-tenant row can't load,
+  so the null result IS the isolation — and the corporate-identity `resourceUserId` nulling now keys on
+  `activeTenantIsPersonal()`); `schedule.service` (same for `picWorkspace`→`assertPicResource` + PIC
+  `picUserId` nulling); `activation.ts` (activation-ready ping suppressed via `activeTenantIsPersonal()`
+  instead of the project's `personalOwnerId`). Guarded by `guest-workspace.itest.ts` (incl. the
+  resourceUserId-nulling case). Also fixed a pre-existing flaky `tenancy-http` test (identical
+  `createMany` createdAt → non-deterministic "first membership"; now explicit timestamps). Code-only,
+  reversible.
+- **Contract — part 2b (the finale, later):** the remaining PURE-REDUNDANT `personalOwnerId` reads
+  (resource/ratecard list-filters + lookup-scoping + validators, adminAudit scope label, users
+  hard-delete cascade — they still work off the written column) go here, together with **stopping the
+  WRITES** and **dropping the column** (the one irreversible migration). Deferred so parts 1 + 2a soak.
 
 > **⚠️ ORDERING CORRECTION (2026-07-31).** 3d as originally written was UNSAFE: the extension does
 > NOT supersede `personalOwnerId` while all guests share the `default` tenant — it isolates *tenants*,

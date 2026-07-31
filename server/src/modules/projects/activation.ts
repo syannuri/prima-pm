@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import type { Prisma, Role } from '@prisma/client';
 import { NotFound } from '../../lib/errors.js';
+import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
 import { assessActivationReadiness, assessPlanningStatus, type ActivationReadiness } from './activation.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 
@@ -179,12 +180,13 @@ export async function notifyActivationReady(projectId: string, actorId: string):
   try {
     const project = await prisma.project.findFirst({
       where: { id: projectId, deletedAt: null },
-      select: { id: true, name: true, code: true, status: true, activationReadyNotifiedAt: true, personalOwnerId: true },
+      select: { id: true, name: true, code: true, status: true, activationReadyNotifiedAt: true },
     });
     // Only for a chartered project that hasn't already been announced as ready.
     if (!project || project.status !== 'CHARTERED' || project.activationReadyNotifiedAt) return;
-    // Personal (guest) projects self-activate — never ping corporate ADMIN/PMO.
-    if (project.personalOwnerId) return;
+    // A guest's personal tenant self-activates — never ping corporate ADMIN/PMO (who aren't members
+    // of it anyway).
+    if (activeTenantIsPersonal()) return;
 
     const readiness = await getActivationReadiness(projectId);
     if (!readiness.canActivate) return;
