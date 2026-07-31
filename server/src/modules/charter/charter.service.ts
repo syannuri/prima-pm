@@ -7,6 +7,7 @@ import {
   buildCharterSnapshot,
 } from './charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
+import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import type { UpsertCharterInput, ChangeRequestInput } from './charter.schemas.js';
 
 export async function getCharter(projectId: string) {
@@ -175,15 +176,14 @@ export async function createChangeRequest(
   // Notify the approvers (ADMIN/PMO) that a change request awaits their decision.
   const [project, approvers] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true } }),
-    prisma.user.findMany({ where: { role: { in: ['ADMIN', 'PMO'] }, isActive: true }, select: { id: true } }),
+    tenantMemberUserIds(['ADMIN', 'PMO'], { excludeUserId: actorId }),
   ]);
   // Notify all approvers concurrently (was serial).
   await Promise.all(
     approvers
-      .filter((a) => a.id !== actorId)
-      .map((a) =>
+      .map((id) =>
         createNotification({
-          userId: a.id,
+          userId: id,
           type: 'CR_SUBMITTED',
           title: 'Change request awaits your decision',
           body: `"${input.title}" on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''} needs approval.`,

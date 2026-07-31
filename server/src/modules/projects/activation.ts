@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import type { Prisma, Role } from '@prisma/client';
 import { NotFound } from '../../lib/errors.js';
 import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
+import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import { assessActivationReadiness, assessPlanningStatus, type ActivationReadiness } from './activation.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 
@@ -191,14 +192,11 @@ export async function notifyActivationReady(projectId: string, actorId: string):
     const readiness = await getActivationReadiness(projectId);
     if (!readiness.canActivate) return;
 
-    const recipients = await prisma.user.findMany({
-      where: { role: { in: ['ADMIN', 'PMO'] }, isActive: true, NOT: { id: actorId } },
-      select: { id: true },
-    });
+    const recipients = await tenantMemberUserIds(['ADMIN', 'PMO'], { excludeUserId: actorId });
     await Promise.all(
-      recipients.map((r) =>
+      recipients.map((rid) =>
         createNotification({
-          userId: r.id,
+          userId: rid,
           type: 'ACTIVATION_READY',
           title: 'Project ready to activate',
           body: `"${project.name}" (${project.code}) has its baselines set and is ready to start execution.`,

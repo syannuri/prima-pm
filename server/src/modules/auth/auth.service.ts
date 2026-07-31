@@ -134,7 +134,8 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
       name: input.name,
       email: input.email,
       passwordHash: await hashPassword(input.password),
-      role: 'GUEST',
+      role: 'GUEST', // dual-written until User.role is dropped (4c-drop)
+      isGuest: true,
     },
   });
   await provisionPersonalTenant(user);
@@ -171,7 +172,7 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
   const byEmail = await prisma.user.findUnique({ where: { email: identity.email } });
   if (byEmail) {
     // Google manages only GUEST accounts — never let it authenticate into a staff account.
-    if (byEmail.role !== 'GUEST') throw Forbidden('This email belongs to a staff account — sign in with your password.');
+    if (!byEmail.isGuest) throw Forbidden('This email belongs to a staff account — sign in with your password.');
     if (!byEmail.isActive) throw Unauthorized('This account is deactivated');
     const linked = await prisma.user.update({ where: { id: byEmail.id }, data: { googleSub: identity.sub } });
     await auditInUserTenant(linked.id, { userId: linked.id, entity: 'User', entityId: linked.id, action: 'LOGIN', after: { via: 'google', linked: true } });
@@ -180,7 +181,7 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
 
   // 3) First-time Google user → provision a sandboxed GUEST (no local password).
   const created = await prisma.user.create({
-    data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST' },
+    data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST', isGuest: true },
   });
   await provisionPersonalTenant(created);
   await auditInUserTenant(created.id, { userId: created.id, entity: 'User', entityId: created.id, action: 'CREATE', after: { email: created.email, role: 'GUEST', via: 'google', self: true } });

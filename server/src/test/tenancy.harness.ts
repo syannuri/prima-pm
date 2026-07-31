@@ -55,6 +55,7 @@ export async function seedGuestOrg(label: string): Promise<OrgFixture> {
       name: `Org ${label}`,
       email: `org-${label.toLowerCase()}@tenancy.test`,
       role: 'GUEST',
+      isGuest: true,
       passwordHash: await hashPassword(PW),
       isActive: true,
     },

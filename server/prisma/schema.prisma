@@ -208,6 +208,11 @@ model User {
   // Google; unique so an account binds to exactly one Google identity. Null for password users.
   googleSub    String?  @unique
   role         Role     @default(VIEWER)
+  // Account TYPE (global identity), distinct from the per-tenant Membership.role: true for a
+  // self-service GUEST sandbox account, false for staff. This is what corporate features gate on
+  // (messaging, tenant membership, corporate-PM assignment) once the legacy global `User.role` is
+  // retired (Phase 4c) — "is a sandbox account" is an identity property, not a per-tenant role.
+  isGuest      Boolean  @default(false)
   isActive     Boolean  @default(true)
   // Bumped to revoke every outstanding token for this user (logout, password change/reset,
   // deactivation). Access/refresh tokens embed the tv they were minted at; requireAuth

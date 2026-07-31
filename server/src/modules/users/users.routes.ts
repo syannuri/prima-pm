@@ -9,6 +9,7 @@ import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { Conflict, NotFound, BadRequest } from '../../lib/errors.js';
 import { runAsSystem } from '../../lib/tenant/context.js';
+import { tenantMemberCount } from '../../lib/tenant/members.js';
 import { hashPassword } from '../../lib/password.js';
 import { strongPassword } from '../auth/auth.schemas.js';
 import { multitenancyEnforced } from '../../lib/tenant/context.js';
@@ -291,10 +292,14 @@ router.delete(
         await tx.user.delete({ where: { id: target.id } }); // cascades memberships + refresh tokens; audit SET NULL
       }));
     } else {
-      // Never lock the org out: keep at least one active admin.
-      if (target.role === 'ADMIN' && target.isActive) {
-        const activeAdmins = await prisma.user.count({ where: { role: 'ADMIN', isActive: true } });
-        if (activeAdmins <= 1) throw BadRequest('Cannot delete the last active admin.');
+      // Never lock the TENANT out: keep at least one active admin in it. The target's admin-ness is
+      // their MEMBERSHIP role in the active tenant (per-tenant, Phase 4); the count is tenant-scoped.
+      const tid = activeScopeTenantId(req);
+      const targetIsAdmin = tid
+        ? (await prisma.membership.findUnique({ where: { userId_tenantId: { userId: target.id, tenantId: tid } }, select: { role: true } }))?.role === 'ADMIN'
+        : target.role === 'ADMIN'; // single-tenant (enforcement off) fallback to the global role
+      if (targetIsAdmin && target.isActive) {
+        if ((await tenantMemberCount('ADMIN')) <= 1) throw BadRequest('Cannot delete the last active admin.');
       }
       // Block while the account still manages work — those references represent real ownership
       // (and two of them are hard FK constraints). Reassign / deactivate first.

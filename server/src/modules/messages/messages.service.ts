@@ -135,7 +135,7 @@ function describe(conv: ConvWithMembers, meId: string) {
 // Users the caller can start a DM / add to a group: active, non-guest, not self.
 export async function listContacts(meId: string) {
   return prisma.user.findMany({
-    where: { isActive: true, role: { not: 'GUEST' }, id: { not: meId } },
+    where: { isActive: true, isGuest: false, id: { not: meId } },
     select: CONTACT,
     orderBy: { name: 'asc' },
   });
@@ -279,7 +279,7 @@ async function postMessage(meId: string, conversationId: string, body: string, a
 export async function sendMessageTo(meId: string, toUserId: string, body: string, attachment?: OutgoingAttachment) {
   if (toUserId === meId) throw BadRequest('Cannot message yourself');
   if (!body.trim() && !attachment) throw BadRequest('Message cannot be empty');
-  const recipient = await prisma.user.findFirst({ where: { id: toUserId, isActive: true, role: { not: 'GUEST' } }, select: { id: true } });
+  const recipient = await prisma.user.findFirst({ where: { id: toUserId, isActive: true, isGuest: false }, select: { id: true } });
   if (!recipient) throw NotFound('Recipient not found');
 
   const [aId, bId] = pair(meId, toUserId);
@@ -308,7 +308,7 @@ export async function createGroup(meId: string, rawTitle: string, memberIds: str
   const others = [...new Set(memberIds)].filter((id) => id !== meId);
   if (others.length < 2) throw BadRequest('Add at least two other people to start a group');
 
-  const valid = await prisma.user.findMany({ where: { id: { in: others }, isActive: true, role: { not: 'GUEST' } }, select: { id: true } });
+  const valid = await prisma.user.findMany({ where: { id: { in: others }, isActive: true, isGuest: false }, select: { id: true } });
   if (valid.length !== others.length) throw BadRequest('One or more members are not valid');
 
   const now = new Date();
@@ -333,7 +333,7 @@ export async function addGroupMembers(meId: string, conversationId: string, user
   const existing = new Set(conv.members.map((m) => m.userId));
   const toAdd = [...new Set(userIds)].filter((id) => !existing.has(id));
   if (toAdd.length) {
-    const valid = await prisma.user.findMany({ where: { id: { in: toAdd }, isActive: true, role: { not: 'GUEST' } }, select: { id: true } });
+    const valid = await prisma.user.findMany({ where: { id: { in: toAdd }, isActive: true, isGuest: false }, select: { id: true } });
     await prisma.conversationMember.createMany({ data: valid.map((u) => ({ conversationId, userId: u.id })), skipDuplicates: true });
   }
   const fresh = await prisma.conversation.findUnique({ where: { id: conversationId }, include: memberInclude });

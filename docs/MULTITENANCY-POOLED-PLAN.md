@@ -354,11 +354,27 @@ The tenant-native replacement for `personalOwnerId`, and the unblocker for 3d.
   set role, `DELETE /:userId` remove (guards: not self, never the tenant's last admin; global `User`
   untouched). Verified in `tenancy-http.itest.ts`. A members **UI** is still pending.
 
-### Phase 4c — contract: drop `User.role`
-- Once no reader remains (all role checks use the membership), remove `User.role`.
+### Phase 4c — retire global `User.role`
 
-### Phase 4c — contract: drop `User.role`
-- Once no reader remains (all role checks use the membership), remove `User.role`.
+**4c-code ✅ DONE (2026-07-31):** split the two things `User.role` conflated:
+- **Account TYPE → new global `User.isGuest` boolean** (migration `20260731140000_user_is_guest`,
+  backfilled from `role='GUEST'`). The guest-exclusion checks now gate on `isGuest`: messaging
+  (`messages.service` ×4), tenant membership (`members.routes`), corporate-PM assignment
+  (`assertNotGuestPm`), Google-links-only-guests (`loginWithGoogle`), the audit personal-scope filter.
+  Guest register / Google provisioning dual-write `isGuest: true` alongside `role`.
+- **Corporate role → per-tenant `Membership.role`.** The "notify/count ADMIN/PMO" sites
+  (`charter.service`, `projects.service`, `activation.ts`, the users last-admin guard) moved from
+  `user.findMany({ where: { role } })` (GLOBAL) to a new `lib/tenant/members.ts` helper
+  (`tenantMemberUserIds`/`tenantMemberCount`) that resolves members of the ACTIVE tenant. **This also
+  FIXES a latent cross-tenant bug:** because `User` is global, those queries previously notified/counted
+  admins ACROSS tenants (tenant A's activation pinged tenant B's admins). The helper falls back to the
+  global `User.role` only when there is no tenant context (enforcement off / single-tenant) — a
+  dual-read removed in 4c-drop. Full suite 242 green. `User.role` is still WRITTEN (dual) + read by 4
+  last-mile spots (effectiveRole fallback, adminAudit actor-role display, `backfillDefaultTenant`, the
+  last-admin off-fallback).
+
+**4c-drop (later, irreversible):** convert those 4 last-mile readers, stop writing `User.role`, drop
+the column. Deferred so 4c-code soaks (same expand→contract discipline as the personalOwnerId retire).
 
 ## Phase 5 — Cross-cutting & platform
 - **Per-tenant sequences:** `PRJ-YYYY-####`, `PRC-###`, etc. scoped by tenant.

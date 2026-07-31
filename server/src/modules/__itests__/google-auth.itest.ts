@@ -52,7 +52,7 @@ beforeAll(async () => {
   });
   // An existing GUEST who signed up with a password — Google should LINK to it (same email).
   await prisma.user.create({
-    data: { name: 'Existing Guest', email: 'existing-guest@gmail.test', role: 'GUEST', passwordHash: await hashPassword('Guest-Pass-1'), isActive: true },
+    data: { name: 'Existing Guest', email: 'existing-guest@gmail.test', role: 'GUEST', isGuest: true, passwordHash: await hashPassword('Guest-Pass-1'), isActive: true },
   });
 });
 

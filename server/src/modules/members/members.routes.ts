@@ -65,9 +65,9 @@ router.post(
   validateBody(addMemberSchema),
   asyncHandler(async (req, res) => {
     const tenantId = await activeTenantId(req);
-    const user = await prisma.user.findUnique({ where: { email: req.body.email }, select: { id: true, role: true } });
+    const user = await prisma.user.findUnique({ where: { email: req.body.email }, select: { id: true, isGuest: true } });
     if (!user) throw NotFound('No user with that email. Create the account first, then add them.');
-    if (user.role === 'GUEST') throw BadRequest('Guest accounts cannot be added as tenant members.');
+    if (user.isGuest) throw BadRequest('Guest accounts cannot be added as tenant members.');
     const existing = await prisma.membership.findUnique({ where: { userId_tenantId: { userId: user.id, tenantId } }, select: { id: true } });
     if (existing) throw Conflict('That user is already a member of this tenant.');
 

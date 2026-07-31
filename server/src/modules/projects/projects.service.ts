@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
+import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
@@ -138,8 +139,8 @@ async function createProjectRow(input: CreateProjectInput, year: number, isGuest
 // The assignment pickers already exclude guests, but guard the service too (defence in depth).
 async function assertNotGuestPm(pmUserId: string | null | undefined): Promise<void> {
   if (!pmUserId) return;
-  const u = await prisma.user.findUnique({ where: { id: pmUserId }, select: { role: true } });
-  if (u?.role === 'GUEST') throw BadRequest('A guest account cannot be assigned to a corporate project');
+  const u = await prisma.user.findUnique({ where: { id: pmUserId }, select: { isGuest: true } });
+  if (u?.isGuest) throw BadRequest('A guest account cannot be assigned to a corporate project');
 }
 
 export async function createProject(input: CreateProjectInput, actorId: string, actorRole?: Role) {
@@ -362,9 +363,9 @@ export async function resubmitActivation(id: string, actorId: string) {
     data: { activationReviewStatus: null, activationReviewNote: null, activationReviewAt: null, activationReviewById: null, activationReadyNotifiedAt: null },
   });
   await writeAudit({ userId: actorId, projectId: id, entity: 'Project', entityId: id, action: 'RESUBMIT_ACTIVATION' });
-  const recipients = await prisma.user.findMany({ where: { role: { in: ['ADMIN', 'PMO'] }, isActive: true, NOT: { id: actorId } }, select: { id: true } });
-  await Promise.all(recipients.map((r) => createNotification({
-    userId: r.id, type: 'ACTIVATION_READY', title: 'Project resubmitted for activation',
+  const recipients = await tenantMemberUserIds(['ADMIN', 'PMO'], { excludeUserId: actorId });
+  await Promise.all(recipients.map((rid) => createNotification({
+    userId: rid, type: 'ACTIVATION_READY', title: 'Project resubmitted for activation',
     body: `"${project.name}" (${project.code}) was revised and resubmitted for activation review.`,
     projectId: id,
   })));

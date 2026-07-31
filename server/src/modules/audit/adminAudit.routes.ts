@@ -30,7 +30,7 @@ router.get(
     // "Personal" (guest) activity = the actor is a GUEST. (This admin audit is tenant-scoped, so a
     // corporate tenant never even sees a guest's personal-project events — they live in the guest's
     // own tenant — which is why matching on the GUEST actor role is sufficient.)
-    const personalCond: Prisma.AuditLogWhereInput = { user: { role: 'GUEST' } };
+    const personalCond: Prisma.AuditLogWhereInput = { user: { isGuest: true } };
 
     const where: Prisma.AuditLogWhereInput = {
       ...(q.entity ? { entity: q.entity } : {}),
