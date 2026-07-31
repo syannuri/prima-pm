@@ -213,6 +213,10 @@ model User {
   // (messaging, tenant membership, corporate-PM assignment) once the legacy global `User.role` is
   // retired (Phase 4c) — "is a sandbox account" is an identity property, not a per-tenant role.
   isGuest      Boolean  @default(false)
+  // PLATFORM (super-admin) privilege — transcends tenants: may create/suspend tenants and provision
+  // their first admin via /admin/tenants (Phase 5). Distinct from a per-tenant Membership.role=ADMIN.
+  // Granted deliberately (never auto); default false.
+  isPlatformAdmin Boolean @default(false)
   isActive     Boolean  @default(true)
   // Bumped to revoke every outstanding token for this user (logout, password change/reset,
   // deactivation). Access/refresh tokens embed the tv they were minted at; requireAuth

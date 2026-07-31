@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { Role } from '@prisma/client';
 import { verifyAccessToken } from '../lib/jwt.js';
-import { Unauthorized } from '../lib/errors.js';
+import { Unauthorized, Forbidden } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { AT_COOKIE } from '../lib/cookies.js';
 import { bindTenantContext, multitenancyEnforced } from '../lib/tenant/context.js';
@@ -65,9 +65,11 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     if (multitenancyEnforced() && payload.tid) {
       const membership = await prisma.membership.findUnique({
         where: { userId_tenantId: { userId: user.id, tenantId: payload.tid } },
-        select: { role: true, tenant: { select: { isPersonal: true } } },
+        select: { role: true, tenant: { select: { isPersonal: true, status: true } } },
       });
       if (!membership) throw Unauthorized('No membership in the active tenant');
+      // A SUSPENDED tenant (platform super-admin action) locks out all its members.
+      if (membership.tenant.status === 'SUSPENDED') throw Forbidden('This workspace is suspended.');
       role = membership.role;
       tenantIsPersonal = membership.tenant.isPersonal;
     }

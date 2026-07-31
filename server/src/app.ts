@@ -21,6 +21,7 @@ import adminAuditRoutes from './modules/audit/adminAudit.routes.js';
 import adminSettingsRoutes from './modules/settings/settings.routes.js';
 import messagesRoutes from './modules/messages/messages.routes.js';
 import membersRoutes from './modules/members/members.routes.js';
+import platformRoutes from './modules/platform/platform.routes.js';
 
 // Locate the built frontend (server/dist/app.js → ../../client/dist). Overridable
 // via CLIENT_DIST_PATH for non-standard layouts.
@@ -133,6 +134,7 @@ export function createApp() {
   api.use('/admin/settings', adminSettingsRoutes);
   api.use('/messages', messagesRoutes);
   api.use('/members', membersRoutes);
+  api.use('/admin/tenants', platformRoutes);
   app.use('/api/v1', api);
 
   if (serveClient) {

@@ -396,6 +396,14 @@ a big schema cleanup); it is safe to leave indefinitely.
 - **EVM auto-capture cron** (`AppSetting.evmAutoCapture*`) iterates per tenant instead of globally.
 - **Guests:** convert `personalOwnerId` sandboxes into personal tenants; retire `personalOwnerId`.
 - **Platform/super-admin console:** create/suspend tenants, provisioning, impersonation (audited).
+  - **Tenant provisioning API ✅ DONE (2026-07-31):** new global `User.isPlatformAdmin` flag (migration
+    `20260731150000_platform_admin`, default false, granted deliberately by SQL). `platform.routes.ts`
+    (`/admin/tenants`, gated by `requirePlatformAdmin`): `GET` lists all tenants + member counts, `POST`
+    creates a CORPORATE tenant + its first ADMIN (attach an existing staff user by email, else create
+    one), `PATCH /:id` suspends/reactivates or renames (never the default tenant; personal tenants
+    excluded). SUSPEND is enforced in `requireAuth` — a suspended tenant's members get 403. Operates on
+    the global Tenant/User/Membership models (no tenant scoping); the platform-admin gate is the
+    boundary. Guarded by `platform.itest.ts` (6). **Still TODO:** a super-admin UI + impersonation.
 - Per-tenant rate limits & quotas.
 
 ## Phase 6 — Tenant lifecycle / SaaS
