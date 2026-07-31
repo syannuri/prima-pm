@@ -350,7 +350,9 @@ model Project {
   // flipped NOT NULL in 2b. See docs/MULTITENANCY-POOLED-PLAN.md.
   tenantId  String?
   tenant    Tenant?  @relation(fields: [tenantId], references: [id])
-  code      String        @unique
+  // Project code is unique PER TENANT (Phase 3c): two orgs can each have PRJ-2026-0001. The
+  // extension scopes all reads to the tenant; the clash-checks use findFirst (see projects.service).
+  code      String
   name      String
   clientName String?      // the client/customer the project is delivered for
   sponsor   String?
@@ -434,6 +436,7 @@ model Project {
   // (portfolio, notifications, resource capacity, EVM trend, audit) — index the hot filter.
   @@index([personalOwnerId])
   @@index([tenantId])
+  @@unique([tenantId, code])
 }
 
 // Per-user project bookmark (personal "pin to top" flag). userId is stored FK-less
@@ -1736,4 +1739,7 @@ model AppSetting {
   updatedById        String?
   updatedAt          DateTime @updatedAt
   @@index([tenantId])
+  // One settings row per tenant (Phase 3c). The singleton id="singleton" PK stays for now (code
+  // still reads by it); this makes the per-tenant scoping a real DB constraint.
+  @@unique([tenantId])
 }

@@ -97,10 +97,12 @@ async function createProjectRow(input: CreateProjectInput, year: number, persona
       return await prisma.$transaction(async (tx) => {
         let code = input.code?.trim();
         if (code) {
-          const clash = await tx.project.findUnique({ where: { code }, select: { id: true } });
+          // findFirst (not findUnique): code is unique PER TENANT now (@@unique([tenantId, code])).
+          // Under enforcement the extension scopes this to the active tenant automatically.
+          const clash = await tx.project.findFirst({ where: { code }, select: { id: true } });
           if (clash) throw Conflict(`Project code "${code}" is already in use`);
         } else {
-          // Scan ALL codes for the year (incl. soft-deleted — `code` is globally unique).
+          // Scan ALL codes for the year (incl. soft-deleted). Code is unique per tenant.
           const existing = await tx.project.findMany({
             where: { code: { startsWith: `PRJ-${year}-` } },
             select: { code: true },
@@ -163,10 +165,10 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   // A corporate project may never be handed to a guest account (personal projects keep their owner).
   if (input.pmUserId && !before.personalOwnerId) await assertNotGuestPm(input.pmUserId);
 
-  // Project code is unique — block a clash with another project.
+  // Project code is unique per tenant — block a clash with another project.
   const newCode = input.code?.trim();
   if (newCode && newCode !== before.code) {
-    const clash = await prisma.project.findUnique({ where: { code: newCode }, select: { id: true } });
+    const clash = await prisma.project.findFirst({ where: { code: newCode }, select: { id: true } });
     if (clash) throw Conflict(`Project code "${newCode}" is already in use`);
   }
 

@@ -44,10 +44,10 @@ describe('Agile assignments feed resource capacity', () => {
   });
 
   it('scales with the project factor', async () => {
-    await prisma.project.update({ where: { code: 'PRJ-CAP-0001' }, data: { mandaysPerPoint: 3 } });
+    await prisma.project.updateMany({ where: { code: 'PRJ-CAP-0001' }, data: { mandaysPerPoint: 3 } }); // code is unique per-tenant now → updateMany
     const report = await getResourceCapacity(adminId, 'ADMIN', { granularity: 'month' });
     const row = report.resources.find((r) => r.name === resourceName);
     expect(row!.totalPlanMandays).toBe(15); // 5 pts × 3
-    await prisma.project.update({ where: { code: 'PRJ-CAP-0001' }, data: { mandaysPerPoint: 2 } });
+    await prisma.project.updateMany({ where: { code: 'PRJ-CAP-0001' }, data: { mandaysPerPoint: 2 } });
   });
 });
