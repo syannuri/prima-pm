@@ -184,8 +184,22 @@ Step 1 deployed current `master` with the flag OFF (all no-op) and verified heal
   → `/auth/refresh` re-mints a tenant-pinned token → retry succeeds. Seamless, no forced logout.
 - **Verified live:** 15 scoped endpoints 200 with a `tid` token; no-`tid` → 401; zero fail-closed in
   the service log. The single default tenant means AppSetting-singleton etc. behave normally.
-- **NOT yet on the VPS** (`prismatix.tech`, `/opt/prismatix`) — a separate deploy; enable there with
-  its own `update-prod.sh` + flag when ready.
+- **VPS `prismatix.tech` enforcement LIVE (2026-07-31).** The VPS was already on current master
+  (client bundle matched HEAD; `migrate status` = all 62 migrations applied), so enabling was just
+  `MULTITENANCY_ENFORCE=true` in `/opt/prismatix/server/.env` + restart — not the multi-commit
+  catch-up an older note implied.
+
+### Public-endpoint fail-closed fix (2026-07-31, `03dd2b3`)
+Turning the flag on surfaced a real regression: **public, unauthenticated routes carry no tenant
+context**, so any scoped-model read on them fail-closes → **500**. `GET /auth/providers` (the login
+page reads it), guest-register, and google-login all gate on the `AppSetting` singleton — a scoped
+model — so they 500'd under enforcement (also latent-live on the LAN box, whose soak never hit
+`/auth/providers`). Fix: `AppSetting` is a **deployment-global singleton** (hardcoded `id:'singleton'`
+PK; the "one AppSetting row per tenant" idea is not realized in code), so `getAppSettings()` (upsert)
+and the admin write (update) now run under **`runAsSystem`** in `settings.service.ts`. The EVM cron
+reads AppSetting via its own per-tenant `runWithTenant`, unaffected. **Rule going forward: any public
+route that touches a scoped model must wrap the read in `runAsSystem`.** Guarded by a
+`/auth/providers`-under-enforcement 200 test in `tenancy-http.itest.ts`.
 
 ### Enforce-on prerequisites (before turning the flag on in a real deployment)
 1. Deploy code + `prisma migrate deploy` on that env (creates Tenant/Membership + tenantId columns +
