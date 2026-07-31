@@ -209,9 +209,12 @@ Step 1 deployed current `master` with the flag OFF (all no-op) and verified heal
   (the suite loads `server/.env` via dotenv, and prod's `.env` has the flag ON — which had made the
   whole suite run under enforcement and fail on no-`tid` test tokens). The 3 tenancy suites toggle it
   on themselves.
-- **Known follow-up:** under enforcement, auth-flow audits (login/logout/password) are written with
-  no tenant context → null tenantId → they don't appear in the (scoped) `/admin/audit` view. Decide
-  whether to stamp them with the user's active tenant.
+- **Auth-audit visibility ✅ FIXED & LIVE (2026-07-31):** public-flow audits (login / guest-register
+  / google) ran with no tenant context → null tenantId → invisible in the scoped `/admin/audit`.
+  `auditInUserTenant` (auth.service) now resolves the user's active tenant and writes the audit inside
+  `runWithTenant(tid)`, so login events show in that tenant's trail. The authenticated flows (logout /
+  change-password / switch-tenant / user-admin) were already stamped via `requireAuth`'s context.
+  No-op when enforcement is off. Guarded by `tenancy-http.itest.ts`.
 
 ### Phase 3d — remove ad-hoc `personalOwnerId` filters the extension now supersedes
 - Carefully, one module at a time, each covered by the leakage suite.
