@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { env } from '../../config/env.js';
+import { runAsSystem } from '../../lib/tenant/context.js';
 
 const SINGLETON = 'singleton';
 
@@ -21,9 +22,13 @@ let cache: AppSettings | null = null;
 
 // Read the singleton settings row, creating it (seeded from the env flags) on first access so a
 // deploy preserves the previously-configured behaviour. Idempotent via upsert (no create race).
+// AppSetting is a DEPLOYMENT-GLOBAL singleton (hardcoded `id:'singleton'` PK, one row) holding
+// auth flags (guest/Google signup) read on PUBLIC, context-less paths (/auth/providers,
+// guest-register, google-login). So the read MUST bypass tenant scoping via runAsSystem — otherwise
+// the fail-closed extension throws when there is no tenant context under MULTITENANCY_ENFORCE.
 export async function getAppSettings(): Promise<AppSettings> {
   if (cache) return cache;
-  const row = await prisma.appSetting.upsert({
+  const row = await runAsSystem(() => prisma.appSetting.upsert({
     where: { id: SINGLETON },
     create: {
       id: SINGLETON,
@@ -32,7 +37,7 @@ export async function getAppSettings(): Promise<AppSettings> {
       googleLoginEnabled: Boolean(env.googleClientId),
     },
     update: {},
-  });
+  }));
   cache = {
     guestSignupEnabled: row.guestSignupEnabled,
     googleLoginEnabled: row.googleLoginEnabled,
@@ -50,7 +55,9 @@ export async function updateAppSettings(patch: Partial<AppSettings>, actorId: st
     evmAutoCaptureEnabled: patch.evmAutoCaptureEnabled ?? current.evmAutoCaptureEnabled,
     evmAutoCaptureWeekday: patch.evmAutoCaptureWeekday ?? current.evmAutoCaptureWeekday,
   };
-  await prisma.appSetting.update({ where: { id: SINGLETON }, data: { ...next, updatedById: actorId } });
+  // Same global-singleton semantics as the read: write the one row as system (the admin PATCH runs
+  // inside a tenant context, whose injected tenantId would otherwise miss the global singleton).
+  await runAsSystem(() => prisma.appSetting.update({ where: { id: SINGLETON }, data: { ...next, updatedById: actorId } }));
   cache = next;
   await writeAudit({ userId: actorId, entity: 'AppSetting', entityId: SINGLETON, action: 'UPDATE', before: current, after: next });
   return next;

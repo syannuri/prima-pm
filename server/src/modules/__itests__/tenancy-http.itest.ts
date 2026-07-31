@@ -92,6 +92,18 @@ describe('transition: pre-enforcement tokens (no tid)', () => {
   });
 });
 
+describe('public, context-less endpoints survive enforcement (no tenant context)', () => {
+  // Regression: /auth/providers is unauthenticated (login page reads it) so it runs with NO tenant
+  // context. It reads the deployment-global AppSetting singleton — which is a SCOPED model — so
+  // without a runAsSystem bypass the fail-closed extension threw → 500, breaking the login page and
+  // guest/Google signup. Must be 200.
+  it('/auth/providers returns 200 (reads the AppSetting singleton as system, not fail-closed)', async () => {
+    const res = await request(app).get(api('/auth/providers'));
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('guestSignup');
+  });
+});
+
 describe('HTTP isolation between corporate tenants (ADMIN — only the extension isolates)', () => {
   it('project list shows only the active tenant’s projects', async () => {
     const a = await request(app).get(api('/projects')).set(bearer(tokenA));
