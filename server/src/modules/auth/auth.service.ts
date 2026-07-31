@@ -7,7 +7,6 @@ import { Unauthorized, Forbidden, Conflict } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled } from '../settings/settings.service.js';
-import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
 import { multitenancyEnforced, runWithTenant } from '../../lib/tenant/context.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput } from './auth.schemas.js';
 
@@ -29,14 +28,24 @@ async function resolveActiveMembership(userId: string, preferred?: string): Prom
   return memberships[0];
 }
 
-// Give a brand-new self-service user a membership in the default tenant (single-tenant world today;
-// guests become their own tenant in Phase 5). Best-effort: skipped if the default tenant is absent
-// (e.g. a test DB wiped of it) — harmless while enforcement is off.
-async function ensureDefaultMembership(userId: string, role: Role): Promise<void> {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: DEFAULT_TENANT_SLUG }, select: { id: true } });
-  if (tenant) {
-    await prisma.membership.create({ data: { userId, tenantId: tenant.id, role } }).catch(() => undefined);
-  }
+// Give a brand-new GUEST their OWN personal tenant — the tenant-native sandbox that replaces the
+// legacy `personalOwnerId` isolation (so the Prisma extension isolates one guest from another and
+// from the corporate portfolio). `Tenant`/`Membership` are GLOBAL models, so this is safe on the
+// context-less public register / Google paths. Idempotent: slug `guest-<userId>` is the stable key,
+// matching the backfill migration, so a retry (or a user backfilled then re-registering) is a no-op.
+async function provisionPersonalTenant(user: User): Promise<void> {
+  const slug = `guest-${user.id}`;
+  const tenant = await prisma.tenant.upsert({
+    where: { slug },
+    create: { slug, name: `${user.name || user.email} (personal)`, isPersonal: true },
+    update: {},
+    select: { id: true },
+  });
+  await prisma.membership.upsert({
+    where: { userId_tenantId: { userId: user.id, tenantId: tenant.id } },
+    create: { userId: user.id, tenantId: tenant.id, role: 'GUEST' },
+    update: {},
+  });
 }
 
 // Write an audit for a PUBLIC auth flow (login/register/google) — these run with NO request tenant
@@ -128,7 +137,7 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
       role: 'GUEST',
     },
   });
-  await ensureDefaultMembership(user.id, 'GUEST');
+  await provisionPersonalTenant(user);
   await auditInUserTenant(user.id, { userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
   return issueTokenPair(user);
 }
@@ -173,7 +182,7 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
   const created = await prisma.user.create({
     data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST' },
   });
-  await ensureDefaultMembership(created.id, 'GUEST');
+  await provisionPersonalTenant(created);
   await auditInUserTenant(created.id, { userId: created.id, entity: 'User', entityId: created.id, action: 'CREATE', after: { email: created.email, role: 'GUEST', via: 'google', self: true } });
   return issueTokenPair(created);
 }

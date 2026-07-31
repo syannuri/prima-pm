@@ -233,6 +233,33 @@ route that touches a scoped model must wrap the read in `runAsSystem`.** Guarded
 ### Phase 3d — remove ad-hoc `personalOwnerId` filters the extension now supersedes
 - Carefully, one module at a time, each covered by the leakage suite.
 
+> **⚠️ ORDERING CORRECTION (2026-07-31).** 3d as originally written was UNSAFE: the extension does
+> NOT supersede `personalOwnerId` while all guests share the `default` tenant — it isolates *tenants*,
+> and does nothing between two guests, or between a guest and corporate data, in one tenant. Every
+> `personalOwnerId` filter (guest sees `= userId`; corporate views exclude `= null`) is still
+> load-bearing. So the **guest→personal-tenant conversion (Phase 5 guests, below) is the prerequisite
+> for 3d** and was pulled forward. Only once every guest is their own tenant do those filters become
+> dead code that 3d can delete (then drop the column).
+
+### Phase 5 (pulled forward) — guests become personal tenants ✅ DONE (2026-07-31), enforcement pending deploy
+The tenant-native replacement for `personalOwnerId`, and the unblocker for 3d.
+- **Schema:** `Tenant.isPersonal Boolean @default(false)` marks a single-guest sandbox tenant.
+- **New guests:** `provisionPersonalTenant(user)` (auth.service) creates a `Tenant(slug='guest-<userId>',
+  isPersonal=true)` + a `GUEST` `Membership` there, replacing `ensureDefaultMembership` in BOTH guest
+  paths (guest-register + first-time Google). `issueTokenPair` then pins `tid` to that personal tenant.
+- **Existing guests:** migration `20260731120000_guest_personal_tenants` — one personal tenant per
+  GUEST user, move their membership, re-stamp sandbox ROOTS (Project/RateCard/Resource by
+  `personalOwnerId`; Bookmark/Notification/AuditLog by guest `userId`) and reconcile every project
+  child/grandchild to its moved parent (`tenantId IS DISTINCT FROM parent`). Idempotent. Programmatic
+  mirror `backfillGuestTenants()` in `lib/tenant/backfill.ts` (runs under `runAsSystem`; used by tests
+  + available to ops).
+- **Cron:** the EVM auto-capture fan-out now skips `isPersonal` tenants (they never configure it).
+- **Verified:** `guest-tenant.itest.ts` (5, flag ON) — backfill moves a guest sandbox + child to a
+  personal tenant leaving corporate untouched, is idempotent, and post-move the guest (tid=personal)
+  sees their project while the corporate admin (tid=default) does not; new registration provisions a
+  personal tenant and two fresh guests land in different tenants. `personalOwnerId` stays (dual
+  mechanism, they agree) until 3d removes the filters after this is live + verified on prod.
+
 ## Phase 4 — Per-tenant roles (retire global `User.role`)
 
 ### Phase 4a — role from the active membership ✅ DONE (2026-07-30)

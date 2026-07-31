@@ -115,8 +115,9 @@ export async function runWeeklyAutoCaptureIfDue(now: Date = new Date()) {
 export async function runWeeklyAutoCaptureIfDueAllTenants(now: Date = new Date()) {
   if (!multitenancyEnforced()) return runWeeklyAutoCaptureIfDue(now);
 
-  // Tenant is a global model, so this listing needs no context.
-  const tenants = await prisma.tenant.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
+  // Tenant is a global model, so this listing needs no context. Personal (guest sandbox) tenants
+  // are skipped — they never configure corporate EVM auto-capture, and there can be many of them.
+  const tenants = await prisma.tenant.findMany({ where: { status: 'ACTIVE', isPersonal: false }, select: { id: true } });
   let ran = false, captured = 0, failed = 0, total = 0;
   for (const t of tenants) {
     const r = await runWithTenant(t.id, () => runWeeklyAutoCaptureIfDue(now));

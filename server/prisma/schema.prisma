@@ -259,6 +259,11 @@ model Tenant {
   name      String
   slug      String       @unique
   status    TenantStatus @default(ACTIVE)
+  // A PERSONAL tenant is a single guest's private sandbox (one per GUEST user), the tenant-native
+  // replacement for the legacy `personalOwnerId` isolation (Phase 5 / de-scatter). Corporate
+  // tenants are false. Used to exclude personal tenants from the corporate EVM cron fan-out and,
+  // later, from super-admin/tenant listings.
+  isPersonal Boolean     @default(false)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
