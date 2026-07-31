@@ -13,6 +13,19 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  // Global platform (super-admin) privilege — gates the tenant-provisioning console.
+  isPlatformAdmin?: boolean;
+}
+
+// Platform console — a tenant as seen by a super-admin (GET /admin/tenants).
+export interface PlatformTenant {
+  id: string;
+  name: string;
+  slug: string;
+  status: 'ACTIVE' | 'SUSPENDED';
+  isPersonal: boolean;
+  createdAt: string;
+  memberCount: number;
 }
 
 export interface AdminUser extends User {

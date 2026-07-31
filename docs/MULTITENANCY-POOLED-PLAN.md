@@ -403,7 +403,12 @@ a big schema cleanup); it is safe to leave indefinitely.
     one), `PATCH /:id` suspends/reactivates or renames (never the default tenant; personal tenants
     excluded). SUSPEND is enforced in `requireAuth` — a suspended tenant's members get 403. Operates on
     the global Tenant/User/Membership models (no tenant scoping); the platform-admin gate is the
-    boundary. Guarded by `platform.itest.ts` (6). **Still TODO:** a super-admin UI + impersonation.
+    boundary. Guarded by `platform.itest.ts` (6).
+  - **Super-admin UI ✅ DONE (2026-07-31):** `/auth/me` + login responses expose `isPlatformAdmin`
+    (client `User` type). New `AdminTenantsPage.tsx` (route `/admin/tenants`) — lists corporate tenants
+    (active/suspended badges, member counts, personal-sandbox tally), a create-tenant form (name→auto
+    slug + first-admin email/name/password), and suspend/reactivate + rename actions. A platform-gated
+    "Tenants" Sidebar link (only for `isPlatformAdmin`). **Still TODO:** impersonation.
 - Per-tenant rate limits & quotas.
 
 ## Phase 6 — Tenant lifecycle / SaaS

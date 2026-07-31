@@ -60,7 +60,7 @@ async function auditInUserTenant(userId: string, input: Parameters<typeof writeA
 }
 
 interface AuthResult {
-  user: { id: string; name: string; email: string; role: Role };
+  user: { id: string; name: string; email: string; role: Role; isPlatformAdmin: boolean };
   accessToken: string;
   refreshToken: string;
 }
@@ -85,7 +85,7 @@ async function issueTokenPair(user: User, opts: { replacesJti?: string; preferre
   // enforcement off we keep the global User.role so single-tenant behaviour is unchanged.
   const effectiveRole = multitenancyEnforced() && active ? active.role : user.role;
   return {
-    user: { id: user.id, name: user.name, email: user.email, role: effectiveRole },
+    user: { id: user.id, name: user.name, email: user.email, role: effectiveRole, isPlatformAdmin: user.isPlatformAdmin },
     accessToken: signAccessToken({ sub: user.id, role: effectiveRole, email: user.email, tv: user.tokenVersion, tid: active?.tenantId }),
     refreshToken,
   };
@@ -277,7 +277,7 @@ export async function switchTenant(userId: string, tenantId: string): Promise<Au
 export async function me(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, isActive: true, isPlatformAdmin: true, createdAt: true },
   });
   if (!user) throw Unauthorized();
   return user;
