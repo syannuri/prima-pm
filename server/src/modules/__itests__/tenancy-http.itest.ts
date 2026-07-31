@@ -4,7 +4,7 @@ import { createApp } from '../../app.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken, verifyAccessToken } from '../../lib/jwt.js';
-import { runWithTenant } from '../../lib/tenant/context.js';
+import { runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
 
 // End-to-end proof of the pooled-multitenancy stack WITH enforcement on: token `tid` →
@@ -73,6 +73,14 @@ describe('auth mints tokens pinned to the active tenant', () => {
     const res = await request(app).post(api('/auth/login')).send({ email: 'a@http.test', password: PW });
     expect(res.status).toBe(200);
     expect(verifyAccessToken(res.body.accessToken).tid).toBe(tenantA);
+  });
+
+  it('stamps the login audit with the user’s tenant (visible in the scoped audit view)', async () => {
+    await request(app).post(api('/auth/login')).send({ email: 'a@http.test', password: PW });
+    const audit = await runAsSystem(() =>
+      prisma.auditLog.findFirst({ where: { userId: uAId, action: 'LOGIN' }, orderBy: { createdAt: 'desc' }, select: { tenantId: true } }),
+    );
+    expect(audit?.tenantId).toBe(tenantA); // not null → shows in tenant A's /admin/audit
   });
 });
 

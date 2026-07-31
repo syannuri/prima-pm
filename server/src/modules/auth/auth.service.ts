@@ -8,7 +8,7 @@ import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled } from '../settings/settings.service.js';
 import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
-import { multitenancyEnforced } from '../../lib/tenant/context.js';
+import { multitenancyEnforced, runWithTenant } from '../../lib/tenant/context.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput } from './auth.schemas.js';
 
 // The membership a freshly-minted token should be pinned to: the caller's chosen tenant when it is
@@ -37,6 +37,17 @@ async function ensureDefaultMembership(userId: string, role: Role): Promise<void
   if (tenant) {
     await prisma.membership.create({ data: { userId, tenantId: tenant.id, role } }).catch(() => undefined);
   }
+}
+
+// Write an audit for a PUBLIC auth flow (login/register/google) — these run with NO request tenant
+// context, so without help the audit lands null-tenant and is invisible in the (scoped)
+// /admin/audit view. Resolve the user's active tenant and stamp the audit inside it. When
+// enforcement is off, the extension is a no-op so the row stays null (unchanged single-tenant
+// behaviour); when a user somehow has no membership, fall back to the plain (self-healing) write.
+async function auditInUserTenant(userId: string, input: Parameters<typeof writeAudit>[0]): Promise<void> {
+  const active = await resolveActiveMembership(userId);
+  if (active) await runWithTenant(active.tenantId, () => writeAudit(input));
+  else await writeAudit(input);
 }
 
 interface AuthResult {
@@ -98,7 +109,7 @@ export async function login(input: LoginInput): Promise<AuthResult> {
   const ok = await verifyPassword(input.password, user.passwordHash);
   if (!ok) throw Unauthorized('Invalid credentials');
 
-  await writeAudit({ userId: user.id, entity: 'User', entityId: user.id, action: 'LOGIN' });
+  await auditInUserTenant(user.id, { userId: user.id, entity: 'User', entityId: user.id, action: 'LOGIN' });
   return issueTokenPair(user);
 }
 
@@ -118,7 +129,7 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
     },
   });
   await ensureDefaultMembership(user.id, 'GUEST');
-  await writeAudit({ userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
+  await auditInUserTenant(user.id, { userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
   return issueTokenPair(user);
 }
 
@@ -143,7 +154,7 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
   const bySub = await prisma.user.findUnique({ where: { googleSub: identity.sub } });
   if (bySub) {
     if (!bySub.isActive) throw Unauthorized('This account is deactivated');
-    await writeAudit({ userId: bySub.id, entity: 'User', entityId: bySub.id, action: 'LOGIN', after: { via: 'google' } });
+    await auditInUserTenant(bySub.id, { userId: bySub.id, entity: 'User', entityId: bySub.id, action: 'LOGIN', after: { via: 'google' } });
     return issueTokenPair(bySub);
   }
 
@@ -154,7 +165,7 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
     if (byEmail.role !== 'GUEST') throw Forbidden('This email belongs to a staff account — sign in with your password.');
     if (!byEmail.isActive) throw Unauthorized('This account is deactivated');
     const linked = await prisma.user.update({ where: { id: byEmail.id }, data: { googleSub: identity.sub } });
-    await writeAudit({ userId: linked.id, entity: 'User', entityId: linked.id, action: 'LOGIN', after: { via: 'google', linked: true } });
+    await auditInUserTenant(linked.id, { userId: linked.id, entity: 'User', entityId: linked.id, action: 'LOGIN', after: { via: 'google', linked: true } });
     return issueTokenPair(linked);
   }
 
@@ -163,7 +174,7 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
     data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST' },
   });
   await ensureDefaultMembership(created.id, 'GUEST');
-  await writeAudit({ userId: created.id, entity: 'User', entityId: created.id, action: 'CREATE', after: { email: created.email, role: 'GUEST', via: 'google', self: true } });
+  await auditInUserTenant(created.id, { userId: created.id, entity: 'User', entityId: created.id, action: 'CREATE', after: { email: created.email, role: 'GUEST', via: 'google', self: true } });
   return issueTokenPair(created);
 }
 
