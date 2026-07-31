@@ -194,9 +194,24 @@ Step 1 deployed current `master` with the flag OFF (all no-op) and verified heal
 3. Expect a one-time re-auth: tokens minted before this carry no `tid`, so scoped queries fail-closed
    until the 15-min access token refreshes (refresh re-mints with `tid`).
 
-### Phase 3c — contract (the deferred Phase-2 steps, now safe)
-- Straggler sweep → default tenant; flip `tenantId` NOT NULL (+ required relation); `Project.code`
-  → `@@unique([tenantId, code])` (+ `findFirst` clash-checks); `AppSetting` per-tenant unique.
+### Phase 3c — per-tenant uniques ✅ DONE & LIVE (2026-07-31)
+- `Project.code` → `@@unique([tenantId, code])` (two orgs can reuse a code) + the 2 clash-checks
+  switched to `findFirst`; `AppSetting` → `@@unique([tenantId])`. Migration
+  `20260731000000_tenant_per_tenant_uniques` (3 index statements); applied to prod + test DB.
+  Safe with nullable tenantId (enforcement stamps every row; Postgres NULLs are distinct).
+- **`tenantId` NOT NULL is DEFERRED (deliberate):** making the Prisma field required breaks **~99
+  create-sites** — the extension injects `tenantId` at runtime, which TypeScript can't see; the only
+  ways around it are threading tenantId through 99 sites (defeats the extension) or a poison
+  `@default(dbgenerated())` on a FK column (fragile). The fail-closed extension already guarantees
+  non-null on every real insert, so the DB NOT NULL is marginal defense-in-depth not worth the churn.
+  `AuditLog` would have to stay nullable regardless (auth-flow audits are context-less by design).
+- **Test-hygiene fix shipped alongside:** `test:integration` now pins `MULTITENANCY_ENFORCE=false`
+  (the suite loads `server/.env` via dotenv, and prod's `.env` has the flag ON — which had made the
+  whole suite run under enforcement and fail on no-`tid` test tokens). The 3 tenancy suites toggle it
+  on themselves.
+- **Known follow-up:** under enforcement, auth-flow audits (login/logout/password) are written with
+  no tenant context → null tenantId → they don't appear in the (scoped) `/admin/audit` view. Decide
+  whether to stamp them with the user's active tenant.
 
 ### Phase 3d — remove ad-hoc `personalOwnerId` filters the extension now supersedes
 - Carefully, one module at a time, each covered by the leakage suite.
