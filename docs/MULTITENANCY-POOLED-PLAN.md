@@ -252,8 +252,22 @@ non-global corporate role still sees `pmUserId = self`).
   suite (flag-off) dropped its list/feed *separation* assertions (now proven under enforcement in the
   tenancy suites) and keeps guest self-service + rbac direct-access 403s. Cron: `tenant-cron.itest`
   gains a personal-tenant-skip case. Full integration suite green.
-- **Remaining contract (later):** drop `personalOwnerId` writes + rbac checks + validators, then drop
-  the column (a final migration).
+- **Contract — part 1 (rbac de-scatter) ✅ DONE (2026-07-31):** the guest self-governance signal moved
+  from the project's `personalOwnerId` to the active TENANT's `isPersonal`. `requireAuth` resolves
+  `tenantIsPersonal` fresh from the membership's tenant (no token field); `requireProjectAccess` drops
+  its `personalOwnerId` branch entirely (corporate ownership + tenant scoping cover a guest reaching
+  their own project — cross-tenant simply 404s); `requireProjectGovernance` uses `req.user.
+  tenantIsPersonal` (personal tenant → member self-governs). The flag-off `rbac.itest` guest-workspace
+  suite was replaced by an enforcement-ON `guest-workspace.itest.ts` (self-governance charter→WBS→
+  baseline, private resource pool, 404 cross-tenant isolation) — its list/read isolation coverage
+  already lives in tenancy-leakage/guest-tenant/tenancy-http. Full suite 244 green. Code-only,
+  reversible (column still written).
+- **Contract — part 2 (later):** convert the remaining SERVICE-layer `personalOwnerId` reads
+  (cost/schedule/activation workspace validators + resourceUserId-nulling, resource/ratecard
+  list-filters, adminAudit scope label, users hard-delete cascade) to tenant/`isPersonal` — needs
+  `isPersonal` plumbed into the service layer (e.g. the ALS store) — then stop WRITING
+  `personalOwnerId` and **drop the column** (final irreversible migration). Deferred deliberately so
+  the rbac change soaks first.
 
 > **⚠️ ORDERING CORRECTION (2026-07-31).** 3d as originally written was UNSAFE: the extension does
 > NOT supersede `personalOwnerId` while all guests share the `default` tenant — it isolates *tenants*,

@@ -33,7 +33,7 @@ export function requireProjectAccess(opts: { write?: boolean; allowRoles?: Role[
 
       const project = await prisma.project.findUnique({
         where: { id: projectId },
-        select: { id: true, pmUserId: true, personalOwnerId: true, status: true, deletedAt: true },
+        select: { id: true, pmUserId: true, status: true, deletedAt: true },
       });
       // A soft-deleted project must be treated as gone for every nested route,
       // not just the top-level project endpoints (otherwise its cost/risk/
@@ -42,21 +42,16 @@ export function requireProjectAccess(opts: { write?: boolean; allowRoles?: Role[
         throw NotFound('Project not found');
       }
 
-      if (project.personalOwnerId) {
-        // Personal (guest) project — fully sandboxed: ONLY its owner may touch it, even
-        // ADMIN/PMO. Corporate roles never reach guest data.
-        if (project.personalOwnerId !== req.user.id) {
-          throw Forbidden('You do not have access to this project');
-        }
-      } else {
-        // Corporate project: ADMIN/PMO global, functional roles for their domain routes,
-        // otherwise the owning PM. A GUEST owns no corporate project → falls through to 403.
-        const isGlobal = GLOBAL_ROLES.includes(req.user.role);
-        const isAllowedFunctional = opts.allowRoles?.includes(req.user.role) ?? false;
-        const isOwner = project.pmUserId === req.user.id;
-        if (!isGlobal && !isAllowedFunctional && !isOwner) {
-          throw Forbidden('You do not have access to this project');
-        }
+      // ADMIN/PMO global, functional roles for their domain routes, otherwise the owning PM. A guest
+      // in their personal tenant is the pmUserId owner of their own projects, so this ownership rule
+      // grants them access; a guest sandbox is kept from corporate users (and vice-versa) by TENANT
+      // scoping — a cross-tenant project simply doesn't load (404 above), so no personalOwnerId check
+      // is needed here.
+      const isGlobal = GLOBAL_ROLES.includes(req.user.role);
+      const isAllowedFunctional = opts.allowRoles?.includes(req.user.role) ?? false;
+      const isOwner = project.pmUserId === req.user.id;
+      if (!isGlobal && !isAllowedFunctional && !isOwner) {
+        throw Forbidden('You do not have access to this project');
       }
 
       // Write access: VIEWER and TEAM_MEMBER may never write at the project level here.
@@ -82,10 +77,12 @@ export function requireProjectAccess(opts: { write?: boolean; allowRoles?: Role[
 }
 
 // Guard for GOVERNANCE actions on a project (commit charter, set/lock baseline, activate/
-// hold/resume/close, delete). For a personal (guest) project the OWNER self-governs it — no
-// approval matrix — so ownership alone suffices. For a corporate project the actor must hold
-// one of `corporateRoles` (typically ADMIN/PMO, sometimes + PROJECT_MANAGER). Loads the
-// project from :projectId / :id, so it replaces a plain requireRole() on these routes.
+// hold/resume/close, delete). In a PERSONAL (guest) tenant the sole member self-governs their own
+// projects — no approval matrix. For a corporate project the actor must hold one of `corporateRoles`
+// (typically ADMIN/PMO, sometimes + PROJECT_MANAGER). Loads the project from :projectId / :id, so it
+// replaces a plain requireRole() on these routes. (Whether the project is a personal sandbox is now
+// read from the active TENANT — req.user.tenantIsPersonal — the tenant-native replacement for the
+// project's personalOwnerId; tenant scoping already blocks cross-tenant reach.)
 export function requireProjectGovernance(...corporateRoles: Role[]) {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -94,12 +91,11 @@ export function requireProjectGovernance(...corporateRoles: Role[]) {
       if (!projectId) throw NotFound('Project id missing in route');
       const project = await prisma.project.findUnique({
         where: { id: projectId },
-        select: { id: true, personalOwnerId: true, deletedAt: true },
+        select: { id: true, deletedAt: true },
       });
       if (!project || project.deletedAt) throw NotFound('Project not found');
-      if (project.personalOwnerId) {
-        if (project.personalOwnerId !== req.user.id) throw Forbidden('You do not have access to this project');
-        // Personal owner governs their own project with no approval matrix.
+      if (req.user.tenantIsPersonal) {
+        // Personal (guest) tenant: the sole member self-governs their own project, no approval matrix.
       } else if (!corporateRoles.includes(req.user.role)) {
         throw Forbidden(`Requires role: ${corporateRoles.join(' | ')}`);
       }

@@ -12,6 +12,10 @@ export interface AuthUser {
   role: Role;
   email: string;
   tid?: string; // active tenant (pooled multitenancy); present once tokens carry `tid`
+  // True when the active tenant is a guest's personal sandbox. The tenant-native replacement for the
+  // project's `personalOwnerId`: in a personal tenant the sole member self-governs their own projects
+  // (rbac). Resolved fresh from the membership's tenant below, only under enforcement.
+  tenantIsPersonal?: boolean;
 }
 
 declare global {
@@ -57,16 +61,18 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     // trusted from the token) for the same reason. A stale token whose membership was revoked is
     // rejected. With enforcement off, the global role stands (single-tenant behaviour unchanged).
     let role = user.role;
+    let tenantIsPersonal = false;
     if (multitenancyEnforced() && payload.tid) {
       const membership = await prisma.membership.findUnique({
         where: { userId_tenantId: { userId: user.id, tenantId: payload.tid } },
-        select: { role: true },
+        select: { role: true, tenant: { select: { isPersonal: true } } },
       });
       if (!membership) throw Unauthorized('No membership in the active tenant');
       role = membership.role;
+      tenantIsPersonal = membership.tenant.isPersonal;
     }
 
-    req.user = { id: user.id, role, email: user.email, tid: payload.tid };
+    req.user = { id: user.id, role, email: user.email, tid: payload.tid, tenantIsPersonal };
 
     // Establish the request-scoped tenant context so the Prisma extension scopes every query.
     if (multitenancyEnforced()) {
