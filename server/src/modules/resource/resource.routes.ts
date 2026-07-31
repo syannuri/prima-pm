@@ -16,11 +16,9 @@ import {
 const router = Router();
 router.use(requireAuth);
 
-// A guest works inside their PRIVATE pool (scoped to their user id); everyone else works on the
-// corporate pool (personalOwnerId = null). This is what keeps the two data sets fully separated.
-const ownerScope = (req: { user?: { id: string; role: string } }): string | null =>
-  req.user?.role === 'GUEST' ? req.user.id : null;
-
+// A guest works inside their PRIVATE pool and everyone else on the corporate pool — the two are now
+// kept apart by TENANT scoping (a guest is their own tenant), so the service no longer needs an owner
+// scope passed in.
 const querySchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
@@ -55,7 +53,7 @@ const resourceSchema = z.object({
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    res.json(await listResources(req.query.all === '1' || req.query.all === 'true', ownerScope(req)));
+    res.json(await listResources(req.query.all === '1' || req.query.all === 'true'));
   }),
 );
 
@@ -65,7 +63,7 @@ router.post(
   requireRole('ADMIN', 'PMO', 'GUEST'),
   validateBody(resourceSchema),
   asyncHandler(async (req, res) => {
-    res.status(201).json({ resource: await createResource(req.body, req.user!.id, ownerScope(req)) });
+    res.status(201).json({ resource: await createResource(req.body, req.user!.id) });
   }),
 );
 
@@ -74,7 +72,7 @@ router.put(
   requireRole('ADMIN', 'PMO', 'GUEST'),
   validateBody(resourceSchema),
   asyncHandler(async (req, res) => {
-    res.json({ resource: await updateResource(req.params.id, req.body, req.user!.id, ownerScope(req)) });
+    res.json({ resource: await updateResource(req.params.id, req.body, req.user!.id) });
   }),
 );
 
@@ -83,7 +81,7 @@ router.patch(
   requireRole('ADMIN', 'PMO', 'GUEST'),
   validateBody(z.object({ isActive: z.boolean() })),
   asyncHandler(async (req, res) => {
-    res.json({ resource: await setResourceActive(req.params.id, req.body.isActive, req.user!.id, ownerScope(req)) });
+    res.json({ resource: await setResourceActive(req.params.id, req.body.isActive, req.user!.id) });
   }),
 );
 
@@ -92,7 +90,7 @@ router.post(
   '/:id/refresh-rate',
   requireRole('ADMIN', 'PMO', 'GUEST'),
   asyncHandler(async (req, res) => {
-    res.json({ resource: await refreshResourceRate(req.params.id, req.user!.id, ownerScope(req)) });
+    res.json({ resource: await refreshResourceRate(req.params.id, req.user!.id) });
   }),
 );
 
@@ -101,7 +99,7 @@ router.delete(
   '/:id',
   requireRole('ADMIN', 'PMO', 'GUEST'),
   asyncHandler(async (req, res) => {
-    await deleteResource(req.params.id, req.user!.id, ownerScope(req));
+    await deleteResource(req.params.id, req.user!.id);
     res.status(204).send();
   }),
 );

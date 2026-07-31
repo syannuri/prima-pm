@@ -8,6 +8,7 @@ import { requireRole } from '../../middleware/rbac.js';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { Conflict, NotFound, BadRequest } from '../../lib/errors.js';
+import { runAsSystem } from '../../lib/tenant/context.js';
 import { hashPassword } from '../../lib/password.js';
 import { strongPassword } from '../auth/auth.schemas.js';
 import { multitenancyEnforced } from '../../lib/tenant/context.js';
@@ -274,15 +275,21 @@ router.delete(
     if (target.id === req.user!.id) throw BadRequest('You cannot delete your own account');
 
     if (target.role === 'GUEST') {
-      await prisma.$transaction(async (tx) => {
-        // Personal projects cascade all nested data (charter, WBS, cost, risk, CRs, timesheets…).
-        await tx.project.deleteMany({ where: { personalOwnerId: target.id } });
-        await tx.resource.deleteMany({ where: { personalOwnerId: target.id } });
-        await tx.rateCard.deleteMany({ where: { personalOwnerId: target.id } });
+      // A guest's data lives in their PERSONAL tenant (slug guest-<id>) — delete it as system, since
+      // these deletes span that tenant, not the caller's. Projects cascade all nested data (charter,
+      // WBS, cost, risk, CRs, timesheets…). The tenant + memberships go when the user is deleted
+      // (Membership cascades on the user FK); the now-empty personal tenant row is harmless.
+      await runAsSystem(() => prisma.$transaction(async (tx) => {
+        const personal = await tx.tenant.findUnique({ where: { slug: `guest-${target.id}` }, select: { id: true } });
+        if (personal) {
+          await tx.project.deleteMany({ where: { tenantId: personal.id } });
+          await tx.resource.deleteMany({ where: { tenantId: personal.id } });
+          await tx.rateCard.deleteMany({ where: { tenantId: personal.id } });
+        }
         await tx.notification.deleteMany({ where: { userId: target.id } });
         await tx.projectBookmark.deleteMany({ where: { userId: target.id } });
-        await tx.user.delete({ where: { id: target.id } }); // cascades refresh tokens; audit SET NULL
-      });
+        await tx.user.delete({ where: { id: target.id } }); // cascades memberships + refresh tokens; audit SET NULL
+      }));
     } else {
       // Never lock the org out: keep at least one active admin.
       if (target.role === 'ADMIN' && target.isActive) {

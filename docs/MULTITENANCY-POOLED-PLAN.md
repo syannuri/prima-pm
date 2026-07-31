@@ -273,10 +273,21 @@ non-global corporate role still sees `pmUserId = self`).
   resourceUserId-nulling case). Also fixed a pre-existing flaky `tenancy-http` test (identical
   `createMany` createdAt → non-deterministic "first membership"; now explicit timestamps). Code-only,
   reversible.
-- **Contract — part 2b (the finale, later):** the remaining PURE-REDUNDANT `personalOwnerId` reads
-  (resource/ratecard list-filters + lookup-scoping + validators, adminAudit scope label, users
-  hard-delete cascade — they still work off the written column) go here, together with **stopping the
-  WRITES** and **dropping the column** (the one irreversible migration). Deferred so parts 1 + 2a soak.
+- **Contract — part 2b-code (last reads + stop writing) ✅ DONE (2026-07-31):** removed the final
+  `personalOwnerId` references from the APP: adminAudit scope label (now `user.role==='GUEST'` only),
+  resource/ratecard modules (dropped `ownerScope` + all filters/validators/writes — pure tenant
+  scoping now; guest resource `userId` nulling via `activeTenantIsPersonal()`), `projects.service`
+  (STOPPED writing `personalOwnerId`; a guest project's `pmUserId=self` via actorRole; `assertNotGuestPm`
+  gated by `!activeTenantIsPersonal()`; dropped the listProjectDatabase `personalOwnerId:null` filter),
+  and the users hard-delete cascade (deletes a guest's data by their PERSONAL TENANT under
+  `runAsSystem`). The column + writes are GONE from the app; only `backfill.ts` (a historical migration
+  helper) + the schema field remain. Full suite 245 green (serial — the parallel run has a pre-existing
+  shared-DB/global-flag concurrency flake). Reversible (git-revert; the column data is intact and
+  reconstructable from tenant slugs).
+- **Contract — part 2b-drop (the irreversible finale, next):** once BOTH prods run 2b-code (no running
+  instance references the column), drop the `personalOwnerId` column (migration) and remove
+  `backfillGuestTenants` + its personalOwnerId reads. `personalOwnerId` data isn't truly lost — each
+  personal tenant's slug is `guest-<userId>`, so the owner is recoverable.
 
 > **⚠️ ORDERING CORRECTION (2026-07-31).** 3d as originally written was UNSAFE: the extension does
 > NOT supersede `personalOwnerId` while all guests share the `default` tenant — it isolates *tenants*,

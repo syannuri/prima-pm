@@ -27,14 +27,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const q = querySchema.parse(req.query);
 
-    // "Personal" (guest) activity = the actor is a GUEST, OR the event happened on a personal
-    // project. Personal projects are few, so we resolve their ids up front.
-    const personalProjectIds = (
-      await prisma.project.findMany({ where: { personalOwnerId: { not: null } }, select: { id: true } })
-    ).map((p) => p.id);
-    const personalCond: Prisma.AuditLogWhereInput = {
-      OR: [{ user: { role: 'GUEST' } }, { projectId: { in: personalProjectIds } }],
-    };
+    // "Personal" (guest) activity = the actor is a GUEST. (This admin audit is tenant-scoped, so a
+    // corporate tenant never even sees a guest's personal-project events — they live in the guest's
+    // own tenant — which is why matching on the GUEST actor role is sufficient.)
+    const personalCond: Prisma.AuditLogWhereInput = { user: { role: 'GUEST' } };
 
     const where: Prisma.AuditLogWhereInput = {
       ...(q.entity ? { entity: q.entity } : {}),
@@ -67,7 +63,7 @@ router.get(
     // Resolve project code/name/owner for the page's project ids (AuditLog has no Project relation).
     const pids = [...new Set(rows.map((r) => r.projectId).filter((v): v is string => !!v))];
     const projects = pids.length
-      ? await prisma.project.findMany({ where: { id: { in: pids } }, select: { id: true, code: true, name: true, personalOwnerId: true } })
+      ? await prisma.project.findMany({ where: { id: { in: pids } }, select: { id: true, code: true, name: true } })
       : [];
     const pmap = new Map(projects.map((p) => [p.id, p]));
 
@@ -83,7 +79,7 @@ router.get(
         after: r.after ?? null,
         actor: r.user ? { name: r.user.name, role: r.user.role, email: r.user.email } : null,
         project: proj ? { code: proj.code, name: proj.name } : null,
-        personal: (proj?.personalOwnerId ?? null) !== null || r.user?.role === 'GUEST',
+        personal: r.user?.role === 'GUEST',
       };
     });
 

@@ -2,6 +2,7 @@ import type { Prisma, Role, ProjectStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
+import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
 import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
@@ -87,7 +88,7 @@ export async function getProject(id: string) {
 // Under concurrent creates two callers can still compute the same max + 1, so we retry
 // the auto-numbered path on the unique-code race (P2002). An explicit user-supplied code
 // that clashes is a real Conflict and is NOT retried.
-async function createProjectRow(input: CreateProjectInput, year: number, personalOwnerId: string | null) {
+async function createProjectRow(input: CreateProjectInput, year: number, isGuest: boolean, actorId: string) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await prisma.$transaction(async (tx) => {
@@ -112,11 +113,10 @@ async function createProjectRow(input: CreateProjectInput, year: number, persona
             name: input.name,
             clientName: input.clientName ?? null,
             sponsor: input.sponsor ?? null,
-            // A guest's personal project is owned + managed by the guest; corporate projects
-            // use the assigned PM. personalOwnerId being set is what flips a project to the
-            // sandboxed/self-governed mode (see rbac + listProjects).
-            personalOwnerId: personalOwnerId,
-            pmUserId: personalOwnerId ?? input.pmUserId ?? null,
+            // A guest's project is owned + managed by the guest (self); corporate projects use the
+            // assigned PM. The sandboxed/self-governed mode is now driven by the guest's PERSONAL
+            // TENANT (rbac reads req.user.tenantIsPersonal), not a per-project flag.
+            pmUserId: isGuest ? actorId : (input.pmUserId ?? null),
             category: input.category ?? null,
             // Free-text detail only carries meaning for the OTHER category.
             categoryOther: input.category === 'OTHER' ? (input.categoryOther?.trim() || null) : null,
@@ -146,9 +146,9 @@ export async function createProject(input: CreateProjectInput, actorId: string, 
   // Year is derived from the actor's request time; passed explicitly to keep code testable.
   const year = new Date().getFullYear();
   // A GUEST can only ever create a personal project owned by themselves — never a corporate one.
-  const personalOwnerId = actorRole === 'GUEST' ? actorId : null;
-  if (!personalOwnerId) await assertNotGuestPm(input.pmUserId); // corporate project: reject a guest PM
-  const project = await createProjectRow(input, year, personalOwnerId);
+  const isGuest = actorRole === 'GUEST';
+  if (!isGuest) await assertNotGuestPm(input.pmUserId); // corporate project: reject a guest PM
+  const project = await createProjectRow(input, year, isGuest, actorId);
 
   await writeAudit({ projectId: project.id, userId: actorId, entity: 'Project', entityId: project.id, action: 'CREATE', after: project });
   await notifyPmAssigned(project.pmUserId, actorId, project);
@@ -158,8 +158,9 @@ export async function createProject(input: CreateProjectInput, actorId: string, 
 export async function updateProject(id: string, input: UpdateProjectInput, actorId: string) {
   const before = await prisma.project.findFirst({ where: { id, deletedAt: null } });
   if (!before) throw NotFound('Project not found');
-  // A corporate project may never be handed to a guest account (personal projects keep their owner).
-  if (input.pmUserId && !before.personalOwnerId) await assertNotGuestPm(input.pmUserId);
+  // A corporate project may never be handed to a guest account. In a guest's personal tenant the
+  // owner stays self, so skip the check there.
+  if (input.pmUserId && !activeTenantIsPersonal()) await assertNotGuestPm(input.pmUserId);
 
   // Project code is unique per tenant — block a clash with another project.
   const newCode = input.code?.trim();
@@ -444,7 +445,7 @@ export async function listProjectDatabase(filters: {
 }) {
   const where: Prisma.ProjectWhereInput = {
     deletedAt: null,
-    personalOwnerId: null,
+    // Guest sandboxes are excluded by tenant scoping (this corporate DB view runs in the corporate tenant).
     archivedAt: filters.archived ? { not: null } : null,
   };
   if (filters.status) where.status = filters.status;

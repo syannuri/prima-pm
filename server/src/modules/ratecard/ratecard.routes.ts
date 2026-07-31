@@ -10,11 +10,8 @@ import { NotFound, Conflict } from '../../lib/errors.js';
 const router = Router();
 router.use(requireAuth);
 
-// A guest manages their PRIVATE rate cards (scoped to their user id); ADMIN/FINANCE manage the
-// corporate ones (personalOwnerId = null). The two sets never mix.
-const ownerScope = (req: { user?: { id: string; role: string } }): string | null =>
-  req.user?.role === 'GUEST' ? req.user.id : null;
-
+// A guest manages their PRIVATE rate cards and ADMIN/FINANCE the corporate ones — the two sets are
+// now kept apart by TENANT scoping (a guest is their own tenant), so no owner scope is passed around.
 const rateCardSchema = z.object({
   roleName: z.string().min(2).max(120),
   level: z.string().max(60).optional(),
@@ -22,11 +19,12 @@ const rateCardSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-// Uniqueness of (roleName, level) is enforced per owner scope (was a global DB constraint; a guest
-// may reuse a role/level name that corporate also uses). Guarded here at the application layer.
-async function assertUniqueRole(roleName: string, level: string | null, ownerId: string | null, excludeId?: string): Promise<void> {
+// Uniqueness of (roleName, level) is enforced within the caller's tenant (a guest may reuse a
+// role/level name that corporate also uses — they're in different tenants). The findFirst is
+// tenant-scoped, so no explicit owner filter is needed.
+async function assertUniqueRole(roleName: string, level: string | null, excludeId?: string): Promise<void> {
   const clash = await prisma.rateCard.findFirst({
-    where: { roleName, level, personalOwnerId: ownerId, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    where: { roleName, level, ...(excludeId ? { id: { not: excludeId } } : {}) },
     select: { id: true },
   });
   if (clash) throw Conflict('A rate card with that role and level already exists');
@@ -39,7 +37,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const all = req.query.all === '1' || req.query.all === 'true';
     const rateCards = await prisma.rateCard.findMany({
-      where: { personalOwnerId: ownerScope(req), ...(all ? {} : { isActive: true }) },
+      where: { ...(all ? {} : { isActive: true }) },
       orderBy: [{ roleName: 'asc' }, { level: 'asc' }],
     });
     res.json({ rateCards });
@@ -52,16 +50,14 @@ router.post(
   requireRole('ADMIN', 'FINANCE', 'GUEST'),
   validateBody(rateCardSchema),
   asyncHandler(async (req, res) => {
-    const ownerId = ownerScope(req);
     const level = req.body.level ?? null;
-    await assertUniqueRole(req.body.roleName, level, ownerId);
+    await assertUniqueRole(req.body.roleName, level);
     const rateCard = await prisma.rateCard.create({
       data: {
         roleName: req.body.roleName,
         level,
         unitCostPerManday: req.body.unitCostPerManday,
         isActive: req.body.isActive ?? true,
-        personalOwnerId: ownerId,
       },
     });
     await writeAudit({ userId: req.user!.id, entity: 'RateCard', entityId: rateCard.id, action: 'CREATE', after: rateCard });
@@ -74,11 +70,10 @@ router.put(
   requireRole('ADMIN', 'FINANCE', 'GUEST'),
   validateBody(rateCardSchema),
   asyncHandler(async (req, res) => {
-    const ownerId = ownerScope(req);
-    const existing = await prisma.rateCard.findFirst({ where: { id: req.params.id, personalOwnerId: ownerId } });
+    const existing = await prisma.rateCard.findFirst({ where: { id: req.params.id } });
     if (!existing) throw NotFound('Rate card not found');
     const level = req.body.level ?? null;
-    await assertUniqueRole(req.body.roleName, level, ownerId, existing.id);
+    await assertUniqueRole(req.body.roleName, level, existing.id);
     const rateCard = await prisma.rateCard.update({
       where: { id: req.params.id },
       data: {
@@ -99,7 +94,7 @@ router.patch(
   requireRole('ADMIN', 'FINANCE', 'GUEST'),
   validateBody(z.object({ isActive: z.boolean() })),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.rateCard.findFirst({ where: { id: req.params.id, personalOwnerId: ownerScope(req) } });
+    const existing = await prisma.rateCard.findFirst({ where: { id: req.params.id } });
     if (!existing) throw NotFound('Rate card not found');
     const rateCard = await prisma.rateCard.update({ where: { id: req.params.id }, data: { isActive: req.body.isActive } });
     await writeAudit({ userId: req.user!.id, entity: 'RateCard', entityId: rateCard.id, action: 'UPDATE', before: existing, after: rateCard });
@@ -113,7 +108,7 @@ router.delete(
   '/:id',
   requireRole('ADMIN', 'FINANCE', 'GUEST'),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.rateCard.findFirst({ where: { id: req.params.id, personalOwnerId: ownerScope(req) } });
+    const existing = await prisma.rateCard.findFirst({ where: { id: req.params.id } });
     if (!existing) throw NotFound('Rate card not found');
     const [resCount, lineCount] = await Promise.all([
       prisma.resource.count({ where: { rateCardId: req.params.id } }),
