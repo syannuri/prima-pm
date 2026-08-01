@@ -23,6 +23,7 @@ export interface PlatformTenant {
   name: string;
   slug: string;
   status: 'ACTIVE' | 'SUSPENDED';
+  plan: 'FREE' | 'PRO' | 'ENTERPRISE';
   isPersonal: boolean;
   createdAt: string;
   memberCount: number;

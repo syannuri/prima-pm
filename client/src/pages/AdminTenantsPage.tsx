@@ -53,7 +53,7 @@ export default function AdminTenantsPage() {
               <table className="prima-rows w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-                    <th className="py-2">{id ? 'Nama' : 'Name'}</th><th>Slug</th><th>{id ? 'Status' : 'Status'}</th><th className="text-right">{id ? 'Anggota' : 'Members'}</th><th>{id ? 'Dibuat' : 'Created'}</th><th></th>
+                    <th className="py-2">{id ? 'Nama' : 'Name'}</th><th>Slug</th><th>{id ? 'Status' : 'Status'}</th><th>{id ? 'Paket' : 'Plan'}</th><th className="text-right">{id ? 'Anggota' : 'Members'}</th><th>{id ? 'Dibuat' : 'Created'}</th><th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -93,10 +93,14 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
     finally { setEntering(false); }
   };
   const patch = useMutation({
-    mutationFn: (body: { status?: 'ACTIVE' | 'SUSPENDED'; name?: string }) => api.patch(`/admin/tenants/${t.id}`, body),
+    mutationFn: (body: { status?: 'ACTIVE' | 'SUSPENDED'; name?: string; plan?: PlatformTenant['plan'] }) => api.patch(`/admin/tenants/${t.id}`, body),
     onSuccess: () => { onChange(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
   });
+  const setPlan = (plan: PlatformTenant['plan']) => {
+    if (plan === t.plan) return;
+    patch.mutate({ plan }, { onSuccess: () => { onChange(); toast.success(id ? `Paket ${t.name} → ${plan}` : `${t.name} plan → ${plan}`); } });
+  };
   const [exporting, setExporting] = useState(false);
   const exportData = async () => {
     setExporting(true);
@@ -117,7 +121,24 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
       patch.mutate({ status: 'ACTIVE' }, { onSuccess: () => { onChange(); toast.success(id ? `${t.name} diaktifkan` : `${t.name} reactivated`); } });
     }
   };
-  return { patch, toggleSuspend, enter, entering, exportData, exporting };
+  return { patch, toggleSuspend, enter, entering, exportData, exporting, setPlan };
+}
+
+const PLANS: PlatformTenant['plan'][] = ['FREE', 'PRO', 'ENTERPRISE'];
+
+// Compact inline plan selector (platform admin sets a tenant's SaaS tier → quota limits).
+function PlanSelect({ t, onPlan, disabled }: { t: PlatformTenant; onPlan: (p: PlatformTenant['plan']) => void; disabled?: boolean }) {
+  return (
+    <select
+      value={t.plan}
+      disabled={disabled}
+      onChange={(e) => onPlan(e.target.value as PlatformTenant['plan'])}
+      title="SaaS plan (quota tier)"
+      className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+    >
+      {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
+    </select>
+  );
 }
 
 function StatusBadge({ status }: { status: PlatformTenant['status'] }) {
@@ -133,12 +154,13 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const { patch, toggleSuspend, enter, entering, exportData, exporting } = useTenantActions(t, onChange);
+  const { patch, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
   return (
     <tr className="border-b last:border-0 dark:border-slate-800">
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{t.name}</td>
       <td className="font-mono text-xs text-slate-500 dark:text-slate-400">{t.slug}</td>
       <td><StatusBadge status={t.status} /></td>
+      <td><PlanSelect t={t} onPlan={setPlan} disabled={patch.isPending} /></td>
       <td className="text-right text-slate-500 dark:text-slate-400">{t.memberCount}</td>
       <td className="text-slate-500 dark:text-slate-400">{formatDate(t.createdAt)}</td>
       <td className="text-right whitespace-nowrap">
@@ -161,7 +183,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const { patch, toggleSuspend, enter, entering, exportData, exporting } = useTenantActions(t, onChange);
+  const { patch, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
       <div className="flex items-start justify-between gap-2">
@@ -169,7 +191,10 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
           <p className="font-medium text-slate-700 dark:text-slate-200">{t.name}</p>
           <p className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">{t.slug} · {t.memberCount} {id ? 'anggota' : 'members'}</p>
         </div>
-        <StatusBadge status={t.status} />
+        <div className="flex flex-col items-end gap-1">
+          <StatusBadge status={t.status} />
+          <PlanSelect t={t} onPlan={setPlan} disabled={patch.isPending} />
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
         <Button variant="ghost" onClick={enter} disabled={entering}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>

@@ -444,6 +444,15 @@ a big schema cleanup); it is safe to leave indefinitely.
     name + email + password). Guarded by `org-signup.itest.ts` (5). Distinct from guest signup (a
     sandboxed personal tenant).
 - Tenant settings, branding, **subdomain/custom domain** (tenant `slug` → host), plan/billing gating.
+  - **✅ Plan & quota gating DONE (2026-08-01):** `Tenant.plan` enum FREE/PRO/ENTERPRISE (migration
+    `20260801160000_tenant_plan`; default tenant → ENTERPRISE as it owns all pre-existing data). Limits
+    in `lib/tenant/plans.ts` (FREE 3 proj/5 members/1 GB · PRO 50/50/20 GB · ENTERPRISE unlimited);
+    enforcement in `lib/tenant/quota.ts` — `assertCanCreateProject`/`assertCanAddMember` (403 over cap)
+    + plan-aware `tenantStorageLimitBytes` (upload 413). Enforcement-gated + PERSONAL tenants ungated
+    (plans gate corporate workspaces). `TENANT_STORAGE_QUOTA_MB` is now a deployment-wide hard cap on
+    top of the plan limit. Platform console: GET returns `plan`, PATCH `{ plan }` changes it; a per-
+    tenant plan `<select>` on each row/card. Guarded by `tenant-plan.itest.ts` (3). Actual PAYMENT
+    integration (Stripe/etc.) is a later step — this is the in-app gating layer.
 - Per-tenant data export, deletion (GDPR), and backup.
   - **✅ Hard-delete DONE (2026-08-01):** `DELETE /admin/tenants/:id` (platform-admin). Guards: never
     the default tenant, never a personal (guest) tenant (those go via user-account delete), and the

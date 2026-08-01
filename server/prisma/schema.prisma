@@ -37,6 +37,14 @@ enum TenantStatus {
   SUSPENDED
 }
 
+// SaaS subscription tier (Phase 6). Gates per-tenant quotas (projects/members/storage). FREE is the
+// default for new + backfilled tenants; ENTERPRISE is unlimited. See lib/tenant/plans.ts for limits.
+enum TenantPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
 enum ProjectStatus {
   DRAFT
   CHARTERED
@@ -268,6 +276,8 @@ model Tenant {
   name      String
   slug      String       @unique
   status    TenantStatus @default(ACTIVE)
+  // SaaS plan (Phase 6) — gates per-tenant quotas (max projects/members/storage). Default FREE.
+  plan      TenantPlan   @default(FREE)
   // A PERSONAL tenant is a single guest's private sandbox (one per GUEST user), the tenant-native
   // replacement for the legacy `personalOwnerId` isolation (Phase 5 / de-scatter). Corporate
   // tenants are false. Used to exclude personal tenants from the corporate EVM cron fan-out and,

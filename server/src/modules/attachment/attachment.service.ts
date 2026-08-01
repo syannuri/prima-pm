@@ -4,15 +4,10 @@ import type { AttachmentOwner } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, NotFound, PayloadTooLarge } from '../../lib/errors.js';
+import { tenantStorageLimitBytes } from '../../lib/tenant/quota.js';
 
 export const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-// Per-TENANT storage quota (total bytes across a tenant's attachments). Live env read (like the
-// enforcement flag) so it's adjustable without a rebuild; 1 GB default.
-export function tenantQuotaBytes(): number {
-  return (Number(process.env.TENANT_STORAGE_QUOTA_MB) || 1024) * 1024 * 1024;
-}
 
 // Uploaded files are namespaced under uploads/<tenantId>/<storageKey> (defence-in-depth + easy
 // per-tenant accounting). Resolve a file's path, falling back to the flat legacy location for
@@ -70,9 +65,9 @@ export async function createAttachment(
 ) {
   await assertOwner(projectId, ownerType, ownerId);
 
-  // Enforce the per-tenant storage quota. The file is already on disk (multer streamed it), so on
-  // rejection we remove it before failing.
-  const quota = tenantQuotaBytes();
+  // Enforce the per-tenant storage quota (plan-aware — Phase 6). The file is already on disk (multer
+  // streamed it), so on rejection we remove it before failing.
+  const quota = await tenantStorageLimitBytes();
   const used = await tenantStorageUsed();
   if (used + file.size > quota) {
     try { fs.unlinkSync(file.path); } catch { /* already gone */ }

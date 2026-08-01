@@ -8,6 +8,7 @@ import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound, Conflict, BadRequest } from '../../lib/errors.js';
 import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
+import { assertCanAddMember } from '../../lib/tenant/quota.js';
 
 // Membership management for the ACTIVE tenant (pooled multitenancy). Lets a tenant ADMIN add an
 // existing user to their org, change a member's per-tenant role, and remove a member — WITHOUT
@@ -70,6 +71,7 @@ router.post(
     if (user.isGuest) throw BadRequest('Guest accounts cannot be added as tenant members.');
     const existing = await prisma.membership.findUnique({ where: { userId_tenantId: { userId: user.id, tenantId } }, select: { id: true } });
     if (existing) throw Conflict('That user is already a member of this tenant.');
+    await assertCanAddMember(); // plan quota (Phase 6)
 
     const membership = await prisma.membership.create({ data: { userId: user.id, tenantId, role: req.body.role } });
     await writeAudit({ userId: req.user!.id, entity: 'Membership', entityId: membership.id, action: 'CREATE', after: { userId: user.id, tenantId, role: req.body.role } });

@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
+import { assertCanCreateProject } from '../../lib/tenant/quota.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
@@ -149,6 +150,7 @@ export async function createProject(input: CreateProjectInput, actorId: string, 
   // A GUEST can only ever create a personal project owned by themselves — never a corporate one.
   const isGuest = actorRole === 'GUEST';
   if (!isGuest) await assertNotGuestPm(input.pmUserId); // corporate project: reject a guest PM
+  await assertCanCreateProject(); // plan quota (Phase 6) — corporate tenants only
   const project = await createProjectRow(input, year, isGuest, actorId);
 
   await writeAudit({ projectId: project.id, userId: actorId, entity: 'Project', entityId: project.id, action: 'CREATE', after: project });

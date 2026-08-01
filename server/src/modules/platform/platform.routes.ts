@@ -45,13 +45,13 @@ router.get(
     const tenants = await prisma.tenant.findMany({
       orderBy: [{ isPersonal: 'asc' }, { createdAt: 'asc' }],
       select: {
-        id: true, name: true, slug: true, status: true, isPersonal: true, createdAt: true,
+        id: true, name: true, slug: true, status: true, plan: true, isPersonal: true, createdAt: true,
         _count: { select: { memberships: true } },
       },
     });
     res.json({
       tenants: tenants.map((t) => ({
-        id: t.id, name: t.name, slug: t.slug, status: t.status, isPersonal: t.isPersonal,
+        id: t.id, name: t.name, slug: t.slug, status: t.status, plan: t.plan, isPersonal: t.isPersonal,
         createdAt: t.createdAt, memberCount: t._count.memberships,
       })),
     });
@@ -90,18 +90,20 @@ const patchSchema = z
   .object({
     status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
     name: z.string().min(2).max(120).optional(),
+    plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
   })
-  .refine((b) => b.status !== undefined || b.name !== undefined, 'Provide a status and/or name to update');
+  .refine((b) => b.status !== undefined || b.name !== undefined || b.plan !== undefined, 'Provide a status, name and/or plan to update');
 
-// PATCH /admin/tenants/:id — suspend/reactivate or rename. The DEFAULT tenant can't be suspended (it
-// owns all pre-existing data + the platform admins); personal (guest) tenants aren't managed here.
+// PATCH /admin/tenants/:id — suspend/reactivate, rename, or change the SaaS plan. The DEFAULT tenant
+// can't be suspended (it owns all pre-existing data + the platform admins); personal (guest) tenants
+// aren't managed here.
 router.patch(
   '/:id',
   validateBody(patchSchema),
   asyncHandler(async (req, res) => {
     const tenant = await prisma.tenant.findUnique({
       where: { id: req.params.id },
-      select: { id: true, name: true, slug: true, status: true, isPersonal: true },
+      select: { id: true, name: true, slug: true, status: true, plan: true, isPersonal: true },
     });
     if (!tenant) throw NotFound('Tenant not found');
     if (tenant.isPersonal) throw BadRequest('Personal (guest) tenants are not managed here.');
@@ -110,13 +112,17 @@ router.patch(
     }
     const updated = await prisma.tenant.update({
       where: { id: tenant.id },
-      data: { ...(req.body.status ? { status: req.body.status } : {}), ...(req.body.name ? { name: req.body.name } : {}) },
+      data: {
+        ...(req.body.status ? { status: req.body.status } : {}),
+        ...(req.body.name ? { name: req.body.name } : {}),
+        ...(req.body.plan ? { plan: req.body.plan } : {}),
+      },
     });
     await writeAudit({
       userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE',
-      before: { status: tenant.status, name: tenant.name }, after: { status: updated.status, name: updated.name },
+      before: { status: tenant.status, name: tenant.name, plan: tenant.plan }, after: { status: updated.status, name: updated.name, plan: updated.plan },
     });
-    res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status } });
+    res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status, plan: updated.plan } });
   }),
 );
 
