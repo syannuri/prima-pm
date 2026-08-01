@@ -35,26 +35,29 @@ function loadGoogleIdentityServices(): Promise<void> {
 }
 
 export default function LoginPage() {
-  const { login, guestRegister, loginWithGoogle } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'guest'>('signin');
+  const { login, guestRegister, signupOrg, loginWithGoogle } = useAuth();
+  const [mode, setMode] = useState<'signin' | 'guest' | 'org'>('signin');
   const [name, setName] = useState('');
+  const [orgName, setOrgName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [googleClientId, setGoogleClientId] = useState('');
   const [guestEnabled, setGuestEnabled] = useState(false);
+  const [orgEnabled, setOrgEnabled] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   // Ask the server which sign-up paths are enabled (admin-toggleable). Google's client ID is
   // public, so it's safe to send. Hides the guest option entirely when disabled.
   useEffect(() => {
     api
-      .get<{ google?: { enabled: boolean; clientId: string }; guestSignup?: boolean }>('/auth/providers')
+      .get<{ google?: { enabled: boolean; clientId: string }; guestSignup?: boolean; orgSignup?: boolean }>('/auth/providers')
       .then((p) => {
         if (p.google?.enabled && p.google.clientId) setGoogleClientId(p.google.clientId);
         setGuestEnabled(Boolean(p.guestSignup));
-        if (!p.guestSignup) setMode('signin');
+        setOrgEnabled(Boolean(p.orgSignup));
+        setMode((m) => (m === 'guest' && !p.guestSignup) || (m === 'org' && !p.orgSignup) ? 'signin' : m);
       })
       .catch(() => {});
   }, []);
@@ -94,18 +97,21 @@ export default function LoginPage() {
 
   const emailOk = isEmailValid(email);
   const isGuest = mode === 'guest';
-  // Guest signup needs a name + a strong-enough password (min 10 — server enforces the full rule).
-  const canSubmit = emailOk && !busy && (isGuest ? name.trim().length >= 2 && password.length >= 10 : password.length > 0);
+  const isOrg = mode === 'org';
+  const isSignup = isGuest || isOrg; // both need a name + a strong password (server enforces the full rule)
+  const canSubmit = emailOk && !busy
+    && (isSignup ? name.trim().length >= 2 && password.length >= 10 && (!isOrg || orgName.trim().length >= 2) : password.length > 0);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      if (isGuest) await guestRegister(name.trim(), email, password);
+      if (isOrg) await signupOrg(orgName.trim(), name.trim(), email, password);
+      else if (isGuest) await guestRegister(name.trim(), email, password);
       else await login(email, password);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : isGuest ? "Couldn't set up your workspace" : 'Login failed');
+      setError(err instanceof ApiError ? err.message : isSignup ? "Couldn't set up your workspace" : 'Login failed');
     } finally {
       setBusy(false);
     }
@@ -201,13 +207,18 @@ export default function LoginPage() {
               </div>
 
               <div className="mb-7 text-center">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{isGuest ? 'Try Prismatix free' : 'Welcome back'}</h1>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{isOrg ? 'Create your organization' : isGuest ? 'Try Prismatix free' : 'Welcome back'}</h1>
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{isOrg ? 'Set up a new workspace for your team — you’ll be its admin' : isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
               </div>
 
               <form onSubmit={submit} className="space-y-4">
-                {isGuest && (
-                  <Field label="Name">
+                {isOrg && (
+                  <Field label="Organization name">
+                    <Input type="text" autoComplete="organization" placeholder="Acme Corp" value={orgName} onChange={(e) => setOrgName(e.target.value)} required state={!orgName ? undefined : orgName.trim().length >= 2 ? 'valid' : 'invalid'} />
+                  </Field>
+                )}
+                {isSignup && (
+                  <Field label={isOrg ? 'Your name' : 'Name'}>
                     <Input type="text" autoComplete="name" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required state={!name ? undefined : name.trim().length >= 2 ? 'valid' : 'invalid'} />
                   </Field>
                 )}
@@ -216,8 +227,8 @@ export default function LoginPage() {
                   {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">Enter a valid email address</span>}
                 </Field>
                 <Field label="Password">
-                  <Input type="password" autoComplete={isGuest ? 'new-password' : 'current-password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? (isGuest && password.length < 10 ? 'invalid' : 'valid') : undefined} />
-                  {isGuest && <span className="mt-1 block text-xs text-slate-400">At least 10 characters, with a letter and a number.</span>}
+                  <Input type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? (isSignup && password.length < 10 ? 'invalid' : 'valid') : undefined} />
+                  {isSignup && <span className="mt-1 block text-xs text-slate-400">At least 10 characters, with a letter and a number.</span>}
                 </Field>
                 {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
                 <Button
@@ -225,7 +236,7 @@ export default function LoginPage() {
                   disabled={!canSubmit}
                   className="w-full bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 text-white shadow-lg shadow-brand-500/30 hover:from-brand-600 hover:to-brand-700"
                 >
-                  {busy ? (isGuest ? 'Setting up…' : 'Signing in…') : isGuest ? 'Start exploring' : 'Sign in'}
+                  {busy ? (isSignup ? 'Setting up…' : 'Signing in…') : isOrg ? 'Create organization' : isGuest ? 'Start exploring' : 'Sign in'}
                 </Button>
               </form>
 
@@ -240,11 +251,26 @@ export default function LoginPage() {
                 </>
               )}
 
-              {(guestEnabled || isGuest) && (
-                <div className="mt-6 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
-                  <button type="button" onClick={() => { setMode(isGuest ? 'signin' : 'guest'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
-                    {isGuest ? 'Have an account? Sign in' : 'New here? Try Prismatix free'}
-                  </button>
+              {(guestEnabled || orgEnabled || isSignup) && (
+                <div className="mt-6 flex flex-col gap-1.5 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
+                  {isSignup ? (
+                    <button type="button" onClick={() => { setMode('signin'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+                      Have an account? Sign in
+                    </button>
+                  ) : (
+                    <>
+                      {guestEnabled && (
+                        <button type="button" onClick={() => { setMode('guest'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+                          New here? Try Prismatix free
+                        </button>
+                      )}
+                      {orgEnabled && (
+                        <button type="button" onClick={() => { setMode('org'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+                          Create an organization
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>

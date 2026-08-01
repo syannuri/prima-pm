@@ -8,6 +8,7 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   guestRegister: (name: string, email: string, password: string) => Promise<void>;
+  signupOrg: (orgName: string, ownerName: string, email: string, password: string) => Promise<void>;
   loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
   // Pooled multitenancy: the tenants this user belongs to, the active one, and a switcher.
@@ -114,6 +115,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadTenants();
   };
 
+  // Self-serve organization signup — creates a corporate tenant + owner admin, same cookie flow
+  // (server auto-logs-in the new owner).
+  const signupOrg = async (orgName: string, ownerName: string, email: string, password: string) => {
+    const res = await api.post<{ user: User }>('/auth/signup', { orgName, ownerName, email, password });
+    tokenStore.clear();
+    setUser(res.user);
+    await loadTenants();
+  };
+
   // Sign in with Google — post the ID token (credential) from Google Identity Services; the
   // server verifies it and matches/creates a sandboxed GUEST, setting the same cookie session.
   const loginWithGoogle = async (credential: string) => {
@@ -136,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, guestRegister, loginWithGoogle, logout, tenants, activeTenantId, switchTenant, impersonating, impersonate, stopImpersonating }}>
+    <AuthContext.Provider value={{ user, loading, login, guestRegister, signupOrg, loginWithGoogle, logout, tenants, activeTenantId, switchTenant, impersonating, impersonate, stopImpersonating }}>
       {children}
     </AuthContext.Provider>
   );

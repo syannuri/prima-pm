@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authRateLimit } from '../../middleware/rateLimit.js';
-import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, refreshSchema, switchTenantSchema } from './auth.schemas.js';
+import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, orgSignupSchema, refreshSchema, switchTenantSchema } from './auth.schemas.js';
 import * as ctrl from './auth.controller.js';
 
 const router = Router();
@@ -38,11 +38,24 @@ const guestLimiter = authRateLimit({
   },
 });
 
-// Corporate self-registration stays disabled (accounts are ADMIN-provisioned via POST /users).
-// The ONLY open signup is the sandboxed GUEST path below, itself gated by GUEST_SIGNUP_ENABLED.
-// Public: which sign-in providers this deployment offers (Google client ID, guest signup).
+// Throttle org signups per IP + email (same as guest/login) to blunt bulk tenant creation.
+const orgSignupLimiter = authRateLimit({
+  windowMs: FIFTEEN_MIN,
+  max: 10,
+  name: 'org-signup',
+  keyBy: (req) => {
+    const email = (req.body as { email?: unknown })?.email;
+    return [typeof email === 'string' ? `email:${email.trim().toLowerCase()}` : undefined];
+  },
+});
+
+// Two open signup paths, each gated by its own AppSetting toggle: a sandboxed GUEST (personal
+// tenant) and a self-serve ORGANIZATION (corporate tenant + owner admin). Corporate members are
+// otherwise ADMIN-provisioned via POST /users or the platform console.
+// Public: which sign-in providers this deployment offers (Google client ID, guest + org signup).
 router.get('/providers', asyncHandler(ctrl.providersHandler));
 router.post('/guest/register', guestLimiter, validateBody(guestRegisterSchema), asyncHandler(ctrl.guestRegisterHandler));
+router.post('/signup', orgSignupLimiter, validateBody(orgSignupSchema), asyncHandler(ctrl.orgSignupHandler));
 router.post('/login', loginLimiter, validateBody(loginSchema), asyncHandler(ctrl.loginHandler));
 // Sign in with Google → matches/creates a sandboxed GUEST (gated by GOOGLE_CLIENT_ID).
 router.post('/google', googleLimiter, validateBody(googleLoginSchema), asyncHandler(ctrl.googleHandler));

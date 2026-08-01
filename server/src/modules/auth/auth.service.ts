@@ -6,9 +6,9 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib
 import { Unauthorized, Forbidden, Conflict } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
-import { isGuestSignupEnabled, isGoogleLoginEnabled } from '../settings/settings.service.js';
+import { isGuestSignupEnabled, isGoogleLoginEnabled, isOrgSignupEnabled } from '../settings/settings.service.js';
 import { multitenancyEnforced, runWithTenant } from '../../lib/tenant/context.js';
-import type { ChangePasswordInput, GuestRegisterInput, LoginInput } from './auth.schemas.js';
+import type { ChangePasswordInput, GuestRegisterInput, LoginInput, OrgSignupInput } from './auth.schemas.js';
 
 // The membership a freshly-minted token should be pinned to: the caller's chosen tenant when it is
 // one of their memberships, else their first (deterministic by createdAt). Undefined only if the
@@ -141,6 +141,44 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
   await provisionPersonalTenant(user);
   await auditInUserTenant(user.id, { userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
   return issueTokenPair(user);
+}
+
+// A URL-safe, unique tenant slug derived from the org name (auto-suffixed on a clash). `Tenant` is a
+// global model, so these lookups need no tenant context.
+function slugifyOrg(name: string): string {
+  const s = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  return s.length >= 2 ? s : 'org';
+}
+async function uniqueTenantSlug(name: string): Promise<string> {
+  const base = slugifyOrg(name);
+  for (let i = 0; i < 50; i++) {
+    const candidate = (i === 0 ? base : `${base}-${i + 1}`).slice(0, 40);
+    if (!(await prisma.tenant.findUnique({ where: { slug: candidate }, select: { id: true } }))) return candidate;
+  }
+  return `${base}-${randomUUID().slice(0, 6)}`.slice(0, 40);
+}
+
+// Self-serve ORGANIZATION signup (Phase 6 SaaS): anyone may create a new CORPORATE tenant and become
+// its owner ADMIN. Gated by the deployment-level orgSignupEnabled toggle. Auto-logs in (token pair
+// pinned to the new tenant). Distinct from guest signup (a sandboxed personal tenant).
+export async function registerOrg(input: OrgSignupInput): Promise<AuthResult> {
+  if (!(await isOrgSignupEnabled())) throw Forbidden('Organization signup is not enabled');
+  const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
+  if (existing) throw Conflict('That email is already registered');
+  const slug = await uniqueTenantSlug(input.orgName);
+  const owner = await prisma.user.create({
+    data: {
+      name: input.ownerName,
+      email: input.email,
+      passwordHash: await hashPassword(input.password),
+      role: 'ADMIN', // dual-written until User.role is dropped (4c-drop)
+      isGuest: false,
+    },
+  });
+  const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'ACTIVE' } });
+  await prisma.membership.create({ data: { userId: owner.id, tenantId: tenant.id, role: 'ADMIN' } });
+  await auditInUserTenant(owner.id, { userId: owner.id, entity: 'Tenant', entityId: tenant.id, action: 'CREATE', after: { name: input.orgName, slug, self: true } });
+  return issueTokenPair(owner);
 }
 
 // "Sign in with Google" — the open, sandboxed jalur: any Google account may sign in, and a

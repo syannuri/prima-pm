@@ -8,6 +8,7 @@ const SINGLETON = 'singleton';
 export interface AppSettings {
   guestSignupEnabled: boolean;
   googleLoginEnabled: boolean;
+  orgSignupEnabled: boolean;
   // Weekly EVM auto-capture (opt-in). weekday: 0=Sun .. 6=Sat. lastRunAt is scheduler-managed
   // (stamped after each run) and NOT part of the admin-editable/cached surface below — the
   // scheduler reads & writes it straight on the row.
@@ -35,12 +36,14 @@ export async function getAppSettings(): Promise<AppSettings> {
       guestSignupEnabled: env.guestSignupEnabled,
       // Default Google ON iff a client ID is configured — matches the pre-toggle behaviour.
       googleLoginEnabled: Boolean(env.googleClientId),
+      orgSignupEnabled: env.orgSignupEnabled,
     },
     update: {},
   }));
   cache = {
     guestSignupEnabled: row.guestSignupEnabled,
     googleLoginEnabled: row.googleLoginEnabled,
+    orgSignupEnabled: row.orgSignupEnabled,
     evmAutoCaptureEnabled: row.evmAutoCaptureEnabled,
     evmAutoCaptureWeekday: row.evmAutoCaptureWeekday,
   };
@@ -52,6 +55,7 @@ export async function updateAppSettings(patch: Partial<AppSettings>, actorId: st
   const next: AppSettings = {
     guestSignupEnabled: patch.guestSignupEnabled ?? current.guestSignupEnabled,
     googleLoginEnabled: patch.googleLoginEnabled ?? current.googleLoginEnabled,
+    orgSignupEnabled: patch.orgSignupEnabled ?? current.orgSignupEnabled,
     evmAutoCaptureEnabled: patch.evmAutoCaptureEnabled ?? current.evmAutoCaptureEnabled,
     evmAutoCaptureWeekday: patch.evmAutoCaptureWeekday ?? current.evmAutoCaptureWeekday,
   };
@@ -71,6 +75,10 @@ export function isGoogleConfigured(): boolean {
 
 export async function isGuestSignupEnabled(): Promise<boolean> {
   return (await getAppSettings()).guestSignupEnabled;
+}
+
+export async function isOrgSignupEnabled(): Promise<boolean> {
+  return (await getAppSettings()).orgSignupEnabled;
 }
 
 export async function isGoogleLoginEnabled(): Promise<boolean> {

@@ -13,6 +13,7 @@ const patchSchema = z
   .object({
     guestSignupEnabled: z.boolean().optional(),
     googleLoginEnabled: z.boolean().optional(),
+    orgSignupEnabled: z.boolean().optional(),
     evmAutoCaptureEnabled: z.boolean().optional(),
     evmAutoCaptureWeekday: z.number().int().min(0).max(6).optional(),
   })

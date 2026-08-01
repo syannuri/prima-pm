@@ -38,6 +38,14 @@ export const guestRegisterSchema = z.object({
   password: strongPassword,
 });
 
+// Self-serve organization signup (Phase 6) — creates a corporate tenant + its owner admin.
+export const orgSignupSchema = z.object({
+  orgName: z.string().min(2).max(120),
+  ownerName: z.string().min(2).max(120),
+  email: z.string().email().toLowerCase(),
+  password: strongPassword,
+});
+
 // refreshToken is optional in the body: the browser sends it as an httpOnly cookie instead
 // (the controller reads cookie-or-body). Legacy/automation clients may still post it here.
 // Google sign-in: the client posts the ID token (JWT credential) returned by Google Identity
@@ -68,6 +76,7 @@ export const changePasswordSchema = z
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type GuestRegisterInput = z.infer<typeof guestRegisterSchema>;
+export type OrgSignupInput = z.infer<typeof orgSignupSchema>;
 export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

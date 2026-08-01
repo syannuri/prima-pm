@@ -14,6 +14,7 @@ const ROLES: Role[] = ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFIC
 interface AppSettings {
   guestSignupEnabled: boolean;
   googleLoginEnabled: boolean;
+  orgSignupEnabled: boolean;
   googleConfigured: boolean;
   evmAutoCaptureEnabled: boolean;
   evmAutoCaptureWeekday: number;
@@ -51,6 +52,13 @@ function AccessSettings() {
             desc="Anyone can self-register with an email + password (any email works). Creates a sandboxed guest who only ever sees their own personal projects."
             checked={data.guestSignupEnabled}
             onChange={(v) => save.mutate({ guestSignupEnabled: v })}
+            busy={save.isPending}
+          />
+          <SettingRow
+            title="Organization sign-up"
+            desc="Anyone can self-register a NEW organization (a corporate workspace) and become its admin. Turn on to open self-serve SaaS onboarding."
+            checked={data.orgSignupEnabled}
+            onChange={(v) => save.mutate({ orgSignupEnabled: v })}
             busy={save.isPending}
           />
           <SettingRow

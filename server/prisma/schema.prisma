@@ -1733,6 +1733,9 @@ model AppSetting {
   tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   guestSignupEnabled Boolean  @default(false)
   googleLoginEnabled Boolean  @default(false)
+  // Self-serve ORGANIZATION signup (Phase 6 SaaS): anyone may create a new corporate tenant + its
+  // owner. Deployment-level toggle (admin-editable), off by default.
+  orgSignupEnabled   Boolean  @default(false)
   // Weekly EVM auto-capture (opt-in). Weekday: 0=Sun .. 6=Sat (default 1 = Monday).
   // lastRunAt is scheduler-managed so a restart doesn't re-run the same day.
   evmAutoCaptureEnabled   Boolean   @default(false)

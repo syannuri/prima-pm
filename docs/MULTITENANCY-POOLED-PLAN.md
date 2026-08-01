@@ -435,6 +435,14 @@ a big schema cleanup); it is safe to leave indefinitely.
 
 ## Phase 6 — Tenant lifecycle / SaaS
 - Self-serve signup → creates `Tenant` + owner `Membership`.
+  - **✅ DONE (2026-08-01):** `POST /auth/signup` (public, rate-limited, gated by a new
+    deployment-level `AppSetting.orgSignupEnabled` toggle, migration `20260801120000_org_signup`,
+    seeded from env `ORG_SIGNUP_ENABLED`) — `auth.service.registerOrg` creates a CORPORATE tenant
+    (auto-unique slug from the org name) + a staff owner `User` + an `ADMIN` `Membership`, and
+    auto-logs in (token pinned to the new tenant). Advertised on `/auth/providers`; admin toggle on
+    the Access & sign-up card; a "Create an organization" mode on the login page (org name + owner
+    name + email + password). Guarded by `org-signup.itest.ts` (5). Distinct from guest signup (a
+    sandboxed personal tenant).
 - Tenant settings, branding, **subdomain/custom domain** (tenant `slug` → host), plan/billing gating.
 - Per-tenant data export, deletion (GDPR), and backup.
 

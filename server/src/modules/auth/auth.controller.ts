@@ -13,6 +13,7 @@ export async function providersHandler(_req: Request, res: Response): Promise<vo
   res.json({
     google: { enabled: isGoogleConfigured() && s.googleLoginEnabled, clientId: env.googleClientId },
     guestSignup: s.guestSignupEnabled,
+    orgSignup: s.orgSignupEnabled,
   });
 }
 
@@ -27,6 +28,12 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
 export async function guestRegisterHandler(req: Request, res: Response): Promise<void> {
   const result = await authService.guestRegister(req.body);
   setAuthCookies(res, result); // auto-login on signup
+  res.status(201).json(result);
+}
+
+export async function orgSignupHandler(req: Request, res: Response): Promise<void> {
+  const result = await authService.registerOrg(req.body);
+  setAuthCookies(res, result); // auto-login as the new org's owner
   res.status(201).json(result);
 }
 
