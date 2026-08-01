@@ -125,6 +125,7 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
   const { lang } = useLang();
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { patch, toggleSuspend, enter, entering } = useTenantActions(t, onChange);
   return (
     <tr className="border-b last:border-0 dark:border-slate-800">
@@ -139,8 +140,10 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
         <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
           {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
         </Button>
+        <Button variant="ghost" onClick={() => setDeleting(true)} className="text-red-600 dark:text-red-400" title={id ? 'Hapus organisasi permanen' : 'Permanently delete tenant'}>{id ? 'Hapus' : 'Delete'}</Button>
       </td>
       {renaming && <RenameModal t={t} onClose={() => setRenaming(false)} onChange={onChange} />}
+      {deleting && <DeleteModal t={t} onClose={() => setDeleting(false)} onChange={onChange} />}
     </tr>
   );
 }
@@ -149,6 +152,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
   const { lang } = useLang();
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { patch, toggleSuspend, enter, entering } = useTenantActions(t, onChange);
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
@@ -165,8 +169,10 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
         <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
           {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
         </Button>
+        <Button variant="ghost" onClick={() => setDeleting(true)} className="text-red-600 dark:text-red-400">{id ? 'Hapus' : 'Delete'}</Button>
       </div>
       {renaming && <RenameModal t={t} onClose={() => setRenaming(false)} onChange={onChange} />}
+      {deleting && <DeleteModal t={t} onClose={() => setDeleting(false)} onChange={onChange} />}
     </div>
   );
 }
@@ -191,6 +197,41 @@ function RenameModal({ t, onClose, onChange }: { t: PlatformTenant; onClose: () 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>{id ? 'Batal' : 'Cancel'}</Button>
           <Button type="submit" disabled={!canSubmit || rename.isPending}>{rename.isPending ? (id ? 'Menyimpan…' : 'Saving…') : (id ? 'Simpan' : 'Save')}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Type-to-confirm HARD DELETE. Wipes the tenant + all its data (projects, resources, files, members…)
+// irreversibly; the admin must retype the slug. User accounts survive (global identity).
+function DeleteModal({ t, onClose, onChange }: { t: PlatformTenant; onClose: () => void; onChange: () => void }) {
+  const { lang } = useLang();
+  const id = lang === 'id';
+  const toast = useToast();
+  const [confirmSlug, setConfirmSlug] = useState('');
+  const remove = useMutation({
+    mutationFn: () => api.del(`/admin/tenants/${t.id}`, { confirmSlug: confirmSlug.trim() }),
+    onSuccess: () => { onChange(); toast.success(id ? `“${t.name}” dihapus permanen` : `“${t.name}” permanently deleted`); onClose(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
+  });
+  const canSubmit = confirmSlug.trim() === t.slug;
+  return (
+    <Modal onClose={onClose} title={id ? 'Hapus organisasi permanen' : 'Permanently delete tenant'} size="sm">
+      <form onSubmit={(e) => { e.preventDefault(); if (canSubmit) remove.mutate(); }} className="space-y-3">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          {id
+            ? <>Ini <strong>menghapus permanen</strong> <strong>{t.name}</strong> beserta SEMUA datanya — proyek, sumber daya, lampiran, pesan, dan {t.memberCount} keanggotaan. Tidak bisa dibatalkan. (Akun pengguna tetap ada.)</>
+            : <>This <strong>permanently deletes</strong> <strong>{t.name}</strong> and ALL of its data — projects, resources, attachments, messages and {t.memberCount} membership{t.memberCount === 1 ? '' : 's'}. This cannot be undone. (User accounts are kept.)</>}
+        </div>
+        <Field label={id ? <>Ketik slug <code className="font-mono">{t.slug}</code> untuk konfirmasi</> : <>Type the slug <code className="font-mono">{t.slug}</code> to confirm</>}>
+          <Input value={confirmSlug} onChange={(e) => setConfirmSlug(e.target.value)} placeholder={t.slug} className="font-mono" autoFocus autoComplete="off" />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>{id ? 'Batal' : 'Cancel'}</Button>
+          <Button type="submit" variant="danger" disabled={!canSubmit || remove.isPending}>
+            {remove.isPending ? (id ? 'Menghapus…' : 'Deleting…') : (id ? 'Hapus permanen' : 'Delete forever')}
+          </Button>
         </div>
       </form>
     </Modal>

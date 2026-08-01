@@ -5,9 +5,13 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePlatformAdmin } from '../../middleware/platformAdmin.js';
 import { prisma } from '../../lib/prisma.js';
+import fs from 'node:fs';
+import path from 'node:path';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
 import { writeAudit } from '../../lib/audit.js';
+import { runAsSystem } from '../../lib/tenant/context.js';
+import { UPLOAD_DIR } from '../attachment/attachment.service.js';
 import { Unauthorized, Forbidden, Conflict, BadRequest, NotFound } from '../../lib/errors.js';
 import { strongPassword } from '../auth/auth.schemas.js';
 import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
@@ -130,6 +134,50 @@ router.post(
     const accessToken = signAccessToken({ sub: req.user!.id, role: 'ADMIN', email: me.email, tv: me.tokenVersion, tid: tenant.id, imp: true });
     await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'IMPERSONATE', after: { tenant: tenant.slug } });
     res.json({ accessToken, tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug } });
+  }),
+);
+
+// DELETE /admin/tenants/:id — HARD-DELETE a corporate tenant and ALL its data (GDPR / offboarding).
+// IRREVERSIBLE. Guards: never the default tenant; not a personal (guest) tenant (those go via user
+// delete); the body must echo the tenant's slug (type-to-confirm). Deletes every tenant-scoped row
+// (as system, bypassing the caller's tenant scope) then the tenant, and removes its upload files.
+// User accounts stay (global identity — a person may belong to other tenants); only memberships go.
+const deleteTenantSchema = z.object({ confirmSlug: z.string() });
+router.delete(
+  '/:id',
+  validateBody(deleteTenantSchema),
+  asyncHandler(async (req, res) => {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, slug: true, isPersonal: true } });
+    if (!tenant) throw NotFound('Tenant not found');
+    if (tenant.slug === DEFAULT_TENANT_SLUG) throw BadRequest('The default tenant cannot be deleted.');
+    if (tenant.isPersonal) throw BadRequest('Personal (guest) tenants are deleted via the user account.');
+    if (req.body.confirmSlug !== tenant.slug) throw BadRequest(`Type the tenant slug "${tenant.slug}" to confirm deletion.`);
+
+    const tenantId = tenant.id;
+    await runAsSystem(() => prisma.$transaction(async (tx) => {
+      // Messaging (leaf → root), then attachments (Project delete SET-NULLs but doesn't remove them).
+      await tx.messageReaction.deleteMany({ where: { tenantId } });
+      await tx.message.deleteMany({ where: { tenantId } });
+      await tx.conversationMember.deleteMany({ where: { tenantId } });
+      await tx.conversation.deleteMany({ where: { tenantId } });
+      await tx.pushSubscription.deleteMany({ where: { tenantId } });
+      await tx.attachment.deleteMany({ where: { tenantId } });
+      // Projects cascade all their children (charter/cost/risk/task/CR/…) via onDelete: Cascade.
+      await tx.project.deleteMany({ where: { tenantId } });
+      // Standalone roots (Resource before RateCard: Resource.rateCardId → RateCard).
+      await tx.resource.deleteMany({ where: { tenantId } });
+      await tx.rateCard.deleteMany({ where: { tenantId } });
+      await tx.notification.deleteMany({ where: { tenantId } });
+      await tx.projectBookmark.deleteMany({ where: { tenantId } });
+      await tx.auditLog.deleteMany({ where: { tenantId } });
+      await tx.appSetting.deleteMany({ where: { tenantId } });
+      await tx.membership.deleteMany({ where: { tenantId } });
+      await tx.tenant.delete({ where: { id: tenantId } });
+    }));
+    // Remove the tenant's uploaded files (best-effort).
+    try { fs.rmSync(path.join(UPLOAD_DIR, tenantId), { recursive: true, force: true }); } catch { /* */ }
+    await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenantId, action: 'DELETE', before: { name: tenant.name, slug: tenant.slug } });
+    res.status(204).send();
   }),
 );
 

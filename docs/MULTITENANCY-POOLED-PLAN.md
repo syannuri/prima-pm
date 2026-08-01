@@ -445,6 +445,17 @@ a big schema cleanup); it is safe to leave indefinitely.
     sandboxed personal tenant).
 - Tenant settings, branding, **subdomain/custom domain** (tenant `slug` → host), plan/billing gating.
 - Per-tenant data export, deletion (GDPR), and backup.
+  - **✅ Hard-delete DONE (2026-08-01):** `DELETE /admin/tenants/:id` (platform-admin). Guards: never
+    the default tenant, never a personal (guest) tenant (those go via user-account delete), and the
+    body `confirmSlug` must echo the tenant's slug (type-to-confirm). Runs `runAsSystem` +
+    `$transaction`, deleting every tenant-scoped row in FK order (messaging leaf→root, `PushSubscription`,
+    `Attachment` [Project delete SET-NULLs but doesn't remove it], `Project` [cascades all children],
+    `Resource`→`RateCard`, `Notification`, `ProjectBookmark`, `AuditLog`, `AppSetting`, `Membership`)
+    then `Tenant.delete`, then `fs.rmSync(UPLOAD_DIR/<tenantId>)` (best-effort), then audits the DELETE
+    against the platform admin's own tenant. User accounts SURVIVE (global identity — a person may
+    belong to other tenants); only their memberships in this tenant go. Client: a red **Delete** action
+    on each corporate tenant row/card → type-slug confirm `DeleteModal`. Guarded by `platform.itest.ts`
+    (2 new: full-wipe-leaves-others-intact + guards). Data export / backup still pending.
 
 ---
 

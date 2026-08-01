@@ -43,7 +43,7 @@ export function Button({
   );
 }
 
-export function Field({ label, children, hint, required, error }: { label: string; children: ReactNode; hint?: string; required?: boolean; error?: string }) {
+export function Field({ label, children, hint, required, error }: { label: ReactNode; children: ReactNode; hint?: string; required?: boolean; error?: string }) {
   const { lang } = useLang();
   return (
     <label className="block">

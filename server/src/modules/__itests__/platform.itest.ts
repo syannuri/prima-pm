@@ -4,7 +4,7 @@ import { createApp } from '../../app.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
-import { runAsSystem } from '../../lib/tenant/context.js';
+import { runAsSystem, runWithTenant } from '../../lib/tenant/context.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
 
@@ -153,5 +153,49 @@ describe('suspend / reactivate locks out members', () => {
     // Reactivate → access restored.
     expect((await request(app).patch(api(`/admin/tenants/${acme.id}`)).set(bearer(platformToken)).send({ status: 'ACTIVE' })).status).toBe(200);
     expect((await request(app).get(api('/projects')).set(bearer(ownerToken))).status).toBe(200);
+  });
+});
+
+describe('hard-delete a tenant (GDPR)', () => {
+  it('removes the tenant and ALL its data, leaving other tenants intact', async () => {
+    const delme = await runAsSystem(() => prisma.tenant.create({ data: { slug: 'delme', name: 'Delete Me' } }));
+    const owner = await runAsSystem(() => prisma.user.create({ data: { name: 'D', email: 'd@delme.test', role: 'ADMIN', isActive: true } }));
+    await runAsSystem(() => prisma.membership.create({ data: { userId: owner.id, tenantId: delme.id, role: 'ADMIN' } }));
+    // Seed data across the tenant: a project + a child risk + a resource + a notification.
+    const { projectId, riskId } = await runWithTenant(delme.id, async () => {
+      const p = await prisma.project.create({ data: { code: 'PRJ-DEL-1', name: 'Doomed', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: owner.id } });
+      const r = await prisma.risk.create({ data: { projectId: p.id, code: 'R-D-1', title: 'x', probabilityScore: 3, impactScore: 3, riskScore: 9, severity: 'MEDIUM', probabilityPct: '0.5', impactCostIdr: '1', emv: '1' } });
+      await prisma.resource.create({ data: { name: 'Res', capacityPerDay: 1 } });
+      await prisma.notification.create({ data: { userId: owner.id, type: 'ACTIVATION_READY', title: 't' } });
+      return { projectId: p.id, riskId: r.id };
+    });
+
+    // A corporate baseline tenant that must SURVIVE (default already exists with data from earlier tests).
+    const survivorProjectsBefore = await runAsSystem(() => prisma.project.count({ where: { tenantId: defaultTid } }));
+
+    const res = await request(app).delete(api(`/admin/tenants/${delme.id}`)).set(bearer(platformToken)).send({ confirmSlug: 'delme' });
+    expect(res.status).toBe(204);
+
+    // Tenant + all its rows are gone.
+    expect(await runAsSystem(() => prisma.tenant.findUnique({ where: { id: delme.id } }))).toBeNull();
+    expect(await runAsSystem(() => prisma.project.findUnique({ where: { id: projectId } }))).toBeNull();
+    expect(await runAsSystem(() => prisma.risk.findUnique({ where: { id: riskId } }))).toBeNull(); // cascaded via project
+    expect(await runAsSystem(() => prisma.resource.count({ where: { tenantId: delme.id } }))).toBe(0);
+    expect(await runAsSystem(() => prisma.notification.count({ where: { tenantId: delme.id } }))).toBe(0);
+    expect(await runAsSystem(() => prisma.membership.count({ where: { tenantId: delme.id } }))).toBe(0);
+    // The owner's global account remains (identity is global).
+    expect(await runAsSystem(() => prisma.user.findUnique({ where: { id: owner.id } }))).not.toBeNull();
+    // The default tenant's data is untouched.
+    expect(await runAsSystem(() => prisma.project.count({ where: { tenantId: defaultTid } }))).toBe(survivorProjectsBefore);
+  });
+
+  it('is guarded: wrong slug (400), the default tenant (400), and a personal tenant (400)', async () => {
+    const acme = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: 'acme' } }));
+    expect((await request(app).delete(api(`/admin/tenants/${acme.id}`)).set(bearer(platformToken)).send({ confirmSlug: 'wrong' })).status).toBe(400);
+    expect((await request(app).delete(api(`/admin/tenants/${defaultTid}`)).set(bearer(platformToken)).send({ confirmSlug: 'default' })).status).toBe(400);
+    const personal = await runAsSystem(() => prisma.tenant.create({ data: { slug: 'del-personal', name: 'g', isPersonal: true } }));
+    expect((await request(app).delete(api(`/admin/tenants/${personal.id}`)).set(bearer(platformToken)).send({ confirmSlug: 'del-personal' })).status).toBe(400);
+    // acme still there (not deleted by the wrong-slug attempt).
+    expect(await runAsSystem(() => prisma.tenant.findUnique({ where: { id: acme.id } }))).not.toBeNull();
   });
 });
