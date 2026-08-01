@@ -137,6 +137,49 @@ router.post(
   }),
 );
 
+// GET /admin/tenants/:id/export — GDPR data portability: download a tenant's business data as one
+// JSON bundle (tenant + members + projects with every child + resources + rate cards). Read-only;
+// runs as system to reach across the caller's tenant scope. Attachment *metadata* is included (the
+// binary files aren't — they live under uploads/<tenantId>/ and are backed up separately).
+router.get(
+  '/:id/export',
+  asyncHandler(async (req, res) => {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true, slug: true, status: true, isPersonal: true, createdAt: true },
+    });
+    if (!tenant) throw NotFound('Tenant not found');
+
+    const bundle = await runAsSystem(async () => {
+      const tenantId = tenant.id;
+      const [members, projects, resources, rateCards] = await Promise.all([
+        prisma.membership.findMany({
+          where: { tenantId },
+          select: { role: true, createdAt: true, user: { select: { id: true, name: true, email: true, isGuest: true } } },
+        }),
+        prisma.project.findMany({
+          where: { tenantId },
+          include: {
+            charter: true, charterVersions: true, directCosts: true, indirectCosts: true, risks: true,
+            issues: true, tasks: true, costBaseline: true, changeRequests: true, attachments: true,
+            actualCosts: true, sprints: true, backlogItems: true, mandayEntries: true, lessons: true,
+            acceptances: true, stakeholders: true, procurements: true, assumptions: true, dependencies: true,
+            evmSnapshots: true, uatTestCases: true, kickoffMeeting: true, requirements: true,
+          },
+        }),
+        prisma.resource.findMany({ where: { tenantId } }),
+        prisma.rateCard.findMany({ where: { tenantId } }),
+      ]);
+      return { members, projects, resources, rateCards };
+    });
+
+    await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'EXPORT', after: { slug: tenant.slug, projects: bundle.projects.length } });
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="tenant-${tenant.slug}-export.json"`);
+    res.send(JSON.stringify({ exportedAt: new Date().toISOString(), tenant, ...bundle }, null, 2));
+  }),
+);
+
 // DELETE /admin/tenants/:id — HARD-DELETE a corporate tenant and ALL its data (GDPR / offboarding).
 // IRREVERSIBLE. Guards: never the default tenant; not a personal (guest) tenant (those go via user
 // delete); the body must echo the tenant's slug (type-to-confirm). Deletes every tenant-scoped row

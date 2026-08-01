@@ -455,7 +455,15 @@ a big schema cleanup); it is safe to leave indefinitely.
     against the platform admin's own tenant. User accounts SURVIVE (global identity — a person may
     belong to other tenants); only their memberships in this tenant go. Client: a red **Delete** action
     on each corporate tenant row/card → type-slug confirm `DeleteModal`. Guarded by `platform.itest.ts`
-    (2 new: full-wipe-leaves-others-intact + guards). Data export / backup still pending.
+    (2 new: full-wipe-leaves-others-intact + guards).
+  - **✅ Data export DONE (2026-08-01):** `GET /admin/tenants/:id/export` (platform-admin). Under
+    `runAsSystem`, assembles a JSON bundle — `{ exportedAt, tenant, members (with user identity),
+    projects (deep include of all 24 child relations), resources, rateCards }` — served as a
+    downloadable attachment `tenant-<slug>-export.json`. Read-only; audited (`EXPORT` action added to
+    `audit.ts`). Attachment *metadata* is included; the binary files aren't (they live under
+    `uploads/<tenantId>/` and are backed up separately). Client: an **Export** action on each tenant
+    row/card via the authenticated `api.download` helper. Guarded by `platform.itest.ts` (2 new).
+    Backup still pending.
 
 ---
 

@@ -20,7 +20,8 @@ type AuditAction =
   | 'RESUBMIT_ACTIVATION'
   | 'ARCHIVE'
   | 'UNARCHIVE'
-  | 'IMPERSONATE';
+  | 'IMPERSONATE'
+  | 'EXPORT';
 
 interface AuditInput {
   userId?: string | null;

@@ -156,6 +156,36 @@ describe('suspend / reactivate locks out members', () => {
   });
 });
 
+describe('export a tenant (GDPR data portability)', () => {
+  it('returns a JSON bundle (tenant + members + projects incl. children + resources) as an attachment', async () => {
+    const exp = await runAsSystem(() => prisma.tenant.create({ data: { slug: 'exportme', name: 'Export Me' } }));
+    const owner = await runAsSystem(() => prisma.user.create({ data: { name: 'E', email: 'e@exportme.test', role: 'ADMIN', isActive: true } }));
+    await runAsSystem(() => prisma.membership.create({ data: { userId: owner.id, tenantId: exp.id, role: 'ADMIN' } }));
+    await runWithTenant(exp.id, async () => {
+      const p = await prisma.project.create({ data: { code: 'PRJ-EXP-1', name: 'Portable', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: owner.id } });
+      await prisma.risk.create({ data: { projectId: p.id, code: 'R-E-1', title: 'x', probabilityScore: 3, impactScore: 3, riskScore: 9, severity: 'MEDIUM', probabilityPct: '0.5', impactCostIdr: '1', emv: '1' } });
+      await prisma.resource.create({ data: { name: 'Exp Res', capacityPerDay: 1 } });
+    });
+
+    const res = await request(app).get(api(`/admin/tenants/${exp.id}/export`)).set(bearer(platformToken));
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toContain('tenant-exportme-export.json');
+    expect(res.body.tenant.slug).toBe('exportme');
+    expect(res.body.members).toHaveLength(1);
+    expect(res.body.members[0].user.email).toBe('e@exportme.test');
+    expect(res.body.projects).toHaveLength(1);
+    expect(res.body.projects[0].risks).toHaveLength(1); // deep child include
+    expect(res.body.resources).toHaveLength(1);
+    expect(typeof res.body.exportedAt).toBe('string');
+  });
+
+  it('is platform-admin only (a plain tenant admin is forbidden) and 404s an unknown tenant', async () => {
+    const acme = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: 'acme' } }));
+    expect((await request(app).get(api(`/admin/tenants/${acme.id}/export`)).set(bearer(plainAdminToken))).status).toBe(403);
+    expect((await request(app).get(api('/admin/tenants/does-not-exist/export')).set(bearer(platformToken))).status).toBe(404);
+  });
+});
+
 describe('hard-delete a tenant (GDPR)', () => {
   it('removes the tenant and ALL its data, leaving other tenants intact', async () => {
     const delme = await runAsSystem(() => prisma.tenant.create({ data: { slug: 'delme', name: 'Delete Me' } }));

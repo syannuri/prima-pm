@@ -97,6 +97,13 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
     onSuccess: () => { onChange(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
   });
+  const [exporting, setExporting] = useState(false);
+  const exportData = async () => {
+    setExporting(true);
+    try { await api.download(`/admin/tenants/${t.id}/export`, `tenant-${t.slug}-export.json`); }
+    catch (e) { toast.error(e instanceof ApiError ? e.message : 'Failed'); }
+    finally { setExporting(false); }
+  };
   const toggleSuspend = async () => {
     if (t.status === 'ACTIVE') {
       if (!(await confirm({
@@ -110,7 +117,7 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
       patch.mutate({ status: 'ACTIVE' }, { onSuccess: () => { onChange(); toast.success(id ? `${t.name} diaktifkan` : `${t.name} reactivated`); } });
     }
   };
-  return { patch, toggleSuspend, enter, entering };
+  return { patch, toggleSuspend, enter, entering, exportData, exporting };
 }
 
 function StatusBadge({ status }: { status: PlatformTenant['status'] }) {
@@ -126,7 +133,7 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const { patch, toggleSuspend, enter, entering } = useTenantActions(t, onChange);
+  const { patch, toggleSuspend, enter, entering, exportData, exporting } = useTenantActions(t, onChange);
   return (
     <tr className="border-b last:border-0 dark:border-slate-800">
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{t.name}</td>
@@ -137,6 +144,7 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
       <td className="text-right whitespace-nowrap">
         <Button variant="ghost" onClick={enter} disabled={entering} title={id ? 'Masuk sebagai admin organisasi ini' : 'Act as an admin inside this tenant'}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
         <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
+        <Button variant="ghost" onClick={exportData} disabled={exporting} title={id ? 'Unduh semua data organisasi (JSON)' : 'Download all tenant data (JSON)'}>{exporting ? '…' : (id ? 'Ekspor' : 'Export')}</Button>
         <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
           {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
         </Button>
@@ -153,7 +161,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const { patch, toggleSuspend, enter, entering } = useTenantActions(t, onChange);
+  const { patch, toggleSuspend, enter, entering, exportData, exporting } = useTenantActions(t, onChange);
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
       <div className="flex items-start justify-between gap-2">
@@ -166,6 +174,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
       <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
         <Button variant="ghost" onClick={enter} disabled={entering}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
         <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
+        <Button variant="ghost" onClick={exportData} disabled={exporting}>{exporting ? '…' : (id ? 'Ekspor' : 'Export')}</Button>
         <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
           {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
         </Button>
