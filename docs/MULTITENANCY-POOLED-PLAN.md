@@ -458,9 +458,12 @@ a big schema cleanup); it is safe to leave indefinitely.
     (8). **⚠️ INFRA (operator action, NOT in-app — can't be tested from the app):** to actually serve
     subdomains you must (a) add a **DNS wildcard** `*.APP_BASE_DOMAIN → server IP` (+ an A record per
     custom domain the customer points at you), (b) nginx `server_name *.prismatix.tech prismatix.tech`
-    (+ each custom domain) proxying to `:4000`, (c) a **wildcard TLS cert** (`*.prismatix.tech`, via
-    certbot DNS-01) + per-custom-domain certs, and (d) set `APP_BASE_DOMAIN=prismatix.tech` in the
-    server `.env` + restart. Until (a)-(d) are done the in-app resolution is dormant (env unset).
+    (+ each custom domain) proxying to `:4000`, (c) a **wildcard TLS cert** and (d) set
+    `APP_BASE_DOMAIN=prismatix.tech` in the server `.env` + restart. Until (a)-(d) are done the in-app
+    resolution is dormant (env unset). **⇒ Full operator runbook: `docs/SUBDOMAIN-ROUTING-SETUP.md`.**
+    NOTE: `prismatix.tech` is now **Cloudflare-fronted**, so the cert is NOT certbot DNS-01 — Cloudflare
+    Universal SSL covers `*.prismatix.tech` at the edge (free) and a Cloudflare **Origin CA** wildcard
+    cert secures the origin hop (`deploy/nginx/prismatix-wildcard.conf`, SSL mode Full (Strict)).
   - **✅ Plan & quota gating DONE (2026-08-01):** `Tenant.plan` enum FREE/PRO/ENTERPRISE (migration
     `20260801160000_tenant_plan`; default tenant → ENTERPRISE as it owns all pre-existing data). Limits
     in `lib/tenant/plans.ts` (FREE 3 proj/5 members/1 GB · PRO 50/50/20 GB · ENTERPRISE unlimited);
