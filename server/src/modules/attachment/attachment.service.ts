@@ -3,10 +3,34 @@ import path from 'node:path';
 import type { AttachmentOwner } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
-import { BadRequest, NotFound } from '../../lib/errors.js';
+import { BadRequest, NotFound, PayloadTooLarge } from '../../lib/errors.js';
 
 export const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// Per-TENANT storage quota (total bytes across a tenant's attachments). Live env read (like the
+// enforcement flag) so it's adjustable without a rebuild; 1 GB default.
+export function tenantQuotaBytes(): number {
+  return (Number(process.env.TENANT_STORAGE_QUOTA_MB) || 1024) * 1024 * 1024;
+}
+
+// Uploaded files are namespaced under uploads/<tenantId>/<storageKey> (defence-in-depth + easy
+// per-tenant accounting). Resolve a file's path, falling back to the flat legacy location for
+// attachments created before namespacing (no filesystem migration needed).
+function resolveStoragePath(tenantId: string | null, storageKey: string): string {
+  if (tenantId) {
+    const scoped = path.join(UPLOAD_DIR, tenantId, storageKey);
+    if (fs.existsSync(scoped)) return scoped;
+  }
+  return path.join(UPLOAD_DIR, storageKey);
+}
+
+// The tenant's current storage usage. The aggregate is tenant-scoped by the Prisma extension under
+// enforcement (a single global sum when off / single-tenant).
+export async function tenantStorageUsed(): Promise<number> {
+  const { _sum } = await prisma.attachment.aggregate({ _sum: { sizeBytes: true } });
+  return _sum.sizeBytes ?? 0;
+}
 
 export const OWNER_TYPES: AttachmentOwner[] = ['CHARTER', 'RISK', 'PROJECT'];
 
@@ -34,6 +58,7 @@ interface UploadedFile {
   mimetype: string;
   size: number;
   filename: string; // multer-generated safe name (the storage key)
+  path: string; // absolute path multer saved to (used to clean up a rejected upload)
 }
 
 export async function createAttachment(
@@ -44,6 +69,15 @@ export async function createAttachment(
   actorId: string,
 ) {
   await assertOwner(projectId, ownerType, ownerId);
+
+  // Enforce the per-tenant storage quota. The file is already on disk (multer streamed it), so on
+  // rejection we remove it before failing.
+  const quota = tenantQuotaBytes();
+  const used = await tenantStorageUsed();
+  if (used + file.size > quota) {
+    try { fs.unlinkSync(file.path); } catch { /* already gone */ }
+    throw PayloadTooLarge(`Storage quota exceeded for this workspace (limit ${Math.round(quota / (1024 * 1024))} MB). Delete some attachments and try again.`);
+  }
 
   const attachment = await prisma.attachment.create({
     data: {
@@ -78,7 +112,7 @@ export async function listAttachments(projectId: string, ownerType?: AttachmentO
 export async function getAttachmentFile(projectId: string, id: string) {
   const att = await prisma.attachment.findFirst({ where: { id, projectRelId: projectId } });
   if (!att) throw NotFound('Attachment not found');
-  const absPath = path.join(UPLOAD_DIR, att.storageKey);
+  const absPath = resolveStoragePath(att.tenantId, att.storageKey);
   if (!fs.existsSync(absPath)) throw NotFound('File missing on storage');
   return { att, absPath };
 }
@@ -88,7 +122,7 @@ export async function deleteAttachment(projectId: string, id: string, actorId: s
   if (!att) throw NotFound('Attachment not found');
   // Remove the file then the row (best-effort on the file).
   try {
-    fs.unlinkSync(path.join(UPLOAD_DIR, att.storageKey));
+    fs.unlinkSync(resolveStoragePath(att.tenantId, att.storageKey));
   } catch {
     /* file already gone — proceed */
   }

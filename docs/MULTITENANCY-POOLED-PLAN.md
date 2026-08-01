@@ -393,6 +393,12 @@ a big schema cleanup); it is safe to leave indefinitely.
 ## Phase 5 — Cross-cutting & platform
 - **Per-tenant sequences:** `PRJ-YYYY-####`, `PRC-###`, etc. scoped by tenant.
 - **Attachments/uploads** namespaced by `tenantId` (path prefix + quota); storage limit per tenant.
+  - **✅ DONE (2026-08-01):** uploads land under `uploads/<tenantId>/<storageKey>` (multer destination
+    reads `req.user.tid`; `resolveStoragePath` falls back to the flat legacy location for pre-existing
+    files — no filesystem migration). Per-tenant storage **quota** enforced in `createAttachment`
+    (`tenantStorageUsed()` = a tenant-scoped `sum(sizeBytes)` aggregate; over-quota → **413** +
+    the just-uploaded file is unlinked). Limit is a live env read `TENANT_STORAGE_QUOTA_MB` (default
+    1 GB / tenant). Guarded by `attachment-tenant.itest.ts` (2). Code-only, no migration.
 - **EVM auto-capture cron** (`AppSetting.evmAutoCapture*`) iterates per tenant instead of globally.
 - **Guests:** convert `personalOwnerId` sandboxes into personal tenants; retire `personalOwnerId`.
 - **Platform/super-admin console:** create/suspend tenants, provisioning, impersonation (audited).

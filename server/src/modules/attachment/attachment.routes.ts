@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { Router } from 'express';
 import multer from 'multer';
@@ -17,9 +18,16 @@ import {
 
 const router = Router({ mergeParams: true });
 
-// Disk storage with server-generated safe names (never trust client filename for the path).
+// Disk storage with server-generated safe names (never trust client filename for the path). Files
+// are namespaced by tenant (uploads/<tenantId>/…) — canWrite runs before this, so req.user.tid is
+// set. Falls back to the flat dir when there's no tenant (single-tenant / enforcement off).
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  destination: (req, _file, cb) => {
+    const tid = req.user?.tid;
+    const dir = tid ? path.join(UPLOAD_DIR, tid) : UPLOAD_DIR;
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
   filename: (_req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname)}`),
 });
 
