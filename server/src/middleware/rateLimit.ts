@@ -70,3 +70,37 @@ export function authRateLimit({ windowMs, max, name, keyBy }: Options) {
     next();
   };
 }
+
+// --- Per-TENANT throughput limiter (Phase 5) -------------------------------------------------
+// A fixed-window request budget PER TENANT so one workspace (or a runaway client in it) can't
+// monopolize the shared server or hammer the API. Unlike authRateLimit this counts EVERY request
+// (not just failures), keyed by the active tenant. Called from requireAuth once req.user.tid is
+// resolved, so it needs no per-router wiring. In-memory (single process); resets per window / on
+// restart. Live env config so limits are tunable without a rebuild; set max<=0 to disable.
+export function tenantRateLimitConfig(): { windowMs: number; max: number } {
+  return {
+    windowMs: Number(process.env.TENANT_RATE_LIMIT_WINDOW_MS) || 60_000,
+    max: Number(process.env.TENANT_RATE_LIMIT_MAX ?? 600),
+  };
+}
+
+const tenantBuckets = new Map<string, Bucket>();
+
+export function enforceTenantRate(tenantId: string, res: Response): void {
+  const { windowMs, max } = tenantRateLimitConfig();
+  if (max <= 0) return; // disabled
+  const now = Date.now();
+  if (tenantBuckets.size > 10_000) {
+    for (const [k, b] of tenantBuckets) if (now > b.resetAt) tenantBuckets.delete(k);
+  }
+  let bucket = tenantBuckets.get(tenantId);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + windowMs };
+    tenantBuckets.set(tenantId, bucket);
+  }
+  if (bucket.count >= max) {
+    res.setHeader('Retry-After', Math.ceil((bucket.resetAt - now) / 1000));
+    throw TooManyRequests('This workspace is sending requests too quickly. Please slow down.');
+  }
+  bucket.count += 1;
+}

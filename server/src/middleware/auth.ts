@@ -5,6 +5,7 @@ import { Unauthorized, Forbidden } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { AT_COOKIE } from '../lib/cookies.js';
 import { bindTenantContext, multitenancyEnforced } from '../lib/tenant/context.js';
+import { enforceTenantRate } from './rateLimit.js';
 
 // Authenticated user attached to the request by requireAuth.
 export interface AuthUser {
@@ -33,7 +34,7 @@ declare global {
 // request: the user must still exist and be active, and the token's version must match
 // User.tokenVersion (so logout / password change / deactivation revoke tokens immediately).
 // Role is taken from the DB, not the token, so role changes take effect at once.
-export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     // Prefer the Authorization header (used by automation / the JWT-mint test workflow);
     // fall back to the httpOnly prima_at cookie (the browser SPA's credential — kept out of
@@ -96,6 +97,8 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       // pinned token — so the transition is seamless, no forced logout. Wrapping next() runs the
       // whole downstream chain inside the tenant's AsyncLocalStorage scope.
       if (!payload.tid) throw Unauthorized('Session needs a tenant — refreshing');
+      // Per-tenant throughput budget — one workspace can't monopolize the shared server (throws 429).
+      enforceTenantRate(payload.tid, res);
       bindTenantContext(payload.tid, tenantIsPersonal, () => next());
     } else {
       next();

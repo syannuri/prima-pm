@@ -425,6 +425,13 @@ a big schema cleanup); it is safe to leave indefinitely.
     amber `ImpersonationBanner`; an "Enter" button per tenant. Reload ends impersonation (in-memory
     token). Guarded by `platform.itest.ts` (9 total). **Platform super-admin console is complete.**
 - Per-tenant rate limits & quotas.
+  - **✅ DONE (2026-08-01):** a fixed-window per-TENANT throughput budget (`enforceTenantRate` in
+    `middleware/rateLimit.ts`) so one workspace / a runaway client can't monopolize the shared server.
+    Counts EVERY authenticated request keyed by the active tenant; over budget → **429** + `Retry-After`.
+    Invoked from `requireAuth` (once `tid` is resolved) so it needs no per-router wiring; only under
+    enforcement. Live env config `TENANT_RATE_LIMIT_MAX` (default 600) / `TENANT_RATE_LIMIT_WINDOW_MS`
+    (default 60000); `max<=0` disables. In-memory (single process). Guarded by
+    `tenant-ratelimit.itest.ts` (429 over budget + per-tenant isolation). **⇒ Phase 5 is complete.**
 
 ## Phase 6 — Tenant lifecycle / SaaS
 - Self-serve signup → creates `Tenant` + owner `Membership`.
