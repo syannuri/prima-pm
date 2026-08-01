@@ -15,10 +15,19 @@ echo "==> Installing dependencies"
 [ -f client/package-lock.json ] && npm --prefix client ci || npm --prefix client install
 
 echo "==> Building client (Vite → client/dist)"
+# Bake the workspace base domain into the client so a <slug>.<base> subdomain routes the public
+# root to the branded /login instead of the marketing homepage. Single source of truth: the
+# server's APP_BASE_DOMAIN (already in server/.env on the VPS). Unset (LAN-by-IP / dev) → empty →
+# the homepage still fronts /, unchanged.
+BASE_DOMAIN="${APP_BASE_DOMAIN:-}"
+if [ -z "$BASE_DOMAIN" ] && [ -f server/.env ]; then
+  BASE_DOMAIN="$(sed -n 's/^APP_BASE_DOMAIN=//p' server/.env | tail -1)"
+  BASE_DOMAIN="${BASE_DOMAIN//\"/}"; BASE_DOMAIN="${BASE_DOMAIN//\'/}"
+fi
 # Same-origin production build: the browser calls the serving Express origin. Default to a
 # relative API path so a fresh VPS build (which has no client/.env — it's gitignored) does
 # NOT bake in the localhost fallback. Override by exporting VITE_API_URL for split-origin.
-VITE_API_URL="${VITE_API_URL:-/api/v1}" npm --prefix client run build
+VITE_API_URL="${VITE_API_URL:-/api/v1}" VITE_APP_BASE_DOMAIN="$BASE_DOMAIN" npm --prefix client run build
 
 echo "==> Building server (Prisma generate + tsc → server/dist)"
 npm --prefix server run build
