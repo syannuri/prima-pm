@@ -109,3 +109,24 @@ describe('custom domain mapping', () => {
     expect((await request(app).get(api('/auth/providers')).set('Host', 'pm.acme.example')).body.workspace).toBeNull();
   });
 });
+
+describe('Caddy on-demand TLS gate (/_internal/tls-check)', () => {
+  const check = (domain: string) => request(app).get(`/_internal/tls-check?domain=${encodeURIComponent(domain)}`);
+  beforeAll(async () => {
+    await prisma.tenant.update({ where: { id: beta }, data: { customDomain: 'pm.beta.example', status: 'ACTIVE' } });
+    await runAsSystem(() => prisma.tenant.create({ data: { slug: 'susp', name: 'Susp', customDomain: 'pm.susp.example', status: 'SUSPENDED' } }));
+  });
+  it('allows (200) a domain an ACTIVE tenant owns — normalising case & port', async () => {
+    expect((await check('pm.beta.example')).status).toBe(200);
+    expect((await check('PM.Beta.Example:443')).status).toBe(200);
+  });
+  it('denies (404) an unknown domain — so a stranger cannot trigger cert issuance', async () => {
+    expect((await check('random.nobody.example')).status).toBe(404);
+  });
+  it("denies (404) a SUSPENDED tenant's domain", async () => {
+    expect((await check('pm.susp.example')).status).toBe(404);
+  });
+  it('400 on a missing domain', async () => {
+    expect((await check('')).status).toBe(400);
+  });
+});

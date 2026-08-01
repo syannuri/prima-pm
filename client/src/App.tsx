@@ -6,7 +6,7 @@ import { OnboardingProvider } from './context/OnboardingContext';
 import OnboardingTour from './components/OnboardingTour';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
-import { isWorkspaceSubdomainHost } from './lib/workspaceHost';
+import { isWorkspaceHost } from './lib/workspaceHost';
 import DashboardPage from './pages/DashboardPage';
 import ProjectPage from './pages/ProjectPage';
 import AdminUsersPage from './pages/AdminUsersPage';
@@ -31,9 +31,10 @@ export default function App() {
   if (!user) {
     return (
       <Routes>
-        {/* On a tenant's own subdomain (acme.prismatix.tech) the root is the branded sign-in, not
-            the public marketing homepage — that only fronts the bare base domain / LAN-by-IP. */}
-        <Route path="/" element={isWorkspaceSubdomainHost() ? <Navigate to="/login" replace /> : <HomePage />} />
+        {/* On a tenant's own subdomain (acme.prismatix.tech) or custom domain (pm.acme.com) the root
+            is the branded sign-in, not the public marketing homepage — that only fronts the bare base
+            domain / LAN-by-IP. */}
+        <Route path="/" element={isWorkspaceHost() ? <Navigate to="/login" replace /> : <HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

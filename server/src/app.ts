@@ -8,7 +8,11 @@ import { env, isProd } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { cookieParser } from './lib/cookies.js';
 import { csrfGuard } from './middleware/csrf.js';
+import { asyncHandler } from './middleware/validate.js';
 import { attachHostTenant } from './middleware/hostTenant.js';
+import { prisma } from './lib/prisma.js';
+import { runAsSystem } from './lib/tenant/context.js';
+import { normalizeHost } from './lib/tenant/host.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
@@ -117,6 +121,21 @@ export function createApp() {
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'prima-pm', ts: new Date().toISOString() });
   });
+
+  // Caddy on-demand TLS gate (custom-domain automation). Caddy calls this BEFORE it asks Let's
+  // Encrypt for a cert for an incoming hostname — 200 = a tenant owns this custom domain (issue it),
+  // anything else = deny (stops a stranger pointing a domain at us and exhausting the LE rate limit).
+  // Loopback-only: Caddy probes 127.0.0.1:4000 directly (no X-Forwarded-For → req.ip is loopback),
+  // whereas real visitors arrive proxied with a forwarded client IP and are refused here.
+  app.get('/_internal/tls-check', asyncHandler(async (req, res) => {
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip ?? '')) return res.sendStatus(403);
+    const domain = normalizeHost(String(req.query.domain ?? ''));
+    if (!domain) return res.sendStatus(400);
+    const owner = await runAsSystem(() =>
+      prisma.tenant.findFirst({ where: { customDomain: domain, status: 'ACTIVE' }, select: { id: true } }),
+    );
+    return res.sendStatus(owner ? 200 : 404);
+  }));
 
   const api = express.Router();
   // Resolve Host → tenant (subdomain / custom domain) before auth, so login can pin the session to

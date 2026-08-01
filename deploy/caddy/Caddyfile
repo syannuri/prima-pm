@@ -1,0 +1,43 @@
+# Prismatix — Caddy reverse proxy (REPLACES nginx as the origin :80/:443 listener).
+#
+# Why Caddy: it adds AUTOMATIC per-customer TLS for custom domains (pm.acmecorp.com) via Let's
+# Encrypt "on-demand" — a cert is issued on the first request and auto-renewed, with NO per-domain
+# nginx/certbot work. Issuance is gated by the app so only domains a tenant actually owns get a cert.
+#
+# Topology:
+#   [ browser ] ─https─▶ [ Cloudflare ] ─https(Origin CA)─▶ [ Caddy ] ─http─▶ [ node :4000 ]   (prismatix.tech + *.prismatix.tech)
+#   [ browser ] ─────────https(Let's Encrypt, on-demand)──▶ [ Caddy ] ─http─▶ [ node :4000 ]   (customer custom domains, no Cloudflare)
+#
+# Install: see docs/CUSTOM-DOMAIN-SETUP.md (install Caddy, drop the Origin CA cert into /etc/caddy,
+# open :80+:443, stop nginx, `caddy run`/systemd). Reversible: stop caddy, start nginx.
+
+{
+	# On-demand TLS MUST be gated, or a stranger pointing a domain at us could exhaust the Let's
+	# Encrypt rate limit. Caddy calls this before every new issuance; the app returns 200 only for a
+	# hostname an ACTIVE tenant owns (customDomain). Loopback call → the app's req.ip is 127.0.0.1.
+	on_demand_tls {
+		ask http://127.0.0.1:4000/_internal/tls-check
+	}
+	# Let's Encrypt account email (expiry / recovery notices). Change to a real inbox you monitor.
+	email admin@prismatix.tech
+}
+
+# --- Cloudflare-fronted apex + tenant subdomains ---------------------------------------------------
+# These sit behind Cloudflare, which terminates the public TLS. Caddy presents the Cloudflare Origin
+# CA cert (wildcard) on the CF→origin hop; keep the Cloudflare SSL/TLS mode at Full (Strict). No ACME
+# here (the cert is static), so Caddy never tries to issue for the apex/subdomains.
+prismatix.tech, *.prismatix.tech {
+	tls /etc/caddy/prismatix-origin.pem /etc/caddy/prismatix-origin.key
+	reverse_proxy 127.0.0.1:4000
+}
+
+# --- Customer custom domains (catch-all) ----------------------------------------------------------
+# Any other hostname arriving on :443 is a customer custom domain pointed straight at this origin (no
+# Cloudflare). Caddy obtains a real Let's Encrypt cert on first request — gated by the ask endpoint
+# above — and auto-renews it. The app resolves the Host → tenant (server/src/lib/tenant/host.ts).
+:443 {
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:4000
+}
