@@ -13,6 +13,7 @@ import { attachHostTenant } from './middleware/hostTenant.js';
 import { prisma } from './lib/prisma.js';
 import { runAsSystem } from './lib/tenant/context.js';
 import { normalizeHost } from './lib/tenant/host.js';
+import { captchaEnabled } from './lib/turnstile.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
@@ -51,6 +52,14 @@ export function createApp() {
   // bars via style attributes) and data: images.
   const serveClient = isProd && fs.existsSync(path.join(clientDist, 'index.html'));
 
+  // Third-party iframe origins for the CSP frame-src (GIS button/one-tap + Turnstile challenge),
+  // each included only when that feature is enabled. Omitted entirely when empty so frame-src falls
+  // back to default-src 'self'.
+  const cspFrameSrc: string[] = [
+    ...(env.googleClientId ? ['https://accounts.google.com/gsi/'] : []),
+    ...(captchaEnabled() ? ['https://challenges.cloudflare.com'] : []),
+  ];
+
   app.use(
     helmet(
       serveClient
@@ -66,14 +75,16 @@ export function createApp() {
                 // console reports the expected sha256 when it blocks it).
                 scriptSrc: ["'self'", "'sha256-gJ9Qv9VU/346gdpDRI3qPE9+6RkSI+W4FxyEcgZFlyY='",
                   // Google Identity Services (the "Sign in with Google" button) — only when enabled.
-                  ...(env.googleClientId ? ['https://accounts.google.com/gsi/client'] : [])],
+                  ...(env.googleClientId ? ['https://accounts.google.com/gsi/client'] : []),
+                  // Cloudflare Turnstile CAPTCHA widget script — only when enabled.
+                  ...(captchaEnabled() ? ['https://challenges.cloudflare.com'] : [])],
                 styleSrc: ["'self'", "'unsafe-inline'",
                   ...(env.googleClientId ? ['https://accounts.google.com/gsi/style'] : [])],
                 imgSrc: ["'self'", 'data:'],
                 connectSrc: ["'self'",
                   ...(env.googleClientId ? ['https://accounts.google.com/gsi/'] : [])],
-                // GIS renders its button/one-tap prompt in an iframe from this origin.
-                ...(env.googleClientId ? { frameSrc: ['https://accounts.google.com/gsi/'] } : {}),
+                // Third-party iframes: GIS button/one-tap, and Turnstile's challenge — each only when enabled.
+                ...(cspFrameSrc.length ? { frameSrc: cspFrameSrc } : {}),
                 objectSrc: ["'none'"],
                 baseUri: ["'self'"],
                 // Clickjacking (CWE-1021): only same-origin pages may frame the app. This is the

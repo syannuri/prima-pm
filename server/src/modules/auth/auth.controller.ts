@@ -4,6 +4,7 @@ import { setAuthCookies, clearAuthCookies, RT_COOKIE } from '../../lib/cookies.j
 import { Unauthorized } from '../../lib/errors.js';
 import { env } from '../../config/env.js';
 import { getAppSettings, isGoogleConfigured } from '../settings/settings.service.js';
+import { captchaEnabled } from '../../lib/turnstile.js';
 
 // Public auth config so the SPA can render provider buttons without a rebuild. The Google
 // client ID is not a secret (it ships in the browser). Reflects the EFFECTIVE (admin-toggled)
@@ -12,6 +13,9 @@ export async function providersHandler(req: Request, res: Response): Promise<voi
   const s = await getAppSettings();
   res.json({
     google: { enabled: isGoogleConfigured() && s.googleLoginEnabled, clientId: env.googleClientId },
+    // Turnstile CAPTCHA on the public forms. The site key is public (renders the widget); enabled
+    // reflects whether the server will verify (TURNSTILE_SECRET_KEY set).
+    turnstile: { enabled: captchaEnabled(), siteKey: env.turnstile.siteKey },
     guestSignup: s.guestSignupEnabled,
     orgSignup: s.orgSignupEnabled,
     // When this Host maps to a workspace (subdomain / custom domain), the SPA brands the login page

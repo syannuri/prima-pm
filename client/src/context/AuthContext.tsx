@@ -6,9 +6,9 @@ import type { User, TenantSummary } from '../api/types';
 interface AuthState {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  guestRegister: (name: string, email: string, password: string) => Promise<void>;
-  signupOrg: (orgName: string, ownerName: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, captchaToken?: string) => Promise<void>;
+  guestRegister: (name: string, email: string, password: string, captchaToken?: string) => Promise<void>;
+  signupOrg: (orgName: string, ownerName: string, email: string, password: string, captchaToken?: string) => Promise<void>;
   loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
   // Pooled multitenancy: the tenants this user belongs to, the active one, and a switcher.
@@ -98,18 +98,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await reloadIdentity();
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, captchaToken?: string) => {
     // The server sets httpOnly auth cookies; nothing to store client-side. Clear any stale
-    // legacy tokens so we don't keep sending a Bearer header.
-    const res = await api.post<{ user: User }>('/auth/login', { email, password });
+    // legacy tokens so we don't keep sending a Bearer header. captchaToken is only verified when
+    // the deployment has Turnstile configured (ignored otherwise).
+    const res = await api.post<{ user: User }>('/auth/login', { email, password, captchaToken });
     tokenStore.clear();
     setUser(res.user);
     await loadTenants();
   };
 
   // Self-service guest signup — same cookie flow as login (server auto-logs-in on success).
-  const guestRegister = async (name: string, email: string, password: string) => {
-    const res = await api.post<{ user: User }>('/auth/guest/register', { name, email, password });
+  const guestRegister = async (name: string, email: string, password: string, captchaToken?: string) => {
+    const res = await api.post<{ user: User }>('/auth/guest/register', { name, email, password, captchaToken });
     tokenStore.clear();
     setUser(res.user);
     await loadTenants();
@@ -117,8 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Self-serve organization signup — creates a corporate tenant + owner admin, same cookie flow
   // (server auto-logs-in the new owner).
-  const signupOrg = async (orgName: string, ownerName: string, email: string, password: string) => {
-    const res = await api.post<{ user: User }>('/auth/signup', { orgName, ownerName, email, password });
+  const signupOrg = async (orgName: string, ownerName: string, email: string, password: string, captchaToken?: string) => {
+    const res = await api.post<{ user: User }>('/auth/signup', { orgName, ownerName, email, password, captchaToken });
     tokenStore.clear();
     setUser(res.user);
     await loadTenants();

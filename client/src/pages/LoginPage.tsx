@@ -16,8 +16,29 @@ declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     google?: any;
+    // Cloudflare Turnstile, injected at runtime (only when the deployment enables CAPTCHA).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    turnstile?: any;
   }
 }
+
+// Cloudflare Turnstile widget script — loaded on demand, only when /auth/providers reports a site key.
+let turnstilePromise: Promise<void> | null = null;
+function loadTurnstile(): Promise<void> {
+  if (turnstilePromise) return turnstilePromise;
+  turnstilePromise = new Promise((resolve, reject) => {
+    if (window.turnstile) return resolve();
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true;
+    s.defer = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load Turnstile'));
+    document.head.appendChild(s);
+  });
+  return turnstilePromise;
+}
+
 let gisPromise: Promise<void> | null = null;
 function loadGoogleIdentityServices(): Promise<void> {
   if (gisPromise) return gisPromise;
@@ -48,15 +69,20 @@ export default function LoginPage() {
   const [orgEnabled, setOrgEnabled] = useState(false);
   const [workspace, setWorkspace] = useState<{ slug: string; name: string } | null>(null);
   const [workspaceNotFound, setWorkspaceNotFound] = useState(false);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
   const googleBtnRef = useRef<HTMLDivElement>(null);
+  const turnstileRef = useRef<HTMLDivElement>(null);
+  const turnstileWidgetId = useRef<string | null>(null);
 
   // Ask the server which sign-up paths are enabled (admin-toggleable). Google's client ID is
   // public, so it's safe to send. Hides the guest option entirely when disabled.
   useEffect(() => {
     api
-      .get<{ google?: { enabled: boolean; clientId: string }; guestSignup?: boolean; orgSignup?: boolean; workspace?: { slug: string; name: string } | null; workspaceNotFound?: boolean }>('/auth/providers')
+      .get<{ google?: { enabled: boolean; clientId: string }; turnstile?: { enabled: boolean; siteKey: string }; guestSignup?: boolean; orgSignup?: boolean; workspace?: { slug: string; name: string } | null; workspaceNotFound?: boolean }>('/auth/providers')
       .then((p) => {
         if (p.google?.enabled && p.google.clientId) setGoogleClientId(p.google.clientId);
+        if (p.turnstile?.enabled && p.turnstile.siteKey) setTurnstileSiteKey(p.turnstile.siteKey);
         // The Host is a workspace-shaped subdomain that owns no tenant → show a "not found" page.
         setWorkspaceNotFound(Boolean(p.workspaceNotFound));
         // On a tenant's own domain (subdomain / custom domain) it's a sign-in-only page for that
@@ -103,6 +129,26 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleClientId]);
 
+  // Render the Turnstile widget once we have a site key (and we're showing the form, not the
+  // workspace-not-found card). The callback stashes the token; expiry/error clears it.
+  useEffect(() => {
+    if (!turnstileSiteKey || workspaceNotFound) return;
+    let cancelled = false;
+    loadTurnstile()
+      .then(() => {
+        if (cancelled || !window.turnstile || !turnstileRef.current || turnstileWidgetId.current) return;
+        turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: turnstileSiteKey,
+          theme: 'dark',
+          callback: (token: string) => setCaptchaToken(token),
+          'expired-callback': () => setCaptchaToken(''),
+          'error-callback': () => setCaptchaToken(''),
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [turnstileSiteKey, workspaceNotFound]);
+
   const emailOk = isEmailValid(email);
   const isGuest = mode === 'guest';
   const isOrg = mode === 'org';
@@ -114,7 +160,9 @@ export default function LoginPage() {
   const mainSiteUrl = attemptedHost.includes('.')
     ? `${window.location.protocol}//${attemptedHost.split('.').slice(1).join('.')}`
     : '/';
-  const canSubmit = emailOk && !busy
+  // When Turnstile is on, block submit until the challenge yields a token.
+  const captchaOk = !turnstileSiteKey || Boolean(captchaToken);
+  const canSubmit = emailOk && !busy && captchaOk
     && (isSignup ? name.trim().length >= 2 && password.length >= 10 && (!isOrg || orgName.trim().length >= 2) : password.length > 0);
 
   const submit = async (e: React.FormEvent) => {
@@ -122,11 +170,16 @@ export default function LoginPage() {
     setError('');
     setBusy(true);
     try {
-      if (isOrg) await signupOrg(orgName.trim(), name.trim(), email, password);
-      else if (isGuest) await guestRegister(name.trim(), email, password);
-      else await login(email, password);
+      if (isOrg) await signupOrg(orgName.trim(), name.trim(), email, password, captchaToken);
+      else if (isGuest) await guestRegister(name.trim(), email, password, captchaToken);
+      else await login(email, password, captchaToken);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : isSignup ? "Couldn't set up your workspace" : 'Login failed');
+      // Turnstile tokens are single-use — reset the widget so a retry gets a fresh one.
+      if (turnstileWidgetId.current && window.turnstile) {
+        window.turnstile.reset(turnstileWidgetId.current);
+        setCaptchaToken('');
+      }
     } finally {
       setBusy(false);
     }
@@ -257,6 +310,8 @@ export default function LoginPage() {
                   {isSignup && <span className="mt-1 block text-xs text-slate-400">At least 10 characters, with a letter and a number.</span>}
                 </Field>
                 {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
+                {/* Cloudflare Turnstile — only rendered when the deployment enables it. */}
+                {turnstileSiteKey && <div ref={turnstileRef} className="flex min-h-[65px] justify-center" />}
                 <Button
                   type="submit"
                   disabled={!canSubmit}

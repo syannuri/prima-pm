@@ -41,6 +41,14 @@ export const env = {
   // ID is not a secret (it ships in the browser), but gating on it keeps the feature opt-in
   // per deployment. New Google users are created as sandboxed GUESTs (like guest signup).
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  // Cloudflare Turnstile CAPTCHA on the public signup/login forms. Enabled by setting the SECRET
+  // key (server-side siteverify); the SITE key is public (ships in the browser to render the
+  // widget). When the secret is empty the CAPTCHA is off — endpoints don't require a token and the
+  // client hides the widget (so dev / LAN-by-IP are unaffected). Keys from the Cloudflare dashboard.
+  turnstile: {
+    siteKey: process.env.TURNSTILE_SITE_KEY ?? '',
+    secretKey: process.env.TURNSTILE_SECRET_KEY ?? '',
+  },
   // Web-push (VAPID). When the keypair is set, browser push notifications are enabled; the public
   // key ships to the client, the private key signs pushes. Empty ⇒ push is off (endpoints report
   // unconfigured, the client hides the enable-notifications control).

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authRateLimit } from '../../middleware/rateLimit.js';
+import { verifyCaptcha } from '../../middleware/captcha.js';
 import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, orgSignupSchema, refreshSchema, switchTenantSchema } from './auth.schemas.js';
 import * as ctrl from './auth.controller.js';
 
@@ -54,9 +55,11 @@ const orgSignupLimiter = authRateLimit({
 // otherwise ADMIN-provisioned via POST /users or the platform console.
 // Public: which sign-in providers this deployment offers (Google client ID, guest + org signup).
 router.get('/providers', asyncHandler(ctrl.providersHandler));
-router.post('/guest/register', guestLimiter, validateBody(guestRegisterSchema), asyncHandler(ctrl.guestRegisterHandler));
-router.post('/signup', orgSignupLimiter, validateBody(orgSignupSchema), asyncHandler(ctrl.orgSignupHandler));
-router.post('/login', loginLimiter, validateBody(loginSchema), asyncHandler(ctrl.loginHandler));
+// verifyCaptcha runs before validateBody (which strips the raw `captchaToken`); no-op unless
+// TURNSTILE_SECRET_KEY is set. Guards the three public forms against bots / bulk abuse.
+router.post('/guest/register', guestLimiter, verifyCaptcha, validateBody(guestRegisterSchema), asyncHandler(ctrl.guestRegisterHandler));
+router.post('/signup', orgSignupLimiter, verifyCaptcha, validateBody(orgSignupSchema), asyncHandler(ctrl.orgSignupHandler));
+router.post('/login', loginLimiter, verifyCaptcha, validateBody(loginSchema), asyncHandler(ctrl.loginHandler));
 // Sign in with Google → matches/creates a sandboxed GUEST (gated by GOOGLE_CLIENT_ID).
 router.post('/google', googleLimiter, validateBody(googleLoginSchema), asyncHandler(ctrl.googleHandler));
 router.post('/refresh', refreshLimiter, validateBody(refreshSchema), asyncHandler(ctrl.refreshHandler));
