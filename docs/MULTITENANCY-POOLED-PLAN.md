@@ -455,15 +455,16 @@ a big schema cleanup); it is safe to leave indefinitely.
     SPA brands the login page ("Sign in to Acme", signup paths hidden). Platform console: PATCH
     `{ customDomain }` (unique, blank clears) + a per-tenant **Domain** modal + the domain shown on
     each row/card. Migration `20260801170000_tenant_custom_domain`. Guarded by `tenant-host.itest.ts`
-    (8). **⚠️ INFRA (operator action, NOT in-app — can't be tested from the app):** to actually serve
-    subdomains you must (a) add a **DNS wildcard** `*.APP_BASE_DOMAIN → server IP` (+ an A record per
-    custom domain the customer points at you), (b) nginx `server_name *.prismatix.tech prismatix.tech`
-    (+ each custom domain) proxying to `:4000`, (c) a **wildcard TLS cert** and (d) set
-    `APP_BASE_DOMAIN=prismatix.tech` in the server `.env` + restart. Until (a)-(d) are done the in-app
-    resolution is dormant (env unset). **⇒ Full operator runbook: `docs/SUBDOMAIN-ROUTING-SETUP.md`.**
-    NOTE: `prismatix.tech` is now **Cloudflare-fronted**, so the cert is NOT certbot DNS-01 — Cloudflare
-    Universal SSL covers `*.prismatix.tech` at the edge (free) and a Cloudflare **Origin CA** wildcard
-    cert secures the origin hop (`deploy/nginx/prismatix-wildcard.conf`, SSL mode Full (Strict)).
+    (8). **✅ INFRA DONE — subdomain routing LIVE on the VPS (2026-08-01).** Verified end-to-end:
+    `default.prismatix.tech` → `/auth/providers` returns `workspace{slug:default,name:PRIMA,ACTIVE}`;
+    unknown/reserved subs → `workspace:null` (generic login); apex unaffected (200). `prismatix.tech` is
+    **Cloudflare-fronted** (origin `31.97.105.155`), so the original "certbot DNS-01 wildcard" was NOT
+    needed. Steps done (full runbook `docs/SUBDOMAIN-ROUTING-SETUP.md`): (a) Cloudflare DNS `A * →
+    31.97.105.155` proxied; (b) Universal SSL auto-covers `*.prismatix.tech` at the edge; (c) a Cloudflare
+    **Origin CA** wildcard cert + `deploy/nginx/prismatix-wildcard.conf` (`server_name prismatix.tech
+    *.prismatix.tech`, `listen 443 ssl http2`) active, SSL mode **Full (Strict)**; (d) `APP_BASE_DOMAIN=
+    prismatix.tech` in `server/.env` + restart. Still pending only for **customer custom domains**
+    (`Tenant.customDomain`): each needs its own origin cert/nginx entry or Cloudflare SSL-for-SaaS.
   - **✅ Plan & quota gating DONE (2026-08-01):** `Tenant.plan` enum FREE/PRO/ENTERPRISE (migration
     `20260801160000_tenant_plan`; default tenant → ENTERPRISE as it owns all pre-existing data). Limits
     in `lib/tenant/plans.ts` (FREE 3 proj/5 members/1 GB · PRO 50/50/20 GB · ENTERPRISE unlimited);
