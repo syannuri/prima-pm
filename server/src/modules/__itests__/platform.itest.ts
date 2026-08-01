@@ -154,6 +154,34 @@ describe('suspend / reactivate locks out members', () => {
     expect((await request(app).patch(api(`/admin/tenants/${acme.id}`)).set(bearer(platformToken)).send({ status: 'ACTIVE' })).status).toBe(200);
     expect((await request(app).get(api('/projects')).set(bearer(ownerToken))).status).toBe(200);
   });
+
+  it('a member of ONLY a suspended tenant cannot LOG IN (403), and can again once reactivated', async () => {
+    // Provision a fresh corporate tenant + a brand-new admin (its only membership).
+    expect((await request(app).post(api('/admin/tenants')).set(bearer(platformToken))
+      .send({ name: 'Susp Co', slug: 'suspco', adminEmail: 'boss@suspco.test', adminName: 'Susp Boss', adminPassword: 'Susp-Boss-1' })).status).toBe(201);
+    // Baseline: they can log in while active.
+    expect((await request(app).post(api('/auth/login')).send({ email: 'boss@suspco.test', password: 'Susp-Boss-1' })).status).toBe(200);
+
+    const suspco = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: 'suspco' } }));
+    expect((await request(app).patch(api(`/admin/tenants/${suspco.id}`)).set(bearer(platformToken)).send({ status: 'SUSPENDED' })).status).toBe(200);
+
+    // Suspended: login must be refused outright — not a 200 that only 403s on later requests.
+    const blocked = await request(app).post(api('/auth/login')).send({ email: 'boss@suspco.test', password: 'Susp-Boss-1' });
+    expect(blocked.status).toBe(403);
+
+    // Reactivate → login works again.
+    expect((await request(app).patch(api(`/admin/tenants/${suspco.id}`)).set(bearer(platformToken)).send({ status: 'ACTIVE' })).status).toBe(200);
+    expect((await request(app).post(api('/auth/login')).send({ email: 'boss@suspco.test', password: 'Susp-Boss-1' })).status).toBe(200);
+  });
+
+  it('a member of an active tenant AND a suspended one logs in to the ACTIVE tenant (not locked out)', async () => {
+    // plainAdmin belongs to default (active) + beta. Suspend beta → they still log in (to default).
+    const beta = await runAsSystem(() => prisma.tenant.findUniqueOrThrow({ where: { slug: 'beta' } }));
+    await runAsSystem(() => prisma.tenant.update({ where: { id: beta.id }, data: { status: 'SUSPENDED' } }));
+    const res = await request(app).post(api('/auth/login')).send({ email: plainAdminEmail, password: 'x' });
+    expect(res.status).toBe(200);
+    await runAsSystem(() => prisma.tenant.update({ where: { id: beta.id }, data: { status: 'ACTIVE' } }));
+  });
 });
 
 describe('export a tenant (GDPR data portability)', () => {

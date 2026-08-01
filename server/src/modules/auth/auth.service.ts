@@ -19,13 +19,28 @@ async function resolveActiveMembership(userId: string, preferred?: string): Prom
   const memberships = await prisma.membership.findMany({
     where: { userId },
     orderBy: { createdAt: 'asc' },
-    select: { tenantId: true, role: true },
+    select: { tenantId: true, role: true, tenant: { select: { status: true } } },
   });
+  // Never pin a session to a SUSPENDED workspace — a suspended tenant is locked out (requireAuth
+  // 403s it), so issuing a token for it would half-log-someone-in. Prefer the user's ACTIVE tenants.
+  const active = memberships.filter((m) => m.tenant.status === 'ACTIVE');
   if (preferred) {
-    const chosen = memberships.find((m) => m.tenantId === preferred);
-    if (chosen) return chosen;
+    const chosen = active.find((m) => m.tenantId === preferred);
+    if (chosen) return { tenantId: chosen.tenantId, role: chosen.role };
   }
-  return memberships[0];
+  const first = active[0];
+  return first ? { tenantId: first.tenantId, role: first.role } : undefined;
+}
+
+// A member of ONLY suspended workspace(s) must be refused login outright (not handed a token that
+// merely 403s on the next request — the client stays "logged in" on a 403). No membership at all is
+// left alone (guests/off-mode). Enforcement-gated, mirroring the requireAuth suspend check.
+async function assertNotFullySuspended(userId: string): Promise<void> {
+  if (!multitenancyEnforced()) return;
+  const memberships = await prisma.membership.findMany({ where: { userId }, select: { tenant: { select: { status: true } } } });
+  if (memberships.length > 0 && !memberships.some((m) => m.tenant.status === 'ACTIVE')) {
+    throw Forbidden('Your workspace has been suspended. Contact your administrator.');
+  }
 }
 
 // Give a brand-new GUEST their OWN personal tenant — the tenant-native sandbox that replaces the
@@ -118,6 +133,7 @@ export async function login(input: LoginInput): Promise<AuthResult> {
   const ok = await verifyPassword(input.password, user.passwordHash);
   if (!ok) throw Unauthorized('Invalid credentials');
 
+  await assertNotFullySuspended(user.id);
   await auditInUserTenant(user.id, { userId: user.id, entity: 'User', entityId: user.id, action: 'LOGIN' });
   return issueTokenPair(user);
 }
@@ -242,6 +258,9 @@ export async function refresh(refreshToken: string): Promise<AuthResult> {
   if (!user || !user.isActive) throw Unauthorized('User no longer active');
   // Reject refresh tokens minted before the user's sessions were revoked.
   if ((payload.tv ?? 0) !== user.tokenVersion) throw Unauthorized('Session has been revoked');
+  // If their workspace was suspended mid-session, end it here rather than minting a tenant-less
+  // token that would 401-loop against requireAuth's fail-closed enforcement.
+  await assertNotFullySuspended(user.id);
 
   if (payload.jti) {
     const stored = await prisma.refreshToken.findUnique({ where: { id: payload.jti } });
@@ -305,9 +324,10 @@ export async function switchTenant(userId: string, tenantId: string): Promise<Au
   if (!user || !user.isActive) throw Unauthorized();
   const membership = await prisma.membership.findUnique({
     where: { userId_tenantId: { userId, tenantId } },
-    select: { id: true },
+    select: { id: true, tenant: { select: { status: true } } },
   });
   if (!membership) throw Forbidden('You are not a member of that tenant');
+  if (membership.tenant.status === 'SUSPENDED') throw Forbidden('That workspace is suspended.');
   await writeAudit({ userId, entity: 'User', entityId: userId, action: 'LOGIN', after: { switchedTenant: tenantId } });
   return issueTokenPair(user, { preferredTid: tenantId });
 }
