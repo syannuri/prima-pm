@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { resolveTenantFromHost, type HostTenant } from '../lib/tenant/host.js';
+import { resolveHostWorkspace, type HostTenant } from '../lib/tenant/host.js';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -8,6 +8,9 @@ declare global {
       // The tenant this request's Host maps to (subdomain / custom domain), or null. Set by
       // attachHostTenant; null unless APP_BASE_DOMAIN is configured and the host matches a tenant.
       hostTenant?: HostTenant | null;
+      // True when the Host is a workspace-shaped subdomain (`<label>.<base>`) that matches NO tenant
+      // — the SPA renders a "workspace not found" page instead of the generic login.
+      hostWorkspaceMissing?: boolean;
     }
   }
 }
@@ -17,7 +20,9 @@ declare global {
 // (null) when subdomain routing is off (APP_BASE_DOMAIN unset) — LAN-by-IP / bare base domain.
 export async function attachHostTenant(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
-    req.hostTenant = await resolveTenantFromHost(req.headers.host);
+    const { tenant, unknownWorkspace } = await resolveHostWorkspace(req.headers.host);
+    req.hostTenant = tenant;
+    req.hostWorkspaceMissing = unknownWorkspace;
     next();
   } catch (err) {
     next(err);

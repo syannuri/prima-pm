@@ -60,6 +60,15 @@ describe('Host → tenant resolution (/auth/providers.workspace)', () => {
   it('an unknown subdomain resolves to no workspace', async () => {
     expect((await ws('nope.prima.test')).body.workspace).toBeNull();
   });
+  it('workspaceNotFound is true ONLY for a workspace-shaped subdomain with no tenant', async () => {
+    // Unknown <label>.base → the SPA shows a "workspace not found" page.
+    expect((await ws('nope.prima.test')).body.workspaceNotFound).toBe(true);
+    // A real workspace, the bare base, reserved subs and deeper hosts are the generic front door.
+    expect((await ws('acme.prima.test')).body.workspaceNotFound).toBe(false);
+    expect((await ws('prima.test')).body.workspaceNotFound).toBe(false);
+    expect((await ws('www.prima.test')).body.workspaceNotFound).toBe(false);
+    expect((await ws('deep.acme.prima.test')).body.workspaceNotFound).toBe(false);
+  });
 });
 
 describe('login pins the session to the host workspace', () => {

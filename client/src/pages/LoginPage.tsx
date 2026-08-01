@@ -47,15 +47,18 @@ export default function LoginPage() {
   const [guestEnabled, setGuestEnabled] = useState(false);
   const [orgEnabled, setOrgEnabled] = useState(false);
   const [workspace, setWorkspace] = useState<{ slug: string; name: string } | null>(null);
+  const [workspaceNotFound, setWorkspaceNotFound] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   // Ask the server which sign-up paths are enabled (admin-toggleable). Google's client ID is
   // public, so it's safe to send. Hides the guest option entirely when disabled.
   useEffect(() => {
     api
-      .get<{ google?: { enabled: boolean; clientId: string }; guestSignup?: boolean; orgSignup?: boolean; workspace?: { slug: string; name: string } | null }>('/auth/providers')
+      .get<{ google?: { enabled: boolean; clientId: string }; guestSignup?: boolean; orgSignup?: boolean; workspace?: { slug: string; name: string } | null; workspaceNotFound?: boolean }>('/auth/providers')
       .then((p) => {
         if (p.google?.enabled && p.google.clientId) setGoogleClientId(p.google.clientId);
+        // The Host is a workspace-shaped subdomain that owns no tenant → show a "not found" page.
+        setWorkspaceNotFound(Boolean(p.workspaceNotFound));
         // On a tenant's own domain (subdomain / custom domain) it's a sign-in-only page for that
         // workspace — the self-serve guest/org signup paths don't apply there.
         const ws = p.workspace ?? null;
@@ -104,6 +107,13 @@ export default function LoginPage() {
   const isGuest = mode === 'guest';
   const isOrg = mode === 'org';
   const isSignup = isGuest || isOrg; // both need a name + a strong password (server enforces the full rule)
+
+  // "Workspace not found" screen: the address the user tried, and a link back to the main site
+  // (the base domain — drop the left-most subdomain label).
+  const attemptedHost = typeof window !== 'undefined' ? window.location.hostname : '';
+  const mainSiteUrl = attemptedHost.includes('.')
+    ? `${window.location.protocol}//${attemptedHost.split('.').slice(1).join('.')}`
+    : '/';
   const canSubmit = emailOk && !busy
     && (isSignup ? name.trim().length >= 2 && password.length >= 10 && (!isOrg || orgName.trim().length >= 2) : password.length > 0);
 
@@ -211,6 +221,17 @@ export default function LoginPage() {
                 </span>
               </div>
 
+              {workspaceNotFound ? (
+                <div className="py-4 text-center">
+                  <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/15 text-brand-300 ring-1 ring-brand-400/40">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-7 w-7"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-3.5-3.5M11 8v3.5" /><circle cx="11" cy="14.6" r=".55" fill="currentColor" stroke="none" /></svg>
+                  </div>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-100">Workspace not found</h1>
+                  <p className="mt-2 text-sm text-slate-400">There’s no workspace at <span className="font-semibold text-slate-200">{attemptedHost}</span>. Check the address, or head to the main site to sign in.</p>
+                  <a href={mainSiteUrl} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Go to Prismatix</a>
+                </div>
+              ) : (
+              <>
               <div className="mb-7 text-center">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{workspace ? `Sign in to ${workspace.name}` : isOrg ? 'Create your organization' : isGuest ? 'Try Prismatix free' : 'Welcome back'}</h1>
                 <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? `${workspace.name} workspace on Prismatix` : isOrg ? 'Set up a new workspace for your team — you’ll be its admin' : isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
@@ -277,6 +298,8 @@ export default function LoginPage() {
                     </>
                   )}
                 </div>
+              )}
+              </>
               )}
             </div>
           </div>

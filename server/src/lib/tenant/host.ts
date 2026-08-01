@@ -60,3 +60,25 @@ export async function resolveTenantFromHost(rawHost: string | undefined): Promis
     return (bySlug as HostTenant) ?? null;
   });
 }
+
+export interface HostWorkspace {
+  tenant: HostTenant | null;
+  // The Host LOOKS like a workspace URL (a non-reserved `<label>.<base>` subdomain) but no tenant
+  // owns that slug — so the SPA shows a "workspace not found" page instead of the generic login. The
+  // bare base domain, reserved subs, IPs and localhost are NOT "unknown workspaces" (they're the
+  // normal generic front door), so this stays false for them.
+  unknownWorkspace: boolean;
+}
+
+// Classify a Host: the tenant it maps to (if any) plus whether it's an unknown-workspace subdomain.
+export async function resolveHostWorkspace(rawHost: string | undefined): Promise<HostWorkspace> {
+  const base = appBaseDomain();
+  if (!base) return { tenant: null, unknownWorkspace: false };
+
+  const tenant = await resolveTenantFromHost(rawHost);
+  if (tenant) return { tenant, unknownWorkspace: false };
+
+  const label = subdomainOf(normalizeHost(rawHost), base);
+  const unknownWorkspace = !!label && !RESERVED_SUBDOMAINS.has(label);
+  return { tenant: null, unknownWorkspace };
+}

@@ -17,6 +17,8 @@ export async function providersHandler(req: Request, res: Response): Promise<voi
     // When this Host maps to a workspace (subdomain / custom domain), the SPA brands the login page
     // for it and scopes sign-in to that tenant. Null on the bare base domain / LAN-by-IP.
     workspace: req.hostTenant ? { slug: req.hostTenant.slug, name: req.hostTenant.name, status: req.hostTenant.status } : null,
+    // The Host is a workspace-shaped subdomain that owns no tenant → SPA shows "workspace not found".
+    workspaceNotFound: Boolean(req.hostWorkspaceMissing),
   });
 }
 
