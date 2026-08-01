@@ -8,6 +8,7 @@ import { env, isProd } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { cookieParser } from './lib/cookies.js';
 import { csrfGuard } from './middleware/csrf.js';
+import { attachHostTenant } from './middleware/hostTenant.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
@@ -118,6 +119,9 @@ export function createApp() {
   });
 
   const api = express.Router();
+  // Resolve Host → tenant (subdomain / custom domain) before auth, so login can pin the session to
+  // this workspace and requireAuth can reject a session for a different workspace on this domain.
+  api.use(attachHostTenant);
   // CSRF double-submit guard on all mutating API requests (skips Bearer-authed calls and
   // login — see middleware/csrf.ts).
   api.use(csrfGuard);

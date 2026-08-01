@@ -154,11 +154,15 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [domainOpen, setDomainOpen] = useState(false);
   const { patch, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
   return (
     <tr className="border-b last:border-0 dark:border-slate-800">
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{t.name}</td>
-      <td className="font-mono text-xs text-slate-500 dark:text-slate-400">{t.slug}</td>
+      <td className="font-mono text-xs text-slate-500 dark:text-slate-400">
+        {t.slug}
+        {t.customDomain && <span className="block text-[11px] text-indigo-500 dark:text-indigo-400">🔗 {t.customDomain}</span>}
+      </td>
       <td><StatusBadge status={t.status} /></td>
       <td><PlanSelect t={t} onPlan={setPlan} disabled={patch.isPending} /></td>
       <td className="text-right text-slate-500 dark:text-slate-400">{t.memberCount}</td>
@@ -166,6 +170,7 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
       <td className="text-right whitespace-nowrap">
         <Button variant="ghost" onClick={enter} disabled={entering} title={id ? 'Masuk sebagai admin organisasi ini' : 'Act as an admin inside this tenant'}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
         <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
+        <Button variant="ghost" onClick={() => setDomainOpen(true)} title={id ? 'Domain kustom' : 'Custom domain'}>{id ? 'Domain' : 'Domain'}</Button>
         <Button variant="ghost" onClick={exportData} disabled={exporting} title={id ? 'Unduh semua data organisasi (JSON)' : 'Download all tenant data (JSON)'}>{exporting ? '…' : (id ? 'Ekspor' : 'Export')}</Button>
         <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
           {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
@@ -173,6 +178,7 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
         <Button variant="ghost" onClick={() => setDeleting(true)} className="text-red-600 dark:text-red-400" title={id ? 'Hapus organisasi permanen' : 'Permanently delete tenant'}>{id ? 'Hapus' : 'Delete'}</Button>
       </td>
       {renaming && <RenameModal t={t} onClose={() => setRenaming(false)} onChange={onChange} />}
+      {domainOpen && <DomainModal t={t} onClose={() => setDomainOpen(false)} onChange={onChange} />}
       {deleting && <DeleteModal t={t} onClose={() => setDeleting(false)} onChange={onChange} />}
     </tr>
   );
@@ -183,6 +189,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [domainOpen, setDomainOpen] = useState(false);
   const { patch, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
@@ -190,6 +197,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
         <div className="min-w-0">
           <p className="font-medium text-slate-700 dark:text-slate-200">{t.name}</p>
           <p className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">{t.slug} · {t.memberCount} {id ? 'anggota' : 'members'}</p>
+          {t.customDomain && <p className="truncate font-mono text-[11px] text-indigo-500 dark:text-indigo-400">🔗 {t.customDomain}</p>}
         </div>
         <div className="flex flex-col items-end gap-1">
           <StatusBadge status={t.status} />
@@ -199,6 +207,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
       <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
         <Button variant="ghost" onClick={enter} disabled={entering}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
         <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
+        <Button variant="ghost" onClick={() => setDomainOpen(true)}>Domain</Button>
         <Button variant="ghost" onClick={exportData} disabled={exporting}>{exporting ? '…' : (id ? 'Ekspor' : 'Export')}</Button>
         <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
           {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
@@ -206,6 +215,7 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
         <Button variant="ghost" onClick={() => setDeleting(true)} className="text-red-600 dark:text-red-400">{id ? 'Hapus' : 'Delete'}</Button>
       </div>
       {renaming && <RenameModal t={t} onClose={() => setRenaming(false)} onChange={onChange} />}
+      {domainOpen && <DomainModal t={t} onClose={() => setDomainOpen(false)} onChange={onChange} />}
       {deleting && <DeleteModal t={t} onClose={() => setDeleting(false)} onChange={onChange} />}
     </div>
   );
@@ -266,6 +276,37 @@ function DeleteModal({ t, onClose, onChange }: { t: PlatformTenant; onClose: () 
           <Button type="submit" variant="danger" disabled={!canSubmit || remove.isPending}>
             {remove.isPending ? (id ? 'Menghapus…' : 'Deleting…') : (id ? 'Hapus permanen' : 'Delete forever')}
           </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Map a fully custom domain (e.g. pm.acmecorp.com) to the tenant. Empty clears it. The tenant's slug
+// already gives an <slug>.<base-domain> subdomain; this is the vanity/custom host. (DNS + TLS for the
+// host must be pointed at the server separately — see docs.)
+function DomainModal({ t, onClose, onChange }: { t: PlatformTenant; onClose: () => void; onChange: () => void }) {
+  const { lang } = useLang();
+  const id = lang === 'id';
+  const toast = useToast();
+  const [domain, setDomain] = useState(t.customDomain ?? '');
+  const save = useMutation({
+    mutationFn: () => api.patch(`/admin/tenants/${t.id}`, { customDomain: domain.trim().toLowerCase() }),
+    onSuccess: () => { onChange(); toast.success(id ? 'Domain diperbarui' : 'Domain updated'); onClose(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
+  });
+  const val = domain.trim().toLowerCase();
+  const valid = val === '' || /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(val);
+  return (
+    <Modal onClose={onClose} title={id ? 'Domain kustom' : 'Custom domain'} size="sm">
+      <form onSubmit={(e) => { e.preventDefault(); if (valid) save.mutate(); }} className="space-y-3">
+        <Field label={id ? 'Domain kustom' : 'Custom domain'} hint={id ? 'Kosongkan untuk menghapus. Arahkan DNS + TLS domain ke server ini secara terpisah.' : 'Leave blank to clear. Point the domain’s DNS + TLS at this server separately.'}>
+          <Input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="pm.acmecorp.com" className="font-mono" autoFocus />
+        </Field>
+        {!valid && <p className="text-xs font-medium text-red-500">{id ? 'Masukkan domain yang valid, mis. pm.acmecorp.com' : 'Enter a valid domain, e.g. pm.acmecorp.com'}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>{id ? 'Batal' : 'Cancel'}</Button>
+          <Button type="submit" disabled={!valid || save.isPending}>{save.isPending ? (id ? 'Menyimpan…' : 'Saving…') : (id ? 'Simpan' : 'Save')}</Button>
         </div>
       </form>
     </Modal>

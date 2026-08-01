@@ -278,6 +278,10 @@ model Tenant {
   status    TenantStatus @default(ACTIVE)
   // SaaS plan (Phase 6) — gates per-tenant quotas (max projects/members/storage). Default FREE.
   plan      TenantPlan   @default(FREE)
+  // Optional vanity/custom domain (Phase 6) — e.g. "pm.acmecorp.com" maps this host to the tenant.
+  // The tenant `slug` already gives a subdomain (acme.<APP_BASE_DOMAIN>); this is for a fully custom
+  // host. Unique across tenants; null = no custom domain. Stored lowercased.
+  customDomain String?    @unique
   // A PERSONAL tenant is a single guest's private sandbox (one per GUEST user), the tenant-native
   // replacement for the legacy `personalOwnerId` isolation (Phase 5 / de-scatter). Corporate
   // tenants are false. Used to exclude personal tenants from the corporate EVM cron fan-out and,

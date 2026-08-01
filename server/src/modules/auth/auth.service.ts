@@ -125,7 +125,7 @@ export async function revokeAllSessions(userId: string): Promise<void> {
   ]);
 }
 
-export async function login(input: LoginInput): Promise<AuthResult> {
+export async function login(input: LoginInput, opts: { hostTenantId?: string } = {}): Promise<AuthResult> {
   const user = await prisma.user.findUnique({ where: { email: input.email } });
   // Constant-ish failure to avoid user enumeration.
   if (!user || !user.isActive) throw Unauthorized('Invalid credentials');
@@ -134,8 +134,18 @@ export async function login(input: LoginInput): Promise<AuthResult> {
   if (!ok) throw Unauthorized('Invalid credentials');
 
   await assertNotFullySuspended(user.id);
+  // On a tenant's own domain (subdomain / custom domain), pin the session to THAT workspace — and
+  // refuse a user who isn't a member of it (they'd otherwise land in a workspace this domain isn't).
+  if (opts.hostTenantId) {
+    const membership = await prisma.membership.findUnique({
+      where: { userId_tenantId: { userId: user.id, tenantId: opts.hostTenantId } },
+      select: { tenant: { select: { status: true } } },
+    });
+    if (!membership) throw Forbidden('You are not a member of this workspace.');
+    if (membership.tenant.status === 'SUSPENDED') throw Forbidden('This workspace is suspended.');
+  }
   await auditInUserTenant(user.id, { userId: user.id, entity: 'User', entityId: user.id, action: 'LOGIN' });
-  return issueTokenPair(user);
+  return issueTokenPair(user, opts.hostTenantId ? { preferredTid: opts.hostTenantId } : {});
 }
 
 // Self-service guest signup. The ONLY open-registration path — hard-codes role GUEST (a guest

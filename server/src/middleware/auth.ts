@@ -59,6 +59,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     if (!user || !user.isActive) throw Unauthorized('Session is no longer valid');
     if ((payload.tv ?? 0) !== user.tokenVersion) throw Unauthorized('Session has been revoked');
 
+    // Subdomain / custom-domain routing (Phase 6): when the Host maps to a specific workspace, a
+    // session pinned to a DIFFERENT workspace may not be used on it (prevents tenant A's token being
+    // replayed on tenant B's domain). No-op unless APP_BASE_DOMAIN is set + the host matches a tenant.
+    if (req.hostTenant && payload.tid && payload.tid !== req.hostTenant.id) {
+      throw Forbidden('This session is for a different workspace than this domain.');
+    }
+
     // Role is resolved FRESH from the DB each request so changes apply at once. Under enforcement
     // it's the active tenant's MEMBERSHIP role (Phase 4), not the global User.role — read here (not
     // trusted from the token) for the same reason. A stale token whose membership was revoked is

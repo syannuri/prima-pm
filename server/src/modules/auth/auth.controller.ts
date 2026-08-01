@@ -8,17 +8,20 @@ import { getAppSettings, isGoogleConfigured } from '../settings/settings.service
 // Public auth config so the SPA can render provider buttons without a rebuild. The Google
 // client ID is not a secret (it ships in the browser). Reflects the EFFECTIVE (admin-toggled)
 // state: Google is on only when a client ID is configured AND the admin has enabled it.
-export async function providersHandler(_req: Request, res: Response): Promise<void> {
+export async function providersHandler(req: Request, res: Response): Promise<void> {
   const s = await getAppSettings();
   res.json({
     google: { enabled: isGoogleConfigured() && s.googleLoginEnabled, clientId: env.googleClientId },
     guestSignup: s.guestSignupEnabled,
     orgSignup: s.orgSignupEnabled,
+    // When this Host maps to a workspace (subdomain / custom domain), the SPA brands the login page
+    // for it and scopes sign-in to that tenant. Null on the bare base domain / LAN-by-IP.
+    workspace: req.hostTenant ? { slug: req.hostTenant.slug, name: req.hostTenant.name, status: req.hostTenant.status } : null,
   });
 }
 
 export async function loginHandler(req: Request, res: Response): Promise<void> {
-  const result = await authService.login(req.body);
+  const result = await authService.login(req.body, { hostTenantId: req.hostTenant?.id });
   // Set the httpOnly auth cookies for the browser SPA; the body still carries the tokens
   // for Bearer/automation clients (backward compatible).
   setAuthCookies(res, result);

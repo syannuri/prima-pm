@@ -45,13 +45,13 @@ router.get(
     const tenants = await prisma.tenant.findMany({
       orderBy: [{ isPersonal: 'asc' }, { createdAt: 'asc' }],
       select: {
-        id: true, name: true, slug: true, status: true, plan: true, isPersonal: true, createdAt: true,
+        id: true, name: true, slug: true, status: true, plan: true, customDomain: true, isPersonal: true, createdAt: true,
         _count: { select: { memberships: true } },
       },
     });
     res.json({
       tenants: tenants.map((t) => ({
-        id: t.id, name: t.name, slug: t.slug, status: t.status, plan: t.plan, isPersonal: t.isPersonal,
+        id: t.id, name: t.name, slug: t.slug, status: t.status, plan: t.plan, customDomain: t.customDomain, isPersonal: t.isPersonal,
         createdAt: t.createdAt, memberCount: t._count.memberships,
       })),
     });
@@ -86,29 +86,51 @@ router.post(
   }),
 );
 
+// A fully-qualified hostname (lowercased), e.g. pm.acmecorp.com. Empty string clears the custom domain.
+const hostnameRule = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(253)
+  .refine((v) => v === '' || /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(v), 'Enter a valid domain, e.g. pm.acmecorp.com (or blank to clear)');
+
 const patchSchema = z
   .object({
     status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
     name: z.string().min(2).max(120).optional(),
     plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
+    customDomain: hostnameRule.optional(),
   })
-  .refine((b) => b.status !== undefined || b.name !== undefined || b.plan !== undefined, 'Provide a status, name and/or plan to update');
+  .refine(
+    (b) => b.status !== undefined || b.name !== undefined || b.plan !== undefined || b.customDomain !== undefined,
+    'Provide a status, name, plan and/or custom domain to update',
+  );
 
-// PATCH /admin/tenants/:id — suspend/reactivate, rename, or change the SaaS plan. The DEFAULT tenant
-// can't be suspended (it owns all pre-existing data + the platform admins); personal (guest) tenants
-// aren't managed here.
+// PATCH /admin/tenants/:id — suspend/reactivate, rename, change the SaaS plan, or set/clear the custom
+// domain. The DEFAULT tenant can't be suspended (it owns all pre-existing data + the platform admins);
+// personal (guest) tenants aren't managed here.
 router.patch(
   '/:id',
   validateBody(patchSchema),
   asyncHandler(async (req, res) => {
     const tenant = await prisma.tenant.findUnique({
       where: { id: req.params.id },
-      select: { id: true, name: true, slug: true, status: true, plan: true, isPersonal: true },
+      select: { id: true, name: true, slug: true, status: true, plan: true, customDomain: true, isPersonal: true },
     });
     if (!tenant) throw NotFound('Tenant not found');
     if (tenant.isPersonal) throw BadRequest('Personal (guest) tenants are not managed here.');
     if (req.body.status === 'SUSPENDED' && tenant.slug === DEFAULT_TENANT_SLUG) {
       throw BadRequest('The default tenant cannot be suspended.');
+    }
+    // Empty string clears the custom domain (→ null); a value must be unique across tenants.
+    let customDomainData: { customDomain?: string | null } = {};
+    if (req.body.customDomain !== undefined) {
+      const cd = req.body.customDomain === '' ? null : req.body.customDomain;
+      if (cd) {
+        const clash = await prisma.tenant.findFirst({ where: { customDomain: cd, id: { not: tenant.id } }, select: { id: true } });
+        if (clash) throw Conflict(`The domain "${cd}" is already mapped to another tenant.`);
+      }
+      customDomainData = { customDomain: cd };
     }
     const updated = await prisma.tenant.update({
       where: { id: tenant.id },
@@ -116,13 +138,15 @@ router.patch(
         ...(req.body.status ? { status: req.body.status } : {}),
         ...(req.body.name ? { name: req.body.name } : {}),
         ...(req.body.plan ? { plan: req.body.plan } : {}),
+        ...customDomainData,
       },
     });
     await writeAudit({
       userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE',
-      before: { status: tenant.status, name: tenant.name, plan: tenant.plan }, after: { status: updated.status, name: updated.name, plan: updated.plan },
+      before: { status: tenant.status, name: tenant.name, plan: tenant.plan, customDomain: tenant.customDomain },
+      after: { status: updated.status, name: updated.name, plan: updated.plan, customDomain: updated.customDomain },
     });
-    res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status, plan: updated.plan } });
+    res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status, plan: updated.plan, customDomain: updated.customDomain } });
   }),
 );
 

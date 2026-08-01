@@ -46,18 +46,23 @@ export default function LoginPage() {
   const [googleClientId, setGoogleClientId] = useState('');
   const [guestEnabled, setGuestEnabled] = useState(false);
   const [orgEnabled, setOrgEnabled] = useState(false);
+  const [workspace, setWorkspace] = useState<{ slug: string; name: string } | null>(null);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   // Ask the server which sign-up paths are enabled (admin-toggleable). Google's client ID is
   // public, so it's safe to send. Hides the guest option entirely when disabled.
   useEffect(() => {
     api
-      .get<{ google?: { enabled: boolean; clientId: string }; guestSignup?: boolean; orgSignup?: boolean }>('/auth/providers')
+      .get<{ google?: { enabled: boolean; clientId: string }; guestSignup?: boolean; orgSignup?: boolean; workspace?: { slug: string; name: string } | null }>('/auth/providers')
       .then((p) => {
         if (p.google?.enabled && p.google.clientId) setGoogleClientId(p.google.clientId);
-        setGuestEnabled(Boolean(p.guestSignup));
-        setOrgEnabled(Boolean(p.orgSignup));
-        setMode((m) => (m === 'guest' && !p.guestSignup) || (m === 'org' && !p.orgSignup) ? 'signin' : m);
+        // On a tenant's own domain (subdomain / custom domain) it's a sign-in-only page for that
+        // workspace — the self-serve guest/org signup paths don't apply there.
+        const ws = p.workspace ?? null;
+        setWorkspace(ws);
+        setGuestEnabled(ws ? false : Boolean(p.guestSignup));
+        setOrgEnabled(ws ? false : Boolean(p.orgSignup));
+        setMode((m) => ws ? 'signin' : ((m === 'guest' && !p.guestSignup) || (m === 'org' && !p.orgSignup) ? 'signin' : m));
       })
       .catch(() => {});
   }, []);
@@ -207,8 +212,8 @@ export default function LoginPage() {
               </div>
 
               <div className="mb-7 text-center">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{isOrg ? 'Create your organization' : isGuest ? 'Try Prismatix free' : 'Welcome back'}</h1>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{isOrg ? 'Set up a new workspace for your team — you’ll be its admin' : isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{workspace ? `Sign in to ${workspace.name}` : isOrg ? 'Create your organization' : isGuest ? 'Try Prismatix free' : 'Welcome back'}</h1>
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? `${workspace.name} workspace on Prismatix` : isOrg ? 'Set up a new workspace for your team — you’ll be its admin' : isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
               </div>
 
               <form onSubmit={submit} className="space-y-4">

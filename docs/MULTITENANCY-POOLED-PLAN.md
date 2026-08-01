@@ -444,6 +444,23 @@ a big schema cleanup); it is safe to leave indefinitely.
     name + email + password). Guarded by `org-signup.itest.ts` (5). Distinct from guest signup (a
     sandboxed personal tenant).
 - Tenant settings, branding, **subdomain/custom domain** (tenant `slug` → host), plan/billing gating.
+  - **✅ Subdomain / custom-domain routing (in-app) DONE (2026-08-01):** `APP_BASE_DOMAIN` env (live
+    read; unset = routing OFF, so LAN-by-IP / bare base domain are unaffected). `lib/tenant/host.ts`
+    `resolveTenantFromHost(host)` maps a Host to a tenant by (1) exact `Tenant.customDomain` match or
+    (2) `<slug>.<APP_BASE_DOMAIN>` subdomain (reserved subs www/app/api/admin/mail… + the bare base +
+    IPs/localhost → no tenant). `middleware/hostTenant.attachHostTenant` sets `req.hostTenant` before
+    auth. Enforcement: `requireAuth` rejects (403) a session whose `tid` ≠ the host tenant (a token
+    can't be replayed on another workspace's domain); `login` pins the session to the host workspace
+    and refuses a non-member (403); `/auth/providers` returns `workspace {slug,name,status}` so the
+    SPA brands the login page ("Sign in to Acme", signup paths hidden). Platform console: PATCH
+    `{ customDomain }` (unique, blank clears) + a per-tenant **Domain** modal + the domain shown on
+    each row/card. Migration `20260801170000_tenant_custom_domain`. Guarded by `tenant-host.itest.ts`
+    (8). **⚠️ INFRA (operator action, NOT in-app — can't be tested from the app):** to actually serve
+    subdomains you must (a) add a **DNS wildcard** `*.APP_BASE_DOMAIN → server IP` (+ an A record per
+    custom domain the customer points at you), (b) nginx `server_name *.prismatix.tech prismatix.tech`
+    (+ each custom domain) proxying to `:4000`, (c) a **wildcard TLS cert** (`*.prismatix.tech`, via
+    certbot DNS-01) + per-custom-domain certs, and (d) set `APP_BASE_DOMAIN=prismatix.tech` in the
+    server `.env` + restart. Until (a)-(d) are done the in-app resolution is dormant (env unset).
   - **✅ Plan & quota gating DONE (2026-08-01):** `Tenant.plan` enum FREE/PRO/ENTERPRISE (migration
     `20260801160000_tenant_plan`; default tenant → ENTERPRISE as it owns all pre-existing data). Limits
     in `lib/tenant/plans.ts` (FREE 3 proj/5 members/1 GB · PRO 50/50/20 GB · ENTERPRISE unlimited);

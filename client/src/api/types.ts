@@ -24,6 +24,7 @@ export interface PlatformTenant {
   slug: string;
   status: 'ACTIVE' | 'SUSPENDED';
   plan: 'FREE' | 'PRO' | 'ENTERPRISE';
+  customDomain: string | null;
   isPersonal: boolean;
   createdAt: string;
   memberCount: number;
