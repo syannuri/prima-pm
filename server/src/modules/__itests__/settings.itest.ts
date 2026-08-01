@@ -25,29 +25,34 @@ beforeAll(async () => {
     const u = await prisma.user.create({ data: { name: role, email: `${role}@settings.test`, role, passwordHash: await hashPassword('Set-Pass-1'), isActive: true } });
     tokens[role] = signAccessToken({ sub: u.id, role, email: u.email });
   }
+  // Deployment settings are PLATFORM-scoped now (super-admin), not per-tenant admin.
+  const plat = await prisma.user.create({ data: { name: 'plat', email: 'platform@settings.test', role: 'ADMIN', isPlatformAdmin: true, passwordHash: await hashPassword('Set-Pass-1'), isActive: true } });
+  tokens.PLATFORM = signAccessToken({ sub: plat.id, role: 'ADMIN', email: plat.email });
 });
 
 describe('Admin access settings', () => {
   it('ADMIN reads current settings incl. googleConfigured', async () => {
-    const res = await request(app).get(api('/admin/settings')).set(auth(tokens.ADMIN));
+    const res = await request(app).get(api('/admin/settings')).set(auth(tokens.PLATFORM));
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ guestSignupEnabled: true, googleConfigured: false }); // GUEST_SIGNUP_ENABLED=true in CI env
   });
 
-  it('non-admin is forbidden', async () => {
+  it('is platform-admin only — a plain tenant ADMIN (and any lower role) is forbidden', async () => {
+    // These are DEPLOYMENT-wide settings, so a per-tenant admin must NOT reach them.
+    expect((await request(app).get(api('/admin/settings')).set(auth(tokens.ADMIN))).status).toBe(403);
+    expect((await request(app).patch(api('/admin/settings')).set(auth(tokens.ADMIN)).send({ guestSignupEnabled: false })).status).toBe(403);
     expect((await request(app).get(api('/admin/settings')).set(auth(tokens.PROJECT_MANAGER))).status).toBe(403);
-    expect((await request(app).patch(api('/admin/settings')).set(auth(tokens.PROJECT_MANAGER)).send({ guestSignupEnabled: false })).status).toBe(403);
   });
 
   it('toggling guest sign-up off blocks guest register, and on allows it', async () => {
-    await request(app).patch(api('/admin/settings')).set(auth(tokens.ADMIN)).send({ guestSignupEnabled: false });
+    await request(app).patch(api('/admin/settings')).set(auth(tokens.PLATFORM)).send({ guestSignupEnabled: false });
     // /auth/providers reflects it immediately
     const prov1 = await request(app).get(api('/auth/providers'));
     expect(prov1.body.guestSignup).toBe(false);
     const blocked = await request(app).post(api('/auth/guest/register')).send({ name: 'Ex Plorer', email: 'ex1@guest.test', password: 'Guest-Explore-1' });
     expect(blocked.status).toBe(403);
 
-    await request(app).patch(api('/admin/settings')).set(auth(tokens.ADMIN)).send({ guestSignupEnabled: true });
+    await request(app).patch(api('/admin/settings')).set(auth(tokens.PLATFORM)).send({ guestSignupEnabled: true });
     const prov2 = await request(app).get(api('/auth/providers'));
     expect(prov2.body.guestSignup).toBe(true);
     const ok = await request(app).post(api('/auth/guest/register')).send({ name: 'Ex Plorer', email: 'ex2@guest.test', password: 'Guest-Explore-1' });
@@ -55,7 +60,7 @@ describe('Admin access settings', () => {
   });
 
   it('google toggle stays ineffective while no client ID is configured', async () => {
-    const res = await request(app).patch(api('/admin/settings')).set(auth(tokens.ADMIN)).send({ googleLoginEnabled: true });
+    const res = await request(app).patch(api('/admin/settings')).set(auth(tokens.PLATFORM)).send({ googleLoginEnabled: true });
     expect(res.status).toBe(200);
     expect(res.body.googleLoginEnabled).toBe(true); // stored preference
     const prov = await request(app).get(api('/auth/providers'));
@@ -63,6 +68,6 @@ describe('Admin access settings', () => {
   });
 
   it('empty patch is rejected', async () => {
-    expect((await request(app).patch(api('/admin/settings')).set(auth(tokens.ADMIN)).send({})).status).toBe(400);
+    expect((await request(app).patch(api('/admin/settings')).set(auth(tokens.PLATFORM)).send({})).status).toBe(400);
   });
 });

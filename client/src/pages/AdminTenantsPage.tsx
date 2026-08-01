@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { PlatformTenant } from '../api/types';
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Spinner } from '../components/ui';
+import PlatformSettings from '../components/PlatformSettings';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
@@ -71,6 +72,8 @@ export default function AdminTenantsPage() {
           </p>
         )}
       </Card>
+
+      <PlatformSettings />
     </div>
   );
 }

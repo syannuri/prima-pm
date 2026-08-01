@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { requirePlatformAdmin } from '../../middleware/platformAdmin.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
@@ -17,19 +18,6 @@ import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
 // created by guest signup and are not managed here.
 const router = Router();
 router.use(requireAuth);
-
-// Global platform privilege, resolved FRESH from the DB (never trusted from the token) — like the
-// per-tenant role. A revoked flag takes effect immediately.
-async function requirePlatformAdmin(req: Request, _res: Response, next: NextFunction): Promise<void> {
-  try {
-    if (!req.user) throw Unauthorized();
-    const u = await prisma.user.findUnique({ where: { id: req.user.id }, select: { isPlatformAdmin: true } });
-    if (!u?.isPlatformAdmin) throw Forbidden('Platform administrators only');
-    next();
-  } catch (e) {
-    next(e);
-  }
-}
 router.use(requirePlatformAdmin);
 
 const slugRule = z

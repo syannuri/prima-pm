@@ -2,12 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { requireRole } from '../../middleware/rbac.js';
+import { requirePlatformAdmin } from '../../middleware/platformAdmin.js';
 import { getAppSettings, updateAppSettings, isGoogleConfigured } from './settings.service.js';
 
-// ADMIN-only runtime settings: toggle the open sign-up paths without an env change + restart.
+// DEPLOYMENT-level runtime settings (global AppSetting singleton): the open sign-up toggles + weekly
+// EVM auto-capture. These affect the WHOLE deployment across all tenants, so they are PLATFORM
+// (super-admin) settings — not a per-tenant admin concern.
 const router = Router();
-router.use(requireAuth, requireRole('ADMIN'));
+router.use(requireAuth, requirePlatformAdmin);
 
 const patchSchema = z
   .object({
