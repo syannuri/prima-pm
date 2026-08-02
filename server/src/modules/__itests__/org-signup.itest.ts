@@ -67,6 +67,19 @@ describe('self-serve organization signup (manual approval)', () => {
     expect(m.role).toBe('ADMIN');
   });
 
+  it('drops an inbox notification for the platform admin about the pending request', async () => {
+    const notif = await runAsSystem(() => prisma.notification.findFirst({
+      where: { type: 'ORG_SIGNUP_PENDING' },
+      orderBy: { createdAt: 'desc' },
+    }));
+    expect(notif).toBeTruthy();
+    expect(notif!.title).toMatch(/workspace request/i);
+    expect(notif!.body).toContain('Acme Industries');
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'plat@org.test' }, select: { id: true } });
+    expect(notif!.userId).toBe(admin.id);
+    expect(notif!.tenantId).toBeTruthy(); // stamped into the admin's home tenant so their inbox sees it
+  });
+
   it('refuses login while the workspace is still PENDING (403, awaiting approval)', async () => {
     const res = await login('ada@acme.test', 'Acme-Owner-1');
     expect(res.status).toBe(403);

@@ -7,7 +7,7 @@ import { Unauthorized, Forbidden, Conflict } from '../../lib/errors.js';
 import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled, isOrgSignupEnabled } from '../settings/settings.service.js';
-import { multitenancyEnforced, runWithTenant } from '../../lib/tenant/context.js';
+import { multitenancyEnforced, runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput, OrgSignupInput } from './auth.schemas.js';
 
 // The membership a freshly-minted token should be pinned to: the caller's chosen tenant when it is
@@ -188,6 +188,28 @@ async function uniqueTenantSlug(name: string): Promise<string> {
   return `${base}-${randomUUID().slice(0, 6)}`.slice(0, 40);
 }
 
+// Best-effort: drop an inbox notification for every platform admin that a new corporate workspace is
+// awaiting approval (option C). The public signup route has no tenant context and platform admins are
+// global, so this runs as SYSTEM and stamps each notification with the admin's OWN home tenant (their
+// earliest membership) so it surfaces in that inbox. Never throws — a notification failure must not
+// break signup. The client links `ORG_SIGNUP_PENDING` straight to the /admin/tenants approval queue.
+async function notifyPlatformAdminsOfSignup(orgName: string): Promise<void> {
+  try {
+    await runAsSystem(async () => {
+      const admins = await prisma.user.findMany({ where: { isPlatformAdmin: true, isActive: true }, select: { id: true } });
+      for (const admin of admins) {
+        const home = await prisma.membership.findFirst({ where: { userId: admin.id }, orderBy: { createdAt: 'asc' }, select: { tenantId: true } });
+        if (!home) continue; // an admin with no membership has no scoped inbox to write to
+        await prisma.notification.create({
+          data: { userId: admin.id, tenantId: home.tenantId, type: 'ORG_SIGNUP_PENDING', title: 'New workspace request', body: `“${orgName}” is awaiting your approval.` },
+        });
+      }
+    });
+  } catch (err) {
+    console.error('[notification] failed to alert platform admins of org signup', err);
+  }
+}
+
 // Self-serve ORGANIZATION signup (option C — manual approval): anyone may REQUEST a new CORPORATE
 // tenant and become its owner ADMIN, but the tenant lands in PENDING and the owner is NOT logged in.
 // A platform admin approves (→ ACTIVE) or rejects (→ REJECTED) from the console; the owner can only
@@ -210,6 +232,8 @@ export async function registerOrg(input: OrgSignupInput): Promise<{ pending: tru
   const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'PENDING' } });
   await prisma.membership.create({ data: { userId: owner.id, tenantId: tenant.id, role: 'ADMIN' } });
   await auditInUserTenant(owner.id, { userId: owner.id, entity: 'Tenant', entityId: tenant.id, action: 'CREATE', after: { name: input.orgName, slug, self: true, status: 'PENDING' } });
+  // Alert platform admins there's a signup to review (best-effort; won't block the response).
+  await notifyPlatformAdminsOfSignup(input.orgName);
   // No token pair: the owner must wait for approval (a PENDING tenant is locked out of login).
   return { pending: true, orgName: input.orgName };
 }
