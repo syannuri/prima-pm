@@ -8,7 +8,7 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string, captchaToken?: string) => Promise<void>;
   guestRegister: (name: string, email: string, password: string, captchaToken?: string) => Promise<void>;
-  signupOrg: (orgName: string, ownerName: string, email: string, password: string, captchaToken?: string) => Promise<void>;
+  signupOrg: (orgName: string, ownerName: string, email: string, password: string, captchaToken?: string) => Promise<{ pending: true; orgName: string }>;
   loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
   // Pooled multitenancy: the tenants this user belongs to, the active one, and a switcher.
@@ -116,13 +116,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadTenants();
   };
 
-  // Self-serve organization signup — creates a corporate tenant + owner admin, same cookie flow
-  // (server auto-logs-in the new owner).
+  // Self-serve organization signup (option C — manual approval): creates a PENDING corporate tenant +
+  // owner admin. Does NOT log in — the owner must wait for a platform admin to approve. Returns the
+  // pending marker so the UI can show a "waiting for approval" screen instead of routing to a session.
   const signupOrg = async (orgName: string, ownerName: string, email: string, password: string, captchaToken?: string) => {
-    const res = await api.post<{ user: User }>('/auth/signup', { orgName, ownerName, email, password, captchaToken });
-    tokenStore.clear();
-    setUser(res.user);
-    await loadTenants();
+    return api.post<{ pending: true; orgName: string }>('/auth/signup', { orgName, ownerName, email, password, captchaToken });
   };
 
   // Sign in with Google — post the ID token (credential) from Google Identity Services; the

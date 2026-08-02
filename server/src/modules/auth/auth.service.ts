@@ -38,9 +38,13 @@ async function resolveActiveMembership(userId: string, preferred?: string): Prom
 async function assertNotFullySuspended(userId: string): Promise<void> {
   if (!multitenancyEnforced()) return;
   const memberships = await prisma.membership.findMany({ where: { userId }, select: { tenant: { select: { status: true } } } });
-  if (memberships.length > 0 && !memberships.some((m) => m.tenant.status === 'ACTIVE')) {
-    throw Forbidden('Your workspace has been suspended. Contact your administrator.');
+  if (memberships.length === 0 || memberships.some((m) => m.tenant.status === 'ACTIVE')) return;
+  // No ACTIVE workspace to sign into. Tailor the message: a self-serve org owner whose only tenant is
+  // still PENDING is awaiting approval (not a punitive suspend); everything else reads as suspended.
+  if (memberships.every((m) => m.tenant.status === 'PENDING')) {
+    throw Forbidden('Your workspace is awaiting administrator approval.');
   }
+  throw Forbidden('Your workspace has been suspended. Contact your administrator.');
 }
 
 // Give a brand-new GUEST their OWN personal tenant — the tenant-native sandbox that replaces the
@@ -184,10 +188,12 @@ async function uniqueTenantSlug(name: string): Promise<string> {
   return `${base}-${randomUUID().slice(0, 6)}`.slice(0, 40);
 }
 
-// Self-serve ORGANIZATION signup (Phase 6 SaaS): anyone may create a new CORPORATE tenant and become
-// its owner ADMIN. Gated by the deployment-level orgSignupEnabled toggle. Auto-logs in (token pair
-// pinned to the new tenant). Distinct from guest signup (a sandboxed personal tenant).
-export async function registerOrg(input: OrgSignupInput): Promise<AuthResult> {
+// Self-serve ORGANIZATION signup (option C — manual approval): anyone may REQUEST a new CORPORATE
+// tenant and become its owner ADMIN, but the tenant lands in PENDING and the owner is NOT logged in.
+// A platform admin approves (→ ACTIVE) or rejects (→ REJECTED) from the console; the owner can only
+// sign in once approved. Gated by the deployment-level orgSignupEnabled toggle. Distinct from guest
+// signup (a sandboxed personal tenant that auto-logs in).
+export async function registerOrg(input: OrgSignupInput): Promise<{ pending: true; orgName: string }> {
   if (!(await isOrgSignupEnabled())) throw Forbidden('Organization signup is not enabled');
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
   if (existing) throw Conflict('That email is already registered');
@@ -201,10 +207,11 @@ export async function registerOrg(input: OrgSignupInput): Promise<AuthResult> {
       isGuest: false,
     },
   });
-  const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'ACTIVE' } });
+  const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'PENDING' } });
   await prisma.membership.create({ data: { userId: owner.id, tenantId: tenant.id, role: 'ADMIN' } });
-  await auditInUserTenant(owner.id, { userId: owner.id, entity: 'Tenant', entityId: tenant.id, action: 'CREATE', after: { name: input.orgName, slug, self: true } });
-  return issueTokenPair(owner);
+  await auditInUserTenant(owner.id, { userId: owner.id, entity: 'Tenant', entityId: tenant.id, action: 'CREATE', after: { name: input.orgName, slug, self: true, status: 'PENDING' } });
+  // No token pair: the owner must wait for approval (a PENDING tenant is locked out of login).
+  return { pending: true, orgName: input.orgName };
 }
 
 // "Sign in with Google" — the open, sandboxed jalur: any Google account may sign in, and a

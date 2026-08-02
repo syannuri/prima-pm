@@ -97,6 +97,22 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
     onSuccess: () => { onChange(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
   });
+  // Self-serve signup queue (option C): approve (→ ACTIVE, owner can sign in) / reject (→ REJECTED).
+  const review = useMutation({
+    mutationFn: (action: 'approve' | 'reject') => api.post(`/admin/tenants/${t.id}/${action}`, {}),
+    onSuccess: (_d, action) => { onChange(); toast.success(action === 'approve' ? (id ? `${t.name} disetujui` : `${t.name} approved`) : (id ? `${t.name} ditolak` : `${t.name} rejected`)); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
+  });
+  const approve = () => review.mutate('approve');
+  const reject = async () => {
+    if (!(await confirm({
+      title: id ? 'Tolak pendaftaran?' : 'Reject signup?',
+      message: id ? <>Tolak permintaan workspace <strong>{t.name}</strong>? Workspace ditandai DITOLAK dan pemiliknya tetap tidak bisa masuk (bisa dihapus permanen nanti).</> : <>Reject the <strong>{t.name}</strong> workspace request? It's marked REJECTED and its owner stays locked out (you can hard-delete it later).</>,
+      confirmLabel: id ? 'Tolak' : 'Reject',
+      danger: true,
+    }))) return;
+    review.mutate('reject');
+  };
   const setPlan = (plan: PlatformTenant['plan']) => {
     if (plan === t.plan) return;
     patch.mutate({ plan }, { onSuccess: () => { onChange(); toast.success(id ? `Paket ${t.name} → ${plan}` : `${t.name} plan → ${plan}`); } });
@@ -121,7 +137,7 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
       patch.mutate({ status: 'ACTIVE' }, { onSuccess: () => { onChange(); toast.success(id ? `${t.name} diaktifkan` : `${t.name} reactivated`); } });
     }
   };
-  return { patch, toggleSuspend, enter, entering, exportData, exporting, setPlan };
+  return { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan };
 }
 
 const PLANS: PlatformTenant['plan'][] = ['FREE', 'PRO', 'ENTERPRISE'];
@@ -144,9 +160,10 @@ function PlanSelect({ t, onPlan, disabled }: { t: PlatformTenant; onPlan: (p: Pl
 function StatusBadge({ status }: { status: PlatformTenant['status'] }) {
   const { lang } = useLang();
   const id = lang === 'id';
-  return status === 'ACTIVE'
-    ? <Badge color="green">{id ? 'Aktif' : 'Active'}</Badge>
-    : <Badge color="red">{id ? 'Ditangguhkan' : 'Suspended'}</Badge>;
+  if (status === 'ACTIVE') return <Badge color="green">{id ? 'Aktif' : 'Active'}</Badge>;
+  if (status === 'PENDING') return <Badge color="amber">{id ? 'Menunggu' : 'Pending'}</Badge>;
+  if (status === 'REJECTED') return <Badge color="red">{id ? 'Ditolak' : 'Rejected'}</Badge>;
+  return <Badge color="red">{id ? 'Ditangguhkan' : 'Suspended'}</Badge>;
 }
 
 function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void }) {
@@ -155,9 +172,10 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [domainOpen, setDomainOpen] = useState(false);
-  const { patch, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
+  const { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
+  const pending = t.status === 'PENDING';
   return (
-    <tr className="border-b last:border-0 dark:border-slate-800">
+    <tr className={`border-b last:border-0 dark:border-slate-800 ${pending ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}>
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{t.name}</td>
       <td className="font-mono text-xs text-slate-500 dark:text-slate-400">
         {t.slug}
@@ -168,13 +186,21 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
       <td className="text-right text-slate-500 dark:text-slate-400">{t.memberCount}</td>
       <td className="text-slate-500 dark:text-slate-400">{formatDate(t.createdAt)}</td>
       <td className="text-right whitespace-nowrap">
+        {pending && (
+          <>
+            <Button variant="ghost" onClick={approve} disabled={review.isPending} className="text-green-600 dark:text-green-400">{id ? 'Setujui' : 'Approve'}</Button>
+            <Button variant="ghost" onClick={reject} disabled={review.isPending} className="text-red-600 dark:text-red-400">{id ? 'Tolak' : 'Reject'}</Button>
+          </>
+        )}
         <Button variant="ghost" onClick={enter} disabled={entering} title={id ? 'Masuk sebagai admin organisasi ini' : 'Act as an admin inside this tenant'}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
         <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
         <Button variant="ghost" onClick={() => setDomainOpen(true)} title={id ? 'Domain kustom' : 'Custom domain'}>{id ? 'Domain' : 'Domain'}</Button>
         <Button variant="ghost" onClick={exportData} disabled={exporting} title={id ? 'Unduh semua data organisasi (JSON)' : 'Download all tenant data (JSON)'}>{exporting ? '…' : (id ? 'Ekspor' : 'Export')}</Button>
-        <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
-          {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
-        </Button>
+        {!pending && (
+          <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+            {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
+          </Button>
+        )}
         <Button variant="ghost" onClick={() => setDeleting(true)} className="text-red-600 dark:text-red-400" title={id ? 'Hapus organisasi permanen' : 'Permanently delete tenant'}>{id ? 'Hapus' : 'Delete'}</Button>
       </td>
       {renaming && <RenameModal t={t} onClose={() => setRenaming(false)} onChange={onChange} />}
@@ -190,9 +216,10 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [domainOpen, setDomainOpen] = useState(false);
-  const { patch, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
+  const { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
+  const pending = t.status === 'PENDING';
   return (
-    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+    <div className={`rounded-xl border p-3 dark:border-slate-800 ${pending ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20' : 'border-slate-200'}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-medium text-slate-700 dark:text-slate-200">{t.name}</p>
@@ -205,13 +232,21 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
         </div>
       </div>
       <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+        {pending && (
+          <>
+            <Button variant="ghost" onClick={approve} disabled={review.isPending} className="text-green-600 dark:text-green-400">{id ? 'Setujui' : 'Approve'}</Button>
+            <Button variant="ghost" onClick={reject} disabled={review.isPending} className="text-red-600 dark:text-red-400">{id ? 'Tolak' : 'Reject'}</Button>
+          </>
+        )}
         <Button variant="ghost" onClick={enter} disabled={entering}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
         <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
         <Button variant="ghost" onClick={() => setDomainOpen(true)}>Domain</Button>
         <Button variant="ghost" onClick={exportData} disabled={exporting}>{exporting ? '…' : (id ? 'Ekspor' : 'Export')}</Button>
-        <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
-          {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
-        </Button>
+        {!pending && (
+          <Button variant="ghost" onClick={toggleSuspend} disabled={patch.isPending} className={t.status === 'ACTIVE' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+            {t.status === 'ACTIVE' ? (id ? 'Tangguhkan' : 'Suspend') : (id ? 'Aktifkan' : 'Reactivate')}
+          </Button>
+        )}
         <Button variant="ghost" onClick={() => setDeleting(true)} className="text-red-600 dark:text-red-400">{id ? 'Hapus' : 'Delete'}</Button>
       </div>
       {renaming && <RenameModal t={t} onClose={() => setRenaming(false)} onChange={onChange} />}

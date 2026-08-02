@@ -41,9 +41,10 @@ export async function guestRegisterHandler(req: Request, res: Response): Promise
 }
 
 export async function orgSignupHandler(req: Request, res: Response): Promise<void> {
+  // Option C: no auto-login. The tenant is created PENDING and must be approved by a platform admin
+  // before the owner can sign in. Return 202 (accepted, not yet actioned) with a pending marker.
   const result = await authService.registerOrg(req.body);
-  setAuthCookies(res, result); // auto-login as the new org's owner
-  res.status(201).json(result);
+  res.status(202).json(result);
 }
 
 export async function googleHandler(req: Request, res: Response): Promise<void> {

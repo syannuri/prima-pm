@@ -22,7 +22,7 @@ export interface PlatformTenant {
   id: string;
   name: string;
   slug: string;
-  status: 'ACTIVE' | 'SUSPENDED';
+  status: 'ACTIVE' | 'SUSPENDED' | 'PENDING' | 'REJECTED';
   plan: 'FREE' | 'PRO' | 'ENTERPRISE';
   customDomain: string | null;
   isPersonal: boolean;

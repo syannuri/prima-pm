@@ -64,6 +64,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Set after a successful org signup (option C): the request is queued for admin approval, so we show
+  // a confirmation panel instead of routing into a session (there is none yet).
+  const [pendingOrg, setPendingOrg] = useState<string | null>(null);
   const [googleClientId, setGoogleClientId] = useState('');
   const [guestEnabled, setGuestEnabled] = useState(false);
   const [orgEnabled, setOrgEnabled] = useState(false);
@@ -170,7 +173,10 @@ export default function LoginPage() {
     setError('');
     setBusy(true);
     try {
-      if (isOrg) await signupOrg(orgName.trim(), name.trim(), email, password, captchaToken);
+      if (isOrg) {
+        const res = await signupOrg(orgName.trim(), name.trim(), email, password, captchaToken);
+        setPendingOrg(res.orgName || orgName.trim()); // queued for approval — no session yet
+      }
       else if (isGuest) await guestRegister(name.trim(), email, password, captchaToken);
       else await login(email, password, captchaToken);
     } catch (err) {
@@ -283,11 +289,20 @@ export default function LoginPage() {
                   <p className="mt-2 text-sm text-slate-400">There’s no workspace at <span className="font-semibold text-slate-200">{attemptedHost}</span>. Check the address, or head to the main site to sign in.</p>
                   <a href={mainSiteUrl} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Go to Prismatix</a>
                 </div>
+              ) : pendingOrg ? (
+                <div className="py-4 text-center">
+                  <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/40">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-7 w-7"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 2" /></svg>
+                  </div>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-100">Menunggu persetujuan</h1>
+                  <p className="mt-2 text-sm text-slate-400">Permintaan workspace <span className="font-semibold text-slate-200">{pendingOrg}</span> sudah kami terima. Seorang admin akan meninjau dan mengaktifkannya. Anda bisa masuk setelah workspace disetujui.</p>
+                  <button type="button" onClick={() => { setPendingOrg(null); setMode('signin'); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Kembali ke halaman masuk</button>
+                </div>
               ) : (
               <>
               <div className="mb-7 text-center">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{workspace ? `Sign in to ${workspace.name}` : isOrg ? 'Create your organization' : isGuest ? 'Try Prismatix free' : 'Welcome back'}</h1>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? `${workspace.name} workspace on Prismatix` : isOrg ? 'Set up a new workspace for your team — you’ll be its admin' : isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? `${workspace.name} workspace on Prismatix` : isOrg ? 'Set up a new workspace for your team — you’ll be its admin once an admin approves it' : isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
               </div>
 
               <form onSubmit={submit} className="space-y-4">

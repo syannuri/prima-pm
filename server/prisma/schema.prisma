@@ -35,6 +35,12 @@ enum Role {
 enum TenantStatus {
   ACTIVE
   SUSPENDED
+  // Self-serve org signup (option C): a new corporate tenant lands here and is locked out until a
+  // platform admin approves (→ ACTIVE) or rejects (→ REJECTED). Its owner cannot log in while PENDING.
+  PENDING
+  // A rejected self-serve signup — kept (soft) for review/audit, stays locked out. Removed via the
+  // platform hard-delete endpoint when no longer needed.
+  REJECTED
 }
 
 // SaaS subscription tier (Phase 6). Gates per-tenant quotas (projects/members/storage). FREE is the

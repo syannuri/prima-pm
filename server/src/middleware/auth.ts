@@ -88,8 +88,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         select: { role: true, tenant: { select: { isPersonal: true, status: true } } },
       });
       if (!membership) throw Unauthorized('No membership in the active tenant');
-      // A SUSPENDED tenant (platform super-admin action) locks out all its members.
-      if (membership.tenant.status === 'SUSPENDED') throw Forbidden('This workspace is suspended.');
+      // Only an ACTIVE tenant admits its members. SUSPENDED = platform super-admin lockout; PENDING /
+      // REJECTED = a self-serve signup not (yet) approved. A session should never be pinned to a
+      // non-ACTIVE tenant (issueTokenPair excludes them) — this is the fail-closed backstop.
+      if (membership.tenant.status !== 'ACTIVE') {
+        if (membership.tenant.status === 'PENDING') throw Forbidden('This workspace is awaiting approval.');
+        throw Forbidden(membership.tenant.status === 'SUSPENDED' ? 'This workspace is suspended.' : 'This workspace is not active.');
+      }
       role = membership.role;
       tenantIsPersonal = membership.tenant.isPersonal;
     }

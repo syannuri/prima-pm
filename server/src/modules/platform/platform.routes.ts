@@ -150,6 +150,37 @@ router.patch(
   }),
 );
 
+// POST /admin/tenants/:id/approve — approve a self-serve org signup (option C): PENDING → ACTIVE, so
+// its owner can finally sign in. Only PENDING tenants qualify; personal (guest) tenants never reach
+// this queue. Audited against the platform admin.
+router.post(
+  '/:id/approve',
+  asyncHandler(async (req, res) => {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, slug: true, status: true, isPersonal: true } });
+    if (!tenant) throw NotFound('Tenant not found');
+    if (tenant.isPersonal) throw BadRequest('Personal (guest) tenants are not managed here.');
+    if (tenant.status !== 'PENDING') throw BadRequest(`Only a PENDING signup can be approved (this one is ${tenant.status}).`);
+    const updated = await prisma.tenant.update({ where: { id: tenant.id }, data: { status: 'ACTIVE' } });
+    await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE', before: { status: tenant.status }, after: { status: updated.status, approved: true } });
+    res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status } });
+  }),
+);
+
+// POST /admin/tenants/:id/reject — reject a self-serve org signup (option C): PENDING → REJECTED. Soft:
+// the tenant is kept (locked out) for review/audit and can be hard-deleted later. Owner cannot sign in.
+router.post(
+  '/:id/reject',
+  asyncHandler(async (req, res) => {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, slug: true, status: true, isPersonal: true } });
+    if (!tenant) throw NotFound('Tenant not found');
+    if (tenant.isPersonal) throw BadRequest('Personal (guest) tenants are not managed here.');
+    if (tenant.status !== 'PENDING') throw BadRequest(`Only a PENDING signup can be rejected (this one is ${tenant.status}).`);
+    const updated = await prisma.tenant.update({ where: { id: tenant.id }, data: { status: 'REJECTED' } });
+    await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE', before: { status: tenant.status }, after: { status: updated.status, rejected: true } });
+    res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status } });
+  }),
+);
+
 // POST /admin/tenants/:id/impersonate — mint a short-lived access token that lets the platform admin
 // ACT INSIDE this tenant as ADMIN (to support/debug), without being a member. No refresh token, so it
 // self-expires (impersonation ends); requireAuth re-verifies platform-admin on every request. Audited
