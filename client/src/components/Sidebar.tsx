@@ -27,6 +27,7 @@ const ICONS = {
   chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
   org: 'M3 21h18M6 21V7l6-4 6 4v14M10 9h.01M14 9h.01M10 13h.01M14 13h.01M10 17h.01M14 17h.01',
   tenants: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z',
+  billing: 'M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7zM2 10h20M6 15h4',
 };
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
@@ -144,6 +145,11 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {user?.role === 'ADMIN' && (
           <NavLink to="/admin/audit" onClick={onNavigate} title="Audit trail" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.changeLog} /> {!collapsed && 'Audit trail'}
+          </NavLink>
+        )}
+        {user?.role === 'ADMIN' && (
+          <NavLink to="/admin/billing" onClick={onNavigate} title="Billing & plan" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.billing} /> {!collapsed && 'Billing'}
           </NavLink>
         )}
         {/* PLATFORM — super-admin (isPlatformAdmin), transcends the active tenant: provision/suspend orgs. */}

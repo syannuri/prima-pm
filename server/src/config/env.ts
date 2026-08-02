@@ -68,3 +68,26 @@ export const env = {
 } as const;
 
 export const isProd = env.nodeEnv === 'production';
+
+// Lemon Squeezy SaaS billing (merchant-of-record). Read LIVE from process.env (like
+// multitenancyEnforced) rather than captured at import, so tests can toggle it and ops can set
+// keys without a rebuild. storeId + the paid variant IDs come from the LS dashboard (use a TEST
+// store + test key first). Plans map: PRO/ENTERPRISE ⇒ the variant IDs below.
+export function lsConfig() {
+  return {
+    apiKey: process.env.LEMONSQUEEZY_API_KEY ?? '',
+    webhookSecret: process.env.LEMONSQUEEZY_WEBHOOK_SECRET ?? '',
+    storeId: process.env.LEMONSQUEEZY_STORE_ID ?? '',
+    variantIds: {
+      pro: process.env.LEMONSQUEEZY_VARIANT_ID_PRO ?? '',
+      enterprise: process.env.LEMONSQUEEZY_VARIANT_ID_ENTERPRISE ?? '',
+    },
+  };
+}
+
+// Billing is live only when both the API key (to mint checkouts / call the LS API) and the
+// webhook secret (to verify inbound events) are present. Missing either ⇒ endpoints 503 and
+// nothing else in the app changes.
+export function billingEnabled(): boolean {
+  return Boolean(process.env.LEMONSQUEEZY_API_KEY && process.env.LEMONSQUEEZY_WEBHOOK_SECRET);
+}

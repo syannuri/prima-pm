@@ -15,6 +15,7 @@ import AdminTenantsPage from './pages/AdminTenantsPage';
 import AdminProjectDatabasePage from './pages/AdminProjectDatabasePage';
 import AdminResourcesPage from './pages/AdminResourcesPage';
 import AdminAuditPage from './pages/AdminAuditPage';
+import AdminBillingPage from './pages/AdminBillingPage';
 import SettingsPage from './pages/SettingsPage';
 import ManualPage from './pages/ManualPage';
 import MyTimesheetPage from './pages/MyTimesheetPage';
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/admin/projects" element={<AdminProjectDatabasePage />} />
           <Route path="/admin/resources" element={<AdminResourcesPage />} />
           <Route path="/admin/audit" element={<AdminAuditPage />} />
+          <Route path="/admin/billing" element={<AdminBillingPage />} />
           <Route path="/my-timesheet" element={<MyTimesheetPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/manual" element={<ManualPage />} />

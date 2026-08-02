@@ -351,11 +351,11 @@ export async function listMyTenants(userId: string) {
   const memberships = await prisma.membership.findMany({
     where: { userId },
     orderBy: { createdAt: 'asc' },
-    select: { role: true, tenant: { select: { id: true, name: true, slug: true, status: true } } },
+    select: { role: true, tenant: { select: { id: true, name: true, slug: true, status: true, plan: true, subscriptionStatus: true } } },
   });
   return memberships
     .filter((m) => m.tenant.status === 'ACTIVE')
-    .map((m) => ({ id: m.tenant.id, name: m.tenant.name, slug: m.tenant.slug, role: m.role }));
+    .map((m) => ({ id: m.tenant.id, name: m.tenant.name, slug: m.tenant.slug, role: m.role, plan: m.tenant.plan, subscriptionStatus: m.tenant.subscriptionStatus }));
 }
 
 // Re-mint the token pair pinned to a DIFFERENT tenant the user is a member of. Rejects a tenant

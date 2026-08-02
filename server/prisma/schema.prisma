@@ -293,10 +293,21 @@ model Tenant {
   // tenants are false. Used to exclude personal tenants from the corporate EVM cron fan-out and,
   // later, from super-admin/tenant listings.
   isPersonal Boolean     @default(false)
+  // Lemon Squeezy billing (self-serve upgrade). All nullable — a FREE tenant that never paid
+  // has none of these. `lsSubscriptionId` is the handle used for the customer portal and for
+  // webhook idempotency. `endsAt` is set when a subscription is cancelled but still in its paid
+  // period (access continues until then); an `expired` webhook then downgrades to FREE.
+  lsSubscriptionId   String?   @unique
+  lsCustomerId       String?
+  lsVariantId        String?
+  subscriptionStatus String?
+  renewsAt           DateTime?
+  endsAt             DateTime?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
   memberships Membership[]
+  billingEvents  BillingEvent[]
   projects  Project[]
   projectBookmarks  ProjectBookmark[]
   rateCards  RateCard[]
@@ -338,6 +349,22 @@ model Tenant {
   kickoffActionItems  KickoffActionItem[]
   requirements  Requirement[]
   requirementTaskLinks  RequirementTaskLink[]
+}
+
+// Append-only audit trail of Lemon Squeezy billing webhooks (what event flipped which plan).
+// Written from the webhook handler under the target tenant's context. Not tenant-scoped in
+// scopedModels — reads are platform-admin only; writes are stamped with tenantId explicitly.
+model BillingEvent {
+  id          String      @id @default(uuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eventName   String
+  planBefore  TenantPlan?
+  planAfter   TenantPlan?
+  rawPayload  Json
+  createdAt   DateTime    @default(now())
+
+  @@index([tenantId])
 }
 
 // A user's membership in a tenant, carrying their per-tenant role. Identity (`User`) stays

@@ -37,11 +37,15 @@ export interface AdminUser extends User {
 
 // Pooled multitenancy — a tenant the current user belongs to (GET /auth/tenants) with their
 // per-tenant role. `active` in the response marks which one the session is scoped to.
+export type TenantPlan = 'FREE' | 'PRO' | 'ENTERPRISE';
+
 export interface TenantSummary {
   id: string;
   name: string;
   slug: string;
   role: Role;
+  plan: TenantPlan;
+  subscriptionStatus?: string | null;
 }
 
 // A member of the active tenant (GET /members) — the tenant-centric view of a user.

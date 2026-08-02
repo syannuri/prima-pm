@@ -28,6 +28,8 @@ import adminSettingsRoutes from './modules/settings/settings.routes.js';
 import messagesRoutes from './modules/messages/messages.routes.js';
 import membersRoutes from './modules/members/members.routes.js';
 import platformRoutes from './modules/platform/platform.routes.js';
+import billingRoutes from './modules/billing/billing.routes.js';
+import { lemonsqueezyWebhook } from './modules/billing/lemonsqueezy.webhook.js';
 
 // Locate the built frontend (server/dist/app.js → ../../client/dist). Overridable
 // via CLIENT_DIST_PATH for non-standard layouts.
@@ -124,6 +126,10 @@ export function createApp() {
     next();
   });
   app.use(cors({ origin: env.corsOrigin, credentials: true }));
+  // Lemon Squeezy webhook — mounted BEFORE express.json() so the handler gets the raw body to
+  // verify the HMAC signature, and outside /api/v1 so no CSRF/cookie guard blocks this
+  // server-to-server call. It authenticates itself via the X-Signature header.
+  app.post('/webhooks/lemonsqueezy', express.raw({ type: '*/*' }), asyncHandler(lemonsqueezyWebhook));
   app.use(express.json({ limit: '1mb' }));
   // Populate req.cookies so cookie-based auth (prima_at) and the CSRF double-submit check
   // can read them.
@@ -168,6 +174,7 @@ export function createApp() {
   api.use('/admin/settings', adminSettingsRoutes);
   api.use('/messages', messagesRoutes);
   api.use('/members', membersRoutes);
+  api.use('/billing', billingRoutes);
   api.use('/admin/tenants', platformRoutes);
   app.use('/api/v1', api);
 
