@@ -22,6 +22,13 @@
     <meta name="theme-color" content="#05070e" />
     <meta name="color-scheme" content="dark light" />
     <link rel="canonical" href="https://prismatix.tech/" />
+    <!-- Prerendered landing sections start hidden (JS reveals them on scroll). If JS is off
+         (some crawlers / no-JS visitors), force them visible so the content isn't blank. -->
+    <noscript>
+      <style>
+        .reveal { opacity: 1 !important; transform: none !important; filter: none !important; }
+      </style>
+    </noscript>
 
     <!-- Open Graph — image URLs MUST be absolute (social crawlers don't run JS or resolve relatives). -->
     <meta property="og:type" content="website" />
