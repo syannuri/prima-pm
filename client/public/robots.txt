@@ -1,0 +1,16 @@
+# Prismatix — public marketing site.
+# The root (/) is the marketing landing we want indexed; everything else is the
+# authenticated app (thin/duplicate content behind login), so keep crawlers out.
+User-agent: *
+Allow: /$
+Disallow: /login
+Disallow: /dashboard
+Disallow: /admin/
+Disallow: /projects/
+Disallow: /reports
+Disallow: /messages
+Disallow: /settings
+Disallow: /my-timesheet
+Disallow: /manual
+
+Sitemap: https://prismatix.tech/sitemap.xml
