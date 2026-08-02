@@ -213,7 +213,7 @@ function Wordmark({ small = false, bare = false }: { small?: boolean; bare?: boo
     return (
       <span className="relative inline-block font-brand text-2xl font-bold tracking-wide text-white">
         PRISMATIX
-        <span className="absolute -right-2 top-0 h-2 w-2 rounded-full bg-white" />
+        <span className="absolute -right-2 top-0 h-2 w-2 rounded-full bg-brand-500" />
       </span>
     );
   }
@@ -225,7 +225,7 @@ function Wordmark({ small = false, bare = false }: { small?: boolean; bare?: boo
     >
       PRISMATIX
       <span
-        className={`absolute rounded-full bg-white ${small ? 'right-1 top-1 h-1.5 w-1.5' : 'right-1.5 top-1.5 h-2 w-2'}`}
+        className={`absolute rounded-full bg-brand-500 ${small ? 'right-1 top-1 h-1.5 w-1.5' : 'right-1.5 top-1.5 h-2 w-2'}`}
       />
     </span>
   );

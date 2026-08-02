@@ -242,7 +242,7 @@ export default function LoginPage() {
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
           <span className="relative self-start inline-block border-[3px] border-slate-900 px-4 py-2 font-brand text-3xl font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
             PRISMATIX
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-slate-900 dark:bg-white" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500" />
           </span>
 
           <div className="max-w-2xl">
@@ -276,7 +276,7 @@ export default function LoginPage() {
               <div className="mb-6 flex justify-center lg:hidden">
                 <span className="relative inline-block border-[3px] border-slate-900 px-3 py-1.5 font-brand text-lg font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
                   PRISMATIX
-                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-slate-900 dark:bg-white" />
+                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
                 </span>
               </div>
 
