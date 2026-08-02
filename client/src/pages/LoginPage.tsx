@@ -294,9 +294,9 @@ export default function LoginPage() {
                   <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/40">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-7 w-7"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 2" /></svg>
                   </div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-100">Menunggu persetujuan</h1>
-                  <p className="mt-2 text-sm text-slate-400">Permintaan workspace <span className="font-semibold text-slate-200">{pendingOrg}</span> sudah kami terima. Seorang admin akan meninjau dan mengaktifkannya. Anda bisa masuk setelah workspace disetujui.</p>
-                  <button type="button" onClick={() => { setPendingOrg(null); setMode('signin'); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Kembali ke halaman masuk</button>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-100">Awaiting approval</h1>
+                  <p className="mt-2 text-sm text-slate-400">Your request for the <span className="font-semibold text-slate-200">{pendingOrg}</span> workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.</p>
+                  <button type="button" onClick={() => { setPendingOrg(null); setMode('signin'); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Back to sign in</button>
                 </div>
               ) : (
               <>
