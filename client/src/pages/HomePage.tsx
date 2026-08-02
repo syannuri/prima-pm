@@ -254,7 +254,6 @@ const SectionTitle = ({ eyebrow, children }: { eyebrow?: string; children: React
 export default function HomePage() {
   const { lang, setLang } = useLang();
   const t = COPY[lang];
-  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const [scrolled, setScrolled] = useState(false);
   // Parallax targets: the aurora backdrop drifts slower than the page (depth), and the hero
   // copy gently fades + lifts as it scrolls away. Both are transform/opacity only.
@@ -265,17 +264,15 @@ export default function HomePage() {
     [],
   );
 
-  // The app shell can lock the outer (window) scroll, so the landing page owns its own
-  // scroll container (aurora + header stay position:fixed to the viewport regardless).
-  // One handler on the container both condenses the header AND reveals sections as they
-  // enter view — the container's 'scroll' event is reliable everywhere.
+  // The landing scrolls with the natural document (window) so it gets the normal, always-visible
+  // OS scrollbar — the aurora + header stay position:fixed to the viewport regardless. One handler
+  // on `window` both condenses the header AND reveals sections as they enter view.
   useEffect(() => {
-    if (!scroller) return;
     const onScroll = () => {
-      const y = scroller.scrollTop;
+      const y = window.scrollY;
       setScrolled(y > 48);
-      const trigger = scroller.getBoundingClientRect().top + scroller.clientHeight * 0.9;
-      scroller.querySelectorAll('.reveal:not(.in)').forEach((el) => {
+      const trigger = window.innerHeight * 0.9;
+      document.querySelectorAll('.reveal:not(.in)').forEach((el) => {
         if (el.getBoundingClientRect().top < trigger) el.classList.add('in');
       });
       // Parallax + hero fade (skipped entirely for reduced-motion users).
@@ -289,22 +286,22 @@ export default function HomePage() {
       }
     };
     onScroll(); // reveal whatever is above the fold on load
-    scroller.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll, { passive: true });
     // Safety net: if anything about layout timing is off, don't leave content hidden.
-    const t = window.setTimeout(onScroll, 400);
+    const timer = window.setTimeout(onScroll, 400);
     return () => {
-      scroller.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
-      window.clearTimeout(t);
+      window.clearTimeout(timer);
     };
-  }, [scroller, reduced]);
+  }, [reduced]);
 
   const explore = () =>
     document.getElementById('features')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 
   return (
-    <div ref={setScroller} className="home-scroll relative isolate h-screen overflow-y-auto overflow-x-clip bg-[#05070e] text-slate-200 antialiased">
+    <div className="relative isolate min-h-screen overflow-x-clip bg-[#05070e] text-slate-200 antialiased">
       <style>{`
         @keyframes pmx-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
 
