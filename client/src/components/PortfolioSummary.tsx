@@ -169,27 +169,14 @@ export default function PortfolioSummary() {
             <input aria-label="Status date (EVM)" type="date" value={statusDate} onChange={(e) => setStatusDate(e.target.value)} className="w-36 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-700 focus:border-brand-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:focus:border-white/30" />
           </div>
         </div>
-        <div className="relative flex flex-col items-center gap-3 lg:flex-row lg:items-center lg:gap-5">
-          <div className="shrink-0">
+        {/* Band 1 — HERO: gauge + RAG mix + the SPI trend (the one thing the gauge can't show).
+            The money/scope KPIs moved OUT to their own even strip below, so this band stays calm. */}
+        <div className="relative flex flex-col items-center gap-4 lg:flex-row lg:items-stretch lg:gap-5">
+          <div className="shrink-0 self-center">
             <NeonGauge compact spi={t.spi} cpi={t.cpi} pct={Math.round(t.scheduleProgress * 100)} status={gaugeStatus} statusLabel={HEALTH_META[gaugeStatus].label} />
           </div>
-          <div className="w-full flex-1">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {([
-                { label: 'Total BAC', value: formatIdrShort(t.bac), title: formatIdr(t.bac) },
-                { label: 'Earned Value', value: formatIdrShort(t.ev), title: formatIdr(t.ev) },
-                { label: 'Actual Cost', value: formatIdrShort(t.ac), title: formatIdr(t.ac) },
-                { label: 'Schedule slip', value: t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule', warn: t.slippedCount > 0 },
-                { label: 'Changes', value: String(totalChanges) },
-                { label: 'Contingency', value: formatIdrShort(t.contingencyReserve), title: formatIdr(t.contingencyReserve) },
-              ] as Array<{ label: string; value: string; title?: string; warn?: boolean }>).map((s) => (
-                <div key={s.label} className="rounded-lg bg-slate-50 px-2.5 py-1.5 ring-1 ring-slate-200 dark:bg-white/5 dark:ring-white/10">
-                  <div className="truncate text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-white/50">{s.label}</div>
-                  <div title={s.title} className={`mt-0.5 truncate text-base font-bold leading-tight tabular-nums ${s.warn ? 'text-red-500 dark:text-red-300' : 'text-slate-800 dark:text-white'}`}>{s.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <div className="flex w-full flex-1 flex-col justify-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
                 <span key={h} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs ring-1 ring-slate-200 dark:bg-white/10 dark:ring-white/10">
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: HEALTH_META[h].dot }} />
@@ -199,22 +186,40 @@ export default function PortfolioSummary() {
               ))}
               {(data.byHealth.NO_DATA ?? 0) > 0 && <span className="text-[11px] text-slate-400 dark:text-white/40">“No data” = not started by this date — pick a later one.</span>}
             </div>
+            {/* SPI trend sparkline */}
+            {spiSeries.length >= 2 && spiLast !== null && (
+              <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-white/5 dark:ring-white/10">
+                <div className="shrink-0">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-white/50">SPI trend</div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-base font-bold tabular-nums text-slate-800 dark:text-white">{spiLast.toFixed(2)}</span>
+                    {spiDelta !== null && <span className={`text-xs font-semibold ${spiDelta >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500 dark:text-red-300'}`}>{spiDelta >= 0 ? '▲' : '▼'} {Math.abs(spiDelta).toFixed(2)} vs last</span>}
+                  </div>
+                </div>
+                <Sparkline values={spiSeries} up={(spiDelta ?? 0) >= 0} className="h-8 flex-1" />
+                <span className="shrink-0 text-[10px] text-slate-400 dark:text-white/40">{spiSeries.length} status points</span>
+              </div>
+            )}
           </div>
         </div>
-        {/* SPI trend sparkline — the one thing the static gauge can't show. */}
-        {spiSeries.length >= 2 && spiLast !== null && (
-          <div className="relative mt-3 flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-white/5 dark:ring-white/10">
-            <div className="shrink-0">
-              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-white/50">SPI trend</div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-base font-bold tabular-nums text-slate-800 dark:text-white">{spiLast.toFixed(2)}</span>
-                {spiDelta !== null && <span className={`text-xs font-semibold ${spiDelta >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500 dark:text-red-300'}`}>{spiDelta >= 0 ? '▲' : '▼'} {Math.abs(spiDelta).toFixed(2)} vs last</span>}
-              </div>
-            </div>
-            <Sparkline values={spiSeries} up={(spiDelta ?? 0) >= 0} className="h-8 flex-1" />
-            <span className="shrink-0 text-[10px] text-slate-400 dark:text-white/40">{spiSeries.length} status points</span>
+      </div>
+
+      {/* Band 2 — KPI strip: the money/scope figures as an even 6-up row (was crammed beside the
+          gauge). One clean strip, equal tiles, aligned gutters. */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+        {([
+          { label: 'Total BAC', value: formatIdrShort(t.bac), title: formatIdr(t.bac) },
+          { label: 'Earned Value', value: formatIdrShort(t.ev), title: formatIdr(t.ev) },
+          { label: 'Actual Cost', value: formatIdrShort(t.ac), title: formatIdr(t.ac) },
+          { label: 'Schedule slip', value: t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule', warn: t.slippedCount > 0 },
+          { label: 'Changes', value: String(totalChanges) },
+          { label: 'Contingency', value: formatIdrShort(t.contingencyReserve), title: formatIdr(t.contingencyReserve) },
+        ] as Array<{ label: string; value: string; title?: string; warn?: boolean }>).map((s) => (
+          <div key={s.label} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+            <div className="truncate text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{s.label}</div>
+            <div title={s.title} className={`mt-0.5 truncate text-base font-bold leading-tight tabular-nums ${s.warn ? 'text-red-500 dark:text-red-300' : 'text-slate-800 dark:text-white'}`}>{s.value}</div>
           </div>
-        )}
+        ))}
       </div>
 
       {/* PMO dashboard — portfolio pie charts */}
