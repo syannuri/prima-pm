@@ -478,7 +478,7 @@ export default function PortfolioSummary() {
                         {canOpen ? (
                           <Link to={`/projects/${p.id}`} className="block">
                             <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
-                            <div className="font-medium text-brand-600 hover:underline">{p.name}</div>
+                            <div className="font-medium text-slate-800 hover:text-brand-600 dark:text-slate-100 dark:hover:text-brand-400">{p.name}</div>
                           </Link>
                         ) : (
                           <div>
@@ -542,7 +542,7 @@ export default function PortfolioSummary() {
                   <div className="min-w-0">
                     <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{p.code}</span>
                     {canOpen ? (
-                      <Link to={`/projects/${p.id}`} className="block font-medium text-brand-600 hover:underline">{p.name}</Link>
+                      <Link to={`/projects/${p.id}`} className="block font-medium text-slate-800 hover:text-brand-600 dark:text-slate-100 dark:hover:text-brand-400">{p.name}</Link>
                     ) : (
                       <div className="font-medium text-slate-700 dark:text-slate-200">{p.name}</div>
                     )}
