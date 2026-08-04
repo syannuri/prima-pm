@@ -32,9 +32,18 @@ try {
   const appHtml = mod.render();
   if (!appHtml || appHtml.length < 500) throw new Error(`render() returned suspiciously little (${appHtml?.length ?? 0} bytes)`);
 
+  // This prerendered landing markup lives in the ONE index.html the SPA serves for EVERY route
+  // (client-side routing). It's only correct for "/"; on any other route (e.g. a hard reload of
+  // /dashboard) it would paint before React mounts → a flash of the landing page. So follow it
+  // with a synchronous (non-deferred) guard that strips #root on non-landing paths — it runs
+  // during parse, before the deferred module script and before first paint. SEO for "/" is intact.
+  const guard =
+    `<script>(function(){var p=location.pathname;` +
+    `if(p!=='/'&&p!=='/index.html'){var r=document.getElementById('root');if(r)r.innerHTML='';}})();</script>`;
+
   const html = readFileSync(indexPath, 'utf8');
   if (!html.includes(PLACEHOLDER)) throw new Error('root placeholder not found in dist/index.html');
-  writeFileSync(indexPath, html.replace(PLACEHOLDER, `<div id="root">${appHtml}</div>`));
+  writeFileSync(indexPath, html.replace(PLACEHOLDER, `<div id="root">${appHtml}</div>${guard}`));
   console.log(`✓ prerendered dist/index.html (${appHtml.length} bytes of landing markup into #root)`);
 } catch (err) {
   console.warn('⚠ prerender skipped — falling back to client-only SPA:', err?.message || err);
