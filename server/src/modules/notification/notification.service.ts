@@ -81,14 +81,15 @@ function computeAlerts(input: AlertInput, now: Date): { alerts: Alert[]; counts:
   for (const t of tasks) {
     if (parentIds.has(t.id)) continue; // skip summary rows
     if (t.progressPct >= 100) continue;
-    const lateMs = now.getTime() - new Date(t.planEnd).getTime();
-    if (lateMs > 0) {
-      const days = Math.floor(lateMs / DAY);
+    // Overdue by WHOLE calendar days — a task due TODAY is not overdue until tomorrow (floor to
+    // the day, matching the Gantt + report.service). Prevents a confusing "0d overdue" alert.
+    const daysLate = Math.floor(now.getTime() / DAY) - Math.floor(new Date(t.planEnd).getTime() / DAY);
+    if (daysLate >= 1) {
       alerts.push({
         type: 'OVERDUE_TASK',
-        severity: days > 14 ? 'HIGH' : 'MEDIUM',
+        severity: daysLate > 14 ? 'HIGH' : 'MEDIUM',
         tab: 'Schedule',
-        message: `Task "${t.name}" is ${days}d overdue (${t.progressPct}% done)`,
+        message: `Task "${t.name}" is ${daysLate}d overdue (${t.progressPct}% done)`,
       });
     }
   }
@@ -107,12 +108,16 @@ function computeAlerts(input: AlertInput, now: Date): { alerts: Alert[]; counts:
   }
 
   // 3) Budget signals. BAC = PMB (cost baseline, excl. management reserve).
-  if (charterCost > 0 && bac > charterCost) {
+  // The charter estimate is a rough order-of-magnitude figure, so ignore trivial (rounding-level)
+  // overages — only flag a MATERIAL overrun (more than Rp 1jt or 0.5% of the charter). Without a
+  // tolerance a Rp 200 delta on a Rp 1B budget cried "wolf" as a MEDIUM alert.
+  const bacOverCharter = bac - charterCost;
+  if (charterCost > 0 && bacOverCharter > Math.max(1_000_000, charterCost * 0.005)) {
     alerts.push({
       type: 'BUDGET_OVERRUN',
       severity: 'MEDIUM',
       tab: 'Cost',
-      message: `Detailed budget (BAC) exceeds the charter estimate by Rp ${Math.round(bac - charterCost).toLocaleString('id-ID')}`,
+      message: `Detailed budget (BAC) exceeds the charter estimate by Rp ${Math.round(bacOverCharter).toLocaleString('id-ID')}`,
     });
   }
   if (bac > 0 && actualCostTotal > bac) {

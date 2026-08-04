@@ -1146,7 +1146,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <span className="text-slate-300 dark:text-slate-600">—</span>
                       ) : (
                         <span title={`${varIsActual ? 'Actual' : 'Forecast'} finish vs baseline (${formatDate(new Date(r.baseEnd!))})`} className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}>
-                          {varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}{varIsActual && <span className="ml-0.5 text-green-600 dark:text-green-400" title="Based on the confirmed actual finish">✓</span>}
+                          {varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}{varIsActual && <span className="ml-0.5 text-slate-400 dark:text-slate-500" title="Based on the confirmed actual finish">✓</span>}
                         </span>
                       )}
                     </td>
