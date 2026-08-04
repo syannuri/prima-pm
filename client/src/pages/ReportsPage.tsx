@@ -42,7 +42,9 @@ const HEALTH: Record<string, { color: string; label: string }> = {
 export default function ReportsPage() {
   const { user } = useAuth();
   const isGuest = user?.role === 'GUEST';
-  const [view, setView] = useState<View>('project');
+  // Land on the Executive (portfolio) report — it's always populated, whereas Project Report
+  // defaults to a single project that may have no data yet (an empty-looking first load).
+  const [view, setView] = useState<View>('executive');
   const [projectId, setProjectId] = useState('');
   const [cadence, setCadence] = useState<Cadence>('weekly');
   const period: Period = cadence; // cadence maps 1:1 to the report engine's period

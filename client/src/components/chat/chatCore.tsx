@@ -333,7 +333,7 @@ export function ConversationList({ conversations, me, activeConvId, onOpen }: { 
   const online = useOnline();
   const typingMap = useTypingMap();
   if (conversations.length === 0) {
-    return <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">No conversations yet.<br />Tap “New message” to start one.</div>;
+    return <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">No conversations yet.<br />Use “New message” to start one.</div>;
   }
   return (
     <>

@@ -39,6 +39,9 @@ const PLANS: { plan: Exclude<TenantPlan, 'FREE'>; priceHint: string; perks: { en
   },
 ];
 
+// Plan hierarchy — used to label a plan switch as an upgrade vs a downgrade (never assume "upgrade").
+const PLAN_RANK: Record<string, number> = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
+
 // Billing & plan management for the active tenant (ADMIN-only). Shows the current plan and lets an
 // admin start a Lemon Squeezy checkout to upgrade, or open the customer portal to manage/cancel.
 export default function AdminBillingPage() {
@@ -118,6 +121,7 @@ export default function AdminBillingPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {PLANS.map(({ plan, perks }) => {
               const isCurrent = currentPlan === plan;
+              const isDowngrade = PLAN_RANK[plan] < (PLAN_RANK[currentPlan] ?? 0);
               return (
                 <Card key={plan} className={isCurrent ? 'ring-2 ring-brand-400' : ''}>
                   <div className="flex items-center justify-between">
@@ -127,7 +131,7 @@ export default function AdminBillingPage() {
                   <ul className="mt-3 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
                     {perks.map((p) => (
                       <li key={p.en} className="flex items-start gap-2">
-                        <span className="mt-0.5 text-brand-500">✓</span>
+                        <span className="mt-0.5 text-emerald-500">✓</span>
                         <span>{id ? p.id : p.en}</span>
                       </li>
                     ))}
@@ -141,7 +145,11 @@ export default function AdminBillingPage() {
                         disabled={!status?.billingEnabled || checkout.isPending}
                         className="w-full"
                       >
-                        {checkout.isPending ? (id ? 'Mengarahkan…' : 'Redirecting…') : (id ? `Tingkatkan ke ${plan}` : `Upgrade to ${plan}`)}
+                        {checkout.isPending
+                          ? (id ? 'Mengarahkan…' : 'Redirecting…')
+                          : isDowngrade
+                            ? (id ? `Turunkan ke ${plan}` : `Downgrade to ${plan}`)
+                            : (id ? `Tingkatkan ke ${plan}` : `Upgrade to ${plan}`)}
                       </Button>
                     )}
                   </div>
