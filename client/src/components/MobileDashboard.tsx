@@ -132,14 +132,20 @@ export default function MobileDashboard() {
         {actions.map((a) => <QuickAction key={a.label} {...a} />)}
       </div>
 
-      {/* KPI tiles */}
+      {/* KPI tiles — colour = meaning: the three plain money figures stay NEUTRAL; only Cost
+          variance (the one KPI with a good/bad reading) is tinted + carries a sign & arrow. Each
+          tile gets a muted sub-line for context so the bare rupiah figure is interpretable. */}
       <div className="grid grid-cols-2 gap-3">
-        <KpiTile label="Total budget" value={formatIdrShort(t.bac)} tint="from-indigo-500/25 to-blue-600/12" />
-        <KpiTile label="Earned value" value={formatIdrShort(t.ev)} tint="from-emerald-500/25 to-teal-600/12" />
-        <KpiTile label="Actual cost" value={formatIdrShort(t.ac)} tint="from-amber-500/25 to-orange-600/12" />
-        {/* Cost variance is the one KPI with a good/bad meaning — colour the wash by it (green =
-            favorable EV≥AC, red = over budget) instead of an arbitrary pink. */}
-        <KpiTile label="Cost variance" value={formatIdrShort(cv)} tone={cv < 0 ? 'red' : 'green'} tint={cv < 0 ? 'from-red-500/25 to-rose-600/12' : 'from-emerald-500/25 to-green-600/12'} />
+        <KpiTile label="Total budget" value={formatIdrShort(t.bac)} sub={`${t.count} ${t.count === 1 ? 'project' : 'projects'}`} />
+        <KpiTile label="Earned value" value={formatIdrShort(t.ev)} sub={`${Math.round((t.bac > 0 ? t.ev / t.bac : 0) * 100)}% of budget earned`} />
+        <KpiTile label="Actual cost" value={formatIdrShort(t.ac)} sub={`${Math.round((t.bac > 0 ? t.ac / t.bac : 0) * 100)}% of budget spent`} />
+        <KpiTile
+          label="Cost variance"
+          value={`${cv >= 0 ? '+' : '−'}${formatIdrShort(Math.abs(cv))}`}
+          tone={cv < 0 ? 'red' : 'green'}
+          arrow={cv >= 0 ? 'up' : 'down'}
+          sub={`CPI ${t.cpi > 0 ? t.cpi.toFixed(2) : '—'} · ${cv < 0 ? 'over budget' : 'under budget'}`}
+        />
       </div>
 
       {/* Needs attention — the action queues (each renders nothing when empty) */}
@@ -227,10 +233,11 @@ function QuickAction({ label, icon, grad, glow, halo, tint, to, onClick }: { lab
     'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.05] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]';
   const inner = (
     <>
-      {/* Elegant coloured wash over the whole tile (Spektrum palette, one hue per action). */}
-      <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint}`} />
+      {/* Faint coloured wash over the tile — kept subtle (halved) so the quick-actions don't
+          compete with the brand FAB and the health hero for attention. */}
+      <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br opacity-50 ${tint}`} />
       {/* Soft coloured halo behind the icon — clipped by the card for an elegant glow. */}
-      <span aria-hidden className={`pointer-events-none absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 -translate-y-6 rounded-full opacity-45 blur-2xl transition-opacity duration-200 group-hover:opacity-70 ${halo}`} />
+      <span aria-hidden className={`pointer-events-none absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 -translate-y-6 rounded-full opacity-25 blur-2xl transition-opacity duration-200 group-hover:opacity-45 ${halo}`} />
       {/* Top sheen on the card for a glossy, premium finish. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
       {/* 3D gradient "app icon": vibrant diagonal gradient, a top gloss highlight for the
@@ -248,16 +255,22 @@ function QuickAction({ label, icon, grad, glow, halo, tint, to, onClick }: { lab
     : <button type="button" onClick={() => { haptic(); onClick?.(); }} className={cls}>{inner}</button>;
 }
 
-function KpiTile({ label, value, tone, tint }: { label: string; value: string; tone?: 'red' | 'green'; tint: string }) {
+function KpiTile({ label, value, sub, tone, arrow }: { label: string; value: string; sub?: string; tone?: 'red' | 'green'; arrow?: 'up' | 'down' }) {
   const valClass = tone === 'red' ? 'text-red-600 dark:text-red-400' : tone === 'green' ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-white';
+  // Only a meaningful (good/bad) KPI gets a coloured wash — the plain money tiles stay neutral.
+  const tint = tone === 'red' ? 'from-red-500/20 to-rose-600/10' : tone === 'green' ? 'from-emerald-500/20 to-green-600/10' : '';
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]">
-      {/* Elegant coloured wash (Spektrum palette, one hue per KPI). */}
-      <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint}`} />
+      {tint && <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint}`} />}
       {/* Top sheen — matches the quick-action tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
       <div className="relative text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`relative mt-1 text-xl font-bold tabular-nums ${valClass}`}>{value}</div>
+      <div className={`relative mt-1 flex items-baseline gap-1 text-xl font-bold tabular-nums ${valClass}`}>
+        {value}
+        {/* Arrow is a non-colour cue for the variance direction (colour-blind safe). */}
+        {arrow && <span aria-hidden className="text-sm">{arrow === 'up' ? '▲' : '▼'}</span>}
+      </div>
+      {sub && <div className="relative mt-0.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">{sub}</div>}
     </div>
   );
 }
