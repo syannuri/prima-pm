@@ -63,12 +63,14 @@ export const PROJECT_STATUS_BADGE: Record<string, string> = {
   CHARTERED: 'sky',
   IN_PROGRESS: 'indigo',
   ON_HOLD: 'amber',
-  CLOSED: 'coral',
+  // CLOSED is a successful end-state, not a problem — a neutral slate (not the coral/red
+  // danger hue) so a finished project doesn't read as an error. Matches the mobile dashboard.
+  CLOSED: 'slate',
 };
 export const PROJECT_STATUS_DOT: Record<string, string> = {
   DRAFT: 'bg-slate-400',
   CHARTERED: 'bg-sky-400',
   IN_PROGRESS: 'bg-indigo-400',
   ON_HOLD: 'bg-amber-400',
-  CLOSED: 'bg-brand-500',
+  CLOSED: 'bg-slate-400',
 };

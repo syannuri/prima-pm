@@ -150,7 +150,7 @@ export default function NotificationBell() {
             <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${high > 0 ? 'bg-red-400' : 'bg-amber-400'}`} />
             <span className={`relative inline-flex h-2 w-2 rounded-full ${high > 0 ? 'bg-red-500' : 'bg-amber-500'}`} />
           </span>
-          {alertTotal} {alertTotal === 1 ? 'item needs' : 'items need'} attention{high > 0 ? ` · ${high} high` : ''}
+          {alertTotal} {alertTotal === 1 ? 'alert' : 'alerts'}{high > 0 ? ` · ${high} high` : ''}
         </button>
       )}
 

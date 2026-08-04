@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { haptic } from '../lib/haptics';
+import { useHideOnScroll } from '../hooks/useHideOnScroll';
 import { useChat, ConversationList, ContactPicker, ChatThread } from './chat/chatCore';
 import type { ChatContact } from '../api/types';
 
@@ -18,6 +19,8 @@ export default function ChatWidget() {
   const loc = useLocation();
   const isGuest = user?.role === 'GUEST';
   const [open, setOpen] = useState(false);
+  // Slide the bubble away on scroll-down (kept ABOVE the early returns — Rules of Hooks).
+  const scrolledAway = useHideOnScroll();
 
   const { data } = useQuery({
     queryKey: ['chat-unread'],
@@ -35,7 +38,7 @@ export default function ChatWidget() {
     <button
       onClick={() => { haptic(); setOpen(true); }}
       aria-label={`Chat${unread > 0 ? ` — ${unread} unread` : ''}`}
-      className="fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-[#0073ea] text-white shadow-lg shadow-[#0073ea]/30 ring-1 ring-black/5 transition-transform active:scale-90 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+4rem)] md:bottom-6 md:right-6"
+      className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-[#0073ea] text-white shadow-lg shadow-[#0073ea]/30 ring-1 ring-black/5 transition-all duration-300 active:scale-90 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+4rem)] md:bottom-6 md:right-6 ${scrolledAway ? 'pointer-events-none translate-y-[150%] opacity-0' : ''}`}
     >
       <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={CHAT_ICON} /></svg>
       {unread > 0 && (
