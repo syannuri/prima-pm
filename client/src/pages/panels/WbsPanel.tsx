@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CpmResult, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
@@ -308,9 +309,10 @@ function InlineName({ value, editable, done, depthZero, onSave }: {
 interface MenuEntry { label?: string; icon?: string; hint?: string; disabled?: boolean; danger?: boolean; separator?: boolean; onClick?: () => void; }
 
 // Right-click / ⋮ row action menu. Fixed-positioned at (x,y), clamped to the viewport, closes on
-// outside-click / Esc / resize. Rendered inside the panel tree so it also paints in native
-// full-screen (where only the full-screen element's subtree is visible).
-function RowMenu({ x, y, items, onClose }: { x: number; y: number; items: MenuEntry[]; onClose: () => void }) {
+// outside-click / Esc / resize. PORTALED into `container` (the full-screen element when in
+// full-screen, else document.body) — same pattern as the modals; a body-portaled menu would be
+// invisible UNDER a native full-screen element (only its own subtree paints in the top layer).
+function RowMenu({ x, y, items, container, onClose }: { x: number; y: number; items: MenuEntry[]; container?: Element | null; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: x, top: y });
   useLayoutEffect(() => {
@@ -327,7 +329,7 @@ function RowMenu({ x, y, items, onClose }: { x: number; y: number; items: MenuEn
     window.addEventListener('resize', onClose);
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onClose); };
   }, [onClose]);
-  return (
+  return createPortal(
     <>
       {/* Invisible backdrop — a click (or another right-click) anywhere dismisses the menu. */}
       <div className="fixed inset-0 z-[59]" onMouseDown={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
@@ -345,7 +347,8 @@ function RowMenu({ x, y, items, onClose }: { x: number; y: number; items: MenuEn
           </button>
         ))}
       </div>
-    </>
+    </>,
+    container ?? document.body,
   );
 }
 
@@ -1440,7 +1443,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
 
       {menu && (
         <RowMenu
-          x={menu.x} y={menu.y} onClose={() => setMenu(null)}
+          x={menu.x} y={menu.y} container={modalContainer} onClose={() => setMenu(null)}
           items={(() => {
             const n = menu.node;
             return [
