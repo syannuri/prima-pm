@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CpmResult, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, SectionTitle, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Select, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
@@ -63,6 +63,8 @@ const NAME_ACCENT: Record<string, string> = {
 };
 
 const day = 86_400_000;
+// Default duration (days) for a brand-new task when we auto-continue the schedule.
+const DEFAULT_TASK_DAYS = 7;
 type Scale = 'day' | 'week' | 'month';
 const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
 
@@ -270,6 +272,34 @@ function InlineOwner({ name, resourceId, editable, resources, onSave }: {
     <button type="button" onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to change owner"
       className="rounded px-1 py-0.5 hover:bg-brand-50 dark:hover:bg-brand-900/20">
       <OwnerCell name={name} />
+    </button>
+  );
+}
+
+// Click-to-edit task/subtask NAME — renders the styled name; clicking (when editable) swaps to a
+// text input that commits on blur/Enter and cancels on Esc. Empty input is ignored (name required).
+function InlineName({ value, editable, done, depthZero, onSave }: {
+  value: string; editable: boolean; done: boolean; depthZero: boolean; onSave: (name: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const nameCls = `${depthZero ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${done ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`;
+  if (editing) {
+    return (
+      <input
+        type="text" autoFocus defaultValue={value}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={(e) => { setEditing(false); const v = e.target.value.trim(); if (v && v !== value) onSave(v); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setEditing(false); }}
+        className="w-full min-w-[8rem] rounded border border-brand-300 bg-white px-1.5 py-0.5 text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100"
+      />
+    );
+  }
+  if (!editable) return <span className={nameCls}>{value}</span>;
+  return (
+    <button type="button" title="Click to rename"
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+      className={`${nameCls} truncate rounded px-0.5 text-left hover:bg-brand-50 dark:hover:bg-brand-900/20`}>
+      {value}
     </button>
   );
 }
@@ -505,7 +535,6 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * f)));
   };
 
-  const [form, setForm] = useState<{ parentId: string | null; edit?: GanttNode } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [fullscreen, setFullscreen] = useState(false);
@@ -605,7 +634,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   }, [rows.length]);
 
   // Inline "add subtask" draft row (monday.com style) — rendered under its parent row.
-  const [draft, setDraft] = useState<{ parentId: string; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
+  const [draft, setDraft] = useState<{ parentId: string | null; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
   // Base = ✓ WBS Task Owner % Status Var (7); +6 date/budget cols when shown; + Actions (editors)
   // + the Gantt column (when shown).
   const colCount = (showDates ? 13 : 7) + (canEdit ? 1 : 0) + (showGantt ? 1 : 0);
@@ -693,10 +722,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // Inline add-subtask (keeps the draft open for the next sibling on success).
   const createSub = useMutation({
     mutationFn: ({ parentId, name, picResourceId, planStart, planEnd, sortOrder }:
-      { parentId: string; name: string; picResourceId: string; planStart: string; planEnd: string; sortOrder: number }) =>
+      { parentId: string | null; name: string; picResourceId: string; planStart: string; planEnd: string; sortOrder: number }) =>
       api.post(`${base}/tasks`, {
         name, planStart, planEnd, progressPct: 0, isMilestone: false,
-        parentTaskId: parentId, sortOrder, picResourceId: picResourceId || undefined,
+        parentTaskId: parentId ?? undefined, sortOrder, picResourceId: picResourceId || undefined,
       }),
     onSuccess: () => { invalidate(); setDraft((d) => (d ? { ...d, name: '' } : null)); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to add subtask'),
@@ -901,7 +930,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {baseline.isPending ? 'Saving…' : baselinedAt ? 'Re-baseline' : 'Set Baseline'}
             </Button>
           )}
-          {canEdit && <Button onClick={() => setForm({ parentId: null })}>+ Add Task</Button>}
+          {canEdit && (
+            <Button onClick={() => {
+              const s = nextTaskStart(rows, null) ?? new Date();
+              setDraft({ parentId: null, name: '', picResourceId: '', planStart: formatDateInput(s), planEnd: formatDateInput(new Date(s.getTime() + DEFAULT_TASK_DAYS * day)) });
+            }}>+ Add Task</Button>
+          )}
         </div>
         {!fullscreen && rows.length > 0 && <ProgressRing pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
         </div>
@@ -909,10 +943,24 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
 
       {!rows.length ? (
         <div className="py-6">
-          <p className="text-center text-slate-500 dark:text-slate-400">
-            No work packages yet.{canEdit ? ' Start from a template below, or click “+ Add Task”.' : ''}
-          </p>
-          {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
+          {canEdit && draft && draft.parentId === null ? (
+            // First task: an inline draft row (same monday.com-style editor as add-subtask) — no popup.
+            <table className="w-full text-sm"><tbody>
+              <DraftRow
+                draft={draft} depth={0} colCount={4} showDates={false} resources={resources} saving={createSub.isPending}
+                onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
+                onCancel={() => setDraft(null)}
+                onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: 0 }); }}
+              />
+            </tbody></table>
+          ) : (
+            <>
+              <p className="text-center text-slate-500 dark:text-slate-400">
+                No work packages yet.{canEdit ? ' Start from a template below, or click “+ Add Task”.' : ''}
+              </p>
+              {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
+            </>
+          )}
         </div>
       ) : (
         <>
@@ -1081,11 +1129,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} fill="currentColor" aria-hidden><path d="M7 5l6 5-6 5V5z" /></svg>
                           </button>
                         )}
-                        <button onClick={() => toggle(node.id)} title="WBS dictionary" className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
+                        <button onClick={() => toggle(node.id)} title={canPlan ? 'WBS dictionary — click to view / edit' : 'WBS dictionary'} className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
                           {isOpen ? '▾' : 'ⓘ'}
                         </button>
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
-                        <span className={`${depth === 0 ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${r.pct >= 100 ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`}>{node.name}</span>
+                        <InlineName value={node.name} editable={canPlan} done={r.pct >= 100} depthZero={depth === 0} onSave={(name) => patchTask.mutate({ node, patch: { name } })} />
                         {isCollapsed && hasKids && <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">⋯</span>}
                         {isCritical && <span className="shrink-0 text-[10px] font-bold text-red-500" title="On the critical path — a slip here delays the whole project">▲ CP</span>}
                       </span>
@@ -1161,7 +1209,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             </>
                           )}
                           <button onClick={() => setDraft({ parentId: node.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(node.planStart)), planEnd: formatDateInput(new Date(node.planEnd)) })} className="text-brand-600 hover:underline" title="Add a subtask inline">+ Sub</button>
-                          <button onClick={() => setForm({ parentId: node.parentTaskId, edit: node })} className="ml-2 text-slate-500 hover:underline dark:text-slate-400" title="Full editor (dictionary, scope, acceptance)">Edit</button>
+                          <button onClick={() => toggle(node.id)} className="ml-2 text-slate-500 hover:underline dark:text-slate-400" title="Edit dictionary, scope & acceptance inline">{isOpen ? 'Close' : 'Details'}</button>
                           <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true, container: modalContainer })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
                         </span>
                       </td>
@@ -1264,7 +1312,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                   {isOpen && (
                     <tr>
                       <td colSpan={colCount} className="border-b border-slate-100 bg-slate-50/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-800/30">
-                        <DictionaryView node={node} />
+                        {canPlan
+                          ? <DictionaryEditor node={node} resources={resources} onSave={(patch) => patchTask.mutate({ node, patch })} />
+                          : <DictionaryView node={node} />}
                       </td>
                     </tr>
                   )}
@@ -1279,6 +1329,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                   </Fragment>
                 );
               })}
+              {/* Inline "+ Add Task" draft — a new top-level work package, filled straight in the grid. */}
+              {draft && draft.parentId === null && (
+                <DraftRow
+                  draft={draft} depth={0} colCount={colCount} showDates={showDates} resources={resources} saving={createSub.isPending}
+                  onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
+                  onCancel={() => setDraft(null)}
+                  onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: ganttQ.data?.tree.length ?? 0 }); }}
+                />
+              )}
             </tbody>
           </table>
           </div>
@@ -1286,6 +1345,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         {/* Right-edge fade — hints that the timeline scrolls horizontally past the frozen pane. */}
         {overflowX && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-white to-transparent dark:from-slate-900" />}
         </div>
+          {/* Full-screen toggle placed directly BELOW the Gantt — a second, obvious entry point to
+              the immersive timeline (the toolbar keeps its own compact toggle). */}
+          {rows.length > 0 && (
+            <div className={`mt-2 flex justify-center sm:justify-end ${fullscreen ? 'hidden' : ''}`}>
+              <button onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen (Esc)' : 'View the Gantt full screen'}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-700 dark:hover:bg-brand-900/20 dark:hover:text-brand-300">
+                {fullscreen ? <><CollapseIcon /> Exit full screen</> : <><ExpandIcon /> Full screen</>}
+              </button>
+            </div>
+          )}
           {/* Drag handle — grow/shrink the timeline box in the normal view (fullscreen already fills
               the screen). Height persists per project; double-click resets to the default cap. */}
           {!fullscreen && rows.length > 0 && (
@@ -1321,19 +1390,6 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
       )}
 
       {del.isError && <p className="mt-2 text-sm text-red-600">{(del.error as Error).message}</p>}
-
-      {form && (
-        <TaskForm
-          base={base}
-          parentId={form.parentId}
-          edit={form.edit}
-          siblingCount={rows.filter((r) => r.node.parentTaskId === form.parentId).length}
-          defaultStart={nextTaskStart(rows, form.parentId)}
-          container={modalContainer}
-          onClose={() => setForm(null)}
-          onSaved={() => { setForm(null); invalidate(); }}
-        />
-      )}
     </Card>
     </div>
   );
@@ -1453,122 +1509,51 @@ function DraftRow({ draft, depth, colCount, showDates, resources, saving, onChan
   );
 }
 
-// Default duration (days) for a brand-new task when we auto-continue the schedule.
-const DEFAULT_TASK_DAYS = 7;
-
-function TaskForm({ base, parentId, edit, siblingCount, defaultStart, container, onClose, onSaved }: {
-  base: string; parentId: string | null; edit?: GanttNode; siblingCount: number; defaultStart?: Date | null; container?: Element | null; onClose: () => void; onSaved: () => void;
+// Editable WBS dictionary — shown when an editor expands a row (the ⓘ / "Details" toggle). Owner &
+// Milestone commit immediately (selects/checkbox); the free-text fields (Deliverable / Description /
+// Acceptance) commit on blur when changed. No popup — every field is filled straight under the row.
+function DictionaryEditor({ node, resources, onSave }: {
+  node: GanttNode; resources: ResourceItem[]; onSave: (patch: Record<string, unknown>) => void;
 }) {
-  // New tasks default to continue from where the schedule currently ends (defaultStart =
-  // the latest existing task's planEnd) so dates run sequentially instead of all starting
-  // today; end = start + a default duration. Editing keeps the task's own dates.
-  const newStart = defaultStart ?? new Date();
-  const newEnd = new Date(newStart.getTime() + DEFAULT_TASK_DAYS * 86_400_000);
-  const [name, setName] = useState(edit?.name ?? '');
-  const [planStart, setStart] = useState(formatDateInput(edit?.planStart ?? newStart));
-  const [planEnd, setEnd] = useState(formatDateInput(edit?.planEnd ?? newEnd));
-  const [progressPct, setProgress] = useState(edit?.progressPct ?? 0);
-  // Actual (real) dates — MS-Project-style tracking; blank = not yet recorded. Editing an existing
-  // task lets the PM correct an auto-stamped / mis-clicked actual (or clear it back to "—").
-  const [actualStart, setActualStart] = useState(edit?.actualStart ? formatDateInput(edit.actualStart) : '');
-  const [actualFinish, setActualFinish] = useState(edit?.actualFinish ? formatDateInput(edit.actualFinish) : '');
-  const [isMilestone, setMilestone] = useState(edit?.isMilestone ?? false);
-  const [description, setDescription] = useState(edit?.description ?? '');
-  const [deliverable, setDeliverable] = useState(edit?.deliverable ?? '');
-  const [acceptanceCriteria, setAcceptance] = useState(edit?.acceptanceCriteria ?? '');
-  const [picResourceId, setPic] = useState(edit?.picResourceId ?? '');
-  const [err, setErr] = useState('');
-  const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources') });
-
-  const save = useMutation({
-    mutationFn: () => {
-      // PUT replaces the whole task, so preserve parent/order/pic/actuals.
-      const body = {
-        name,
-        planStart,
-        planEnd,
-        progressPct,
-        isMilestone,
-        parentTaskId: edit ? edit.parentTaskId : parentId,
-        sortOrder: edit ? edit.sortOrder : siblingCount,
-        picUserId: edit?.picUserId ?? undefined, // preserve any legacy user-PIC
-        picResourceId: picResourceId || undefined,
-        description: description || null,
-        deliverable: deliverable || null,
-        acceptanceCriteria: acceptanceCriteria || null,
-        actualStart: actualStart || null,
-        actualFinish: actualFinish || null,
-      };
-      return edit ? api.put(`${base}/tasks/${edit.id}`, body) : api.post(`${base}/tasks`, body);
-    },
-    onSuccess: onSaved,
-    onError: (e) => setErr(e instanceof ApiError ? e.message : 'Failed to save'),
-  });
-
-  const title = edit ? 'Edit task' : parentId ? 'Add subtask' : 'Add task';
-  // A summary task's dates & % roll up from its subtasks, so they're not edited here.
-  const isParent = !!edit?.children?.length;
-
+  const [deliverable, setDeliverable] = useState(node.deliverable ?? '');
+  const [description, setDescription] = useState(node.description ?? '');
+  const [acceptance, setAcceptance] = useState(node.acceptanceCriteria ?? '');
+  const label = 'text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+  const inp = 'mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100';
+  // Commit a free-text field only when it actually changed (blank → null so it clears cleanly).
+  const commit = (field: string, value: string, current: string | null | undefined) => {
+    const v = value.trim() || null;
+    if (v !== (current ?? null)) onSave({ [field]: v });
+  };
   return (
-    <Modal onClose={onClose} title={title} size="lg" container={container}>
-        <div className="space-y-3">
-          <Field label="Task name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Requirements gathering" />
-          </Field>
-          {isParent ? (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              Dates &amp; % roll up automatically from this task’s subtasks.
-            </p>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Start"><Input type="date" value={planStart} onChange={(e) => setStart(e.target.value)} /></Field>
-                <Field label="Finish"><Input type="date" value={planEnd} onChange={(e) => setEnd(e.target.value)} /></Field>
-              </div>
-              <Field label={`% Complete (${progressPct}%)`}>
-                <input type="range" min={0} max={100} value={progressPct} onChange={(e) => setProgress(Number(e.target.value))} className="w-full accent-brand-600" />
-              </Field>
-              {/* Actual (tracking) dates — the real start/finish, independent of the plan. Blank = not
-                  recorded yet; clearing them reverts an accidental completion. */}
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Actual start">
-                  <Input type="date" value={actualStart} onChange={(e) => setActualStart(e.target.value)} />
-                </Field>
-                <Field label="Actual finish">
-                  <Input type="date" value={actualFinish} onChange={(e) => setActualFinish(e.target.value)} />
-                </Field>
-              </div>
-            </>
-          )}
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <input type="checkbox" checked={isMilestone} onChange={(e) => setMilestone(e.target.checked)} className="accent-brand-600" />
-            Milestone
-          </label>
-
-          {/* WBS dictionary */}
-          <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">WBS dictionary (optional)</div>
-            <div className="space-y-3">
-              <Field label="Owner (PIC)">
-                <Select value={picResourceId} onChange={(e) => setPic(e.target.value)}>
-                  <option value="">— unassigned —</option>
-                  {resourcesQ.data?.resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
-                </Select>
-              </Field>
-              <Field label="Deliverable"><Input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} placeholder="e.g. Signed-off design document" /></Field>
-              <Field label="Description / scope"><Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What this work package covers" /></Field>
-              <Field label="Acceptance criteria"><Textarea value={acceptanceCriteria} onChange={(e) => setAcceptance(e.target.value)} placeholder="Definition of done" /></Field>
-            </div>
-          </div>
-
-          {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}
-          <div className="flex gap-2 pt-1">
-            <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1" disabled={!name || !planStart || !planEnd || save.isPending} onClick={() => save.mutate()}>
-              {save.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-        </div>
-    </Modal>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="block">
+        <span className={label}>Owner (PIC)</span>
+        <select value={node.picResourceId ?? ''} onChange={(e) => onSave({ picResourceId: e.target.value || null })} className={inp} aria-label="Owner (PIC)">
+          <option value="">— unassigned —</option>
+          {resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
+        </select>
+      </label>
+      <label className="flex items-end gap-2 pb-1.5 text-sm text-slate-600 dark:text-slate-300 sm:self-end">
+        <input type="checkbox" checked={node.isMilestone} onChange={(e) => onSave({ isMilestone: e.target.checked })} className="mb-0.5 accent-brand-600" />
+        <span>Milestone <span className="text-slate-400 dark:text-slate-500">(zero-duration marker ◆)</span></span>
+      </label>
+      <label className="block sm:col-span-2">
+        <span className={label}>Deliverable</span>
+        <input value={deliverable} onChange={(e) => setDeliverable(e.target.value)} onBlur={() => commit('deliverable', deliverable, node.deliverable)}
+          placeholder="e.g. Signed-off design document" className={inp} />
+      </label>
+      <label className="block sm:col-span-2">
+        <span className={label}>Description / scope</span>
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => commit('description', description, node.description)}
+          rows={2} placeholder="What this work package covers" className={`${inp} resize-y`} />
+      </label>
+      <label className="block sm:col-span-2">
+        <span className={label}>Acceptance criteria</span>
+        <textarea value={acceptance} onChange={(e) => setAcceptance(e.target.value)} onBlur={() => commit('acceptanceCriteria', acceptance, node.acceptanceCriteria)}
+          rows={2} placeholder="Definition of done" className={`${inp} resize-y`} />
+      </label>
+    </div>
   );
 }
+
