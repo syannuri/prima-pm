@@ -304,6 +304,51 @@ function InlineName({ value, editable, done, depthZero, onSave }: {
   );
 }
 
+// A single entry in the row action menu (or a divider via `separator`).
+interface MenuEntry { label?: string; icon?: string; hint?: string; disabled?: boolean; danger?: boolean; separator?: boolean; onClick?: () => void; }
+
+// Right-click / ⋮ row action menu. Fixed-positioned at (x,y), clamped to the viewport, closes on
+// outside-click / Esc / resize. Rendered inside the panel tree so it also paints in native
+// full-screen (where only the full-screen element's subtree is visible).
+function RowMenu({ x, y, items, onClose }: { x: number; y: number; items: MenuEntry[]; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number }>({ left: x, top: y });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const left = Math.max(8, Math.min(x, window.innerWidth - r.width - 8));
+    const top = Math.max(8, Math.min(y, window.innerHeight - r.height - 8));
+    setPos({ left, top });
+  }, [x, y]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onClose);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onClose); };
+  }, [onClose]);
+  return (
+    <>
+      {/* Invisible backdrop — a click (or another right-click) anywhere dismisses the menu. */}
+      <div className="fixed inset-0 z-[59]" onMouseDown={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
+      <div ref={ref} role="menu" style={{ left: pos.left, top: pos.top }}
+        className="fixed z-[60] min-w-[11rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-800">
+        {items.map((it, i) => it.separator ? (
+          <div key={i} className="my-1 border-t border-slate-100 dark:border-slate-700" />
+        ) : (
+          <button key={i} type="button" role="menuitem" disabled={it.disabled}
+            onClick={() => { if (!it.disabled) { it.onClick?.(); onClose(); } }}
+            className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition disabled:cursor-default disabled:opacity-40 ${it.danger ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700'}`}>
+            <span className="w-4 shrink-0 text-center text-xs">{it.icon}</span>
+            <span className="flex-1">{it.label}</span>
+            {it.hint && <span className="text-[10px] text-slate-400 dark:text-slate-500">{it.hint}</span>}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
 // The date a new task should default to starting: the latest planEnd among its would-be
 // siblings (same parent), else the latest planEnd across the whole WBS, else null (today).
 // Keeps newly added tasks running sequentially instead of all starting on the same day.
@@ -588,10 +633,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const toggleFullscreen = () => { fullscreen ? exitFullscreen() : enterFullscreen(); };
   // Timeline (Gantt) column is collapsible — hiding it gives the widened 4-date table room.
   const [showGantt, setShowGantt] = useState(true);
-  // Date/budget columns (Plan·Actual Start/Finish, Dur, Budget) are OFF by default so the
-  // frozen ✓/WBS/Task pane + the timeline get the room — the Gantt bars already encode the
-  // plan-vs-actual dates. Toggle on for the full spreadsheet view.
-  const [showDates, setShowDates] = useState(false);
+  // Date/budget columns (Plan·Actual Start/Finish, Dur, Budget) show by DEFAULT — PMs expect the
+  // full spreadsheet view up front; toggle off for a wider, bars-only timeline.
+  const [showDates, setShowDates] = useState(true);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
@@ -635,9 +679,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
 
   // Inline "add subtask" draft row (monday.com style) — rendered under its parent row.
   const [draft, setDraft] = useState<{ parentId: string | null; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
-  // Base = ✓ WBS Task Owner % Status Var (7); +6 date/budget cols when shown; + Actions (editors)
-  // + the Gantt column (when shown).
-  const colCount = (showDates ? 13 : 7) + (canEdit ? 1 : 0) + (showGantt ? 1 : 0);
+  // Right-click / ⋮ row action menu (indent · outdent · add subtask · edit details · delete).
+  // Replaces the old Actions column — anchored at the pointer (right-click) or the ⋮ button.
+  const [menu, setMenu] = useState<{ node: GanttNode; x: number; y: number } | null>(null);
+  const openRowMenu = (node: GanttNode, x: number, y: number) => { if (canEdit) setMenu({ node, x, y }); };
+  // Base = ✓ WBS Task Owner % Status Var (7); +6 date/budget cols when shown; + the Gantt column
+  // (when shown). No Actions column anymore — row actions live in the right-click / ⋮ menu.
+  const colCount = (showDates ? 13 : 7) + (showGantt ? 1 : 0);
   // Resource pool for the inline owner picker + add-subtask draft (editors only).
   const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources'), enabled: canEdit });
   const resources = resourcesQ.data?.resources ?? [];
@@ -1034,7 +1082,6 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
                 <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">Status</th>
                 <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Finish variance vs baseline (days)">Var</th>
-                {canEdit && <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Actions</th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
                 {showGantt && (
                   <th ref={timelineRef} rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">
@@ -1115,7 +1162,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 const togglingId = progress.isPending && progress.variables?.id === node.id;
                 return (
                   <Fragment key={node.id}>
-                  <tr className={`group [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 ${alt ? 'bg-slate-50/70 dark:bg-slate-800/30' : ''} hover:bg-slate-100 dark:hover:bg-slate-800/60`}>
+                  <tr
+                    onContextMenu={(e) => {
+                      // Right-click a task row → the action menu. Skip when the target is a form field
+                      // (date/owner/% inline editors) so their native context menu still works.
+                      if (!canEdit || (e.target as HTMLElement).closest('input,select,textarea')) return;
+                      e.preventDefault();
+                      openRowMenu(node, e.clientX, e.clientY);
+                    }}
+                    className={`group [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 ${alt ? 'bg-slate-50/70 dark:bg-slate-800/30' : ''} hover:bg-slate-100 dark:hover:bg-slate-800/60`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
@@ -1136,6 +1191,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <InlineName value={node.name} editable={canPlan} done={r.pct >= 100} depthZero={depth === 0} onSave={(name) => patchTask.mutate({ node, patch: { name } })} />
                         {isCollapsed && hasKids && <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">⋯</span>}
                         {isCritical && <span className="shrink-0 text-[10px] font-bold text-red-500" title="On the critical path — a slip here delays the whole project">▲ CP</span>}
+                        {canEdit && (
+                          // Actions affordance: opens the same menu as right-click. Always visible on
+                          // touch (no right-click there); hover-reveal on desktop to keep the row clean.
+                          <button type="button" title="Task actions — or right-click the row"
+                            onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); openRowMenu(node, rect.left, rect.bottom + 4); }}
+                            className={`ml-auto grid h-5 w-5 shrink-0 place-items-center rounded text-slate-400 transition hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>⋮</button>
+                        )}
                       </span>
                     </td>
                     <td>{canEdit
@@ -1198,22 +1260,6 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         </span>
                       )}
                     </td>
-                    {canEdit && (
-                      <td className="whitespace-nowrap text-right text-xs">
-                        {/* Hover-reveal to declutter the dense grid; focus-within keeps keyboard access. */}
-                        <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
-                          {canPlan && (
-                            <>
-                              <button onClick={() => outdentTask(node)} disabled={!canOutdent(node)} className="mr-1 rounded px-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-default disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800" title="Outdent — promote one level (←)">⇤</button>
-                              <button onClick={() => indentTask(node)} disabled={!canIndent(node)} className="mr-2 rounded px-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-default disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800" title="Indent — make a subtask of the task above (→)">⇥</button>
-                            </>
-                          )}
-                          <button onClick={() => setDraft({ parentId: node.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(node.planStart)), planEnd: formatDateInput(new Date(node.planEnd)) })} className="text-brand-600 hover:underline" title="Add a subtask inline">+ Sub</button>
-                          <button onClick={() => toggle(node.id)} className="ml-2 text-slate-500 hover:underline dark:text-slate-400" title="Edit dictionary, scope & acceptance inline">{isOpen ? 'Close' : 'Details'}</button>
-                          <button onClick={async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{node.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true, container: modalContainer })) del.mutate(node.id); }} className="ml-2 text-red-500 hover:underline">Del</button>
-                        </span>
-                      </td>
-                    )}
                     {showGantt && (
                     <td>
                       <div
@@ -1383,6 +1429,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             <span className="flex items-center gap-1.5"><svg width="26" height="8" className="overflow-visible"><line x1="1" y1="4" x2="20" y2="4" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" markerEnd={`url(#arrow-${uid})`} /></svg>Dependency (FS)</span>
             {canDrag && <span className="text-slate-400 dark:text-slate-500">· drag a bar to reschedule</span>}
             {canPlan && <span className="text-slate-400 dark:text-slate-500">· use the ⛓ handle to link tasks</span>}
+            {canEdit && <span className="text-slate-400 dark:text-slate-500">· right-click a task (or ⋮) for subtask / indent / delete</span>}
             {canPlan && baselinedAt && <span className="text-amber-600 dark:text-amber-400">· schedule baselined — reschedule via a change request</span>}
             {baselineLocked && <span className="text-amber-600 dark:text-amber-400">· baseline locked — unlock to edit the schedule</span>}
           </div>
@@ -1390,6 +1437,24 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
       )}
 
       {del.isError && <p className="mt-2 text-sm text-red-600">{(del.error as Error).message}</p>}
+
+      {menu && (
+        <RowMenu
+          x={menu.x} y={menu.y} onClose={() => setMenu(null)}
+          items={(() => {
+            const n = menu.node;
+            return [
+              { label: 'Add subtask', icon: '＋', disabled: !canPlan, onClick: () => setDraft({ parentId: n.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(n.planStart)), planEnd: formatDateInput(new Date(n.planEnd)) }) },
+              { label: expanded.has(n.id) ? 'Close details' : 'Edit details', icon: '✎', onClick: () => toggle(n.id) },
+              { separator: true },
+              { label: 'Indent', icon: '⇥', hint: 'make subtask', disabled: !canPlan || !canIndent(n), onClick: () => indentTask(n) },
+              { label: 'Outdent', icon: '⇤', hint: 'promote', disabled: !canPlan || !canOutdent(n), onClick: () => outdentTask(n) },
+              { separator: true },
+              { label: 'Delete', icon: '🗑', danger: true, disabled: !canPlan, onClick: async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{n.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true, container: modalContainer })) del.mutate(n.id); } },
+            ];
+          })()}
+        />
+      )}
     </Card>
     </div>
   );
@@ -1457,9 +1522,9 @@ function DictionaryView({ node }: { node: GanttNode }) {
   );
 }
 
-// Inline "add subtask" row (monday.com style) — editable name / owner / plan dates in-column;
-// Enter saves & keeps the row open for the next sibling, Esc cancels. The remaining columns
-// merge into a single Save/Cancel cell (a fresh task has no actuals/budget/status yet).
+// Inline add-task / add-subtask row (monday.com style) — editable name / owner / plan dates
+// in-column; Enter saves & keeps the row open for the next sibling, Esc cancels. The Save/Cancel
+// buttons sit RIGHT NEXT TO the name (in the Task cell) so the confirm action is where the eye is.
 function DraftRow({ draft, depth, colCount, showDates, resources, saving, topLevel, onChange, onCancel, onSave }: {
   draft: { name: string; picResourceId: string; planStart: string; planEnd: string };
   depth: number; colCount: number; showDates: boolean; resources: ResourceItem[]; saving: boolean;
@@ -1474,11 +1539,16 @@ function DraftRow({ draft, depth, colCount, showDates, resources, saving, topLev
       <td className="text-center text-brand-500">＋</td>
       <td className="font-mono text-[10px] uppercase text-brand-500">new</td>
       <td>
-        <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center">
+        <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
           <input autoFocus value={draft.name} placeholder={`${kind} name…`} aria-label={`${kind} name`}
             onChange={(e) => onChange({ name: e.target.value })}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSave(); } else if (e.key === 'Escape') onCancel(); }}
-            className={inp} />
+            className={`${inp} min-w-[6rem] flex-1`} />
+          {/* Save/Cancel right beside the name — the confirm action is near the task, not off-screen. */}
+          <button disabled={!draft.name.trim() || saving} onClick={onSave} title="Save (Enter)"
+            className="shrink-0 rounded bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-40">{saving ? 'Saving…' : 'Save'}</button>
+          <button onClick={onCancel} title="Cancel (Esc)"
+            className="shrink-0 rounded border border-slate-200 px-1.5 py-1 text-xs text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800" aria-label="Cancel">✕</button>
         </span>
       </td>
       <td>
@@ -1488,14 +1558,14 @@ function DraftRow({ draft, depth, colCount, showDates, resources, saving, topLev
         </select>
       </td>
       {/* Spreadsheet view: plan dates align under their own columns. Lean view: the date pickers
-          move into the action cell so a subtask's dates are still settable. */}
+          move into the trailing cell so a task's dates are still settable. */}
       {showDates && (
         <>
           <td><input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} text-right`} aria-label={`${kind} plan start`} /></td>
           <td><input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} text-right`} aria-label={`${kind} plan finish`} /></td>
         </>
       )}
-      <td colSpan={Math.max(1, colCount - (showDates ? 6 : 4))} className="whitespace-nowrap text-right text-xs">
+      <td colSpan={Math.max(1, colCount - (showDates ? 6 : 4))} className="whitespace-nowrap text-right text-[11px] text-slate-400 dark:text-slate-500">
         {!showDates && (
           <span className="mr-2 inline-flex items-center gap-1 align-middle">
             <input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} w-32 text-right`} aria-label={`${kind} plan start`} title="Plan start" />
@@ -1503,9 +1573,7 @@ function DraftRow({ draft, depth, colCount, showDates, resources, saving, topLev
             <input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} w-32 text-right`} aria-label={`${kind} plan finish`} title="Plan finish" />
           </span>
         )}
-        <span className="mr-2 hidden text-[11px] text-slate-400 sm:inline dark:text-slate-500">Enter=save · Esc=cancel</span>
-        <button disabled={!draft.name.trim() || saving} onClick={onSave} className="rounded bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-40">{saving ? 'Saving…' : 'Save'}</button>
-        <button onClick={onCancel} className="ml-2 rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Cancel</button>
+        <span className="hidden sm:inline">Enter = save · Esc = cancel</span>
       </td>
     </tr>
   );
