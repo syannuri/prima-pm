@@ -681,7 +681,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   }, [rows.length]);
 
   // Inline "add subtask" draft row (monday.com style) — rendered under its parent row.
-  const [draft, setDraft] = useState<{ parentId: string | null; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
+  // `afterId` = insert this new task right AFTER that row (the inline "+" between rows); the row
+  // becomes a sibling (parentId = that row's parent). Absent → a subtask (parentId=node) or the
+  // first/top-level task (parentId=null, empty state).
+  const [draft, setDraft] = useState<{ parentId: string | null; afterId?: string; name: string; picResourceId: string; planStart: string; planEnd: string } | null>(null);
+  // Open an inline draft to insert a task after `node` (same level = a sibling). Start date defaults
+  // to the row's finish so it sorts right after it (rows order by date).
+  const insertAfter = (node: GanttNode, endMs: number) => setDraft({
+    parentId: node.parentTaskId, afterId: node.id, name: '', picResourceId: '',
+    planStart: formatDateInput(new Date(endMs)), planEnd: formatDateInput(new Date(endMs + DEFAULT_TASK_DAYS * day)),
+  });
   // Right-click / ⋮ row action menu (indent · outdent · add subtask · edit details · delete).
   // Replaces the old Actions column — anchored at the pointer (right-click) or the ⋮ button.
   const [menu, setMenu] = useState<{ node: GanttNode; x: number; y: number } | null>(null);
@@ -981,12 +990,6 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {baseline.isPending ? 'Saving…' : baselinedAt ? 'Re-baseline' : 'Set Baseline'}
             </Button>
           )}
-          {canEdit && (
-            <Button onClick={() => {
-              const s = nextTaskStart(rows, null) ?? new Date();
-              setDraft({ parentId: null, name: '', picResourceId: '', planStart: formatDateInput(s), planEnd: formatDateInput(new Date(s.getTime() + DEFAULT_TASK_DAYS * day)) });
-            }}>+ Add Task</Button>
-          )}
         </div>
         {!fullscreen && rows.length > 0 && <ProgressRing pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
         </div>
@@ -1006,9 +1009,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </tbody></table>
           ) : (
             <>
-              <p className="text-center text-slate-500 dark:text-slate-400">
-                No work packages yet.{canEdit ? ' Start from a template below, or click “+ Add Task”.' : ''}
-              </p>
+              <p className="text-center text-slate-500 dark:text-slate-400">No work packages yet.</p>
+              {canEdit && (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    onClick={() => { const s = nextTaskStart(rows, null) ?? new Date(); setDraft({ parentId: null, name: '', picResourceId: '', planStart: formatDateInput(s), planEnd: formatDateInput(new Date(s.getTime() + DEFAULT_TASK_DAYS * day)) }); }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100 dark:border-brand-700 dark:bg-brand-900/20 dark:text-brand-300 dark:hover:bg-brand-900/40">
+                    + Add first task
+                  </button>
+                </div>
+              )}
               {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
             </>
           )}
@@ -1180,7 +1190,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </div>
                     </td>
                     <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>
-                    <td style={frozenLeft(88)} className={`${frozenTd} ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
+                    <td style={frozenLeft(88)} className={`${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-20 ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         {hasKids && (
                           <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
@@ -1202,6 +1212,15 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             className={`ml-auto grid h-5 w-5 shrink-0 place-items-center rounded text-slate-400 transition hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>⋮</button>
                         )}
                       </span>
+                      {/* Inline insert: a "+" straddling the row's bottom edge (in the Task column) —
+                          hover-reveal; click to add a task right after this row (same level). The td
+                          is sticky (=positioned) so this absolute button anchors to it. */}
+                      {canPlan && (
+                        <button type="button" title="Add a task here"
+                          onClick={(e) => { e.stopPropagation(); insertAfter(node, r.end); }}
+                          style={{ left: 8 + depth * 18 }}
+                          className={`absolute -bottom-2.5 z-[15] grid h-5 w-5 place-items-center rounded-full border border-brand-300 bg-white text-sm font-semibold leading-none text-brand-600 shadow-sm transition hover:scale-110 hover:bg-brand-50 dark:border-brand-600 dark:bg-slate-800 dark:text-brand-300 dark:hover:bg-brand-900/40 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
+                      )}
                     </td>
                     <td>{canEdit
                       ? <InlineOwner name={node.picResource?.name ?? node.pic?.name} resourceId={node.picResourceId ?? null} editable resources={resources} onSave={(id) => patchTask.mutate({ node, patch: { picResourceId: id } })} />
@@ -1367,7 +1386,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </td>
                     </tr>
                   )}
-                  {draft?.parentId === node.id && (
+                  {/* Subtask draft (right-click → Add subtask): renders as this node's first child. */}
+                  {draft?.parentId === node.id && !draft.afterId && (
                     <DraftRow
                       draft={draft} depth={depth + 1} colCount={colCount} showDates={showDates} resources={resources} saving={createSub.isPending}
                       onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
@@ -1375,18 +1395,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: node.children.length }); }}
                     />
                   )}
+                  {/* Inline "+" insert: renders right AFTER this row, as a same-level sibling. */}
+                  {draft?.afterId === node.id && (
+                    <DraftRow
+                      draft={draft} depth={depth} colCount={colCount} showDates={showDates} resources={resources} saving={createSub.isPending} topLevel={draft.parentId === null}
+                      onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
+                      onCancel={() => setDraft(null)}
+                      onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: (node.sortOrder ?? 0) + 1 }); }}
+                    />
+                  )}
                   </Fragment>
                 );
               })}
-              {/* Inline "+ Add Task" draft — a new top-level work package, filled straight in the grid. */}
-              {draft && draft.parentId === null && (
-                <DraftRow
-                  draft={draft} depth={0} colCount={colCount} showDates={showDates} resources={resources} saving={createSub.isPending} topLevel
-                  onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
-                  onCancel={() => setDraft(null)}
-                  onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: ganttQ.data?.tree.length ?? 0 }); }}
-                />
-              )}
             </tbody>
           </table>
           </div>
