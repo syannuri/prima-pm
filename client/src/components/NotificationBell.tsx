@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -109,17 +110,38 @@ export default function NotificationBell() {
     });
   }
 
-  // Keyboard dismissal: Escape closes the open dropdown.
+  // The dropdown is PORTALED to <body> so it escapes the app-shell stacking context — the header
+  // is only z-10, so the sticky project tab strip (z-[31]) painted OVER an in-header dropdown no
+  // matter its own z-index (same reason AvatarMenu portals). Portaled + z-[61] it sits in the root
+  // layer. Position = fixed coords from the bell's rect: a right-anchored w-80 card on sm+, a
+  // full-width sheet pinned under the header on phones.
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<CSSProperties>({});
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const gap = 8, m = 8;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const maxHeight = vh - (r.bottom + gap) - m;
+    setPos(window.matchMedia('(min-width: 640px)').matches
+      ? { position: 'fixed', top: r.bottom + gap, right: Math.max(m, vw - r.right), width: '20rem', maxHeight }
+      : { position: 'fixed', top: r.bottom + gap, left: m, right: m, maxHeight });
+  }, [open]);
+
+  // Keyboard dismissal + close on resize/orientation change (the fixed coords would go stale).
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onResize = () => setOpen(false);
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    return () => { document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
   }, [open]);
 
   return (
     <div className="relative">
       <button
+        ref={btnRef}
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -154,11 +176,12 @@ export default function NotificationBell() {
         </button>
       )}
 
-      {open && (
+      {open && createPortal(
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          {/* Mobile: pinned below the header, full width with margins (a right-anchored w-80 ran off-screen left). sm+: dropdown under the bell. */}
-          <div className="prima-toast fixed inset-x-2 top-[calc(3.5rem+env(safe-area-inset-top))] z-20 max-h-[75vh] w-auto overflow-y-auto rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[80vh] sm:w-80">
+          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+          {/* Portaled to <body> + fixed coords (see btnRef effect): a right-anchored w-80 card on
+              sm+, a full-width sheet under the header on phones — sits above the sticky tab strip. */}
+          <div style={pos} className="prima-toast z-[61] overflow-y-auto rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90">
             {/* Personal inbox — assignment & other discrete events */}
             {!!inbox?.items.length && (
               <div className="mb-3">
@@ -247,7 +270,8 @@ export default function NotificationBell() {
               </div>
             )}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
