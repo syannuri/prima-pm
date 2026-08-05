@@ -947,7 +947,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             // First task: an inline draft row (same monday.com-style editor as add-subtask) — no popup.
             <table className="w-full text-sm"><tbody>
               <DraftRow
-                draft={draft} depth={0} colCount={4} showDates={false} resources={resources} saving={createSub.isPending}
+                draft={draft} depth={0} colCount={4} showDates={false} resources={resources} saving={createSub.isPending} topLevel
                 onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
                 onCancel={() => setDraft(null)}
                 onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: 0 }); }}
@@ -1332,7 +1332,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {/* Inline "+ Add Task" draft — a new top-level work package, filled straight in the grid. */}
               {draft && draft.parentId === null && (
                 <DraftRow
-                  draft={draft} depth={0} colCount={colCount} showDates={showDates} resources={resources} saving={createSub.isPending}
+                  draft={draft} depth={0} colCount={colCount} showDates={showDates} resources={resources} saving={createSub.isPending} topLevel
                   onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
                   onCancel={() => setDraft(null)}
                   onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: ganttQ.data?.tree.length ?? 0 }); }}
@@ -1460,27 +1460,29 @@ function DictionaryView({ node }: { node: GanttNode }) {
 // Inline "add subtask" row (monday.com style) — editable name / owner / plan dates in-column;
 // Enter saves & keeps the row open for the next sibling, Esc cancels. The remaining columns
 // merge into a single Save/Cancel cell (a fresh task has no actuals/budget/status yet).
-function DraftRow({ draft, depth, colCount, showDates, resources, saving, onChange, onCancel, onSave }: {
+function DraftRow({ draft, depth, colCount, showDates, resources, saving, topLevel, onChange, onCancel, onSave }: {
   draft: { name: string; picResourceId: string; planStart: string; planEnd: string };
   depth: number; colCount: number; showDates: boolean; resources: ResourceItem[]; saving: boolean;
+  topLevel?: boolean; // a new top-level task (via "+ Add Task") vs a subtask (via "+ Sub")
   onChange: (patch: Partial<{ name: string; picResourceId: string; planStart: string; planEnd: string }>) => void;
   onCancel: () => void; onSave: () => void;
 }) {
   const inp = 'w-full rounded border border-brand-300 bg-white px-1.5 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100';
+  const kind = topLevel ? 'Task' : 'Subtask';
   return (
     <tr className="bg-brand-50/40 dark:bg-brand-900/10 [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3">
       <td className="text-center text-brand-500">＋</td>
       <td className="font-mono text-[10px] uppercase text-brand-500">new</td>
       <td>
         <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center">
-          <input autoFocus value={draft.name} placeholder="Subtask name…" aria-label="Subtask name"
+          <input autoFocus value={draft.name} placeholder={`${kind} name…`} aria-label={`${kind} name`}
             onChange={(e) => onChange({ name: e.target.value })}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSave(); } else if (e.key === 'Escape') onCancel(); }}
             className={inp} />
         </span>
       </td>
       <td>
-        <select value={draft.picResourceId} onChange={(e) => onChange({ picResourceId: e.target.value })} className={`${inp} max-w-[10rem]`} aria-label="Subtask owner">
+        <select value={draft.picResourceId} onChange={(e) => onChange({ picResourceId: e.target.value })} className={`${inp} max-w-[10rem]`} aria-label={`${kind} owner`}>
           <option value="">— owner —</option>
           {resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
         </select>
@@ -1489,16 +1491,16 @@ function DraftRow({ draft, depth, colCount, showDates, resources, saving, onChan
           move into the action cell so a subtask's dates are still settable. */}
       {showDates && (
         <>
-          <td><input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan start" /></td>
-          <td><input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} text-right`} aria-label="Subtask plan finish" /></td>
+          <td><input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} text-right`} aria-label={`${kind} plan start`} /></td>
+          <td><input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} text-right`} aria-label={`${kind} plan finish`} /></td>
         </>
       )}
       <td colSpan={Math.max(1, colCount - (showDates ? 6 : 4))} className="whitespace-nowrap text-right text-xs">
         {!showDates && (
           <span className="mr-2 inline-flex items-center gap-1 align-middle">
-            <input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} w-32 text-right`} aria-label="Subtask plan start" title="Plan start" />
+            <input type="date" value={draft.planStart} onChange={(e) => onChange({ planStart: e.target.value })} className={`${inp} w-32 text-right`} aria-label={`${kind} plan start`} title="Plan start" />
             <span className="text-slate-400">→</span>
-            <input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} w-32 text-right`} aria-label="Subtask plan finish" title="Plan finish" />
+            <input type="date" value={draft.planEnd} onChange={(e) => onChange({ planEnd: e.target.value })} className={`${inp} w-32 text-right`} aria-label={`${kind} plan finish`} title="Plan finish" />
           </span>
         )}
         <span className="mr-2 hidden text-[11px] text-slate-400 sm:inline dark:text-slate-500">Enter=save · Esc=cancel</span>
