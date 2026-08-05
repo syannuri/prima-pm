@@ -14,6 +14,25 @@ interface AttentionItem {
   severity: 'HIGH' | 'MEDIUM' | 'LOW';
   tab: string;
   message: string;
+  key: string; // dismissal signature — POST to follow it up
+}
+
+// Small ✓ "followed up" action shared by both lists — hides the item (re-appears for a live alert
+// only if it changes).
+function FollowUpButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}
+      title="Mark as followed up"
+      aria-label="Mark as followed up"
+      className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-slate-400 transition hover:bg-emerald-100 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400"
+    >
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 10.5l4 4 8-9" />
+      </svg>
+    </button>
+  );
 }
 interface Attention { items: AttentionItem[]; total: number; high: number }
 interface ChangeItem { id: string; area: string; action: string; projectId: string | null; projectCode: string; projectName: string; by: string; byRole: string | null; at: string; isNew: boolean }
@@ -63,9 +82,15 @@ export default function NotificationBell() {
     mutationFn: () => api.post('/notifications/changes/seen', {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['changes'] }),
   });
-  const markInboxSeen = useMutation({
-    mutationFn: () => api.post('/notifications/inbox/seen', {}),
+  // Follow up (✓) ONE "For you" item — it's marked done and won't return.
+  const followUpInbox = useMutation({
+    mutationFn: (id: string) => api.post(`/notifications/inbox/${id}/read`, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+  });
+  // Follow up (✓) ONE "Needs attention" alert — hidden until it changes (new signature).
+  const followUpAttn = useMutation({
+    mutationFn: (signature: string) => api.post('/notifications/attention/dismiss', { signature }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attention'] }),
   });
 
   const alertTotal = attn?.total ?? 0;
@@ -104,8 +129,9 @@ export default function NotificationBell() {
   function toggle() {
     setOpen((o) => {
       const next = !o;
+      // The "Recent changes" feed still clears its unread badge on open; the "For you" inbox no
+      // longer auto-clears — items stay until each is followed up (✓).
       if (next && unread > 0 && !markSeen.isPending) markSeen.mutate();
-      if (next && inboxUnread > 0 && !markInboxSeen.isPending) markInboxSeen.mutate();
       return next;
     });
   }
@@ -188,11 +214,9 @@ export default function NotificationBell() {
                 <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">For you</div>
                 <ul className="space-y-0.5">
                   {inbox.items.slice(0, 6).map((n) => {
-                    const isNew = !n.readAt && inboxUnread > 0;
                     const inner = (
-                      <div className={`rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/70 ${isNew ? 'bg-brand-50/70 dark:bg-brand-600/15' : ''}`}>
+                      <div className="rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/70">
                         <div className="flex items-center gap-1.5">
-                          {isNew && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" title="New" />}
                           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{n.title}</span>
                           <span className="ml-auto shrink-0 text-[10px] text-slate-500 dark:text-slate-400">{formatDate(n.createdAt)}</span>
                         </div>
@@ -200,10 +224,13 @@ export default function NotificationBell() {
                       </div>
                     );
                     return (
-                      <li key={n.id}>
-                        {n.type === 'ORG_SIGNUP_PENDING'
-                          ? <Link to="/admin/tenants" onClick={() => setOpen(false)} className="block">{inner}</Link>
-                          : n.projectId ? <Link to={`/projects/${n.projectId}${n.type === 'ACTIVATION_READY' ? '?review=activation' : ''}`} onClick={() => setOpen(false)} className="block">{inner}</Link> : inner}
+                      <li key={n.id} className="flex items-center gap-1">
+                        <div className="min-w-0 flex-1">
+                          {n.type === 'ORG_SIGNUP_PENDING'
+                            ? <Link to="/admin/tenants" onClick={() => setOpen(false)} className="block">{inner}</Link>
+                            : n.projectId ? <Link to={`/projects/${n.projectId}${n.type === 'ACTIVATION_READY' ? '?review=activation' : ''}`} onClick={() => setOpen(false)} className="block">{inner}</Link> : inner}
+                        </div>
+                        <FollowUpButton onClick={() => followUpInbox.mutate(n.id)} />
                       </li>
                     );
                   })}
@@ -224,17 +251,18 @@ export default function NotificationBell() {
             ) : (
               <ul className="max-h-72 space-y-0.5 overflow-y-auto">
                 {attn.items.map((it, i) => (
-                  <li key={i}>
+                  <li key={it.key ?? i} className="flex items-center gap-1">
                     <Link
                       to={`/projects/${it.projectId}`}
                       onClick={() => setOpen(false)}
-                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
                     >
                       <span className={`h-2 w-2 shrink-0 rounded-full ${SEV_DOT[it.severity] ?? 'bg-slate-400'}`} title={it.severity} />
                       <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ATTN_AREA[it.tab] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{it.tab}</span>
                       <span className="truncate text-sm text-slate-700 dark:text-slate-200" title={it.message}>{it.message}</span>
                       <span className="ml-auto shrink-0 font-mono text-[11px] text-slate-500 dark:text-slate-400">{it.projectCode}</span>
                     </Link>
+                    <FollowUpButton onClick={() => followUpAttn.mutate(it.key)} />
                   </li>
                 ))}
               </ul>

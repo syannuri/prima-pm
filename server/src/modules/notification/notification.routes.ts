@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { getAttentionItems, getInbox, getPendingApprovals, getPortfolioAlerts, getRecentChanges, markChangesSeen, markInboxSeen } from './notification.service.js';
+import { dismissAttention, getAttentionItems, getInbox, getPendingApprovals, getPortfolioAlerts, getRecentChanges, markChangesSeen, markInboxSeen, markNotificationRead } from './notification.service.js';
 
 // Portfolio-wide alerts for the header bell. Mounted at /api/v1/notifications.
 const router = Router();
@@ -43,6 +43,16 @@ router.get(
   }),
 );
 
+// Follow up (dismiss) one live attention item — re-appears only if the alert changes (new signature).
+const dismissSchema = z.object({ signature: z.string().min(1).max(128) });
+router.post(
+  '/attention/dismiss',
+  asyncHandler(async (req, res) => {
+    const { signature } = dismissSchema.parse(req.body);
+    res.json(await dismissAttention(req.user!.id, signature));
+  }),
+);
+
 // Personal inbox — discrete events for the current user (e.g. project assignment).
 router.get(
   '/inbox',
@@ -54,6 +64,13 @@ router.post(
   '/inbox/seen',
   asyncHandler(async (req, res) => {
     res.json(await markInboxSeen(req.user!.id));
+  }),
+);
+// Follow up (mark done) ONE inbox notification (✓) — it won't come back.
+router.post(
+  '/inbox/:id/read',
+  asyncHandler(async (req, res) => {
+    res.json(await markNotificationRead(req.user!.id, req.params.id));
   }),
 );
 

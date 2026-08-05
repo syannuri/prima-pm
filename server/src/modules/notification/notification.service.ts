@@ -1,9 +1,17 @@
 import type { Prisma, Role } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 
 const GLOBAL_ROLES: Role[] = ['ADMIN', 'PMO'];
+// Stable identity of a live "Needs attention" alert for the per-user dismissal store. The message
+// encodes the alert's magnitude (days overdue, Rp overrun, severity), so a worsening alert yields a
+// DIFFERENT signature → a followed-up alert re-appears when it changes.
+const alertSignature = (projectId: string, type: string, message: string) =>
+  createHash('sha256').update(`${projectId}|${type}|${message}`).digest('hex');
 const dec = (v: Prisma.Decimal | number | null | undefined): number => (v == null ? 0 : Number(v));
 const DAY = 86_400_000;
+// Prune dismissals this old so the table can't grow unbounded (old signatures never match again).
+const DISMISSAL_TTL = 60 * DAY;
 
 export type AlertType = 'OVERDUE_TASK' | 'HIGH_RISK' | 'BUDGET_OVERRUN' | 'OVERSPEND';
 export type AlertSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -200,12 +208,18 @@ export async function createNotification(input: { userId: string; type: string; 
   }
 }
 
+// The inbox shows only items NOT yet followed up (readAt = the "followed up / done" marker, set
+// per-item via the ✓ button). A handled item never comes back.
 export async function getInbox(userId: string, limit = 20) {
-  const [items, unread] = await Promise.all([
-    prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: Math.min(limit, 50) }),
-    prisma.notification.count({ where: { userId, readAt: null } }),
-  ]);
-  return { items, unread };
+  const items = await prisma.notification.findMany({ where: { userId, readAt: null }, orderBy: { createdAt: 'desc' }, take: Math.min(limit, 50) });
+  return { items, unread: items.length };
+}
+
+// Mark ONE inbox notification followed up (✓). Scoped to the caller so nobody can clear another
+// user's inbox.
+export async function markNotificationRead(userId: string, id: string) {
+  await prisma.notification.updateMany({ where: { id, userId }, data: { readAt: new Date() } });
+  return { ok: true };
 }
 
 export async function markInboxSeen(userId: string) {
@@ -285,6 +299,19 @@ export interface AttentionItem {
   severity: AlertSeverity;
   tab: string;
   message: string;
+  key: string; // dismissal signature (POST /attention/dismiss to follow it up)
+}
+
+// Record that the caller has followed up an attention item (✓). Idempotent; only re-appears if the
+// underlying alert changes (→ new signature). Best-effort prune of stale dismissals.
+export async function dismissAttention(userId: string, signature: string) {
+  await prisma.alertDismissal.upsert({
+    where: { userId_signature: { userId, signature } },
+    create: { userId, signature },
+    update: {},
+  });
+  await prisma.alertDismissal.deleteMany({ where: { userId, createdAt: { lt: new Date(Date.now() - DISMISSAL_TTL) } } });
+  return { ok: true };
 }
 
 export async function getAttentionItems(userId: string, role: string, now: Date) {
@@ -299,9 +326,10 @@ export async function getAttentionItems(userId: string, role: string, now: Date)
   const inputs = await loadAlertInputs(projects.map((p) => p.id));
 
   const items: AttentionItem[] = [];
+  const push = (i: Omit<AttentionItem, 'key'>) => items.push({ ...i, key: alertSignature(i.projectId, i.type, i.message) });
   projects.forEach((p) => {
     for (const a of computeAlerts(inputs.get(p.id)!, now).alerts) {
-      items.push({ projectId: p.id, projectCode: p.code, projectName: p.name, type: a.type, severity: a.severity, tab: a.tab, message: a.message });
+      push({ projectId: p.id, projectCode: p.code, projectName: p.name, type: a.type, severity: a.severity, tab: a.tab, message: a.message });
     }
   });
 
@@ -311,10 +339,14 @@ export async function getAttentionItems(userId: string, role: string, now: Date)
     select: { title: true, projectId: true, project: { select: { code: true, name: true } } },
   });
   for (const cr of crs) {
-    items.push({ projectId: cr.projectId, projectCode: cr.project.code, projectName: cr.project.name, type: 'CHANGE_REQUEST', severity: 'MEDIUM', tab: 'Change Req', message: `Change request “${cr.title}” awaiting a decision` });
+    push({ projectId: cr.projectId, projectCode: cr.project.code, projectName: cr.project.name, type: 'CHANGE_REQUEST', severity: 'MEDIUM', tab: 'Change Req', message: `Change request “${cr.title}” awaiting a decision` });
   }
 
+  // Drop items the caller has already followed up (✓) — unless the alert changed (→ new signature).
+  const dismissed = new Set((await prisma.alertDismissal.findMany({ where: { userId }, select: { signature: true } })).map((d) => d.signature));
+  const visible = dismissed.size ? items.filter((i) => !dismissed.has(i.key)) : items;
+
   const rank: Record<AlertSeverity, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-  items.sort((a, b) => rank[a.severity] - rank[b.severity]);
-  return { items, total: items.length, high: items.filter((i) => i.severity === 'HIGH').length };
+  visible.sort((a, b) => rank[a.severity] - rank[b.severity]);
+  return { items: visible, total: visible.length, high: visible.filter((i) => i.severity === 'HIGH').length };
 }

@@ -256,6 +256,7 @@ model User {
   resourceProfiles  Resource[]      @relation("ResourceUser")
   assignedBacklog   BacklogItem[]   @relation("BacklogAssignee")
   notifications     Notification[]  @relation("UserNotifications")
+  alertDismissals   AlertDismissal[] @relation("UserAlertDismissals")
   refreshTokens     RefreshToken[]  @relation("UserRefreshTokens")
   sentMessages      Message[]       @relation("MessageSender")
   conversationsA    Conversation[]  @relation("ConvUserA")
@@ -1365,6 +1366,23 @@ model Notification {
 
   @@index([userId, createdAt])
   @@index([tenantId])
+}
+
+// Per-user "followed up / dismissed" markers for the LIVE "Needs attention" alerts (which are
+// derived, not stored). Keyed by a SIGNATURE = hash(projectId|type|message); because the alert
+// message encodes its magnitude (days overdue, Rp overrun, severity), a worsening alert produces a
+// NEW signature → it re-appears (the dismissal only silences the exact state that was followed up).
+// GLOBAL (no tenantId, NOT in SCOPED_MODELS): keyed by the global user identity; the signature
+// already embeds projectId, so there is no cross-tenant ambiguity.
+model AlertDismissal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("UserAlertDismissals", fields: [userId], references: [id], onDelete: Cascade)
+  signature String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, signature])
+  @@index([userId])
 }
 
 // A private 1-to-1 direct-message thread between two users. Exactly one row per pair,
