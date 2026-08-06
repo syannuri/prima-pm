@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { AgileBoard, Project, ProjectReportData } from '../api/types';
+import type { AgileBoard, Project, ProjectCommentary, ProjectReportData } from '../api/types';
 import { Badge, Button, Card, EmptyState, Select, Spinner } from '../components/ui';
 import { formatIdrShort, formatDate } from '../lib/format';
 import DonutChart from '../components/DonutChart';
@@ -42,6 +42,8 @@ const HEALTH: Record<string, { color: string; label: string }> = {
 export default function ReportsPage() {
   const { user } = useAuth();
   const isGuest = user?.role === 'GUEST';
+  // PM narrative is written by delivery leadership; the server also enforces per-project write access.
+  const canEditCommentary = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
   // Land on the Executive (portfolio) report — it's always populated, whereas Project Report
   // defaults to a single project that may have no data yet (an empty-looking first load).
   const [view, setView] = useState<View>('executive');
@@ -150,7 +152,7 @@ export default function ReportsPage() {
                 <EmptyState title="No projects to report on" hint="Commit a project charter first — reports need a project past the draft stage." />
               )}
               {reportQ.isLoading && <div className="flex justify-center py-16"><Spinner /></div>}
-              {r && <ReportBody r={r} />}
+              {r && <ReportBody r={r} projectId={selected} period={period} canEdit={canEditCommentary} />}
             </>
           )}
 
@@ -205,7 +207,7 @@ function AgileLens({ projectId }: { projectId: string }) {
   return <AgileReports sprints={b?.sprints ?? []} items={b?.items ?? []} snapshots={b?.snapshots ?? []} />;
 }
 
-function ReportBody({ r }: { r: ProjectReportData }) {
+function ReportBody({ r, projectId, period, canEdit }: { r: ProjectReportData; projectId: string; period: Period; canEdit: boolean }) {
   const h = HEALTH[r.health] ?? HEALTH.NO_DATA;
   const e = r.evm;
   const f = r.forecast;
@@ -250,6 +252,9 @@ function ReportBody({ r }: { r: ProjectReportData }) {
             warn={(f.schedule.varianceDays ?? 0) > 0} good={(f.schedule.varianceDays ?? 0) < 0} />
         </div>
       </Card>
+
+      {/* PM commentary — the story behind the numbers */}
+      <CommentarySection commentary={r.commentary} projectId={projectId} period={period} canEdit={canEdit} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Task completion */}
@@ -310,6 +315,99 @@ function ReportBody({ r }: { r: ProjectReportData }) {
         </p>
       </Card>
     </div>
+  );
+}
+
+// The three narrative fields, in report order, with their heading + accent colour.
+const COMMENTARY_FIELDS = [
+  { key: 'highlights', label: 'Highlights', accent: 'emerald', hint: 'What went well / achievements this period' },
+  { key: 'lowlights', label: 'Challenges & concerns', accent: 'amber', hint: 'Blockers, risks materialising, slippage' },
+  { key: 'nextFocus', label: 'Focus next period', accent: 'sky', hint: 'Planned priorities for the coming period' },
+] as const;
+
+const ACCENT_BAR: Record<string, string> = {
+  emerald: 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20',
+  amber: 'border-amber-400 bg-amber-50/60 dark:bg-amber-950/20',
+  sky: 'border-sky-400 bg-sky-50/60 dark:bg-sky-950/20',
+};
+
+// PM narrative for the reporting bucket — read view + inline editor (write access only). The story
+// the EVM KPIs can't tell, so a status report reads like a report, not a dashboard dump.
+function CommentarySection({ commentary, projectId, period, canEdit }: {
+  commentary: ProjectReportData['commentary']; projectId: string; period: Period; canEdit: boolean;
+}) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ highlights: '', lowlights: '', nextFocus: '' });
+
+  const startEdit = () => {
+    setDraft({
+      highlights: commentary.highlights ?? '',
+      lowlights: commentary.lowlights ?? '',
+      nextFocus: commentary.nextFocus ?? '',
+    });
+    setEditing(true);
+  };
+
+  const save = useMutation({
+    mutationFn: () => api.put<ProjectCommentary>(`/projects/${projectId}/report/commentary?period=${period}`, draft),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['report', projectId, period] }); setEditing(false); },
+  });
+
+  const hasAny = !!(commentary.highlights || commentary.lowlights || commentary.nextFocus);
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3">
+        <SectionHead title="PM commentary" sub="Narrative status — the story behind the numbers" />
+        {canEdit && !editing && (
+          <Button variant="secondary" onClick={startEdit}>{hasAny ? '✎ Edit' : '+ Add commentary'}</Button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="space-y-3">
+          {COMMENTARY_FIELDS.map((f) => (
+            <div key={f.key}>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{f.label}</label>
+              <textarea
+                value={draft[f.key]}
+                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                rows={3}
+                maxLength={4000}
+                placeholder={f.hint}
+                className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </div>
+          ))}
+          {save.isError && <p className="text-sm text-red-600 dark:text-red-400">Couldn’t save — please try again.</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setEditing(false)} disabled={save.isPending}>Cancel</Button>
+            <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save commentary'}</Button>
+          </div>
+        </div>
+      ) : hasAny ? (
+        <div className="space-y-3">
+          {COMMENTARY_FIELDS.map((f) => commentary[f.key] && (
+            <div key={f.key} className={`rounded-lg border-l-4 px-3 py-2 ${ACCENT_BAR[f.accent]}`}>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{f.label}</div>
+              <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{commentary[f.key]}</p>
+            </div>
+          ))}
+          {commentary.authorName && (
+            <div className="text-right text-xs text-slate-400">
+              — {commentary.authorName}{commentary.updatedAt ? ` · updated ${formatDate(commentary.updatedAt)}` : ''}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {canEdit
+            ? 'No commentary for this period yet. Add highlights, challenges and next-period focus to turn the numbers into a story for stakeholders.'
+            : 'No PM commentary has been written for this period.'}
+        </p>
+      )}
+    </Card>
   );
 }
 

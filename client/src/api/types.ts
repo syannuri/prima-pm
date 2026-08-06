@@ -746,7 +746,18 @@ export interface ProjectReportData {
     remaining: { name: string; pct: number; planEnd: string; overdue: boolean; isMilestone: boolean; owner: string | null }[];
   };
   forecast: Forecast;
+  // PM narrative for this reporting bucket (null fields when nothing written yet).
+  commentary: {
+    highlights: string | null;
+    lowlights: string | null;
+    nextFocus: string | null;
+    authorName: string | null;
+    updatedAt: string | null;
+  };
 }
+
+// Response of PUT /projects/:id/report/commentary (echoes the saved narrative).
+export type ProjectCommentary = ProjectReportData['commentary'];
 
 // UAT (User Acceptance Test) — a structured, executable test-case template per project.
 export type UatStatus = 'NOT_RUN' | 'PASS' | 'FAIL' | 'BLOCKED';

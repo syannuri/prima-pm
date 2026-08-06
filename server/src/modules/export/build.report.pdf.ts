@@ -130,6 +130,32 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
   doc.fillColor('#334155').font('Helvetica').fontSize(9.5).text(summary, left + boxPad, boxY + boxPad + 12, { width: width - 2 * boxPad });
   doc.y = boxY + boxTotalH;
 
+  // ---------- PM commentary (the narrative behind the numbers) ----------
+  const c = r.commentary;
+  const commentaryBlocks = [
+    { label: 'Highlights', text: c.highlights, color: GREEN },
+    { label: 'Challenges & concerns', text: c.lowlights, color: AMBER },
+    { label: 'Focus next period', text: c.nextFocus, color: '#0284c7' },
+  ].filter((b): b is { label: string; text: string; color: string } => !!b.text);
+  if (commentaryBlocks.length) {
+    doc.moveDown(0.8);
+    if (doc.y > pageH - 140) doc.addPage();
+    doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(8).text('PM COMMENTARY', left, doc.y, { characterSpacing: 0.5 });
+    doc.moveDown(0.3);
+    for (const b of commentaryBlocks) {
+      if (doc.y > pageH - 90) doc.addPage();
+      const y = doc.y;
+      doc.save().rect(left, y, 3, doc.heightOfString(b.text, { width: width - 12 }) + 14).fill(b.color).restore();
+      doc.fillColor(b.color).font('Helvetica-Bold').fontSize(8).text(b.label.toUpperCase(), left + 9, y, { width: width - 12 });
+      doc.fillColor('#334155').font('Helvetica').fontSize(9).text(b.text, left + 9, doc.y + 1, { width: width - 12 });
+      doc.moveDown(0.5);
+    }
+    if (c.authorName) {
+      doc.fillColor(GRAY).font('Helvetica-Oblique').fontSize(7.5)
+        .text(`— ${c.authorName}${c.updatedAt ? `, updated ${iso(c.updatedAt)}` : ''}`, left + 9, doc.y, { width: width - 12 });
+    }
+  }
+
   // ---------- KPI band ----------
   doc.moveDown(0.7);
   const kpis: { label: string; value: string; color?: string }[] = [

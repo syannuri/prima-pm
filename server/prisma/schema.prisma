@@ -350,6 +350,7 @@ model Tenant {
   kickoffActionItems  KickoffActionItem[]
   requirements  Requirement[]
   requirementTaskLinks  RequirementTaskLink[]
+  projectCommentaries  ProjectCommentary[]
 }
 
 // Append-only audit trail of Lemon Squeezy billing webhooks (what event flipped which plan).
@@ -490,6 +491,7 @@ model Project {
   kickoffMeeting   KickoffMeeting?
   bookmarks        ProjectBookmark[]
   requirements     Requirement[]
+  commentaries     ProjectCommentary[]
 
   @@index([status])
   @@index([pmUserId])
@@ -851,6 +853,39 @@ model Risk {
 
   @@unique([projectId, code])
   @@index([projectId, severity])
+  @@index([tenantId])
+}
+
+// PM narrative for a status report — the story behind the numbers (highlights / lowlights /
+// next-period focus) that the EVM KPIs can't tell. One row per project per reporting bucket
+// (period + periodKey), so viewing an older report shows the commentary written for THAT period,
+// not the latest. Written by the PM/PMO; surfaced on the Project report + PDF. Tenant-scoped
+// (see lib/tenant/scopedModels.ts) — the extension stamps/filters tenantId automatically.
+model ProjectCommentary {
+  id        String  @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant? @relation(fields: [tenantId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Reporting bucket this narrative belongs to. period = daily|weekly|monthly|yearly; periodKey is
+  // the normalized bucket start (daily/weekly=YYYY-MM-DD, monthly=YYYY-MM, yearly=YYYY).
+  period    String
+  periodKey String
+
+  highlights String? // what went well / achievements this period
+  lowlights  String? // challenges, blockers, concerns
+  nextFocus  String? // planned focus / priorities for the next period
+
+  // Denormalized author identity (no FK to User — a status report keeps its author's name even if
+  // the account is later removed).
+  authorId   String?
+  authorName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, period, periodKey])
   @@index([tenantId])
 }
 

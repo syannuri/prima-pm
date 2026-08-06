@@ -52,6 +52,61 @@ export function periodLabel(asOf: Date, period: ReportPeriod): string {
   return `Week ending ${end.toLocaleString('en', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`;
 }
 
+// Normalized identifier for the reporting bucket asOf falls in, so PM commentary is stored/looked
+// up per period rather than per exact timestamp. daily/weekly → the bucket-start date (weekly snaps
+// back to Monday, matching the S-curve sampling); monthly → YYYY-MM; yearly → YYYY.
+export function periodKey(asOf: Date, period: ReportPeriod): string {
+  const d = new Date(asOf);
+  d.setUTCHours(0, 0, 0, 0);
+  if (period === 'yearly') return String(d.getUTCFullYear());
+  if (period === 'monthly') return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  if (period === 'weekly') d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); // back to Monday
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD (daily, or weekly's Monday)
+}
+
+const emptyCommentary = { highlights: null, lowlights: null, nextFocus: null, authorName: null, updatedAt: null };
+
+// The PM narrative saved for a project's reporting bucket (null fields when nothing written yet).
+export async function getCommentary(projectId: string, period: ReportPeriod, asOf: Date) {
+  const row = await prisma.projectCommentary.findUnique({
+    where: { projectId_period_periodKey: { projectId, period, periodKey: periodKey(asOf, period) } },
+    select: { highlights: true, lowlights: true, nextFocus: true, authorName: true, updatedAt: true },
+  });
+  if (!row) return { ...emptyCommentary };
+  return { ...row, updatedAt: row.updatedAt.toISOString() };
+}
+
+type CommentaryInput = { highlights?: string | null; lowlights?: string | null; nextFocus?: string | null };
+
+// Upsert the PM narrative for a project's reporting bucket. Blank strings are stored as null so an
+// emptied field reads back as "not written". tenantId is stamped by the tenant extension on create.
+export async function saveCommentary(
+  projectId: string,
+  period: ReportPeriod,
+  asOf: Date,
+  input: CommentaryInput,
+  author: { id: string; email: string },
+) {
+  const project = await prisma.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { id: true } });
+  if (!project) throw NotFound('Project not found');
+  // Resolve a display name for the byline (User is global/unscoped); fall back to the email.
+  const u = await prisma.user.findUnique({ where: { id: author.id }, select: { name: true } });
+  const authorName = u?.name?.trim() || author.email;
+  const norm = (v?: string | null) => {
+    const t = (v ?? '').trim();
+    return t.length ? t : null;
+  };
+  const data = { highlights: norm(input.highlights), lowlights: norm(input.lowlights), nextFocus: norm(input.nextFocus) };
+  const key = periodKey(asOf, period);
+  const row = await prisma.projectCommentary.upsert({
+    where: { projectId_period_periodKey: { projectId, period, periodKey: key } },
+    create: { projectId, period, periodKey: key, ...data, authorId: author.id, authorName },
+    update: { ...data, authorId: author.id, authorName },
+    select: { highlights: true, lowlights: true, nextFocus: true, authorName: true, updatedAt: true },
+  });
+  return { ...row, updatedAt: row.updatedAt.toISOString() };
+}
+
 /**
  * Curated single-project status report (PM + ADMIN/PMO): lifecycle + RAG health, EVM KPIs,
  * task completion (by count AND by weighted value — they differ), an EVM S-curve resampled at
@@ -65,7 +120,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
   });
   if (!project) throw NotFound('Project not found');
 
-  const [evm, forecast, tasks, actuals] = await Promise.all([
+  const [evm, forecast, tasks, actuals, commentary] = await Promise.all([
     getProjectEvm(projectId, undefined, asOf),
     getProjectForecast(projectId, asOf),
     prisma.task.findMany({
@@ -73,6 +128,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
       select: { id: true, name: true, wbsCode: true, parentTaskId: true, planStart: true, planEnd: true, actualStart: true, actualFinish: true, progressPct: true, isMilestone: true, picResource: { select: { name: true } } },
     }),
     prisma.actualCostEntry.findMany({ where: { projectId }, orderBy: { date: 'asc' }, select: { date: true, amount: true } }),
+    getCommentary(projectId, period, asOf),
   ]);
 
   // Task completion from LEAF tasks (the schedule work packages).
@@ -172,5 +228,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
     // Full forecast payload, but with the S-curve resampled to the report's granularity so
     // ForecastChart renders weekly/monthly buckets.
     forecast: { ...forecast, sCurve },
+    // PM narrative for this reporting bucket (the story behind the numbers).
+    commentary,
   };
 }

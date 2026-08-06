@@ -13,6 +13,13 @@ const reportQuerySchema = z.object({
   asOf: z.coerce.date().optional(),
 });
 
+// PM narrative for the reporting bucket — free text, capped so a report stays a summary not an essay.
+const commentaryBodySchema = z.object({
+  highlights: z.string().max(4000).nullish(),
+  lowlights: z.string().max(4000).nullish(),
+  nextFocus: z.string().max(4000).nullish(),
+});
+
 // Access = the owning PM + ADMIN/PMO (requireProjectAccess default). No FINANCE/RISK: this is
 // a PM/PMO status report.
 router.get(
@@ -21,6 +28,18 @@ router.get(
   asyncHandler(async (req, res) => {
     const { period, asOf } = reportQuerySchema.parse(req.query);
     res.json(await svc.getProjectReport(req.params.projectId, period, asOf ?? new Date()));
+  }),
+);
+
+// Save (upsert) the PM narrative for a reporting bucket. Write access = PM/PMO/ADMIN.
+router.put(
+  '/commentary',
+  requireProjectAccess({ write: true }),
+  asyncHandler(async (req, res) => {
+    const { period, asOf } = reportQuerySchema.parse(req.query);
+    const body = commentaryBodySchema.parse(req.body);
+    const author = { id: req.user!.id, email: req.user!.email };
+    res.json(await svc.saveCommentary(req.params.projectId, period, asOf ?? new Date(), body, author));
   }),
 );
 
