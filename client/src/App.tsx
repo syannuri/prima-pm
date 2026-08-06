@@ -1,26 +1,33 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import AppShellSkeleton from './components/AppShellSkeleton';
+import { PanelLoading } from './components/ui';
 import { OnboardingProvider } from './context/OnboardingContext';
 import OnboardingTour from './components/OnboardingTour';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import { isWorkspaceHost } from './lib/workspaceHost';
-import DashboardPage from './pages/DashboardPage';
-import ProjectPage from './pages/ProjectPage';
-import AdminUsersPage from './pages/AdminUsersPage';
-import AdminMembersPage from './pages/AdminMembersPage';
-import AdminTenantsPage from './pages/AdminTenantsPage';
-import AdminProjectDatabasePage from './pages/AdminProjectDatabasePage';
-import AdminResourcesPage from './pages/AdminResourcesPage';
-import AdminAuditPage from './pages/AdminAuditPage';
-import AdminBillingPage from './pages/AdminBillingPage';
-import SettingsPage from './pages/SettingsPage';
-import ManualPage from './pages/ManualPage';
-import MyTimesheetPage from './pages/MyTimesheetPage';
-import ReportsPage from './pages/ReportsPage';
-import MessagesPage from './pages/MessagesPage';
+
+// The authenticated pages are code-split: each lands in its own chunk that's fetched only when its
+// route is first visited, so the initial bundle stays small (big win on mobile / first paint). The
+// anonymous entry (HomePage + LoginPage) stays eagerly imported — HomePage is build-time prerendered
+// for SEO, and lazy-loading it would flash a spinner over that markup on hydration.
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProjectPage = lazy(() => import('./pages/ProjectPage'));
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
+const AdminMembersPage = lazy(() => import('./pages/AdminMembersPage'));
+const AdminTenantsPage = lazy(() => import('./pages/AdminTenantsPage'));
+const AdminProjectDatabasePage = lazy(() => import('./pages/AdminProjectDatabasePage'));
+const AdminResourcesPage = lazy(() => import('./pages/AdminResourcesPage'));
+const AdminAuditPage = lazy(() => import('./pages/AdminAuditPage'));
+const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const ManualPage = lazy(() => import('./pages/ManualPage'));
+const MyTimesheetPage = lazy(() => import('./pages/MyTimesheetPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const MessagesPage = lazy(() => import('./pages/MessagesPage'));
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -45,6 +52,7 @@ export default function App() {
   return (
     <OnboardingProvider>
       <Layout>
+        <Suspense fallback={<PanelLoading className="py-24" />}>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/reports" element={<ReportsPage />} />
@@ -62,6 +70,7 @@ export default function App() {
           <Route path="/manual" element={<ManualPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </Layout>
       <OnboardingTour />
     </OnboardingProvider>
