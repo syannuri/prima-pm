@@ -4,6 +4,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
 import { getPortfolioSummary } from './portfolio.service.js';
+import { getPortfolioRaid } from './portfolio.raid.js';
 import { getPortfolioEvmTrend, captureAllSnapshots } from '../evm/evm.portfolio.js';
 import { getAwaitingActivation, getPlanningReminders } from '../projects/activation.js';
 import { getAwaitingClosure } from '../projects/closure.js';
@@ -26,6 +27,15 @@ router.get(
     const { statusDate } = querySchema.parse(req.query);
     const summary = await getPortfolioSummary(req.user!.id, req.user!.role, statusDate ?? new Date());
     res.json(summary);
+  }),
+);
+
+// Portfolio RAID roll-up — Risks/Assumptions/Issues/Dependencies across the caller's projects.
+router.get(
+  '/raid',
+  asyncHandler(async (req, res) => {
+    const { statusDate } = querySchema.parse(req.query);
+    res.json(await getPortfolioRaid(req.user!.id, req.user!.role, statusDate ?? new Date()));
   }),
 );
 

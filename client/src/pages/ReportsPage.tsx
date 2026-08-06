@@ -8,6 +8,7 @@ import DonutChart from '../components/DonutChart';
 import ForecastChart from '../components/ForecastChart';
 import ExecutiveReport from '../components/ExecutiveReport';
 import PortfolioReport from '../components/PortfolioReport';
+import PortfolioRaidReport from '../components/PortfolioRaidReport';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ForecastPanel from './panels/ForecastPanel';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +18,7 @@ import AgileReports from './panels/AgileReports';
 // (they drive the S-curve granularity + the period label). View = the centralized sub-nav.
 type Cadence = 'daily' | 'weekly' | 'monthly' | 'yearly';
 type Period = Cadence;
-type View = 'executive' | 'project' | 'portfolio' | 'analytics';
+type View = 'executive' | 'project' | 'portfolio' | 'raid' | 'analytics';
 
 const CADENCES: { key: Cadence; label: string; ready: boolean }[] = [
   { key: 'daily', label: 'Daily', ready: true },
@@ -29,6 +30,7 @@ const NAV: { key: View; label: string; scope: string; desc: string; ready: boole
   { key: 'executive', label: 'Executive', scope: 'Portfolio', desc: 'One-screen portfolio health — RAG heatmap across every active project, delivered value and budget performance.', ready: true },
   { key: 'project', label: 'Project Report', scope: 'Single project', desc: 'Formal status report for one project — schedule, cost, task completion & forecast.', ready: true },
   { key: 'portfolio', label: 'Portfolio', scope: 'Portfolio', desc: 'Financial roll-up across all projects — budget vs actual, cost variance and CPI per project.', ready: true },
+  { key: 'raid', label: 'RAID', scope: 'Portfolio', desc: 'Risks, Assumptions, Issues & Dependencies rolled up across every project — the cross-project governance log.', ready: true },
   { key: 'analytics', label: 'Analytics', scope: 'Single project', desc: 'Deep analytics surfaced centrally — EVM trend and forecast for any project, without leaving the reporting hub.', ready: true },
 ];
 
@@ -142,9 +144,9 @@ export default function ReportsPage() {
             </div>
             {/* Exports are hidden on phones (download/print is a desktop task). */}
             <div className="hidden gap-2 sm:flex">
-              <Button variant="secondary" disabled={!canDownload} onClick={download}>⬇ PDF</Button>
+              {view !== 'raid' && <Button variant="secondary" disabled={!canDownload} onClick={download}>⬇ PDF</Button>}
               {(view === 'executive' || view === 'portfolio') && <Button variant="secondary" disabled={!canDownload} onClick={downloadExcel}>⬇ Excel</Button>}
-              {(view === 'executive' || view === 'portfolio') && <Button disabled={!canDownload} onClick={downloadBoardPack} title="Portfolio health + top risks, issues & decisions in one steering-committee PDF">📋 Board Pack</Button>}
+              {(view === 'executive' || view === 'portfolio' || view === 'raid') && <Button disabled={!projects.length} onClick={downloadBoardPack} title="Portfolio health + top risks, issues & decisions in one steering-committee PDF">📋 Board Pack</Button>}
             </div>
           </Card>
 
@@ -168,8 +170,10 @@ export default function ReportsPage() {
               : <EmptyState title="No projects to analyze" hint="Analytics needs a project past the draft stage." />
           )}
 
-          {/* Not-yet-built views — describe the target so the IA is legible. */}
           {view === 'portfolio' && <PortfolioReport />}
+
+          {/* RAID — cross-project Risks/Assumptions/Issues/Dependencies roll-up. */}
+          {view === 'raid' && <PortfolioRaidReport />}
         </div>
     </div>
   );

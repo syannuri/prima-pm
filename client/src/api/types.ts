@@ -462,6 +462,17 @@ export interface PortfolioSummary {
   statusDate: string;
 }
 
+// Portfolio RAID roll-up (R5) — Risks/Assumptions/Issues/Dependencies across visible projects.
+export interface PortfolioRaid {
+  statusDate: string;
+  projectCount: number;
+  counts: { risks: number; risksHigh: number; assumptions: number; issues: number; dependencies: number; dependenciesAtRisk: number };
+  risks: { project: string; code: string; title: string; severity: string; status: string; kind: string; emv: number; response: string | null; owner: string | null }[];
+  assumptions: { project: string; code: string; statement: string; impact: string; category: string | null; owner: string | null }[];
+  issues: { project: string; code: string; title: string; impact: string; status: string; ageDays: number; owner: string | null }[];
+  dependencies: { project: string; code: string; description: string; direction: string; counterparty: string | null; status: string; impact: string; dueDate: string | null; overdue: boolean; owner: string | null }[];
+}
+
 export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface Risk {
