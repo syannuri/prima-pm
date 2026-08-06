@@ -72,6 +72,8 @@ export default function ReportsPage() {
     }
   };
   const downloadExcel = () => api.download('/portfolio/export/excel', 'portfolio_report.xlsx'); // Executive portfolio export.
+  // Steering Committee Board Pack — portfolio health + top risks + issues + decisions in one PDF.
+  const downloadBoardPack = () => api.download('/portfolio/board-pack/pdf', 'steering_board_pack.pdf');
   const canDownload = view === 'project' ? !!selected && !!r : view === 'executive' || view === 'portfolio';
 
   return (
@@ -142,6 +144,7 @@ export default function ReportsPage() {
             <div className="hidden gap-2 sm:flex">
               <Button variant="secondary" disabled={!canDownload} onClick={download}>⬇ PDF</Button>
               {(view === 'executive' || view === 'portfolio') && <Button variant="secondary" disabled={!canDownload} onClick={downloadExcel}>⬇ Excel</Button>}
+              {(view === 'executive' || view === 'portfolio') && <Button disabled={!canDownload} onClick={downloadBoardPack} title="Portfolio health + top risks, issues & decisions in one steering-committee PDF">📋 Board Pack</Button>}
             </div>
           </Card>
 

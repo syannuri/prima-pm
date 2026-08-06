@@ -10,6 +10,8 @@ import { getAwaitingClosure } from '../projects/closure.js';
 import { gatherPortfolioExport } from '../export/export.portfolio.data.js';
 import { buildPortfolioPdf } from '../export/build.portfolio.pdf.js';
 import { buildPortfolioWorkbook } from '../export/build.portfolio.excel.js';
+import { gatherBoardPack } from '../export/export.boardpack.data.js';
+import { buildBoardPackPdf } from '../export/build.boardpack.pdf.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -94,6 +96,20 @@ router.get(
     const buffer = await buildPortfolioPdf(data);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="portfolio_report.pdf"');
+    res.send(buffer);
+  }),
+);
+
+// Steering Committee Board Pack — portfolio health + top risks + open issues + decisions needed,
+// in one governance PDF. Same role-scoping as the rest of the portfolio (a PM gets their own).
+router.get(
+  '/board-pack/pdf',
+  asyncHandler(async (req, res) => {
+    const { statusDate } = querySchema.parse(req.query);
+    const data = await gatherBoardPack(req.user!.id, req.user!.role, statusDate ?? new Date());
+    const buffer = await buildBoardPackPdf(data);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="steering_board_pack.pdf"');
     res.send(buffer);
   }),
 );
