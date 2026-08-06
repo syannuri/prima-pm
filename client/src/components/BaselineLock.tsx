@@ -41,6 +41,10 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
     onSuccess: (_d, body) => {
       qc.invalidateQueries({ queryKey: ['project', projectId] });
       qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
+      // The WBS Gantt derives baselineLocked (→ canPlan → whether plan dates are editable) from
+      // the ['gantt', projectId] query, so it must refetch here — otherwise unlocking flips the
+      // badge but the Gantt keeps its stale locked state and plan dates stay un-editable.
+      qc.invalidateQueries({ queryKey: ['gantt', projectId] });
       // On lock, confirm the baseline is now complete (both baselines for a WBS project).
       toast.success(
         body.locked

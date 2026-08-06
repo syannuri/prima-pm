@@ -38,7 +38,9 @@ export default function PendingApprovals() {
     mutationFn: ({ cr, decision, applyToRevenue }: { cr: PendingApproval; decision: 'APPROVED' | 'REJECTED'; applyToRevenue?: boolean }) =>
       api.patch<{ baselineUnlocked?: boolean }>(`/projects/${cr.project.id}/charter/change-requests/${cr.id}`, { decision, applyToRevenue }),
     onSuccess: (d, v) => {
-      ['pending-approvals', 'charter-crs', 'notifications', 'inbox', 'projects', 'portfolio', 'charter', 'project'].forEach((k) =>
+      // 'gantt' matters: approving a COST/SCHEDULE change request unlocks the baseline server-side,
+      // and the WBS Gantt reads baselineLocked from ['gantt', …] to decide if plan dates are editable.
+      ['pending-approvals', 'charter-crs', 'notifications', 'inbox', 'projects', 'portfolio', 'charter', 'project', 'gantt'].forEach((k) =>
         qc.invalidateQueries({ queryKey: [k] }),
       );
       const note = `${v.applyToRevenue ? ' · revenue updated' : ''}${d?.baselineUnlocked ? ' · baseline unlocked — apply changes, then re-lock' : ''}`;

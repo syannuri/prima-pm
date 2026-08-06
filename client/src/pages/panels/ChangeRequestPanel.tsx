@@ -31,7 +31,9 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
   const verQ = useQuery({ queryKey: ['charter-versions', projectId], queryFn: () => api.get<{ versions: CharterVersion[] }>(`${base}/versions`) });
 
   const refresh = () => {
-    ['charter-crs', 'charter-versions', 'charter', 'project'].forEach((k) => qc.invalidateQueries({ queryKey: [k, projectId] }));
+    // 'gantt' included: approving a COST/SCHEDULE change request unlocks the baseline, and the WBS
+    // Gantt reads baselineLocked from ['gantt', projectId] to decide if plan dates are editable.
+    ['charter-crs', 'charter-versions', 'charter', 'project', 'gantt'].forEach((k) => qc.invalidateQueries({ queryKey: [k, projectId] }));
   };
 
   const raise = useMutation({
