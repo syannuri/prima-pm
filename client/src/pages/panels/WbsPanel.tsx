@@ -1194,7 +1194,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </div>
                     </td>
                     <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>
-                    <td style={frozenLeft(88)} className={`${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-20 ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
+                    <td style={frozenLeft(88)} className={`${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         {hasKids && (
                           <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
@@ -1224,8 +1224,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       {canPlan && (
                         <button type="button" title="Add a task here"
                           onClick={(e) => { e.stopPropagation(); insertAfter(node, r.end); }}
-                          style={{ left: 8 + depth * 18 }}
-                          className={`absolute -bottom-2.5 z-30 grid h-5 w-5 place-items-center rounded-full bg-brand-600 text-sm font-bold leading-none text-white shadow-md ring-2 ring-white transition hover:scale-110 hover:bg-brand-700 dark:bg-brand-500 dark:text-white dark:ring-slate-900 dark:hover:bg-brand-400 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
+                          style={{ left: 6 + depth * 18 }}
+                          className={`absolute -bottom-2 z-30 grid h-3.5 w-3.5 place-items-center text-sm font-bold leading-none text-slate-600 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
                       )}
                     </td>
                     <td>{canEdit
