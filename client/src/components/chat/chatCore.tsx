@@ -6,6 +6,30 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../Toast';
 import { useOnline, useTypingMap } from '../../lib/chatLive';
 
+// Keep a `--kb-inset` CSS var on <html> = the height the on-screen keyboard covers (0 when closed),
+// measured from the VisualViewport. The chat composer pads itself up by this so it stays ABOVE the
+// keyboard on phones — without it the composer sits behind the keyboard and the browser scrolls the
+// fixed thread, pushing the header off-screen ("overflow when typing"). No-op on desktop (inset 0).
+function useKeyboardInset() {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const update = () => {
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--kb-inset', `${Math.round(kb)}px`);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      root.style.removeProperty('--kb-inset');
+    };
+  }, []);
+}
+
 // ---- Shared bits for the chat surfaces (full Messages page + the floating widget) ----
 
 // monday.com-style people colours — each user gets a stable, vivid avatar colour.
@@ -504,6 +528,7 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
   const [menuOpen, setMenuOpen] = useState(false);
   const onlineSet = useOnline();
   const typingMap = useTypingMap();
+  useKeyboardInset();
   if (!active || !header) return null;
   const isGroup = header.type === 'GROUP';
   const members = header.members ?? [];
@@ -626,7 +651,10 @@ export function ChatThread({ chat, onBack, showBack = true, backMobileOnly = fal
         <div ref={endRef} />
       </div>
 
-      <div className={`border-t border-slate-100 bg-white px-3 pt-3 dark:border-slate-800 dark:bg-slate-900 ${safeArea ? 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]' : 'pb-3'}`}>
+      <div
+        className="border-t border-slate-100 bg-white px-3 pt-3 dark:border-slate-800 dark:bg-slate-900"
+        style={{ paddingBottom: `calc(var(--kb-inset, 0px) + ${safeArea ? 'env(safe-area-inset-bottom) + 0.75rem' : '0.75rem'})` }}
+      >
         <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 py-1.5 pl-2 pr-1.5 focus-within:border-[#0073ea] focus-within:bg-white dark:border-slate-700 dark:bg-slate-800">
           <input ref={fileRef} type="file" className="hidden" accept=".pdf,.xlsx,.docx,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf" onChange={(e) => { attachFile(e.target.files?.[0]); if (fileRef.current) fileRef.current.value = ''; }} />
           <button onClick={() => fileRef.current?.click()} disabled={attaching} aria-label="Attach file" title="Attach file" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-600 disabled:opacity-40 dark:hover:bg-slate-700 dark:hover:text-slate-200">
