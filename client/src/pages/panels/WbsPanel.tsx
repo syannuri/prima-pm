@@ -87,6 +87,10 @@ const FROZEN_TH = 'sticky !z-30 bg-slate-50 dark:bg-slate-800';
 const FROZEN_TD = 'sticky z-10'; // opaque zebra bg + group-hover are applied per-row (see rowBg)
 const FROZEN_EDGE = 'border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-3px_rgba(15,23,42,0.25)]';
 
+// WBS dictionary (per-row ⓘ detail: description / deliverable / acceptance criteria / owner) is
+// hidden for now — flip to true to bring back the row toggle, expandable detail and menu entry.
+const SHOW_WBS_DICTIONARY = false;
+
 // Summary-task roll-up (MS-Project / WBS 100% rule): a parent's dates span its
 // descendants and its % is the duration-weighted average of theirs. Leaves keep
 // their own stored values. Returns a map of taskId → rolled metrics.
@@ -1197,9 +1201,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} fill="currentColor" aria-hidden><path d="M7 5l6 5-6 5V5z" /></svg>
                           </button>
                         )}
-                        <button onClick={() => toggle(node.id)} title={canPlan ? 'WBS dictionary — click to view / edit' : 'WBS dictionary'} className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
-                          {isOpen ? '▾' : 'ⓘ'}
-                        </button>
+                        {SHOW_WBS_DICTIONARY && (
+                          <button onClick={() => toggle(node.id)} title={canPlan ? 'WBS dictionary — click to view / edit' : 'WBS dictionary'} className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] ${hasDict ? 'text-brand-600' : 'text-slate-300 dark:text-slate-600'} hover:bg-slate-200 dark:hover:bg-slate-700`}>
+                            {isOpen ? '▾' : 'ⓘ'}
+                          </button>
+                        )}
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
                         <InlineName value={node.name} editable={canPlan} done={r.pct >= 100} depthZero={depth === 0} onSave={(name) => patchTask.mutate({ node, patch: { name } })} />
                         {isCollapsed && hasKids && <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">⋯</span>}
@@ -1219,7 +1225,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <button type="button" title="Add a task here"
                           onClick={(e) => { e.stopPropagation(); insertAfter(node, r.end); }}
                           style={{ left: 8 + depth * 18 }}
-                          className={`absolute -bottom-2.5 z-[15] grid h-5 w-5 place-items-center rounded-full border border-brand-300 bg-white text-sm font-semibold leading-none text-brand-600 shadow-sm transition hover:scale-110 hover:bg-brand-50 dark:border-brand-600 dark:bg-slate-800 dark:text-brand-300 dark:hover:bg-brand-900/40 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
+                          className={`absolute -bottom-2.5 z-30 grid h-5 w-5 place-items-center rounded-full bg-brand-600 text-sm font-bold leading-none text-white shadow-md ring-2 ring-white transition hover:scale-110 hover:bg-brand-700 dark:bg-brand-500 dark:text-white dark:ring-slate-900 dark:hover:bg-brand-400 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
                       )}
                     </td>
                     <td>{canEdit
@@ -1227,17 +1233,21 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       : <OwnerCell name={node.picResource?.name ?? node.pic?.name} />}</td>
                     {showDates && (
                       <>
-                        {/* Plan Start — rolls up (read-only) on summary rows; leaf is click-to-edit unless baselined. */}
+                        {/* Plan Start — rolls up (read-only) on summary rows; leaf is click-to-edit
+                            whenever the baseline is UNLOCKED (canPlan). Drag-reschedule is separately
+                            frozen once a baseline exists (canDrag), but click-editing plan dates must
+                            work after a change request unlocks the baseline — else an approved CR
+                            can't actually be applied. */}
                         <td className="whitespace-nowrap text-right">
                           {r.isParent
                             ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
-                            : <InlineDate value={node.planStart} editable={canDrag} onSave={(v) => v && patchTask.mutate({ node, patch: { planStart: v } })} title={canDrag ? 'Plan start — click to edit' : baselinedAt ? 'Baselined — change via a change request' : undefined} />}
+                            : <InlineDate value={node.planStart} editable={canPlan} onSave={(v) => v && patchTask.mutate({ node, patch: { planStart: v } })} title={canPlan ? 'Plan start — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                         {/* Plan Finish */}
                         <td className="whitespace-nowrap text-right">
                           {r.isParent
                             ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
-                            : <InlineDate value={node.planEnd} editable={canDrag} onSave={(v) => v && patchTask.mutate({ node, patch: { planEnd: v } })} title={canDrag ? 'Plan finish — click to edit' : baselinedAt ? 'Baselined — change via a change request' : undefined} />}
+                            : <InlineDate value={node.planEnd} editable={canPlan} onSave={(v) => v && patchTask.mutate({ node, patch: { planEnd: v } })} title={canPlan ? 'Plan finish — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                         {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
                         <td className="whitespace-nowrap text-right">
@@ -1377,7 +1387,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     </td>
                     )}
                   </tr>
-                  {isOpen && (
+                  {SHOW_WBS_DICTIONARY && isOpen && (
                     <tr>
                       <td colSpan={colCount} className="border-b border-slate-100 bg-slate-50/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-800/30">
                         {canPlan
@@ -1468,7 +1478,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             const n = menu.node;
             return [
               { label: 'Add subtask', icon: '＋', disabled: !canPlan, onClick: () => setDraft({ parentId: n.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(n.planStart)), planEnd: formatDateInput(new Date(n.planEnd)) }) },
-              { label: expanded.has(n.id) ? 'Close details' : 'Edit details', icon: '✎', onClick: () => toggle(n.id) },
+              ...(SHOW_WBS_DICTIONARY ? [{ label: expanded.has(n.id) ? 'Close details' : 'Edit details', icon: '✎', onClick: () => toggle(n.id) }] : []),
               { separator: true },
               { label: 'Indent', icon: '⇥', hint: 'make subtask', disabled: !canPlan || !canIndent(n), onClick: () => indentTask(n) },
               { label: 'Outdent', icon: '⇤', hint: 'promote', disabled: !canPlan || !canOutdent(n), onClick: () => outdentTask(n) },
