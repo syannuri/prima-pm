@@ -235,13 +235,10 @@ function InlineDate({ value, editable, onSave, title }: {
       <input
         type="date" autoFocus defaultValue={cur}
         onClick={(e) => e.stopPropagation()}
-        // Commit on CHANGE, not blur: picking a date in the native calendar can blur the input
-        // before its value updates, so an onBlur handler would read the stale (old) value and the
-        // edit would silently revert. onChange fires reliably on selection (and on a fully-typed
-        // date). onBlur just closes; Escape cancels. (Mirrors the Owner <select> below.)
-        onChange={(e) => { const v = e.target.value || null; setEditing(false); if (v !== (cur || null)) onSave(v); }}
-        onBlur={() => setEditing(false)}
-        onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); }}
+        // Commit on blur / Enter (NOT onChange — a native date input fires onChange on every
+        // partial subfield edit, which would close the editor mid-edit and save half-changed dates).
+        onBlur={(e) => { setEditing(false); const v = e.target.value || null; if (v !== (cur || null)) onSave(v); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setEditing(false); }}
         className="w-[7.25rem] rounded border border-brand-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100"
       />
     );
@@ -779,6 +776,22 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     onSuccess: invalidate,
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to save'); },
   });
+
+  // Editing a plan date from the table. Plan Start SHIFTS Plan Finish to keep the duration
+  // (MS-Project style) so moving a task earlier/later never produces an invalid start>finish
+  // intermediate — the server enforces planEnd>=planStart and would 400 ("Invalid request") if we
+  // sent a new start against the old finish. Plan Finish sets the finish directly (changes
+  // duration), guarded so it can't land before the start.
+  const editPlanStart = (node: GanttNode, v: string) => {
+    const dur = Math.max(0, +new Date(node.planEnd) - +new Date(node.planStart));
+    const planEnd = new Date(+new Date(v) + dur).toISOString();
+    patchTask.mutate({ node, patch: { planStart: v, planEnd } });
+  };
+  const editPlanEnd = (node: GanttNode, v: string) => {
+    if (+new Date(v) < +new Date(node.planStart)) { toast.error('Plan finish can’t be before plan start.'); return; }
+    patchTask.mutate({ node, patch: { planEnd: v } });
+  };
+
   // Actual-date tracking edit (set to a specific day, or null to clear). Hits the dedicated
   // /actuals endpoint so it keeps working under a locked baseline — actuals evolve in execution
   // even when the plan is frozen (unlike patchTask, which the API blocks once the baseline locks).
@@ -1246,13 +1259,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <td className="whitespace-nowrap text-right">
                           {r.isParent
                             ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
-                            : <InlineDate value={node.planStart} editable={canPlan} onSave={(v) => v && patchTask.mutate({ node, patch: { planStart: v } })} title={canPlan ? 'Plan start — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
+                            : <InlineDate value={node.planStart} editable={canPlan} onSave={(v) => v && editPlanStart(node, v)} title={canPlan ? 'Plan start — click to edit (keeps duration, shifts finish)' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                         {/* Plan Finish */}
                         <td className="whitespace-nowrap text-right">
                           {r.isParent
                             ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
-                            : <InlineDate value={node.planEnd} editable={canPlan} onSave={(v) => v && patchTask.mutate({ node, patch: { planEnd: v } })} title={canPlan ? 'Plan finish — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
+                            : <InlineDate value={node.planEnd} editable={canPlan} onSave={(v) => v && editPlanEnd(node, v)} title={canPlan ? 'Plan finish — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                         {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
                         <td className="whitespace-nowrap text-right">
