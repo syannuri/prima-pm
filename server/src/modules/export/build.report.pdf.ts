@@ -8,6 +8,7 @@ const GREEN = '#16a34a';
 const AMBER = '#d97706';
 const RED = '#dc2626';
 const iso = (d: string | null) => (d ? new Date(d).toISOString().slice(0, 10) : '—');
+const HEALTH_ORDER: Record<string, number> = { RED: 0, AMBER: 1, GREEN: 2, NO_DATA: -1 };
 const healthColor = (h: string) => (h === 'GREEN' ? GREEN : h === 'AMBER' ? AMBER : h === 'RED' ? RED : GRAY);
 const healthLabel = (h: string) => (h === 'NO_DATA' ? 'No data' : h);
 const statusLabel = (s: string) => s.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
@@ -185,6 +186,14 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
   kv('Planned finish', iso(f.schedule.plannedFinish));
   kv('Forecast finish', f.schedule.forecastFinish ? `${iso(f.schedule.forecastFinish)}${f.schedule.varianceDays != null ? `  (${f.schedule.varianceDays > 0 ? '+' : ''}${f.schedule.varianceDays}d)` : ''}` : '—',
     f.schedule.varianceDays != null ? (f.schedule.varianceDays > 0 ? RED : GREEN) : undefined);
+  if (r.delta) {
+    // Trend vs the prior captured status — governance is about direction, not a single snapshot.
+    const d = r.delta;
+    const arrow = (v: number, digits: number) => (Math.abs(v) < (digits === 0 ? 0.5 : 0.005) ? '=' : `${v > 0 ? '+' : ''}${v.toFixed(digits)}`);
+    const parts = [`SPI ${arrow(d.spi, 2)}`, `CPI ${arrow(d.cpi, 2)}`, `%cpl ${arrow(d.weightedPct, 0)}pp`];
+    if (d.healthChanged) parts.push(`health ${d.healthFrom === 'NO_DATA' ? 'no data' : d.healthFrom} -> ${d.healthTo === 'NO_DATA' ? 'no data' : d.healthTo}`);
+    kv(`Trend since ${iso(d.since)}`, parts.join('   ·   '), d.healthChanged ? ((HEALTH_ORDER[d.healthTo] ?? -1) > (HEALTH_ORDER[d.healthFrom] ?? -1) ? GREEN : RED) : undefined);
+  }
 
   // ---------- 2. Task completion ----------
   heading('2. Task Completion');

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { AgileBoard, Project, ProjectCommentary, ProjectReportData } from '../api/types';
@@ -240,24 +240,31 @@ function ReportBody({ r, projectId, period, canEdit }: { r: ProjectReportData; p
           </div>
           {/* Mobile: health + % complete sit on one compact row; desktop: stacked, right-aligned. */}
           <div className="flex shrink-0 items-center gap-3 border-t border-slate-100 pt-3 dark:border-slate-800 sm:block sm:border-0 sm:pt-0 sm:text-right">
-            <Badge color={h.color}>● {h.label}</Badge>
+            <div className="sm:flex sm:flex-col sm:items-end">
+              <Badge color={h.color}>● {h.label}</Badge>
+              {r.delta?.healthChanged && <HealthDelta from={r.delta.healthFrom} to={r.delta.healthTo} />}
+            </div>
             <div className="ml-auto flex items-baseline gap-1.5 sm:mt-1 sm:block">
               <div className="text-3xl font-extrabold tabular-nums text-slate-800 dark:text-white">{r.tasks.weightedPct}%</div>
               <div className="text-[11px] uppercase tracking-wide text-slate-400">complete</div>
+              {r.delta && <div className="text-[11px] sm:mt-0.5"><DeltaChip value={r.delta.weightedPct} unit="pp" digits={0} /></div>}
             </div>
           </div>
         </div>
         {/* KPI strip */}
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <Kpi label="Tasks done" value={`${r.tasks.completed}/${r.tasks.total}`} sub={`${byCount}% by count`} />
-          <Kpi label="SPI" value={e.pv > 0 ? e.spi.toFixed(2) : '—'} warn={e.pv > 0 && e.spi < 1} good={e.pv > 0 && e.spi >= 1} sub="schedule" />
-          <Kpi label="CPI" value={e.ac > 0 ? e.cpi.toFixed(2) : '—'} warn={e.ac > 0 && e.cpi < 1} good={e.ac > 0 && e.cpi >= 1} sub="cost" />
+          <Kpi label="SPI" value={e.pv > 0 ? e.spi.toFixed(2) : '—'} warn={e.pv > 0 && e.spi < 1} good={e.pv > 0 && e.spi >= 1}
+            sub="schedule" trend={r.delta && e.pv > 0 ? <DeltaChip value={r.delta.spi} digits={2} /> : undefined} />
+          <Kpi label="CPI" value={e.ac > 0 ? e.cpi.toFixed(2) : '—'} warn={e.ac > 0 && e.cpi < 1} good={e.ac > 0 && e.cpi >= 1}
+            sub="cost" trend={r.delta && e.ac > 0 ? <DeltaChip value={r.delta.cpi} digits={2} /> : undefined} />
           <Kpi label="BAC" value={formatIdrShort(e.bac)} sub="budget" />
           <Kpi label="EAC (likely)" value={formatIdrShort(f.eac.likely)} sub="forecast cost" warn={f.eac.likely > e.bac} />
           <Kpi label="Forecast finish" value={f.schedule.forecastFinish ? formatDate(f.schedule.forecastFinish) : '—'}
             sub={f.schedule.varianceDays != null ? `${f.schedule.varianceDays > 0 ? '+' : ''}${f.schedule.varianceDays}d vs plan` : 'schedule'}
             warn={(f.schedule.varianceDays ?? 0) > 0} good={(f.schedule.varianceDays ?? 0) < 0} />
         </div>
+        {r.delta && <p className="mt-2 text-[11px] text-slate-400">▲▼ trend vs last captured status ({formatDate(r.delta.since)})</p>}
       </Card>
 
       {/* PM commentary — the story behind the numbers */}
@@ -418,7 +425,7 @@ function CommentarySection({ commentary, projectId, period, canEdit }: {
   );
 }
 
-function Kpi({ label, value, sub, warn, good }: { label: string; value: string; sub?: string; warn?: boolean; good?: boolean }) {
+function Kpi({ label, value, sub, warn, good, trend }: { label: string; value: string; sub?: string; warn?: boolean; good?: boolean; trend?: ReactNode }) {
   // Light-mode tint by state (monday.com-style); dark keeps the neutral card.
   const tint = warn
     ? 'border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30'
@@ -429,8 +436,32 @@ function Kpi({ label, value, sub, warn, good }: { label: string; value: string; 
     <div className={`min-w-0 rounded-lg border p-2.5 ${tint}`}>
       <div className="truncate text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400" title={label}>{label}</div>
       <div title={value} className={`truncate text-base font-bold tabular-nums sm:text-lg ${warn ? 'text-red-600 dark:text-red-400' : good ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-100'}`}>{value}</div>
-      {sub && <div className="truncate text-[10px] text-slate-400" title={sub}>{sub}</div>}
+      {trend ? <div className="truncate text-[10px] tabular-nums">{trend}</div> : sub && <div className="truncate text-[10px] text-slate-400" title={sub}>{sub}</div>}
     </div>
+  );
+}
+
+// A small ▲/▼ trend chip vs the prior status. Higher is better for every metric it's used on
+// (SPI, CPI, % complete), so up = green (improving), down = red (worsening).
+function DeltaChip({ value, unit = '', digits = 2 }: { value: number; unit?: string; digits?: number }) {
+  const eps = digits === 0 ? 0.5 : 0.005;
+  if (Math.abs(value) < eps) return <span className="text-slate-400">◦ flat{unit ? '' : ''}</span>;
+  const up = value > 0;
+  return (
+    <span className={up ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+      {up ? '▲' : '▼'} {up ? '+' : '−'}{Math.abs(value).toFixed(digits)}{unit}
+    </span>
+  );
+}
+
+// Health RAG change chip, e.g. "▲ from RED" (improved) / "▼ from GREEN" (worsened).
+const HEALTH_ORDER: Record<string, number> = { RED: 0, AMBER: 1, GREEN: 2, NO_DATA: -1 };
+function HealthDelta({ from, to }: { from: string; to: string }) {
+  const improved = (HEALTH_ORDER[to] ?? -1) > (HEALTH_ORDER[from] ?? -1);
+  return (
+    <span className={`mt-1 inline-block text-[10px] font-semibold ${improved ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+      {improved ? '▲' : '▼'} from {from === 'NO_DATA' ? 'no data' : from}
+    </span>
   );
 }
 

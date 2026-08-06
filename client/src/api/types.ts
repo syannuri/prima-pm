@@ -765,6 +765,17 @@ export interface ProjectReportData {
     authorName: string | null;
     updatedAt: string | null;
   };
+  // Trend vs the prior captured status (most recent EvmSnapshot before this bucket); null if none.
+  delta: {
+    since: string;
+    prior: { spi: number; cpi: number; weightedPct: number; health: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA' };
+    spi: number;
+    cpi: number;
+    weightedPct: number;
+    healthFrom: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
+    healthTo: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
+    healthChanged: boolean;
+  } | null;
 }
 
 // Response of PUT /projects/:id/report/commentary (echoes the saved narrative).

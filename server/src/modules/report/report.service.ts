@@ -64,6 +64,51 @@ export function periodKey(asOf: Date, period: ReportPeriod): string {
   return d.toISOString().slice(0, 10); // YYYY-MM-DD (daily, or weekly's Monday)
 }
 
+// Start (UTC midnight) of the reporting bucket asOf falls in — weekly snaps back to Monday, monthly
+// to the 1st, yearly to 1 Jan, daily to that day. Used to find the "prior status" for the delta.
+export function periodStart(asOf: Date, period: ReportPeriod): Date {
+  const d = new Date(asOf);
+  d.setUTCHours(0, 0, 0, 0);
+  if (period === 'yearly') d.setUTCMonth(0, 1);
+  else if (period === 'monthly') d.setUTCDate(1);
+  else if (period === 'weekly') d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d;
+}
+
+// Schedule RAG from SPI (matches the portfolio engine): no planned value yet → no data.
+function schedHealth(spi: number, pv: number): 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA' {
+  if (pv <= 0) return 'NO_DATA';
+  if (spi >= 0.95) return 'GREEN';
+  if (spi >= 0.85) return 'AMBER';
+  return 'RED';
+}
+
+// Delta vs the prior captured status (the most recent EvmSnapshot before this reporting bucket).
+// Governance is about trend, not a single snapshot — "GREEN→AMBER since 30 Jul" is far more
+// actionable than a static RAG. Returns null when there's no earlier snapshot to compare against.
+async function getPeriodDelta(
+  projectId: string, period: ReportPeriod, asOf: Date,
+  now: { spi: number; cpi: number; weightedProgress: number; pv: number; health: string },
+) {
+  const prior = await prisma.evmSnapshot.findFirst({
+    where: { projectId, statusDate: { lt: periodStart(asOf, period) } },
+    orderBy: { statusDate: 'desc' },
+    select: { statusDate: true, spi: true, cpi: true, weightedProgress: true, pv: true },
+  });
+  if (!prior) return null;
+  const priorHealth = schedHealth(prior.spi, Number(prior.pv));
+  return {
+    since: prior.statusDate.toISOString(),
+    prior: { spi: prior.spi, cpi: prior.cpi, weightedPct: r2(prior.weightedProgress * 100), health: priorHealth },
+    spi: r2(now.spi - prior.spi),
+    cpi: r2(now.cpi - prior.cpi),
+    weightedPct: r2(now.weightedProgress * 100 - prior.weightedProgress * 100),
+    healthFrom: priorHealth,
+    healthTo: now.health,
+    healthChanged: priorHealth !== now.health,
+  };
+}
+
 const emptyCommentary = { highlights: null, lowlights: null, nextFocus: null, authorName: null, updatedAt: null };
 
 // The PM narrative saved for a project's reporting bucket (null fields when nothing written yet).
@@ -192,6 +237,10 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
     }));
   }
 
+  const delta = await getPeriodDelta(projectId, period, asOf, {
+    spi: evm.spi, cpi: evm.cpi, weightedProgress: evm.scheduleProgress, pv: evm.pv, health: evm.health,
+  });
+
   return {
     project: {
       code: project.code,
@@ -230,5 +279,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
     forecast: { ...forecast, sCurve },
     // PM narrative for this reporting bucket (the story behind the numbers).
     commentary,
+    // Trend vs the prior captured status (null when there's no earlier snapshot).
+    delta,
   };
 }
