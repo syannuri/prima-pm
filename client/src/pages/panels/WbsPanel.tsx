@@ -235,8 +235,13 @@ function InlineDate({ value, editable, onSave, title }: {
       <input
         type="date" autoFocus defaultValue={cur}
         onClick={(e) => e.stopPropagation()}
-        onBlur={(e) => { setEditing(false); const v = e.target.value || null; if (v !== (cur || null)) onSave(v); }}
-        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setEditing(false); }}
+        // Commit on CHANGE, not blur: picking a date in the native calendar can blur the input
+        // before its value updates, so an onBlur handler would read the stale (old) value and the
+        // edit would silently revert. onChange fires reliably on selection (and on a fully-typed
+        // date). onBlur just closes; Escape cancels. (Mirrors the Owner <select> below.)
+        onChange={(e) => { const v = e.target.value || null; setEditing(false); if (v !== (cur || null)) onSave(v); }}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); }}
         className="w-[7.25rem] rounded border border-brand-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100"
       />
     );
@@ -1225,7 +1230,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <button type="button" title="Add a task here"
                           onClick={(e) => { e.stopPropagation(); insertAfter(node, r.end); }}
                           style={{ left: 6 + depth * 18 }}
-                          className={`absolute -bottom-2 z-30 grid h-3.5 w-3.5 place-items-center text-sm font-bold leading-none text-slate-600 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
+                          className={`absolute -bottom-2.5 z-30 grid h-5 w-5 place-items-center text-lg font-bold leading-none text-slate-600 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
                       )}
                     </td>
                     <td>{canEdit
