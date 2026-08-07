@@ -4,7 +4,7 @@ import { categoryLabel, flattenGantt, type ProjectExport } from './export.data.j
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const iso = (d: Date | string | null) => (d ? new Date(d).toISOString().slice(0, 10) : '—');
-const ACCENT = '#e34f4a'; // brand coral (matches the app)
+const ACCENT = '#2563eb'; // brand blue (matches the app)
 const GRAY = '#64748b';
 
 export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {

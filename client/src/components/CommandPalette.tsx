@@ -8,6 +8,7 @@ import type { Project } from '../api/types';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { PROJECT_STATUS_DOT } from '../lib/labels';
+import { getRecentProjectIds } from '../lib/recentProjects';
 
 type Cmd = { id: string; label: string; sub?: string; group: string; dot?: string; keywords?: string; run: () => void };
 
@@ -31,6 +32,9 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     const isPortfolio = !!user && ['ADMIN', 'PMO', 'FINANCE'].includes(user.role);
     const nav: Cmd[] = [
       { id: 'nav-dash', group: 'Navigate', label: 'Dashboard', sub: 'Portfolio overview', keywords: 'home portfolio', run: () => go('/') },
+      { id: 'nav-cards', group: 'Navigate', label: 'Project cards', sub: 'All projects', keywords: 'projects grid cards new create', run: () => go('/?view=cards') },
+      ...(user && ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'GUEST'].includes(user.role) ? [{ id: 'nav-reports', group: 'Navigate', label: user.role === 'GUEST' ? 'My Reports' : 'Reports', sub: 'Status & portfolio', keywords: 'report pdf status weekly', run: () => go('/reports') } as Cmd] : []),
+      ...(user && user.role !== 'GUEST' ? [{ id: 'nav-messages', group: 'Navigate', label: 'Messages', sub: 'Direct chat', keywords: 'chat dm inbox', run: () => go('/messages') } as Cmd] : []),
       ...(isAdmin ? [{ id: 'nav-users', group: 'Navigate', label: 'Users', sub: 'Admin', keywords: 'accounts', run: () => go('/admin/users') } as Cmd] : []),
       ...(isAdmin ? [{ id: 'nav-members', group: 'Navigate', label: 'Members', sub: 'Admin', keywords: 'tenant organization membership', run: () => go('/admin/members') } as Cmd] : []),
       ...(isPortfolio ? [{ id: 'nav-res', group: 'Navigate', label: 'Resource Pool', sub: 'Capacity & rates', keywords: 'resources capacity', run: () => go('/admin/resources') } as Cmd] : []),
@@ -48,11 +52,24 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     return [...nav, ...proj, ...actions];
   }, [projects, user, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Recently-visited projects — shown as a "Recent" group at the top when the box is empty.
+  const recent: Cmd[] = useMemo(() => {
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    return getRecentProjectIds()
+      .map((id) => byId.get(id))
+      .filter((p): p is Project => !!p)
+      .slice(0, 5)
+      .map((p) => ({
+        id: `r-${p.id}`, group: 'Recent', label: p.name, sub: p.code,
+        dot: PROJECT_STATUS_DOT[p.status] ?? 'bg-slate-400', run: () => go(`/projects/${p.id}`),
+      }));
+  }, [projects, open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return cmds;
+    if (!s) return [...recent, ...cmds];
     return cmds.filter((c) => `${c.label} ${c.sub ?? ''} ${c.keywords ?? ''}`.toLowerCase().includes(s));
-  }, [q, cmds]);
+  }, [q, cmds, recent]);
 
   useEffect(() => { setSel(0); }, [q, open]);
   useEffect(() => { if (open) { setQ(''); setTimeout(() => inputRef.current?.focus(), 0); } }, [open]);

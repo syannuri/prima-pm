@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import { formatIdr } from '../../calc/money.js';
 import type { BoardPack } from './export.boardpack.data.js';
 
-const ACCENT = '#e34f4a'; // brand coral (matches the app + the other report PDFs)
+const ACCENT = '#2563eb'; // brand blue (matches the app + the other report PDFs)
 const GRAY = '#64748b';
 const GREEN = '#16a34a';
 const AMBER = '#d97706';

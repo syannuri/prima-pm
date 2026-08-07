@@ -99,6 +99,14 @@ export default function NotificationBell() {
   const inboxUnread = inbox?.unread ?? 0;
   const total = alertTotal + unread + inboxUnread;
 
+  // Dropdown filter tabs + a one-click "mark all read" (clears the changes feed + follows up every
+  // "For you" item; live "Needs attention" signals are left — they clear themselves as they resolve).
+  const [filter, setFilter] = useState<'all' | 'inbox' | 'attn' | 'changes'>('all');
+  const markAllRead = () => {
+    if (unread > 0 && !markSeen.isPending) markSeen.mutate();
+    inbox?.items.forEach((n) => followUpInbox.mutate(n.id));
+  };
+
   // Gentle, faint reminder that fades in → holds → fades out — shown every time the
   // user opens the dashboard (the bell lives in the persistent layout, so we re-arm on
   // each navigation back to the dashboard route).
@@ -208,8 +216,27 @@ export default function NotificationBell() {
           {/* Portaled to <body> + fixed coords (see btnRef effect): a right-anchored w-80 card on
               sm+, a full-width sheet under the header on phones — sits above the sticky tab strip. */}
           <div style={pos} className="prima-toast z-[61] overflow-y-auto rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-xl backdrop-blur-md dark:border-slate-700/80 dark:bg-slate-900/90">
+            {/* Filter tabs + one-click mark-all-read */}
+            <div className="mb-2 flex items-center gap-1 border-b border-slate-200/70 pb-2 dark:border-slate-800/70">
+              {([['all', 'All'], ['inbox', 'For you'], ['attn', 'Attention'], ['changes', 'Changes']] as const)
+                .filter(([k]) => (k !== 'changes' || isAdminPmo) && (k !== 'inbox' || !!inbox?.items.length))
+                .map(([k, label]) => (
+                  <button
+                    key={k}
+                    onClick={() => setFilter(k)}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition ${filter === k ? 'bg-brand-600 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              {(inboxUnread > 0 || unread > 0) && (
+                <button onClick={markAllRead} className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-900/20">
+                  Mark all read
+                </button>
+              )}
+            </div>
             {/* Personal inbox — assignment & other discrete events */}
-            {!!inbox?.items.length && (
+            {(filter === 'all' || filter === 'inbox') && !!inbox?.items.length && (
               <div className="mb-3">
                 <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">For you</div>
                 <ul className="space-y-0.5">
@@ -238,6 +265,8 @@ export default function NotificationBell() {
                 <div className="mt-2 border-t border-slate-200/70 dark:border-slate-800/70" />
               </div>
             )}
+            {(filter === 'all' || filter === 'attn') && (
+            <>
             <div className="mb-2 flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Needs attention</span>
               {alertTotal > 0 && (
@@ -267,8 +296,10 @@ export default function NotificationBell() {
                 ))}
               </ul>
             )}
+            </>
+            )}
 
-            {isAdminPmo && (
+            {(filter === 'all' || filter === 'changes') && isAdminPmo && (
               <div className="mt-3 border-t border-slate-200/70 pt-2 dark:border-slate-800/70">
                 <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
                   Recent changes (WBS · Cost · Risk)

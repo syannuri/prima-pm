@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import { formatIdr } from '../../calc/money.js';
 import type { PortfolioExport } from './export.portfolio.data.js';
 
-const ACCENT = '#e34f4a'; // brand coral (matches the app + per-project report)
+const ACCENT = '#2563eb'; // brand blue (matches the app + per-project report)
 const GRAY = '#64748b';
 const GREEN = '#16a34a';
 const AMBER = '#d97706';

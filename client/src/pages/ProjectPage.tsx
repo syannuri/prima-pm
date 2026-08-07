@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { pushRecentProject } from '../lib/recentProjects';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
@@ -46,6 +47,8 @@ const MOBILE_HIDDEN: Tab[] = ['Timesheet', 'Change Req'];
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams();
+  // Remember this project as recently-visited (powers the ⌘K palette's "Recent" group).
+  useEffect(() => { if (projectId) pushRecentProject(projectId); }, [projectId]);
   const [searchParams, setSearchParams] = useSearchParams();
   // Deep-link from the ACTIVATION_READY notification / PMO queue: ?review=activation opens the
   // activation review card (governors only). Read once on mount.

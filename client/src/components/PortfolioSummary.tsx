@@ -16,7 +16,7 @@ import ProgressChart from './ProgressChart';
 import DonutChart, { type DonutSlice } from './DonutChart';
 import { projectAccent } from '../lib/projectColor';
 
-const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#f4675f' };
+const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#2563eb' };
 
 // Mono line-icons (feather-style) for the KPI cards — purely for scannability.
 

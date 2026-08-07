@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import { formatIdr } from '../../calc/money.js';
 import type { ProjectReport } from '../report/report.service.js';
 
-const ACCENT = '#e34f4a'; // brand coral (matches the app)
+const ACCENT = '#2563eb'; // brand blue (matches the app)
 const GRAY = '#64748b';
 const GREEN = '#16a34a';
 const AMBER = '#d97706';
@@ -324,7 +324,7 @@ export function buildReportPdf(r: ProjectReport): Promise<Buffer> {
     };
     line((p) => p.pv, '#334155', false); // Planned Value (slate)
     line((p) => p.ac, '#0284c7', false); // Actual Cost (sky)
-    line((p) => p.forecast, ACCENT, true); // Forecast to EAC (coral, dashed)
+    line((p) => p.forecast, ACCENT, true); // Forecast to EAC (blue, dashed)
     // Axis frame.
     doc.strokeColor('#cbd5e1').lineWidth(0.8).moveTo(cX, cY).lineTo(cX, cY + cH).lineTo(cX + cW, cY + cH).stroke();
     doc.restore();

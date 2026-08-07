@@ -7,7 +7,7 @@ export interface ProgressDatum {
 
 const GRID = [100, 75, 50, 25, 0];
 const BASE_COLOR = '#94a3b8'; // slate-400 — planned baseline
-const ACTUAL_COLOR = '#f4675f'; // brand-500 — actual
+const ACTUAL_COLOR = '#2563eb'; // brand-600 (blue) — actual
 
 const clampPct = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 100);
 
