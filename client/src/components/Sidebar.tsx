@@ -31,12 +31,12 @@ const ICONS = {
 };
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
-// Light sidebar in light mode, dark navy in dark mode.
-const linkIdle = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white';
-// Active item: soft coral wash + a crisp coral left accent bar.
-const linkActive = 'bg-brand-50 text-brand-700 shadow-[inset_2px_0_0_theme(colors.brand.500)] dark:bg-brand-600/15 dark:text-white';
+// Elegant dark charcoal rail in BOTH themes: idle = muted light-grey, hover = subtle white wash.
+const linkIdle = 'text-slate-300 hover:bg-white/10 hover:text-white';
+// Active item: subtle white wash + a crisp BLUE left accent bar (matches the project tab accent).
+const linkActive = 'bg-white/10 text-white shadow-[inset_2px_0_0_theme(colors.blue.500)]';
 // Small uppercase group heading between nav sections (Workspace / Manage / Projects).
-const sectionLabel = 'px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500';
+const sectionLabel = 'px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400';
 
 // `drawer` = rendered as the mobile slide-over (not the fixed web sidebar). The Manual/Settings
 // footer is drawer-only: on the web those live in the header top-bar, so the sidebar hides them.
@@ -74,9 +74,9 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
   const cx = (active: boolean) => `${linkBase} ${collapsed ? 'justify-center px-0' : ''} ${active ? linkActive : linkIdle}`;
 
   return (
-    <div className={`flex h-full flex-col border-r border-slate-200 bg-white text-slate-600 shadow-[6px_0_24px_-18px_rgba(15,23,42,0.35)] transition-[width] duration-200 dark:border-transparent dark:bg-slate-900 dark:text-slate-300 dark:shadow-none ${collapsed ? 'w-16' : 'w-60'}`}>
+    <div className={`flex h-full flex-col border-r border-black/20 bg-slate-800 text-slate-300 shadow-[6px_0_24px_-18px_rgba(0,0,0,0.55)] transition-[width] duration-200 ${collapsed ? 'w-16' : 'w-60'}`}>
       <div className={`flex h-14 items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <span className={`relative inline-block border-[3px] border-slate-900 font-brand font-bold tracking-wide text-slate-900 dark:border-white dark:text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
+        <span className={`relative inline-block border-[3px] border-white font-brand font-bold tracking-wide text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
           {collapsed ? 'P' : 'PRISMATIX'}
           <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
         </span>
@@ -87,7 +87,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         <NavLink to="/" end onClick={onNavigate} title={unread > 0 ? `Dashboard — ${unread} unread changes` : 'Dashboard'} className={({ isActive }) => `relative ${cx(isActive)}`}>
           <Icon path={ICONS.home} /> {!collapsed && 'Dashboard'}
           {unread > 0 && (collapsed ? (
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-white dark:ring-slate-900" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-800" />
           ) : (
             <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{unread}</span>
           ))}
@@ -97,7 +97,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
           <NavLink to="/messages" onClick={onNavigate} title={chatUnreadCount > 0 ? `Messages — ${chatUnreadCount} unread` : 'Messages'} className={({ isActive }) => `relative ${cx(isActive)}`}>
             <Icon path={ICONS.chat} /> {!collapsed && 'Messages'}
             {chatUnreadCount > 0 && (collapsed ? (
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-white dark:ring-slate-900" />
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-800" />
             ) : (
               <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{chatUnreadCount}</span>
             ))}
@@ -126,7 +126,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {/* MANAGE — admin/PMO governance (project registry, users, audit). */}
         {isAdminPmo && (!collapsed
           ? <div className={sectionLabel}>Manage</div>
-          : <div className="my-2 border-t border-slate-200 dark:border-slate-800" />)}
+          : <div className="my-2 border-t border-white/10" />)}
         {isAdminPmo && (
           <NavLink to="/admin/projects" onClick={onNavigate} title="Project Database" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.database} /> {!collapsed && 'Project Database'}
@@ -159,11 +159,11 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
           </NavLink>
         )}
         {!collapsed && <div className={sectionLabel}>Projects</div>}
-        {collapsed && <div className="my-2 border-t border-slate-200 dark:border-slate-800" />}
+        {collapsed && <div className="my-2 border-t border-white/10" />}
         {/* Don't flash "No projects yet" while the list is still loading (looks like the
             projects vanished on a slow first paint). */}
-        {!collapsed && projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-500">Loading…</div>}
-        {!collapsed && !projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-500">No projects yet</div>}
+        {!collapsed && projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-400">Loading…</div>}
+        {!collapsed && !projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-400">No projects yet</div>}
         {visibleProjects.map((p) => (
           <NavLink key={p.id} to={`/projects/${p.id}`} onClick={onNavigate} title={p.name} className={({ isActive }) => cx(isActive)}>
             {collapsed ? (
@@ -181,7 +181,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {!collapsed && projects.length > CAP && (
           <button
             onClick={() => setShowAllProjects((s) => !s)}
-            className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-slate-400 transition hover:bg-white/10 hover:text-white"
           >
             {showAllProjects ? '▴ Show less' : `▾ Show all ${projects.length}`}
           </button>
@@ -191,7 +191,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
       {/* Manual + Settings: drawer-only. On the web these sit in the header top-bar, so the
           fixed sidebar keeps its focus on Dashboard / Resources / Projects. */}
       {drawer && (
-        <div className="space-y-1 border-t border-slate-200 dark:border-slate-800 px-3 py-2">
+        <div className="space-y-1 border-t border-white/10 px-3 py-2">
           <NavLink to="/manual" onClick={onNavigate} title="Manual" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.manual} /> {!collapsed && 'Manual'}
           </NavLink>
@@ -203,7 +203,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
 
       {/* Profile footer doubles as the account menu (Settings / Manual / theme / Logout),
           opening upward so it clears the bottom of the viewport. */}
-      <div className={`border-t border-slate-200 py-2 dark:border-slate-800 ${collapsed ? 'flex justify-center px-2' : 'px-2'}`}>
+      <div className={`border-t border-white/10 py-2 ${collapsed ? 'flex justify-center px-2' : 'px-2'}`}>
         <AvatarMenu variant="row" direction="up" collapsed={collapsed} />
       </div>
     </div>

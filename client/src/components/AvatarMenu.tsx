@@ -112,12 +112,12 @@ export default function AvatarMenu({
           aria-label={t.account}
           aria-haspopup="menu"
           aria-expanded={open}
-          className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition hover:bg-white/10"
         >
           {avatarDot}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-slate-800 dark:text-white">{user?.name}</span>
-            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{user?.role}</span>
+            <span className="block truncate text-sm font-medium text-white">{user?.name}</span>
+            <span className="block truncate text-xs text-slate-400">{user?.role}</span>
           </span>
           <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={I.caretV} /></svg>
         </button>
