@@ -65,7 +65,6 @@ export default function ProjectPage() {
   // Anchor at the top of the tab strip — selecting a tab scrolls it up so the freshly-loaded
   // panel is in view (the project header/alerts above can push content below the fold).
   const tabsAnchorRef = useRef<HTMLDivElement>(null);
-  const firstTabRun = useRef(true);
   // "Jump to" (More menu) — switch tab and optionally deep-link to a section anchor within it.
   const [jump, setJump] = useState<string | null>(null);
   const goto = (t: Tab, sectionId?: string) => { setTab(t); setJump(sectionId ?? null); };
@@ -77,17 +76,9 @@ export default function ProjectPage() {
     });
     return () => cancelAnimationFrame(raf);
   }, [jump, tab]);
-  // On a user tab switch, bring the tab strip to the top of the scroll area so the newly-selected
-  // panel is in view. Keyed on the `tab` STATE (changes on every click) and declared BEFORE the
-  // loading/not-found early returns so the hook order stays stable. Skips the initial mount; a
-  // section "jump" does its own scroll. Disabled on mobile — the iPhone-style bottom tab bar makes
-  // the extra page jump on every tap jarring, so phones just stay put.
-  useEffect(() => {
-    if (firstTabRun.current) { firstTabRun.current = false; return; }
-    if (jump || isMobile) return;
-    tabsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  // Auto-scroll on a plain tab click is intentionally DISABLED (user preference) — clicking a tab
+  // no longer jumps the page to the tab strip; the view stays put. The "Jump to" deep-link (above)
+  // still scrolls to its target section, since that's an explicit navigation.
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
   const { lang } = useLang();
   const [editOpen, setEditOpen] = useState(false);
@@ -360,7 +351,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
   const groupBtn = (active: boolean) =>
     `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-2 text-sm font-bold transition ${
       active
-        ? 'border-brand-600 bg-brand-50 text-slate-800 dark:bg-brand-900/30 dark:text-white'
+        ? 'border-blue-600 bg-blue-50 text-slate-800 dark:bg-blue-900/30 dark:text-white'
         : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-800/60 dark:hover:text-white'
     }`;
   // Level 2: sub-tabs of the active group (pills), always visible so the group's contents are
@@ -368,7 +359,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
   const subBtn = (active: boolean) =>
     `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-bold transition ${
       active
-        ? 'bg-brand-600 text-white shadow-sm'
+        ? 'bg-blue-600 text-white shadow-sm'
         : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white'
     }`;
 

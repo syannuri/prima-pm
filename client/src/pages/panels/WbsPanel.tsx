@@ -966,7 +966,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           <span aria-hidden>↻</span> Rotate your device to landscape for the full timeline.
         </div>
       )}
-      <div className={`flex flex-wrap items-end justify-between gap-2 ${fullscreen ? 'mb-2' : 'mb-3'}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${fullscreen ? 'justify-between mb-2' : 'justify-end mb-1'}`}>
         {/* In full view the title block is dropped so the header chrome stays short — on a
             landscape PHONE (~390px tall) it otherwise eats the whole height and collapses the
             timeline to nothing. */}
