@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { Badge, Card, Spinner } from '../components/ui';
-import { IconUser, IconBuilding } from '../components/icons';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
@@ -27,17 +26,13 @@ import UatPanel from './panels/UatPanel';
 import KickoffPanel from './panels/KickoffPanel';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ProjectAlerts from './panels/ProjectAlerts';
-import NextStepChip from '../components/NextStepChip';
 import CrDecisionBanner from '../components/CrDecisionBanner';
-import ReassignPm from '../components/ReassignPm';
-import ProjectDetailsPopover from '../components/ProjectDetailsPopover';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
 import LifecycleActions from '../components/LifecycleActions';
 import ActivationReviewModal from '../components/ActivationReviewModal';
 import ActivationReviewBanner from '../components/ActivationReviewBanner';
 import EvmHealth from '../components/EvmHealth';
-import ProjectHealthStrip from '../components/ProjectHealthStrip';
 import ProjectOverview from '../components/ProjectOverview';
 import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
@@ -169,10 +164,6 @@ export default function ProjectPage() {
     isMobile && MOBILE_HIDDEN.includes(chosenTab) ? landingTab
     : chosenTab;
 
-  // Shared pill style for the compact header meta chips (add the display util per use so
-  // the conditionally-hidden chips can toggle with `hidden sm:inline-flex`).
-  const chipCls = 'items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
-
   return (
     <div className="space-y-3">
       <div>
@@ -228,28 +219,9 @@ export default function ProjectPage() {
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
-        {/* EVM health summary (RAG + CPI/SPI/%complete) on its own row under the title. Full
-            detail lives in the Monitoring → Health tab; clicking jumps there. */}
-        {chartered && <div className="mt-2"><ProjectHealthStrip projectId={projectId} onOpen={() => setTab('Health')} /></div>}
-        {/* Compact meta chips (PM · Client · Margin · Next steps). Hidden entirely on
-            phones — the mobile Overview tab carries the health/financials, so the header stays
-            tight; the full chip row returns on sm+ (desktop/tablet). */}
-        <div className="mt-2 hidden flex-wrap items-center gap-1.5 text-xs sm:flex">
-          <span className={`inline-flex ${chipCls}`}>
-            <IconUser className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-            <span className="font-medium text-slate-700 dark:text-slate-200">{project.pm?.name ?? '—'}</span>
-            <ReassignPm projectId={projectId} currentPmId={project.pm?.id ?? project.pmUserId} />
-          </span>
-          {project.clientName && (
-            <span className={`hidden sm:inline-flex ${chipCls}`}><IconBuilding className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />{project.clientName}</span>
-          )}
-          {/* Margin chip doubles as the trigger for a Cost Baseline / Revenue breakdown popover. */}
-          <ProjectDetailsPopover project={project} />
-          {/* Lifecycle "what to do next" guide as a compact informational chip (expands to a
-              popover). Renders nothing when no steps pending; desktop-only by virtue of this
-              hidden-on-phones chip row (phones lead with the graphic Overview tab instead). */}
-          <NextStepChip projectId={projectId} onJump={(t) => setTab(t as Tab)} />
-        </div>
+        {/* Header meta rows (EVM health strip + PM/Client/Margin/Next-step chips) are intentionally
+            hidden to keep the header tight and lift the tab bar right under the project name. The
+            same info lives in the Monitoring → Health tab and the graphic Overview tab. */}
         {project.status === 'ON_HOLD' && (
           <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
             ⏸ On hold{project.onHoldReason && <> · <span className="italic">“{project.onHoldReason}”</span></>}
