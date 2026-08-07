@@ -25,13 +25,10 @@ import CloseoutPanel from './panels/CloseoutPanel';
 import UatPanel from './panels/UatPanel';
 import KickoffPanel from './panels/KickoffPanel';
 import EvmTrendPanel from './panels/EvmTrendPanel';
-import ProjectAlerts from './panels/ProjectAlerts';
-import CrDecisionBanner from '../components/CrDecisionBanner';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
 import LifecycleActions from '../components/LifecycleActions';
 import ActivationReviewModal from '../components/ActivationReviewModal';
-import ActivationReviewBanner from '../components/ActivationReviewBanner';
 import EvmHealth from '../components/EvmHealth';
 import ProjectOverview from '../components/ProjectOverview';
 import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
@@ -219,29 +216,16 @@ export default function ProjectPage() {
           {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
           <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
-        {/* Header meta rows (EVM health strip + PM/Client/Margin/Next-step chips) are intentionally
-            hidden to keep the header tight and lift the tab bar right under the project name. The
-            same info lives in the Monitoring → Health tab and the graphic Overview tab. */}
-        {project.status === 'ON_HOLD' && (
-          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
-            ⏸ On hold{project.onHoldReason && <> · <span className="italic">“{project.onHoldReason}”</span></>}
-          </div>
-        )}
-        {project.status === 'CLOSED' && project.closedAt && (
-          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-            🔒 Closed on {new Date(project.closedAt).toLocaleDateString()}
-            {project.closureNote && <> · <span className="italic">“{project.closureNote}”</span></>}
-          </div>
-        )}
+        {/* Header carries NO inline status/alert banners — project status shows as the badge
+            beside the name, and every notification (budget/risk/schedule signals, pending change
+            requests, activation-ready) lives only in the top-bar notification bell. The meta rows
+            (EVM health strip + PM/Client/Margin/Next-step chips) are hidden too; that info stays in
+            Monitoring → Health and the graphic Overview tab. */}
       </div>
 
-      {/* CR banner jumps to the Change Req tab — hidden on phones where that tab is hidden. */}
-      {!isMobile && <CrDecisionBanner projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
-
-      <ActivationReviewBanner project={project} />
+      {/* Activation review modal still mounts — it's opened from the bell's "activation ready"
+          deep-link (?review=activation) or the lifecycle action, not an inline banner. */}
       {reviewOpen && canEdit && <ActivationReviewModal projectId={projectId} onClose={closeReview} />}
-
-      <ProjectAlerts projectId={projectId} onJump={(t) => setTab(t as Tab)} />
 
       <div ref={tabsAnchorRef} className="scroll-mt-4" />
       {/* Tab strip + active panel share one wrapper with a viewport-tall min-height (desktop only)
