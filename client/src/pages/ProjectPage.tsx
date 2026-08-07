@@ -162,7 +162,7 @@ export default function ProjectPage() {
     : chosenTab;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1.5">
       <div>
         {/* Header leads straight with the project name — the in-page breadcrumb link and the
             project-code chip were dropped to keep the top tight and lift the tab bar up. The
@@ -355,19 +355,21 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
     <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-slate-200 px-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">{changeCount}</span>
   ) : null);
 
-  // Level 1: domain groups (underline tabs).
+  // Level 1: domain groups (underline tabs). Bold black type like the project title; the active
+  // tab keeps its brand underline + tint as the accent, but the text stays black for legibility.
   const groupBtn = (active: boolean) =>
-    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition ${
+    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-2 text-sm font-bold transition ${
       active
-        ? 'border-brand-600 bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
+        ? 'border-brand-600 bg-brand-50 text-slate-900 dark:bg-brand-900/30 dark:text-white'
+        : 'border-transparent text-slate-800 hover:bg-slate-50 hover:text-black dark:text-slate-100 dark:hover:bg-slate-800/60 dark:hover:text-white'
     }`;
-  // Level 2: sub-tabs of the active group (pills), always visible so the group's contents are discoverable.
+  // Level 2: sub-tabs of the active group (pills), always visible so the group's contents are
+  // discoverable. Bold black; the active sub-tab is the filled brand pill (white text on brand).
   const subBtn = (active: boolean) =>
-    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-bold transition ${
       active
         ? 'bg-brand-600 text-white shadow-sm'
-        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+        : 'text-slate-800 hover:bg-slate-100 hover:text-black dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-white'
     }`;
 
   return (
@@ -377,7 +379,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
     // z-[31] beats the WBS/Gantt sticky header (frozen th is !z-30) so, when the WBS box scrolls
     // up under the strip, its column header tucks *behind* the opaque strip instead of painting
     // over the tabs. Kept below the mobile drawer (z-40).
-    <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-50 px-4 pb-1 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:-mx-6 sm:px-6">
+    <div className="sticky -top-2 z-[31] -mx-4 border-b border-slate-200 bg-slate-50 px-4 pb-1 pt-2 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:-mx-6 sm:px-6">
       {/* Level 1 — domain groups. Scrolls horizontally on narrow screens; a right-edge fade
           hints there are more groups to swipe to (hidden on md+ where they all fit). */}
       <div className="relative">

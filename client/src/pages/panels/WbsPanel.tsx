@@ -152,54 +152,30 @@ const CheckIcon = () => (
 
 // Overall project % complete as a circular gauge for the WBS/Gantt header — the accumulated,
 // weighted roll-up straight from the EVM engine (identical to the dashboard's per-project
-// %complete). The arc is a soft gradient whose HUE tracks schedule health (SPI): green on
-// track, amber at risk, red behind, neutral before a baseline exists — so the colour is
-// meaningful, not decorative. Thin (3px), rounded, on a faint track; full at 100%.
-const RING_GRADIENT: Record<string, [string, string]> = {
-  GREEN: ['#34d399', '#16a34a'], // emerald → green
-  AMBER: ['#fbbf24', '#d97706'], // amber → amber-600
-  RED: ['#fb7185', '#e11d48'], // rose → rose-600
-  NO_DATA: ['#cbd5e1', '#94a3b8'], // slate (neutral)
-};
+// %complete). Rendered as a compact RAG pill (button-height) — a coloured dot + % + short health
+// word — whose colour tracks schedule health (SPI): green on track, amber at risk, red behind,
+// slate before a baseline exists — so the colour is meaningful, not decorative.
 const HEALTH_WORD: Record<string, string> = { GREEN: 'on track', AMBER: 'at risk', RED: 'behind schedule', NO_DATA: 'no schedule baseline yet' };
+const HEALTH_SHORT: Record<string, string> = { GREEN: 'On track', AMBER: 'At risk', RED: 'Behind', NO_DATA: 'No baseline' };
+const HEALTH_PILL: Record<string, { box: string; dot: string }> = {
+  GREEN: { box: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  AMBER: { box: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300', dot: 'bg-amber-500' },
+  RED: { box: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-900/20 dark:text-rose-300', dot: 'bg-rose-500' },
+  NO_DATA: { box: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', dot: 'bg-slate-400' },
+};
 
-function ProgressRing({ pct, health = 'NO_DATA', loading }: { pct: number; health?: string; loading?: boolean }) {
-  const gid = useId();
-  const R = 15.5;
-  const C = 2 * Math.PI * R;
+// Overall project % complete as a RAG rounded box, sized to match the header control buttons.
+function ProgressBadge({ pct, health = 'NO_DATA', loading }: { pct: number; health?: string; loading?: boolean }) {
   const clamped = Math.max(0, Math.min(100, pct));
-  const dash = (clamped / 100) * C;
-  const [from, to] = RING_GRADIENT[health] ?? RING_GRADIENT.NO_DATA;
+  const p = HEALTH_PILL[health] ?? HEALTH_PILL.NO_DATA;
   return (
     <div
-      className="flex shrink-0 items-center gap-2"
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${p.box}`}
       title={`Overall project progress: ${clamped.toFixed(1)}% complete — schedule ${HEALTH_WORD[health] ?? ''}. Weighted roll-up (same figure as the dashboard).`}
     >
-      <div className="relative h-11 w-11">
-        <svg viewBox="0 0 40 40" className="h-11 w-11 -rotate-90">
-          <defs>
-            <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={from} />
-              <stop offset="100%" stopColor={to} />
-            </linearGradient>
-          </defs>
-          <circle cx="20" cy="20" r={R} fill="none" strokeWidth="3" className="stroke-slate-100 dark:stroke-slate-800" />
-          {!loading && (
-            <circle
-              cx="20" cy="20" r={R} fill="none" strokeWidth="3" strokeLinecap="round"
-              stroke={`url(#${gid})`}
-              className="transition-[stroke-dasharray] duration-500"
-              strokeDasharray={`${dash} ${C}`}
-            />
-          )}
-        </svg>
-        <span className="absolute inset-0 grid place-items-center text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-100">
-          {loading ? '…' : `${Math.round(clamped)}%`}
-        </span>
-      </div>
-      <span className="hidden text-[10px] font-semibold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400 sm:block">
-        Overall<br />progress
-      </span>
+      <span className={`h-2 w-2 shrink-0 rounded-full ${p.dot}`} aria-hidden />
+      <span className="tabular-nums">{loading ? '…' : `${Math.round(clamped)}%`}</span>
+      <span className="opacity-75">· {HEALTH_SHORT[health] ?? ''}</span>
     </div>
   );
 }
@@ -1060,7 +1036,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </OptionsMenu>
           )}
         </div>
-        {!fullscreen && rows.length > 0 && <ProgressRing pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
+        {!fullscreen && rows.length > 0 && <ProgressBadge pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
         </div>
       </div>
 
