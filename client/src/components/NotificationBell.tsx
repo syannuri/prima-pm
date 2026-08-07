@@ -224,6 +224,7 @@ export default function NotificationBell() {
                   <button
                     key={k}
                     onClick={() => setFilter(k)}
+                    aria-pressed={filter === k}
                     className={`rounded-md px-2 py-1 text-xs font-medium transition ${filter === k ? 'bg-brand-600 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800'}`}
                   >
                     {label}

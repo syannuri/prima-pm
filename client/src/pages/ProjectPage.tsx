@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment, lazy, Suspense } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { pushRecentProject } from '../lib/recentProjects';
 import { useQuery } from '@tanstack/react-query';
@@ -19,7 +19,9 @@ import StakeholderPanel from './panels/StakeholderPanel';
 import RequirementsPanel from './panels/RequirementsPanel';
 import ProcurementPanel from './panels/ProcurementPanel';
 import RaidPanel from './panels/RaidPanel';
-import SchedulePanel from './panels/SchedulePanel';
+// Lazy-loaded: the Schedule/WBS/Gantt panel is by far the heaviest sub-tree — code-splitting it
+// out of the ProjectPage chunk cuts first load for anyone who opens a different tab first.
+const SchedulePanel = lazy(() => import('./panels/SchedulePanel'));
 import ChangeRequestPanel from './panels/ChangeRequestPanel';
 import AuditPanel from './panels/AuditPanel';
 import CloseoutPanel from './panels/CloseoutPanel';
@@ -231,6 +233,9 @@ export default function ProjectPage() {
       <div className="space-y-2 sm:min-h-[calc(100vh-3.5rem)]">
       <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} isMobile={isMobile} onSelect={(t) => setTab(t)} />
 
+      {/* Suspense boundary for the lazy Schedule/Gantt panel — the fallback replaces only the panel
+          area (below the tab strip) while its chunk loads, not the tabs. */}
+      <Suspense fallback={<Card><div className="flex justify-center py-10"><Spinner /></div></Card>}>
       {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && activeTab !== 'Stakeholders' && activeTab !== 'Requirements' && activeTab !== 'RAID' && (
         <Card>
           <p className="text-center text-amber-600">
@@ -266,6 +271,7 @@ export default function ProjectPage() {
       {activeTab === 'UAT' && chartered && <UatPanel projectId={projectId} />}
       {activeTab === 'Closeout' && <CloseoutPanel projectId={projectId} />}
       {activeTab === 'Audit' && <AuditPanel projectId={projectId} />}
+      </Suspense>
       </div>
     </div>
   );

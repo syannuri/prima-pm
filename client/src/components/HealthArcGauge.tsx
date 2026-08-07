@@ -54,7 +54,8 @@ export default function HealthArcGauge({ spi, cpi, pct, status, statusLabel, cla
 
   return (
     <div className={`relative mx-auto w-full ${className ?? 'max-w-[280px]'}`}>
-      <svg viewBox="0 0 220 168" className="w-full">
+      {/* Decorative — the numeric read-out below (status · SPI · CPI · %) is the accessible content. */}
+      <svg viewBox="0 0 220 168" className="w-full" aria-hidden="true">
         <defs>
           <linearGradient id="hgArcFill" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor={c0} /><stop offset="100%" stopColor={c1} />
@@ -71,7 +72,7 @@ export default function HealthArcGauge({ spi, cpi, pct, status, statusLabel, cla
           </filter>
           {/* Coloured glow around the value arc + marker (status hue). */}
           <filter id="hgGlow" x="-40%" y="-40%" width="180%" height="180%">
-            <feDropShadow dx="0" dy="0" stdDeviation="3.2" floodColor={c1} floodOpacity="0.6" />
+            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor={c1} floodOpacity="0.4" />
           </filter>
         </defs>
 
@@ -80,9 +81,9 @@ export default function HealthArcGauge({ spi, cpi, pct, status, statusLabel, cla
         {/* Soft RAG zones (muted, so thresholds stay visible under/after the fill) */}
         {!noData && (
           <>
-            <path d={arc(0, fAmber)} fill="none" stroke={ZONE.red} strokeOpacity={0.28} strokeWidth="14" strokeLinecap="round" />
-            <path d={arc(fAmber, fGreen)} fill="none" stroke={ZONE.amber} strokeOpacity={0.28} strokeWidth="14" />
-            <path d={arc(fGreen, 1)} fill="none" stroke={ZONE.green} strokeOpacity={0.28} strokeWidth="14" strokeLinecap="round" />
+            <path d={arc(0, fAmber)} fill="none" stroke={ZONE.red} strokeOpacity={0.5} strokeWidth="14" strokeLinecap="round" />
+            <path d={arc(fAmber, fGreen)} fill="none" stroke={ZONE.amber} strokeOpacity={0.5} strokeWidth="14" />
+            <path d={arc(fGreen, 1)} fill="none" stroke={ZONE.green} strokeOpacity={0.5} strokeWidth="14" strokeLinecap="round" />
           </>
         )}
         {/* Value fill 0→SPI: status gradient + glow, animated grow */}
