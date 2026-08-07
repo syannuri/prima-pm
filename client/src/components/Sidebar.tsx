@@ -82,7 +82,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         </span>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
+      <nav className="scrollbar-sidebar flex-1 space-y-1 overflow-y-auto px-3 py-2">
         {!collapsed && <div className={sectionLabel}>Workspace</div>}
         <NavLink to="/" end onClick={onNavigate} title={unread > 0 ? `Dashboard — ${unread} unread changes` : 'Dashboard'} className={({ isActive }) => `relative ${cx(isActive)}`}>
           <Icon path={ICONS.home} /> {!collapsed && 'Dashboard'}

@@ -74,7 +74,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className="z-10 flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4 shadow-[0_4px_16px_-12px_rgba(15,23,42,0.25)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-none"
+          className="z-10 flex shrink-0 items-center gap-2 border-b border-black/20 bg-slate-800 px-4"
           style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
         >
           {/* Phones: initials avatar (account/settings) sits top-left. */}
@@ -82,14 +82,14 @@ export default function Layout({ children }: { children: ReactNode }) {
           {/* Phones, Home only: a monday.com-style greeting + full name. */}
           {showGreeting && (
             <div className="min-w-0 leading-tight md:hidden">
-              <div className="truncate text-xs text-slate-500 dark:text-slate-400">{greet(lang, new Date().getHours())}</div>
-              <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{user?.name}</div>
+              <div className="truncate text-xs text-slate-400">{greet(lang, new Date().getHours())}</div>
+              <div className="truncate text-sm font-semibold text-white">{user?.name}</div>
             </div>
           )}
           {/* Hamburger removed on phones — the bottom tab bar handles navigation there. Kept for md as a fallback. */}
           <button
             onClick={() => setMobileOpen(true)}
-            className="hidden h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            className="hidden h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
             aria-label="Open menu"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -102,7 +102,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={() => navigate(-1)}
               aria-label="Back"
               title="Back"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -111,13 +111,13 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
           {/* Section title on every non-Home page (phones) — mirrors the menu name. */}
           {!showGreeting && pageTitle && (
-            <div className="min-w-0 truncate text-base font-semibold text-slate-800 dark:text-slate-100 md:hidden">{pageTitle}</div>
+            <div className="min-w-0 truncate text-base font-semibold text-white md:hidden">{pageTitle}</div>
           )}
           <button
             onClick={() => setCollapsed((c) => !c)}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label="Toggle sidebar"
-            className="hidden h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 md:grid"
+            className="hidden h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white md:grid"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -127,23 +127,23 @@ export default function Layout({ children }: { children: ReactNode }) {
           {/* Desktop: the current section name (mirrors the sidebar menu) so the top bar
               isn't a blank strip and users always know where they are. */}
           {pageTitle && (
-            <div className="ml-1 hidden min-w-0 truncate text-base font-semibold text-slate-800 dark:text-slate-100 md:block">{pageTitle}</div>
+            <div className="ml-1 hidden min-w-0 truncate text-base font-semibold text-white md:block">{pageTitle}</div>
           )}
           {/* Command palette trigger — pill on desktop, icon on mobile */}
           <button
             onClick={() => setCmdOpen(true)}
-            className="ml-1 hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-400 transition hover:border-slate-300 hover:text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-slate-600 dark:hover:text-slate-300 sm:flex"
+            className="ml-1 hidden w-64 items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-slate-300 transition hover:border-white/25 hover:text-white sm:flex lg:w-80"
             title="Search & jump (Ctrl/⌘ K)"
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-            <span>Search…</span>
-            <kbd className="rounded border border-slate-300 px-1 text-[10px] dark:border-slate-600">⌘K</kbd>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+            <span className="flex-1 text-left">Search…</span>
+            <kbd className="shrink-0 rounded border border-white/20 px-1 text-[10px] text-slate-300">⌘K</kbd>
           </button>
           <div className="flex-1" />
           <button
             onClick={() => setCmdOpen(true)}
             aria-label="Search"
-            className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 sm:hidden"
+            className="grid h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white sm:hidden"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
           </button>
@@ -154,7 +154,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={startTour}
               title={lang === 'id' ? 'Panduan penggunaan' : 'Getting-started tour'}
               aria-label={lang === 'id' ? 'Panduan penggunaan' : 'Getting-started tour'}
-              className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-brand-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-brand-400"
+              className="grid h-9 w-9 place-items-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />

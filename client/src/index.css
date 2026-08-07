@@ -55,6 +55,24 @@
   }
 }
 
+/* Sidebar (always-dark charcoal rail): a slim scrollbar that BLENDS into the surface — a
+   transparent track + a faint translucent-white thumb — instead of the OS-default light
+   scrollbar showing through on the dark background in light theme. */
+.scrollbar-sidebar {
+  color-scheme: dark;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.scrollbar-sidebar::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollbar-sidebar::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-sidebar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.16);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scrollbar-sidebar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.3); }
+
 /* Subtle row hover for data tables — add class "prima-rows" to the <table>. */
 .prima-rows tbody tr {
   transition: background-color 0.12s ease;
