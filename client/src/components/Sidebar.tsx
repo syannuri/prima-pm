@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -33,8 +34,9 @@ const ICONS = {
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
 // Elegant dark charcoal rail in BOTH themes: idle = muted light-grey, hover = subtle white wash.
 const linkIdle = 'text-slate-300 hover:bg-white/10 hover:text-white';
-// Active item: subtle white wash + a crisp BLUE left accent bar (matches the project tab accent).
-const linkActive = 'bg-white/10 text-white shadow-[inset_2px_0_0_theme(colors.blue.500)]';
+// Active item: a faint BLUE wash + blue-tinted glyph/label + a crisp blue left accent bar, so
+// "you are here" reads in the accent colour (matches the project tab accent), not just white.
+const linkActive = 'bg-blue-500/15 text-blue-100 shadow-[inset_2px_0_0_theme(colors.blue.500)]';
 // Small uppercase group heading between nav sections (Workspace / Manage / Projects).
 const sectionLabel = 'px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400';
 
@@ -63,6 +65,9 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
   });
   const chatUnreadCount = chatUnread?.unread ?? 0;
   const [showAllProjects, setShowAllProjects] = useState(false);
+  // Collapsed icon-rail hover tooltip: one delegated handler reads the hovered link's aria-label
+  // and shows a portal tooltip (portaled + fixed so it escapes the nav's overflow clipping).
+  const [tip, setTip] = useState<{ label: string; top: number } | null>(null);
   // Active work first so the most relevant projects stay near the top of a long list.
   const STATUS_RANK: Record<string, number> = { IN_PROGRESS: 0, ON_HOLD: 1, CHARTERED: 2, DRAFT: 3, CLOSED: 4 };
   const projects = [...(data?.projects ?? [])].sort(
@@ -82,9 +87,17 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         </span>
       </div>
 
-      <nav className="scrollbar-sidebar flex-1 space-y-1 overflow-y-auto px-3 py-2">
+      <nav
+        className="scrollbar-sidebar flex-1 space-y-1 overflow-y-auto px-3 py-2"
+        onMouseOver={collapsed && !drawer ? (e) => {
+          const a = (e.target as HTMLElement).closest('a[aria-label]');
+          if (a) { const r = a.getBoundingClientRect(); setTip({ label: a.getAttribute('aria-label') || '', top: r.top + r.height / 2 }); }
+          else setTip(null);
+        } : undefined}
+        onMouseLeave={() => setTip(null)}
+      >
         {!collapsed && <div className={sectionLabel}>Workspace</div>}
-        <NavLink to="/" end onClick={onNavigate} title={unread > 0 ? `Dashboard — ${unread} unread changes` : 'Dashboard'} className={({ isActive }) => `relative ${cx(isActive)}`}>
+        <NavLink to="/" end onClick={onNavigate} aria-label={unread > 0 ? `Dashboard — ${unread} unread changes` : 'Dashboard'} className={({ isActive }) => `relative ${cx(isActive)}`}>
           <Icon path={ICONS.home} /> {!collapsed && 'Dashboard'}
           {unread > 0 && (collapsed ? (
             <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-800" />
@@ -94,7 +107,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         </NavLink>
         {/* Messages — private 1-to-1 direct chat. Hidden for sandboxed guests. */}
         {!!user && !isGuest && (
-          <NavLink to="/messages" onClick={onNavigate} title={chatUnreadCount > 0 ? `Messages — ${chatUnreadCount} unread` : 'Messages'} className={({ isActive }) => `relative ${cx(isActive)}`}>
+          <NavLink to="/messages" onClick={onNavigate} aria-label={chatUnreadCount > 0 ? `Messages — ${chatUnreadCount} unread` : 'Messages'} className={({ isActive }) => `relative ${cx(isActive)}`}>
             <Icon path={ICONS.chat} /> {!collapsed && 'Messages'}
             {chatUnreadCount > 0 && (collapsed ? (
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-800" />
@@ -106,20 +119,20 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {/* Reports — PM status report (weekly/monthly); PMs run them, ADMIN/PMO oversee. A guest
             gets the same hub scoped to their own personal projects. */}
         {!!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'GUEST'].includes(user.role) && (
-          <NavLink to="/reports" onClick={onNavigate} title={user.role === 'GUEST' ? 'My Reports' : 'Reports'} className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/reports" onClick={onNavigate} aria-label={user.role === 'GUEST' ? 'My Reports' : 'Reports'} className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.reports} /> {!collapsed && (user.role === 'GUEST' ? 'My Reports' : 'Reports')}
           </NavLink>
         )}
         {/* Timesheet is for people who do task work — hide it for ADMIN/PMO (portfolio roles). */}
         {!!user && !['ADMIN', 'PMO'].includes(user.role) && (
-          <NavLink to="/my-timesheet" onClick={onNavigate} title="My Timesheet" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/my-timesheet" onClick={onNavigate} aria-label="My Timesheet" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.clock} /> {!collapsed && 'My Timesheet'}
           </NavLink>
         )}
         {/* Resource Pool sits with the daily-work items — Finance & Guests use it too, so it's
             not an admin-only tool. */}
         {!!user && ['ADMIN', 'PMO', 'FINANCE', 'GUEST'].includes(user.role) && (
-          <NavLink to="/admin/resources" onClick={onNavigate} title={user.role === 'GUEST' ? 'My Resource Pool' : 'Resource Pool'} className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/admin/resources" onClick={onNavigate} aria-label={user.role === 'GUEST' ? 'My Resource Pool' : 'Resource Pool'} className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.resources} /> {!collapsed && (user.role === 'GUEST' ? 'My Resources' : 'Resource Pool')}
           </NavLink>
         )}
@@ -128,33 +141,33 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
           ? <div className={sectionLabel}>Manage</div>
           : <div className="my-2 border-t border-white/10" />)}
         {isAdminPmo && (
-          <NavLink to="/admin/projects" onClick={onNavigate} title="Project Database" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/admin/projects" onClick={onNavigate} aria-label="Project Database" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.database} /> {!collapsed && 'Project Database'}
           </NavLink>
         )}
         {user?.role === 'ADMIN' && (
-          <NavLink to="/admin/users" onClick={onNavigate} title="Users" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/admin/users" onClick={onNavigate} aria-label="Users" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.users} /> {!collapsed && 'Users'}
           </NavLink>
         )}
         {user?.role === 'ADMIN' && (
-          <NavLink to="/admin/members" onClick={onNavigate} title="Members" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/admin/members" onClick={onNavigate} aria-label="Members" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.org} /> {!collapsed && 'Members'}
           </NavLink>
         )}
         {user?.role === 'ADMIN' && (
-          <NavLink to="/admin/audit" onClick={onNavigate} title="Audit trail" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/admin/audit" onClick={onNavigate} aria-label="Audit trail" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.changeLog} /> {!collapsed && 'Audit trail'}
           </NavLink>
         )}
         {user?.role === 'ADMIN' && (
-          <NavLink to="/admin/billing" onClick={onNavigate} title="Billing & plan" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/admin/billing" onClick={onNavigate} aria-label="Billing & plan" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.billing} /> {!collapsed && 'Billing'}
           </NavLink>
         )}
         {/* PLATFORM — super-admin (isPlatformAdmin), transcends the active tenant: provision/suspend orgs. */}
         {user?.isPlatformAdmin && (
-          <NavLink to="/admin/tenants" onClick={onNavigate} title="Tenants (Platform)" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/admin/tenants" onClick={onNavigate} aria-label="Tenants (Platform)" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.tenants} /> {!collapsed && 'Tenants'}
           </NavLink>
         )}
@@ -165,7 +178,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {!collapsed && projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-400">Loading…</div>}
         {!collapsed && !projectsLoading && projects.length === 0 && <div className="px-3 py-1 text-xs text-slate-400">No projects yet</div>}
         {visibleProjects.map((p) => (
-          <NavLink key={p.id} to={`/projects/${p.id}`} onClick={onNavigate} title={p.name} className={({ isActive }) => cx(isActive)}>
+          <NavLink key={p.id} to={`/projects/${p.id}`} onClick={onNavigate} aria-label={p.name} className={({ isActive }) => cx(isActive)}>
             {collapsed ? (
               <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md text-[11px] font-semibold text-white ${projectAccent(p.id).solid}`}>
                 {p.name[0]?.toUpperCase() ?? '?'}
@@ -192,10 +205,10 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
           fixed sidebar keeps its focus on Dashboard / Resources / Projects. */}
       {drawer && (
         <div className="space-y-1 border-t border-white/10 px-3 py-2">
-          <NavLink to="/manual" onClick={onNavigate} title="Manual" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/manual" onClick={onNavigate} aria-label="Manual" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.manual} /> {!collapsed && 'Manual'}
           </NavLink>
-          <NavLink to="/settings" onClick={onNavigate} title="Settings" className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/settings" onClick={onNavigate} aria-label="Settings" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.settings} /> {!collapsed && 'Settings'}
           </NavLink>
         </div>
@@ -206,6 +219,15 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
       <div className={`border-t border-white/10 py-2 ${collapsed ? 'flex justify-center px-2' : 'px-2'}`}>
         <AvatarMenu variant="row" direction="up" collapsed={collapsed} />
       </div>
+      {collapsed && !drawer && tip && createPortal(
+        <div
+          style={{ top: tip.top }}
+          className="pointer-events-none fixed left-16 z-[70] ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-lg ring-1 ring-white/10"
+        >
+          {tip.label}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

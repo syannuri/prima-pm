@@ -80,6 +80,13 @@ const SCALE_LABEL: Record<ScaleOpt, string> = { width: 'Fit', fit: 'Auto', day: 
 // used inside the Options popover, so the toolbar and the menu stay visually consistent.
 const CTRL_BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200';
 const OPT_ROW = 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700';
+
+// Persist the Gantt view preferences (timeline scale · show-timeline · show-dates) across reloads
+// so a PM's chosen layout sticks. Collapse state is intentionally session-only — it's tied to
+// specific task ids that change as the WBS is edited.
+const WBS_PREFS_KEY = 'prima_wbs_prefs';
+type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean };
+const readWbsPrefs = (): WbsPrefs => { try { return JSON.parse(localStorage.getItem(WBS_PREFS_KEY) || '{}'); } catch { return {}; } };
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
 // Frozen identity pane — ✓ · WBS · Task stay pinned while the timeline (and any date columns)
@@ -520,7 +527,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // Timeline zoom/scale. 'fit' auto-picks a legible discrete scale; 'width' fits the visible width;
   // day/week/month are explicit and multiplied by `zoom` (± buttons / ⌘-scroll). `fitW` is the
   // measured available timeline width for 'width' mode; `overflowX` drives the right-edge scroll hint.
-  const [scale, setScale] = useState<ScaleOpt>('fit');
+  const [scale, setScale] = useState<ScaleOpt>(() => readWbsPrefs().scale ?? 'fit');
   const [zoom, setZoom] = useState(1);
   const [fitW, setFitW] = useState<number | null>(null);
   const [overflowX, setOverflowX] = useState(false);
@@ -669,10 +676,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   };
   const toggleFullscreen = () => { fullscreen ? exitFullscreen() : enterFullscreen(); };
   // Timeline (Gantt) column is collapsible — hiding it gives the widened 4-date table room.
-  const [showGantt, setShowGantt] = useState(true);
+  const [showGantt, setShowGantt] = useState(() => readWbsPrefs().showGantt ?? true);
   // Date/budget columns (Plan·Actual Start/Finish, Dur, Budget) show by DEFAULT — PMs expect the
   // full spreadsheet view up front; toggle off for a wider, bars-only timeline.
-  const [showDates, setShowDates] = useState(true);
+  const [showDates, setShowDates] = useState(() => readWbsPrefs().showDates ?? true);
+  // Remember the three view prefs across reloads.
+  useEffect(() => {
+    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, showGantt, showDates })); } catch { /* ignore quota */ }
+  }, [scale, showGantt, showDates]);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
