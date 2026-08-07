@@ -2,10 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang, type Lang } from '../context/LanguageContext';
 
-// Real product screenshots for the "A look inside" showcase (served from client/public).
-// These are tight, pre-cropped close-ups of one feature each (WBS+Gantt / EVM KPIs /
-// Kanban board) so they read clearly when shown full-width — see the showcase section.
-const SHOWCASE = ['/shot-gantt-zoom.png', '/shot-evm-zoom.png', '/shot-agile-zoom.png'];
 
 /**
  * Public landing page — the front door shown to guests at `/` before the login screen.
@@ -417,47 +413,22 @@ export default function HomePage() {
           </div>
           </div>
 
-          {/* the one real screenshot — proof, framed with an aurora glow */}
-          <div className="pmx-float relative mt-16 w-full max-w-5xl" style={{ animation: reduced ? undefined : 'pmx-float 8s ease-in-out infinite' }}>
-            <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-600/30 via-violet-600/20 to-indigo-600/30 blur-3xl" />
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200">
-              <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-                <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
-              </div>
-              <img
-                src="/hero-dashboard.png"
-                width={1600}
-                height={1000}
-                loading="eager"
-                decoding="async"
-                alt="Prismatix Project Manager dashboard — a 3D portfolio-health speedometer, EVM KPIs, SPI trend and cost/schedule/status pies"
-                className="block w-full"
-              />
-            </div>
-          </div>
+          {/* Hero screenshot temporarily removed: the old /hero-dashboard.png is the DARK + coral UI
+              and clashes with the new light theme. Re-add a fresh LIGHT-mode capture here (drop it
+              at client/public/hero-dashboard.png) and restore the framed <img> block. */}
         </section>
 
         {/* ---------- why ---------- */}
-        <section className="mx-auto max-w-3xl px-5 py-16 text-center sm:px-8">
+        <section className="mx-auto max-w-3xl px-5 py-12 text-center sm:px-8">
           <Reveal>
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{t.why.eyebrow}</div>
             <p className="text-2xl font-medium leading-relaxed text-slate-700 sm:text-[1.7rem]">{t.why.body}</p>
           </Reveal>
         </section>
 
-        {/* ---------- what it is ---------- */}
-        <section className="mx-auto max-w-4xl px-5 py-8 text-center sm:px-8">
-          <Reveal>
-            <SectionTitle>{t.what.title}</SectionTitle>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-slate-600">{t.what.body}</p>
-          </Reveal>
-        </section>
-
         {/* ---------- feature constellation ---------- */}
-        <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-8">
-          <Reveal className="mb-14 text-center">
+        <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-12 sm:px-8">
+          <Reveal className="mb-10 text-center">
             <SectionTitle>{t.features.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.features.sub}</p>
           </Reveal>
@@ -488,40 +459,9 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ---------- showcase: real product screenshots ---------- */}
-        <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
-          <Reveal className="mb-12 text-center">
-            <SectionTitle>{t.showcase.title}</SectionTitle>
-            <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.showcase.sub}</p>
-          </Reveal>
-          {/* One feature per row, shown full-width so each close-up reads clearly. */}
-          <div className="mx-auto max-w-5xl space-y-10">
-            {SHOWCASE.map((img, i) => (
-              <Reveal key={img} className={i % 2 ? 'reveal-right' : 'reveal-left'} delay={i * 120}>
-                <figure className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200 transition duration-300 hover:border-slate-300">
-                  <div className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-600/20 via-violet-600/15 to-indigo-600/20 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
-                  <figcaption className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
-                    <span className="ml-3 text-sm font-medium text-slate-700">{t.showcase.labels[i]}</span>
-                  </figcaption>
-                  <img
-                    src={img}
-                    loading="lazy"
-                    decoding="async"
-                    alt={t.showcase.labels[i]}
-                    className="block w-full"
-                  />
-                </figure>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
         {/* ---------- the language of EVM (abstract, glowing chips) ---------- */}
-        <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
-          <Reveal className="mb-12 text-center">
+        <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+          <Reveal className="mb-8 text-center">
             <SectionTitle>{t.evm.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.evm.sub}</p>
           </Reveal>
@@ -538,21 +478,8 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ---------- principles strip ---------- */}
-        <section className="mx-auto max-w-5xl px-5 py-10 sm:px-8">
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {t.principles.chips.map((c, i) => (
-              <Reveal key={c} className="reveal-zoom" delay={i * 70}>
-                <span className="rounded-full border border-slate-200 bg-slate-100 px-5 py-2 text-sm font-medium text-slate-700 backdrop-blur">
-                  {c}
-                </span>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
         {/* ---------- community (heart) ---------- */}
-        <section className="mx-auto max-w-3xl px-5 py-16 text-center sm:px-8">
+        <section className="mx-auto max-w-3xl px-5 py-12 text-center sm:px-8">
           <Reveal>
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{t.community.eyebrow}</div>
             <h2 className="text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{t.community.title}</h2>
@@ -569,9 +496,9 @@ export default function HomePage() {
         </section>
 
         {/* ---------- final CTA (bookend) ---------- */}
-        <section className="mx-auto max-w-4xl px-5 py-16 text-center sm:px-8">
+        <section className="mx-auto max-w-4xl px-5 py-12 text-center sm:px-8">
           <Reveal className="reveal-zoom">
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white px-6 py-16 backdrop-blur-sm">
+            <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white px-6 py-12 backdrop-blur-sm">
               <div className="pointer-events-none absolute -inset-10 -z-10 bg-gradient-to-tr from-brand-600/25 via-violet-600/20 to-indigo-600/25 blur-3xl" />
               <h2 className="mx-auto max-w-2xl text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{t.cta.title}</h2>
               <div className="mt-8">
