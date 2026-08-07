@@ -197,12 +197,14 @@ export default function ProjectPage() {
                     <MenuGroupHeader>{lang === 'id' ? (GROUP_LABEL_ID[g.label] ?? g.label) : g.label}</MenuGroupHeader>
                     {gTabs.map((t) => (
                       <Fragment key={t}>
-                        <MenuItem icon={TAB_ICONS[t]} active={t === activeTab} onClick={() => goto(t)}>{t}</MenuItem>
+                        {/* The Schedule tab is surfaced as "Timeline" in this Jump-to menu (the on-page
+                            tab label stays "Schedule"); its two sub-sections are Gantt Chart and the
+                            Manpower ↔ Schedule Sync. Critical Path stays on the page, just not listed here. */}
+                        <MenuItem icon={TAB_ICONS[t]} active={t === activeTab} onClick={() => goto(t)}>{t === 'Schedule' ? 'Timeline' : t}</MenuItem>
                         {t === 'Schedule' && (
                           <>
-                            <MenuItem indent onClick={() => goto('Schedule', 'section-wbs')}>↳ WBS</MenuItem>
-                            <MenuItem indent onClick={() => goto('Schedule', 'section-cpm')}>↳ Critical Path (CPM)</MenuItem>
-                            <MenuItem indent onClick={() => goto('Schedule', 'section-manpower')}>↳ Manpower sync</MenuItem>
+                            <MenuItem indent onClick={() => goto('Schedule', 'section-wbs')}>↳ Gantt Chart</MenuItem>
+                            <MenuItem indent onClick={() => goto('Schedule', 'section-manpower')}>↳ Manpower ↔ Schedule Sync</MenuItem>
                           </>
                         )}
                       </Fragment>

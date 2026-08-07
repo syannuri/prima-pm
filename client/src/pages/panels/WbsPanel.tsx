@@ -1,9 +1,9 @@
-import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CpmResult, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Select, SectionTitle, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
@@ -75,6 +75,11 @@ const PX_PER_DAY: Record<Scale, number> = { day: 22, week: 7, month: 2.4 };
 type ScaleOpt = Scale | 'fit' | 'width';
 const SCALE_OPTS: ScaleOpt[] = ['width', 'fit', 'day', 'week', 'month'];
 const SCALE_LABEL: Record<ScaleOpt, string> = { width: 'Fit', fit: 'Auto', day: 'Day', week: 'Week', month: 'Month' };
+
+// Shared header control-button chrome (Full screen / Today / Options trigger) and the row style
+// used inside the Options popover, so the toolbar and the menu stay visually consistent.
+const CTRL_BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200';
+const OPT_ROW = 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700';
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
 // Frozen identity pane — ✓ · WBS · Task stay pinned while the timeline (and any date columns)
@@ -355,6 +360,53 @@ function RowMenu({ x, y, items, container, onClose }: { x: number; y: number; it
       </div>
     </>,
     container ?? document.body,
+  );
+}
+
+// "Options" popover for the WBS/Gantt header — consolidates the view toggles, timeline scale
+// and baseline controls behind a single trigger so the toolbar stays one line. Anchored under the
+// trigger button and PORTALED into `container` (the full-screen element when in full-screen, else
+// document.body) so it isn't clipped by the overflow-x-auto control row in full-screen. Closes on
+// outside-click / Esc / resize. `children` is a render-prop receiving a `close` fn.
+function OptionsMenu({ container, children }: { container?: Element | null; children: (close: () => void) => ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const place = () => {
+    const b = btnRef.current?.getBoundingClientRect();
+    if (!b) return;
+    const w = panelRef.current?.getBoundingClientRect().width ?? 256;
+    const h = panelRef.current?.getBoundingClientRect().height ?? 0;
+    const left = Math.max(8, Math.min(b.right - w, window.innerWidth - w - 8));
+    const top = Math.max(8, Math.min(b.bottom + 4, window.innerHeight - h - 8));
+    setPos({ left, top });
+  };
+  useLayoutEffect(() => { if (open) place(); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onResize = () => setOpen(false);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
+  }, [open]);
+  return (
+    <>
+      <button ref={btnRef} type="button" onClick={() => { if (!open) place(); setOpen((o) => !o); }} aria-expanded={open} title="View & schedule options" className={CTRL_BTN}>
+        ⚙ Options <span className="text-[9px]">▾</span>
+      </button>
+      {open && createPortal(
+        <>
+          <div className="fixed inset-0 z-[59]" onMouseDown={() => setOpen(false)} />
+          <div ref={panelRef} role="menu" style={{ left: pos.left, top: pos.top }}
+            className="fixed z-[60] w-64 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            {children(() => setOpen(false))}
+          </div>
+        </>,
+        container ?? document.body,
+      )}
+    </>
   );
 }
 
@@ -942,75 +994,70 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         {/* In full view the title block is dropped so the header chrome stays short — on a
             landscape PHONE (~390px tall) it otherwise eats the whole height and collapses the
             timeline to nothing. */}
-        {!fullscreen && (
-          <SectionTitle sub="Deliverable-oriented breakdown of work — tasks, subtasks, dates, % complete">
-            Work Breakdown Structure
-          </SectionTitle>
-        )}
-        {/* Non-full view: min-w-0 + flex-wrap so the control cluster + progress ring can wrap
-            below each other on a narrow phone instead of pushing the row wider than the viewport
-            (iOS Safari won't shrink an inline-flex group → it overflowed sideways). */}
+        {/* The "Work Breakdown Structure" title was dropped (redundant with the Schedule & WBS tab).
+            Full screen + Today stay visible as one-tap controls; every other control (view toggles,
+            timeline scale/zoom, baseline) tucks into a single "Options" popover so the header stays
+            one line instead of wrapping into 2–3 rows. */}
         <div className={`flex min-w-0 items-center gap-3 ${fullscreen ? 'w-full' : 'flex-wrap'}`}>
-        {/* In full view the controls collapse to ONE horizontally-scrollable row (never wrap into
-            3 rows) so they don't eat the timeline's height on a landscape phone. [&>*]:shrink-0
-            keeps each control full-size; the row scrolls instead of squishing. */}
         <div className={`flex min-w-0 items-center gap-2 ${fullscreen ? 'min-w-0 flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0' : 'flex-wrap'}`}>
           {rows.length > 0 && (
-            <button onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+            <button onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'} className={CTRL_BTN}>
               {fullscreen ? <><CollapseIcon /> Exit full screen</> : <><ExpandIcon /> Full screen</>}
             </button>
           )}
-          {rows.length > 0 && (
-            <button onClick={() => setShowGantt((g) => !g)} title={showGantt ? 'Hide the Gantt timeline (more room for the date columns)' : 'Show the Gantt timeline'}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-              {showGantt ? '📊 Hide timeline' : '📊 Show timeline'}
-            </button>
-          )}
-          {rows.length > 0 && (
-            <button onClick={() => setShowDates((d) => !d)} title={showDates ? 'Hide the Plan/Actual date, duration & budget columns for a wider timeline' : 'Show the Plan/Actual dates, duration & budget columns (spreadsheet view)'}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-              {showDates ? '🗓 Hide dates' : '🗓 Show dates'}
-            </button>
-          )}
-          {allParentIds.length > 0 && (
-            <button onClick={() => setCollapsed((c) => (c.size > 0 ? new Set() : new Set(allParentIds)))} title={collapsed.size > 0 ? 'Expand all work packages' : 'Collapse all work packages (show top-level only)'}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-              {collapsed.size > 0 ? '⊞ Expand all' : '⊟ Collapse all'}
-            </button>
-          )}
           {rows.length > 0 && showGantt && axis?.todayPct != null && (
-            <button onClick={scrollToToday} title="Scroll the timeline to today"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+            <button onClick={scrollToToday} title="Scroll the timeline to today" className={CTRL_BTN}>
               ↦ Today
             </button>
           )}
-          {rows.length > 0 && showGantt && (
-            <div className="inline-flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Timeline</span>
-              <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-                {SCALE_OPTS.map((s) => (
-                  <button key={s} onClick={() => { setScale(s); if (s !== 'fit' && s !== 'width') setZoom(1); }}
-                    title={s === 'width' ? 'Fit the whole timeline to the screen width' : s === 'fit' ? `Auto-pick a legible scale for the span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : undefined}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-                    {SCALE_LABEL[s]}
+          {rows.length > 0 && (
+            <OptionsMenu container={modalContainer}>
+              {(close) => (
+                <>
+                  <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">View</div>
+                  <button type="button" onClick={() => setShowGantt((g) => !g)} className={OPT_ROW}>
+                    <span aria-hidden>📊</span><span className="flex-1 text-left">{showGantt ? 'Hide timeline' : 'Show timeline'}</span>
                   </button>
-                ))}
-              </div>
-              {/* Continuous zoom — also ⌘/Ctrl + scroll on the timeline. Disabled in Fit-to-width. */}
-              <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-                <button onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">−</button>
-                <button onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">+</button>
-              </div>
-            </div>
-          )}
-          <span className="text-xs text-slate-500 dark:text-slate-400">
-            {baselinedAt ? `Baselined ${formatDate(baselinedAt)}` : 'No baseline set'}
-          </span>
-          {canEdit && rows.length > 0 && (
-            <Button data-tour="schedule-baseline" variant="secondary" disabled={baseline.isPending} onClick={async () => { if (await confirm({ title: baselinedAt ? 'Re-capture baseline?' : 'Set schedule baseline?', message: baselinedAt ? 'Re-capture the schedule baseline from the current plan dates? This overwrites the existing baseline used for variance.' : 'Capture the current plan dates as the schedule baseline?', confirmLabel: baselinedAt ? 'Re-baseline' : 'Set baseline', container: modalContainer })) baseline.mutate(); }}>
-              {baseline.isPending ? 'Saving…' : baselinedAt ? 'Re-baseline' : 'Set Baseline'}
-            </Button>
+                  <button type="button" onClick={() => setShowDates((d) => !d)} className={OPT_ROW}>
+                    <span aria-hidden>🗓</span><span className="flex-1 text-left">{showDates ? 'Hide dates' : 'Show dates'}</span>
+                  </button>
+                  {allParentIds.length > 0 && (
+                    <button type="button" onClick={() => setCollapsed((c) => (c.size > 0 ? new Set() : new Set(allParentIds)))} className={OPT_ROW}>
+                      <span aria-hidden>{collapsed.size > 0 ? '⊞' : '⊟'}</span><span className="flex-1 text-left">{collapsed.size > 0 ? 'Expand all' : 'Collapse all'}</span>
+                    </button>
+                  )}
+                  {showGantt && (
+                    <>
+                      <div className="mb-1 mt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Timeline</div>
+                      <div className="flex flex-wrap items-center gap-1.5 px-1">
+                        <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-700/60">
+                          {SCALE_OPTS.map((s) => (
+                            <button key={s} type="button" onClick={() => { setScale(s); if (s !== 'fit' && s !== 'width') setZoom(1); }}
+                              title={s === 'width' ? 'Fit the whole timeline to the screen width' : s === 'fit' ? `Auto-pick a legible scale for the span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : undefined}
+                              className={`rounded-md px-2 py-1 text-xs font-medium transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white'}`}>
+                              {SCALE_LABEL[s]}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-600">
+                          <button type="button" onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700">−</button>
+                          <button type="button" onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">+</button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <div className="mb-1 mt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Baseline</div>
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{baselinedAt ? `Baselined ${formatDate(baselinedAt)}` : 'No baseline set'}</span>
+                    {canEdit && rows.length > 0 && (
+                      <Button data-tour="schedule-baseline" variant="secondary" disabled={baseline.isPending} onClick={async () => { close(); if (await confirm({ title: baselinedAt ? 'Re-capture baseline?' : 'Set schedule baseline?', message: baselinedAt ? 'Re-capture the schedule baseline from the current plan dates? This overwrites the existing baseline used for variance.' : 'Capture the current plan dates as the schedule baseline?', confirmLabel: baselinedAt ? 'Re-baseline' : 'Set baseline', container: modalContainer })) baseline.mutate(); }}>
+                        {baseline.isPending ? 'Saving…' : baselinedAt ? 'Re-baseline' : 'Set Baseline'}
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </OptionsMenu>
           )}
         </div>
         {!fullscreen && rows.length > 0 && <ProgressRing pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
