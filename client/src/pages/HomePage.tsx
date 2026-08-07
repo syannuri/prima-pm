@@ -211,7 +211,7 @@ function Wordmark({ small = false, bare = false }: { small?: boolean; bare?: boo
   // `bare` = the wordmark with no box, but keeping the signature white accent dot.
   if (bare) {
     return (
-      <span className="relative inline-block font-brand text-2xl font-bold tracking-wide text-white">
+      <span className="relative inline-block font-brand text-2xl font-bold tracking-wide text-slate-900">
         PRISMATIX
         <span className="absolute -right-2 top-0 h-2 w-2 rounded-full bg-brand-500" />
       </span>
@@ -219,7 +219,7 @@ function Wordmark({ small = false, bare = false }: { small?: boolean; bare?: boo
   }
   return (
     <span
-      className={`relative inline-block border-white font-brand font-bold tracking-wide text-white ${
+      className={`relative inline-block border-slate-900 font-brand font-bold tracking-wide text-slate-900 ${
         small ? 'border-[2.5px] px-2 py-0.5 text-sm' : 'border-4 px-4 py-2 text-2xl'
       }`}
     >
@@ -246,7 +246,7 @@ function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; 
 const SectionTitle = ({ eyebrow, children }: { eyebrow?: string; children: ReactNode }) => (
   <>
     {eyebrow && <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{eyebrow}</div>}
-    <h2 className="text-3xl font-bold leading-tight text-white sm:text-4xl">{children}</h2>
+    <h2 className="text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{children}</h2>
   </>
 );
 
@@ -301,7 +301,7 @@ export default function HomePage() {
     document.getElementById('features')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 
   return (
-    <div className="relative isolate min-h-screen overflow-x-clip bg-[#05070e] text-slate-200 antialiased">
+    <div className="relative isolate min-h-screen overflow-x-clip bg-slate-100 text-slate-700 antialiased">
       <style>{`
         @keyframes pmx-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
 
@@ -350,33 +350,30 @@ export default function HomePage() {
 
       {/* ---------- aurora borealis backdrop ---------- */}
       {/* Fixed midnight base so overscroll + every section below the hero stays dark. */}
-      <div className="pointer-events-none fixed inset-0 -z-20 bg-[#05070e]" />
-      {/* A real aurora photo anchored to the top of the page — it scrolls away with the
-          hero and fades into the midnight base, so the rest of the page stays calm/dark. */}
+      <div className="pointer-events-none fixed inset-0 -z-20 bg-slate-100" />
+      {/* Soft light backdrop — a faint blue glow at the top that gently parallaxes (keeps the depth
+          feel), replacing the old midnight-aurora photo so the page matches the app's light theme. */}
       <div ref={auroraRef} className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[118vh] overflow-hidden will-change-transform">
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/aurora-bg.jpg)' }} />
-        {/* a few twinkling stars layered over the sky */}
-        <div className="pmx-stars" />
-        {/* readability scrim: darken the nav band + hero copy, hard-fade into the base */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#05070e]/80 via-[#05070e]/35 to-[#05070e]" />
-        <div className="absolute inset-0 bg-[radial-gradient(85%_55%_at_50%_40%,rgba(5,7,14,0.55),transparent_72%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_0%,rgba(37,99,235,0.14),transparent_70%)]" />
+        <div className="absolute -left-32 top-10 h-[32rem] w-[32rem] rounded-full bg-blue-400/15 blur-3xl" />
+        <div className="absolute -right-24 top-40 h-[30rem] w-[30rem] rounded-full bg-indigo-400/10 blur-3xl" />
       </div>
 
       {/* ---------- top nav ---------- */}
       {/* On scroll the bar becomes a translucent purple (blurred) instead of solid black. */}
-      <header className={`fixed inset-x-0 top-0 z-30 transition-all duration-300 ${scrolled ? 'border-b border-white/10 backdrop-blur-xl' : ''}`}>
-        {/* purple gradient wash across the top header */}
-        <div className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-violet-700/40 via-violet-900/15 to-transparent transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-75'}`} />
+      <header className={`fixed inset-x-0 top-0 z-30 transition-all duration-300 ${scrolled ? 'border-b border-slate-200 backdrop-blur-xl' : ''}`}>
+        {/* Frosted white wash — fades in on scroll so the header reads as a clean light bar. */}
+        <div className={`pointer-events-none absolute inset-0 -z-10 bg-white/70 transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0'}`} />
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5 sm:px-8">
           <Wordmark bare />
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="inline-flex rounded-lg bg-white/5 p-0.5 ring-1 ring-white/10">
+            <div className="inline-flex rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
               {(['en', 'id'] as Lang[]).map((l) => (
                 <button
                   key={l}
                   onClick={() => setLang(l)}
                   aria-pressed={lang === l}
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase transition ${lang === l ? 'bg-white/90 text-slate-900' : 'text-slate-300 hover:text-white'}`}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase transition ${lang === l ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
                 >
                   {l}
                 </button>
@@ -396,14 +393,14 @@ export default function HomePage() {
         {/* ---------- hero ---------- */}
         <section className="mx-auto flex max-w-6xl flex-col items-center px-5 pb-16 pt-32 text-center sm:px-8 sm:pt-40">
           <div ref={heroRef} className="flex flex-col items-center will-change-transform">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium text-slate-300 backdrop-blur">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-1.5 text-xs font-medium text-slate-600 backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-400" /> {t.hero.badge}
           </div>
-          <h1 className="max-w-3xl text-5xl font-bold leading-[1.08] tracking-tight text-white sm:text-6xl">
+          <h1 className="max-w-3xl text-5xl font-bold leading-[1.08] tracking-tight text-slate-900 sm:text-6xl">
             {t.hero.titlePre}
-            <span className="pmx-accent bg-gradient-to-r from-sky-400 via-indigo-400 to-violet-400 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
+            <span className="pmx-accent bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-500 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
           </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-300">{t.hero.sub}</p>
+          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">{t.hero.sub}</p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link
               to="/login"
@@ -413,7 +410,7 @@ export default function HomePage() {
             </Link>
             <button
               onClick={explore}
-              className="rounded-xl border border-white/15 bg-white/5 px-7 py-3 text-base font-semibold text-slate-100 backdrop-blur transition hover:bg-white/10"
+              className="rounded-xl border border-slate-300 bg-slate-100 px-7 py-3 text-base font-semibold text-slate-700 backdrop-blur transition hover:bg-slate-200"
             >
               {t.hero.explore} ↓
             </button>
@@ -423,8 +420,8 @@ export default function HomePage() {
           {/* the one real screenshot — proof, framed with an aurora glow */}
           <div className="pmx-float relative mt-16 w-full max-w-5xl" style={{ animation: reduced ? undefined : 'pmx-float 8s ease-in-out infinite' }}>
             <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-600/30 via-violet-600/20 to-indigo-600/30 blur-3xl" />
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 shadow-2xl ring-1 ring-white/10">
-              <div className="flex items-center gap-1.5 border-b border-white/10 bg-white/5 px-4 py-2.5">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200">
+              <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5">
                 <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
                 <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
                 <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
@@ -446,7 +443,7 @@ export default function HomePage() {
         <section className="mx-auto max-w-3xl px-5 py-16 text-center sm:px-8">
           <Reveal>
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{t.why.eyebrow}</div>
-            <p className="text-2xl font-medium leading-relaxed text-slate-200 sm:text-[1.7rem]">{t.why.body}</p>
+            <p className="text-2xl font-medium leading-relaxed text-slate-700 sm:text-[1.7rem]">{t.why.body}</p>
           </Reveal>
         </section>
 
@@ -454,7 +451,7 @@ export default function HomePage() {
         <section className="mx-auto max-w-4xl px-5 py-8 text-center sm:px-8">
           <Reveal>
             <SectionTitle>{t.what.title}</SectionTitle>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-slate-300">{t.what.body}</p>
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-slate-600">{t.what.body}</p>
           </Reveal>
         </section>
 
@@ -462,25 +459,25 @@ export default function HomePage() {
         <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-8">
           <Reveal className="mb-14 text-center">
             <SectionTitle>{t.features.title}</SectionTitle>
-            <p className="mx-auto mt-4 max-w-2xl text-slate-400">{t.features.sub}</p>
+            <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.features.sub}</p>
           </Reveal>
           <div className="grid gap-6 md:grid-cols-2">
             {t.features.groups.map((g, gi) => (
               <Reveal key={g.name} className="reveal-zoom" delay={gi * 90}>
-                <div className="group h-full rounded-2xl border border-white/10 bg-white/[0.04] p-7 backdrop-blur-sm transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06]">
+                <div className="group h-full rounded-2xl border border-slate-200 bg-white p-7 backdrop-blur-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:bg-slate-50">
                   <div className="mb-5 flex items-center gap-3">
-                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-500/25 to-indigo-500/25 ring-1 ring-white/10">
+                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-500/25 to-indigo-500/25 ring-1 ring-slate-200">
                       <svg viewBox="0 0 24 24" className="h-5 w-5 text-brand-300" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={g.icon} /></svg>
                     </span>
-                    <h3 className="text-lg font-semibold text-white">{g.name}</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{g.name}</h3>
                   </div>
                   <ul className="space-y-4">
                     {g.items.map(([name, desc]) => (
                       <li key={name} className="flex gap-3">
                         <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400/80" />
                         <div>
-                          <div className="font-medium text-slate-100">{name}</div>
-                          <div className="text-sm leading-relaxed text-slate-400">{desc}</div>
+                          <div className="font-medium text-slate-700">{name}</div>
+                          <div className="text-sm leading-relaxed text-slate-500">{desc}</div>
                         </div>
                       </li>
                     ))}
@@ -495,19 +492,19 @@ export default function HomePage() {
         <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
           <Reveal className="mb-12 text-center">
             <SectionTitle>{t.showcase.title}</SectionTitle>
-            <p className="mx-auto mt-4 max-w-2xl text-slate-400">{t.showcase.sub}</p>
+            <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.showcase.sub}</p>
           </Reveal>
           {/* One feature per row, shown full-width so each close-up reads clearly. */}
           <div className="mx-auto max-w-5xl space-y-10">
             {SHOWCASE.map((img, i) => (
               <Reveal key={img} className={i % 2 ? 'reveal-right' : 'reveal-left'} delay={i * 120}>
-                <figure className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 shadow-2xl ring-1 ring-white/10 transition duration-300 hover:border-white/20">
+                <figure className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200 transition duration-300 hover:border-slate-300">
                   <div className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-600/20 via-violet-600/15 to-indigo-600/20 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
-                  <figcaption className="flex items-center gap-1.5 border-b border-white/10 bg-white/5 px-4 py-2.5">
+                  <figcaption className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
                     <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
                     <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
-                    <span className="ml-3 text-sm font-medium text-slate-200">{t.showcase.labels[i]}</span>
+                    <span className="ml-3 text-sm font-medium text-slate-700">{t.showcase.labels[i]}</span>
                   </figcaption>
                   <img
                     src={img}
@@ -526,15 +523,15 @@ export default function HomePage() {
         <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
           <Reveal className="mb-12 text-center">
             <SectionTitle>{t.evm.title}</SectionTitle>
-            <p className="mx-auto mt-4 max-w-2xl text-slate-400">{t.evm.sub}</p>
+            <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.evm.sub}</p>
           </Reveal>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {t.evm.items.map(([k, desc], i) => (
               <Reveal key={k} className="reveal-zoom" delay={i * 70}>
-                <div className="relative h-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+                <div className="relative h-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-6">
                   <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-brand-500/20 blur-2xl" />
-                  <div className="font-brand text-4xl font-bold text-white">{k}</div>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-400">{desc}</p>
+                  <div className="font-brand text-4xl font-bold text-slate-900">{k}</div>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-500">{desc}</p>
                 </div>
               </Reveal>
             ))}
@@ -546,7 +543,7 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-center gap-3">
             {t.principles.chips.map((c, i) => (
               <Reveal key={c} className="reveal-zoom" delay={i * 70}>
-                <span className="rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm font-medium text-slate-200 backdrop-blur">
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-5 py-2 text-sm font-medium text-slate-700 backdrop-blur">
                   {c}
                 </span>
               </Reveal>
@@ -558,13 +555,13 @@ export default function HomePage() {
         <section className="mx-auto max-w-3xl px-5 py-16 text-center sm:px-8">
           <Reveal>
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{t.community.eyebrow}</div>
-            <h2 className="text-3xl font-bold leading-tight text-white sm:text-4xl">{t.community.title}</h2>
-            <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-300">{t.community.body}</p>
+            <h2 className="text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{t.community.title}</h2>
+            <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">{t.community.body}</p>
             <div className="mt-10">
-              <div className="mb-4 text-sm font-medium text-slate-400">{t.audience.title}</div>
+              <div className="mb-4 text-sm font-medium text-slate-500">{t.audience.title}</div>
               <div className="flex flex-wrap items-center justify-center gap-2.5">
                 {t.audience.chips.map((c) => (
-                  <span key={c} className="rounded-lg bg-white/5 px-3.5 py-1.5 text-sm text-slate-200 ring-1 ring-white/10">{c}</span>
+                  <span key={c} className="rounded-lg bg-slate-100 px-3.5 py-1.5 text-sm text-slate-700 ring-1 ring-slate-200">{c}</span>
                 ))}
               </div>
             </div>
@@ -574,9 +571,9 @@ export default function HomePage() {
         {/* ---------- final CTA (bookend) ---------- */}
         <section className="mx-auto max-w-4xl px-5 py-16 text-center sm:px-8">
           <Reveal className="reveal-zoom">
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] px-6 py-16 backdrop-blur-sm">
+            <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white px-6 py-16 backdrop-blur-sm">
               <div className="pointer-events-none absolute -inset-10 -z-10 bg-gradient-to-tr from-brand-600/25 via-violet-600/20 to-indigo-600/25 blur-3xl" />
-              <h2 className="mx-auto max-w-2xl text-3xl font-bold leading-tight text-white sm:text-4xl">{t.cta.title}</h2>
+              <h2 className="mx-auto max-w-2xl text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{t.cta.title}</h2>
               <div className="mt-8">
                 <Link
                   to="/login"
@@ -585,18 +582,18 @@ export default function HomePage() {
                   {t.cta.enter}
                 </Link>
               </div>
-              <p className="mt-4 text-sm text-slate-400">{t.cta.note}</p>
+              <p className="mt-4 text-sm text-slate-500">{t.cta.note}</p>
             </div>
           </Reveal>
         </section>
 
         {/* ---------- footer ---------- */}
-        <footer className="border-t border-white/10">
+        <footer className="border-t border-slate-200">
           <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5 py-10 text-center sm:flex-row sm:justify-between sm:px-8 sm:text-left">
             <div className="flex items-center gap-3">
               <Wordmark small />
             </div>
-            <p className="text-sm text-slate-400">{t.footer.tagline}</p>
+            <p className="text-sm text-slate-500">{t.footer.tagline}</p>
             <p className="text-xs text-slate-500">{t.footer.rights}</p>
           </div>
         </footer>
