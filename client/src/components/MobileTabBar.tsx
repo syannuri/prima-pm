@@ -38,13 +38,13 @@ export default function MobileTabBar() {
   ];
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/70 bg-white/80 backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-slate-900/75 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-slate-800/90 backdrop-blur-2xl backdrop-saturate-150 md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Primary"
     >
       {/* Scrim above the bar: fades scrolling content into it so nothing reads
           through the frosted glass (iOS-style). Sits just above the nav's top edge. */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-full h-8 bg-gradient-to-t from-slate-50 to-transparent dark:from-slate-950" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-full h-8 bg-gradient-to-t from-slate-100 to-transparent dark:from-slate-950" />
       <div className="grid grid-cols-3">
         {tabs.map((t) => (
           <Link
@@ -52,7 +52,7 @@ export default function MobileTabBar() {
             to={t.to}
             onClick={() => haptic()}
             aria-current={t.active ? 'page' : undefined}
-            className={`group relative flex select-none flex-col items-center gap-1 pb-1.5 pt-2 transition-colors ${t.active ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 dark:text-slate-500'}`}
+            className={`group relative flex select-none flex-col items-center gap-1 pb-1.5 pt-2 transition-colors ${t.active ? 'text-blue-400' : 'text-slate-400'}`}
           >
             <span className="relative grid place-items-center">
               {/* iOS shows the filled glyph when selected; the outline (thin stroke) otherwise.

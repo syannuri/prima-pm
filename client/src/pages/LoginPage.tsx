@@ -194,70 +194,34 @@ export default function LoginPage() {
   return (
     // `dark` forces this subtree into dark mode so the aurora-dark background reads correctly
     // regardless of the app theme — matching the always-dark landing page (HomePage).
-    <div className="dark relative min-h-screen overflow-hidden bg-[#05070e] text-slate-200 antialiased">
-      {/* Aurora-dark backdrop — the same recipe as the public landing page (HomePage) so the
-          sign-in screen shares its midnight-aurora identity: a real aurora photo anchored to
-          the top over a #05070e base, twinkling stars, dark readability scrims, and soft
-          coral/indigo/violet glows drifting for depth. */}
-      <style>{`
-        @keyframes prima-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(22px,-26px)} }
-        @keyframes prima-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-26px,20px)} }
-        @keyframes prima-drift3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(18px,24px)} }
-        @keyframes prima-twinkle { 0%,100%{opacity:.55} 50%{opacity:.95} }
-        .prima-stars { position:absolute; inset:0; opacity:.85; background-repeat:no-repeat;
-          background-image:
-            radial-gradient(1.6px 1.6px at 8% 16%,  rgba(255,255,255,.95), transparent),
-            radial-gradient(1.2px 1.2px at 17% 30%, rgba(255,255,255,.75), transparent),
-            radial-gradient(1.4px 1.4px at 27% 12%, rgba(255,255,255,.85), transparent),
-            radial-gradient(1px   1px   at 34% 24%, rgba(255,255,255,.65), transparent),
-            radial-gradient(1.5px 1.5px at 63% 14%, rgba(255,255,255,.9),  transparent),
-            radial-gradient(1.1px 1.1px at 72% 27%, rgba(255,255,255,.7),  transparent),
-            radial-gradient(1.3px 1.3px at 83% 18%, rgba(255,255,255,.85), transparent),
-            radial-gradient(1px   1px   at 91% 33%, rgba(255,255,255,.6),  transparent),
-            radial-gradient(1.2px 1.2px at 47% 9%,  rgba(255,255,255,.8),  transparent),
-            radial-gradient(1px   1px   at 55% 22%, rgba(255,255,255,.6),  transparent);
-          animation:prima-twinkle 6s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce){ .prima-orb,.prima-stars{animation:none!important} }
-      `}</style>
-
-      {/* real aurora photo anchored to the top, twinkling stars, then scrims that fade it into
-          the midnight base — identical treatment to the landing page hero */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[85vh] overflow-hidden">
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/aurora-bg.jpg)' }} />
-        <div className="prima-stars" />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#05070e]/80 via-[#05070e]/45 to-[#05070e]" />
-        <div className="absolute inset-0 bg-[radial-gradient(85%_55%_at_50%_35%,rgba(5,7,14,0.5),transparent_72%)]" />
-      </div>
-
-      {/* soft drifting glows for depth — coral · indigo · violet, the same palette as the hero */}
-      <div className="prima-orb pointer-events-none absolute -left-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-brand-600/25 blur-3xl" style={{ animation: 'prima-drift1 15s ease-in-out infinite' }} />
-      <div className="prima-orb pointer-events-none absolute -bottom-32 left-1/4 h-[34rem] w-[34rem] rounded-full bg-indigo-700/30 blur-3xl" style={{ animation: 'prima-drift2 18s ease-in-out infinite' }} />
-      <div className="prima-orb pointer-events-none absolute -right-16 top-1/4 h-[28rem] w-[28rem] rounded-full bg-violet-700/30 blur-3xl" style={{ animation: 'prima-drift3 22s ease-in-out infinite' }} />
-
-      {/* bottom vignette for depth (matches the landing page) */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_120%,rgba(0,0,0,0.7),transparent_55%)]" />
+    <div className="relative min-h-screen overflow-hidden bg-slate-100 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
+      {/* Light theme matching the app (charcoal chrome + blue accent + slate canvas). Subtle blue
+          depth glows on the light canvas replace the old midnight-aurora backdrop. */}
+      <div className="pointer-events-none absolute -right-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-blue-400/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 right-1/3 h-[34rem] w-[34rem] rounded-full bg-blue-500/10 blur-3xl" />
 
       <div className="relative z-10 flex min-h-screen">
-        {/* ---------- LEFT · tagline space (large screens) ---------- */}
-        <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-20">
-          <span className="relative self-start inline-block border-[3px] border-slate-900 px-4 py-2 font-brand text-3xl font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
+        {/* ---------- LEFT · charcoal brand panel (lg+) — mirrors the app's dark chrome ---------- */}
+        <div className="relative hidden flex-1 flex-col justify-between overflow-hidden bg-slate-900 p-12 text-white lg:flex xl:p-20">
+          <div className="pointer-events-none absolute -left-20 top-1/3 h-[26rem] w-[26rem] rounded-full bg-blue-600/20 blur-3xl" />
+          <span className="relative z-10 self-start inline-block border-[3px] border-white px-4 py-2 font-brand text-3xl font-bold tracking-wide text-white">
             PRISMATIX
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-blue-500" />
           </span>
 
-          <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold leading-[1.15] text-slate-800 dark:text-white xl:text-4xl">
-              <span className="bg-gradient-to-r from-brand-400 to-brand-600 bg-clip-text text-transparent">Clarity</span>{' '}
+          <div className="relative z-10 max-w-2xl">
+            <h2 className="text-3xl font-bold leading-[1.15] text-white xl:text-4xl">
+              <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">Clarity</span>{' '}
               in every project.
             </h2>
-            <p className="mt-3 max-w-md text-base text-slate-500 dark:text-slate-300">
+            <p className="mt-3 max-w-md text-base text-slate-300">
               Plan, track and report cost, schedule and risk — with earned-value truth, not gut feel.
             </p>
-            <ul className="mt-9 space-y-3.5 text-sm text-slate-600 dark:text-slate-300">
+            <ul className="mt-9 space-y-3.5 text-sm text-slate-200">
               {HIGHLIGHTS.map((t) => (
                 <li key={t} className="flex items-center gap-3">
-                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-500/15 ring-1 ring-brand-400/40">
-                    <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-500/20 ring-1 ring-blue-400/40">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
                   </span>
                   {t}
                 </li>
@@ -265,13 +229,13 @@ export default function LoginPage() {
             </ul>
           </div>
 
-          <p className="text-xs text-slate-500 dark:text-slate-400">© 2026 Prismatix</p>
+          <p className="relative z-10 text-xs text-slate-400">© 2026 Prismatix</p>
         </div>
 
         {/* ---------- RIGHT · sign-in card (right-aligned) ---------- */}
         <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[42%] lg:justify-center lg:pr-12 xl:pr-16">
           <div className="w-full max-w-sm">
-            <div className="rounded-3xl border border-white/70 bg-white/75 p-7 shadow-[0_24px_70px_-20px_rgba(244,103,95,0.35)] backdrop-blur-xl sm:p-8 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_24px_70px_-20px_rgba(0,0,0,0.65)]">
+            <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-300/40 sm:p-8 dark:border-slate-700 dark:bg-slate-900">
               {/* logo on small screens (left pane hidden) */}
               <div className="mb-6 flex justify-center lg:hidden">
                 <span className="relative inline-block border-[3px] border-slate-900 px-3 py-1.5 font-brand text-lg font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
@@ -282,20 +246,20 @@ export default function LoginPage() {
 
               {workspaceNotFound ? (
                 <div className="py-4 text-center">
-                  <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/15 text-brand-300 ring-1 ring-brand-400/40">
+                  <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-200">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-7 w-7"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-3.5-3.5M11 8v3.5" /><circle cx="11" cy="14.6" r=".55" fill="currentColor" stroke="none" /></svg>
                   </div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-100">Workspace not found</h1>
-                  <p className="mt-2 text-sm text-slate-400">There’s no workspace at <span className="font-semibold text-slate-200">{attemptedHost}</span>. Check the address, or head to the main site to sign in.</p>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Workspace not found</h1>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">There’s no workspace at <span className="font-semibold text-slate-700 dark:text-slate-200">{attemptedHost}</span>. Check the address, or head to the main site to sign in.</p>
                   <a href={mainSiteUrl} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Go to Prismatix</a>
                 </div>
               ) : pendingOrg ? (
                 <div className="py-4 text-center">
-                  <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/40">
+                  <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-200">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-7 w-7"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 2" /></svg>
                   </div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-100">Awaiting approval</h1>
-                  <p className="mt-2 text-sm text-slate-400">Your request for the <span className="font-semibold text-slate-200">{pendingOrg}</span> workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.</p>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Awaiting approval</h1>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Your request for the <span className="font-semibold text-slate-700 dark:text-slate-200">{pendingOrg}</span> workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.</p>
                   <button type="button" onClick={() => { setPendingOrg(null); setMode('signin'); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Back to sign in</button>
                 </div>
               ) : (
