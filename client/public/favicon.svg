@@ -1,14 +1,14 @@
 <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Prismatix" fill="none">
   <defs>
     <linearGradient id="lit" x1="8" y1="6" x2="24" y2="44" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ff8f88" /><stop offset="1" stop-color="#f4675f" />
+      <stop stop-color="#60a5fa" /><stop offset="1" stop-color="#2563eb" />
     </linearGradient>
     <linearGradient id="dim" x1="24" y1="6" x2="42" y2="44" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#e3564e" /><stop offset="1" stop-color="#b23a37" />
+      <stop stop-color="#2563eb" /><stop offset="1" stop-color="#1e40af" />
     </linearGradient>
   </defs>
   <!-- badge-less 3D prism (transparent bg), bold for small-size legibility -->
-  <path d="M24 3 L5 44 H24 Z" fill="url(#lit)" stroke="#f4675f" stroke-width="2" stroke-linejoin="round" />
-  <path d="M24 3 L43 44 H24 Z" fill="url(#dim)" stroke="#b23a37" stroke-width="2" stroke-linejoin="round" />
+  <path d="M24 3 L5 44 H24 Z" fill="url(#lit)" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" />
+  <path d="M24 3 L43 44 H24 Z" fill="url(#dim)" stroke="#1e40af" stroke-width="2" stroke-linejoin="round" />
   <path d="M24 5 L11 33" stroke="#fff" stroke-opacity="0.4" stroke-width="1.8" stroke-linecap="round" />
 </svg>
