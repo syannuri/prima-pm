@@ -954,6 +954,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // (the "can't add a task in full screen" bug). Outside fullscreen: default portal (undefined).
   const modalContainer = fullscreen ? fsRef.current : undefined;
 
+  // Slip-vs-baseline summary. Rendered inline on the LEFT of the header control row (non-fullscreen)
+  // so it doesn't cost a dedicated row above the table — letting the Gantt sit right under the
+  // controls. In fullscreen it stays above the timeline instead (the control row is a scroll row).
+  const slipBanner = slip.baselined > 0 ? (
+    <div className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${slip.late > 0 ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>
+      {slip.late > 0
+        ? <>⚠ {slip.late} of {slip.baselined} tasks late vs baseline · worst +{slip.worst}d</>
+        : <>✓ All {slip.baselined} baselined tasks on or ahead of schedule</>}
+      {criticalIds.size > 0 && <span className="ml-1 text-red-600 dark:text-red-400">· {criticalIds.size} on the critical path</span>}
+    </div>
+  ) : null;
+
   return (
     <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
     {/* In full view the card is a flex column: header stays put, the timeline gets ALL remaining
@@ -966,7 +978,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           <span aria-hidden>↻</span> Rotate your device to landscape for the full timeline.
         </div>
       )}
-      <div className={`flex flex-wrap items-center gap-2 ${fullscreen ? 'justify-between mb-2' : 'justify-end mb-1'}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${fullscreen ? 'justify-between mb-2' : 'mb-1'}`}>
+        {/* Slip summary on the left (non-fullscreen) — shares the row with the right-aligned
+            controls so the table rises directly beneath the buttons instead of a row lower. */}
+        {!fullscreen && slipBanner}
         {/* In full view the title block is dropped so the header chrome stays short — on a
             landscape PHONE (~390px tall) it otherwise eats the whole height and collapses the
             timeline to nothing. */}
@@ -974,7 +989,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             Full screen + Today stay visible as one-tap controls; every other control (view toggles,
             timeline scale/zoom, baseline) tucks into a single "Options" popover so the header stays
             one line instead of wrapping into 2–3 rows. */}
-        <div className={`flex min-w-0 items-center gap-3 ${fullscreen ? 'w-full' : 'flex-wrap'}`}>
+        <div className={`flex min-w-0 items-center gap-3 ${fullscreen ? 'w-full' : 'ml-auto flex-wrap'}`}>
         <div className={`flex min-w-0 items-center gap-2 ${fullscreen ? 'min-w-0 flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0' : 'flex-wrap'}`}>
           {rows.length > 0 && (
             <button onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'} className={CTRL_BTN}>
@@ -1070,14 +1085,9 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <>
-        {slip.baselined > 0 && (
-          <div className={`mb-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${slip.late > 0 ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>
-            {slip.late > 0
-              ? <>⚠ {slip.late} of {slip.baselined} tasks late vs baseline · worst +{slip.worst}d</>
-              : <>✓ All {slip.baselined} baselined tasks on or ahead of schedule</>}
-            {criticalIds.size > 0 && <span className="ml-1 text-red-600 dark:text-red-400">· {criticalIds.size} on the critical path</span>}
-          </div>
-        )}
+        {/* Non-fullscreen shows the slip summary inline in the header row (above); in fullscreen the
+            control row is a full-width scroll row, so keep it here above the timeline instead. */}
+        {fullscreen && slipBanner && <div className="mb-2">{slipBanner}</div>}
         <div className={`relative w-full min-w-0 ${fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}`}>
         {/* w-full clamps the scroll box to the viewport so the wide table scrolls INSIDE it (never
             pushes the page); in full view flex-1/min-h-0 fills the remaining height robustly — a %
