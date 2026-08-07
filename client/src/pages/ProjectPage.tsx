@@ -234,7 +234,7 @@ export default function ProjectPage() {
           so a short panel still gives <main> enough scroll room to pin the whole tab strip to the
           top on a tab switch — the align-to-top scroll then lands consistently for every tab,
           not just the tall ones (WBS/Gantt). 3.5rem = the 56px top bar. */}
-      <div className="space-y-5 sm:min-h-[calc(100vh-3.5rem)]">
+      <div className="space-y-2 sm:min-h-[calc(100vh-3.5rem)]">
       <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} isMobile={isMobile} onSelect={(t) => setTab(t)} />
 
       {!chartered && activeTab !== 'Charter' && activeTab !== 'Audit' && activeTab !== 'Agile' && activeTab !== 'Issues' && activeTab !== 'Closeout' && activeTab !== 'Stakeholders' && activeTab !== 'Requirements' && activeTab !== 'RAID' && (
@@ -360,8 +360,8 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
   const groupBtn = (active: boolean) =>
     `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-2 text-sm font-bold transition ${
       active
-        ? 'border-brand-600 bg-brand-50 text-slate-900 dark:bg-brand-900/30 dark:text-white'
-        : 'border-transparent text-slate-800 hover:bg-slate-50 hover:text-black dark:text-slate-100 dark:hover:bg-slate-800/60 dark:hover:text-white'
+        ? 'border-brand-600 bg-brand-50 text-slate-800 dark:bg-brand-900/30 dark:text-white'
+        : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-800/60 dark:hover:text-white'
     }`;
   // Level 2: sub-tabs of the active group (pills), always visible so the group's contents are
   // discoverable. Bold black; the active sub-tab is the filled brand pill (white text on brand).
@@ -369,7 +369,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
     `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-bold transition ${
       active
         ? 'bg-brand-600 text-white shadow-sm'
-        : 'text-slate-800 hover:bg-slate-100 hover:text-black dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-white'
+        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white'
     }`;
 
   return (
@@ -379,7 +379,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
     // z-[31] beats the WBS/Gantt sticky header (frozen th is !z-30) so, when the WBS box scrolls
     // up under the strip, its column header tucks *behind* the opaque strip instead of painting
     // over the tabs. Kept below the mobile drawer (z-40).
-    <div className="sticky -top-2 z-[31] -mx-4 border-b border-slate-200 bg-slate-50 px-4 pb-1 pt-2 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:-mx-6 sm:px-6">
+    <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-50 px-4 pb-1 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:-mx-6 sm:px-6">
       {/* Level 1 — domain groups. Scrolls horizontally on narrow screens; a right-edge fade
           hints there are more groups to swipe to (hidden on md+ where they all fit). */}
       <div className="relative">
