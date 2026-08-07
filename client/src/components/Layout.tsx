@@ -58,7 +58,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950">
       {/* Sidebar — fixed column on md+ (collapsible to an icon rail), slide-over on mobile. */}
       <aside className="hidden md:block">
         <Sidebar collapsed={collapsed} />

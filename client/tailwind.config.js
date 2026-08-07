@@ -9,18 +9,21 @@ export default {
         brand: ['Poppins', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
-        // Asana-style coral accent (full 50–900 ramp).
+        // Primary accent — unified BLUE ramp (matches the charcoal chrome + tab accent). This was
+        // formerly an Asana-style coral; redefining the single `brand` token recolors every
+        // `brand-*` usage app-wide (buttons, links, badges, project spine, focus ring, logo) to blue
+        // in one place, so the whole product speaks one accent. Mirrors Tailwind's default blue.
         brand: {
-          50: '#fff1f1',
-          100: '#ffe0df',
-          200: '#ffc7c4',
-          300: '#ffa19c',
-          400: '#fb7d77',
-          500: '#f4675f',
-          600: '#e34f4a',
-          700: '#be3b39',
-          800: '#9d3331',
-          900: '#822f2e',
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
         },
       },
     },
