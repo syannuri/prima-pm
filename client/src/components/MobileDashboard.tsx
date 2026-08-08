@@ -170,7 +170,7 @@ export default function MobileDashboard() {
           </div>
         </div>
         {projects.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 py-6 text-center text-sm text-slate-400 dark:border-slate-700">No {filter !== 'all' ? filter : ''} projects.</p>}
-        <div className="space-y-2.5">
+        <div data-tour="sample-projects" className="space-y-2.5">
           {projects.map((p, i) => {
             const ppct = Math.round(p.scheduleProgress * 100);
             const rag = RAG[p.health];

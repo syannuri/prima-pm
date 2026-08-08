@@ -238,9 +238,23 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-x-hidden bg-slate-100 px-6 py-10 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
-      <div className="pointer-events-none absolute -right-24 -top-24 h-[28rem] w-[28rem] rounded-full bg-blue-400/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 left-1/4 h-[30rem] w-[30rem] rounded-full bg-blue-500/10 blur-3xl" />
+    <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-slate-50 px-6 py-6 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
+      {/* Soft blue mesh — layered radial gradients (light mode) for an elegant, calm aurora canvas. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 dark:hidden"
+        style={{
+          background:
+            'radial-gradient(60rem 60rem at 12% 8%, rgba(59,130,246,0.13), transparent 60%),' +
+            'radial-gradient(52rem 52rem at 92% 12%, rgba(37,99,235,0.11), transparent 55%),' +
+            'radial-gradient(58rem 58rem at 82% 96%, rgba(96,165,250,0.16), transparent 60%),' +
+            'radial-gradient(46rem 46rem at 6% 92%, rgba(37,99,235,0.09), transparent 55%)',
+        }}
+      />
+      {/* Floating aurora blobs (both themes; softer in dark). */}
+      <div className="pointer-events-none absolute -right-24 -top-24 h-[28rem] w-[28rem] rounded-full bg-blue-400/20 blur-3xl dark:bg-blue-500/10" />
+      <div className="pointer-events-none absolute -bottom-24 left-1/4 h-[30rem] w-[30rem] rounded-full bg-blue-500/15 blur-3xl dark:bg-blue-600/10" />
+      <div className="pointer-events-none absolute -left-20 top-1/3 h-72 w-72 rounded-full bg-indigo-300/20 blur-3xl dark:bg-indigo-500/10" />
 
       {/* language toggle (matches the landing) */}
       <div className="absolute right-4 top-4 z-20 inline-flex rounded-lg border border-slate-200 bg-white/80 p-0.5 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-800/80">
@@ -254,14 +268,14 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-sm">
         {/* logo — centered above the card */}
-        <div className="mb-6 flex justify-center">
+        <div className="mb-4 flex justify-center">
           <span className="relative inline-block border-[3px] border-slate-900 px-3.5 py-1.5 font-brand text-xl font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
             PRISMATIX
             <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
           </span>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/40 sm:p-7 dark:border-slate-700 dark:bg-slate-900">
+        <div className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-xl shadow-slate-300/40 backdrop-blur-sm sm:p-6 dark:border-slate-700 dark:bg-slate-900">
               {workspaceNotFound ? (
                 <div className="py-4 text-center">
                   <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-200">
@@ -282,7 +296,7 @@ export default function LoginPage() {
                 </div>
               ) : (
               <>
-              <div className="mb-5 text-center">
+              <div className="mb-4 text-center">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{workspace ? tx.signInTo(workspace.name) : isOrg ? tx.createOrg : isGuest ? tx.tryFree : tx.welcome}</h1>
                 <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? tx.workspaceOn(workspace.name) : isOrg ? tx.createOrgSub : isGuest ? tx.tryFreeSub : tx.welcomeSub}</p>
               </div>
@@ -291,13 +305,13 @@ export default function LoginPage() {
               {googleClientId && (
                 <>
                   <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />
-                  <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  <div className="my-3.5 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-slate-400">
                     <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" /> {tx.or} <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
                   </div>
                 </>
               )}
 
-              <form onSubmit={submit} className="space-y-3.5">
+              <form onSubmit={submit} className="space-y-3">
                 {isOrg && (
                   <Field label={tx.orgName}>
                     <Input type="text" autoComplete="organization" placeholder="Acme Corp" value={orgName} onChange={(e) => setOrgName(e.target.value)} required state={!orgName ? undefined : orgName.trim().length >= 2 ? 'valid' : 'invalid'} />
@@ -335,13 +349,13 @@ export default function LoginPage() {
               </form>
 
               {/* trust / security note at the point of sign-in */}
-              <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+              <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
                 {tx.secure}
               </p>
 
               {(guestEnabled || orgEnabled || isSignup) && (
-                <div className="mt-5 flex flex-col gap-1.5 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
+                <div className="mt-4 flex flex-col gap-1.5 border-t border-slate-200/70 pt-3 text-center dark:border-slate-700/60">
                   {isSignup ? (
                     <button type="button" onClick={() => { setMode('signin'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
                       {tx.haveAccount}

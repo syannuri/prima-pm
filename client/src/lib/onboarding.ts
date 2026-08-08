@@ -19,18 +19,18 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '👋',
     title: { id: 'Selamat datang di Prismatix', en: 'Welcome to Prismatix' },
     body: {
-      id: 'Panduan singkat memulai proyek pertama — dari Charter hingga baseline. ±1 menit, bisa dilewati.',
-      en: 'A quick guide to starting your first project — Charter to baseline. ~1 min, skippable.',
+      id: 'Dua contoh proyek — Predictive & Agile — sudah disiapkan untuk Anda. Panduan singkat ini menyorot fitur utamanya (±1 menit, bisa dilewati). Anda tetap bisa mengeklik apa pun selama tur berjalan.',
+      en: 'Two sample projects — Predictive & Agile — are ready for you. This quick guide highlights the key features (~1 min, skippable). You can still click anything while the tour runs.',
     },
   },
   {
-    id: 'new-project',
-    anchor: 'new-project',
-    emoji: '➕',
-    title: { id: 'Buat proyek pertama', en: 'Create your first project' },
+    id: 'explore-samples',
+    anchor: 'sample-projects',
+    emoji: '📂',
+    title: { id: 'Jelajahi contoh proyek', en: 'Explore the sample projects' },
     body: {
-      id: 'Klik “+ New Project”, beri nama, lalu Create. Proyek ini milik Anda.',
-      en: 'Click “+ New Project”, name it, then Create. It’s entirely yours.',
+      id: 'Klik salah satu contoh proyek untuk membuka Charter, WBS/Gantt, biaya & dasbor EVM-nya. Atau tekan “+ New Project” untuk membuat milik Anda sendiri.',
+      en: 'Click a sample project to open its Charter, WBS/Gantt, cost & EVM dashboards. Or press “+ New Project” to create your own.',
     },
   },
   {

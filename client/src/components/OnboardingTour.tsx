@@ -151,7 +151,10 @@ export default function OnboardingTour() {
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-[60]">
+    // pointer-events-none on the layer: the tour is a NON-BLOCKING guide — the dim panes only
+    // highlight, they never trap clicks (the app stays fully interactive during the tour, so a guest
+    // can click a sample project straight away). Only the popover card re-enables pointer events.
+    <div className="pointer-events-none fixed inset-0 z-[60]">
       {spotlight && rect ? (
         <>
           {/* Four dim panes leave a clickable hole over the target. */}
@@ -162,7 +165,7 @@ export default function OnboardingTour() {
           {/* Highlight ring around the target (does not block its clicks). */}
           <div
             className="pointer-events-none fixed rounded-xl ring-2 ring-brand-400 ring-offset-2 ring-offset-transparent animate-pulse motion-reduce:animate-none"
-            style={{ top: rect.top - PAD, left: rect.left - PAD, width: rect.width + 2 * PAD, height: rect.height + 2 * PAD, boxShadow: '0 0 0 4px rgba(244,103,95,0.25)' }}
+            style={{ top: rect.top - PAD, left: rect.left - PAD, width: rect.width + 2 * PAD, height: rect.height + 2 * PAD, boxShadow: '0 0 0 4px rgba(96,165,250,0.30)' }}
           />
           {/* Popover anchored near the target. */}
           <div className="fixed" style={{ top: popTop, left: popLeft }}>{card}</div>

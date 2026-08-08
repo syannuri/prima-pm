@@ -10,7 +10,12 @@ export function canGovernProject(
   corporateRoles: Role[] = ['ADMIN', 'PMO'],
 ): boolean {
   if (!user) return false;
-  if (project.personalOwnerId) return project.personalOwnerId === user.id;
+  // A GUEST lives entirely in their own PERSONAL tenant and self-governs every project there. The
+  // multitenancy refactor moved "is this a personal sandbox?" off the per-project `personalOwnerId`
+  // flag (now unset) onto the tenant, and tenant scoping guarantees a guest only ever loads their
+  // own projects — so any project a guest can see, they own. (Server mirrors this via tenantIsPersonal.)
+  if (user.role === 'GUEST') return true;
+  if (project.personalOwnerId) return project.personalOwnerId === user.id; // legacy per-project owner
   return corporateRoles.includes(user.role);
 }
 

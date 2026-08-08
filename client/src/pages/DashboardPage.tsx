@@ -319,7 +319,7 @@ export default function DashboardPage() {
           />
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div data-tour="sample-projects" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {data.projects.map((p) => {
             const meta = metaById.get(p.id);
             const pct = meta ? Math.round(Math.min(1, Math.max(0, meta.scheduleProgress)) * 100) : null;
