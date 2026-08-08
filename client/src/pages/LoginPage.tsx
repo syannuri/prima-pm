@@ -169,7 +169,10 @@ export default function LoginPage() {
         });
         googleBtnRef.current.innerHTML = '';
         window.google.accounts.id.renderButton(googleBtnRef.current, {
-          type: 'standard', theme: 'filled_black', size: 'large', text: 'continue_with', shape: 'rectangular', width: 320,
+          // 'outline' = white button with a light rounded border, matching the form fields
+          // (vs the old black "banner"). Google renders this in an iframe, so the corner radius
+          // is Google's own (~4px), not the field's rounded-lg — as close as GIS allows.
+          type: 'standard', theme: 'outline', size: 'large', text: 'continue_with', shape: 'rectangular', width: 320,
         });
       })
       .catch(() => {});
@@ -188,7 +191,7 @@ export default function LoginPage() {
         if (cancelled || !window.turnstile || !turnstileRef.current || turnstileWidgetId.current) return;
         turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
           sitekey: turnstileSiteKey,
-          theme: 'dark',
+          theme: 'light',
           callback: (token: string) => setCaptchaToken(token),
           'expired-callback': () => setCaptchaToken(''),
           'error-callback': () => setCaptchaToken(''),
