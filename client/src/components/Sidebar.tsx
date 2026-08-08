@@ -171,6 +171,11 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
             <Icon path={ICONS.tenants} /> {!collapsed && 'Tenants'}
           </NavLink>
         )}
+        {user?.isPlatformAdmin && (
+          <NavLink to="/admin/guests" onClick={onNavigate} aria-label="Guests (Platform)" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.users} /> {!collapsed && 'Guests'}
+          </NavLink>
+        )}
         {!collapsed && <div className={sectionLabel}>Projects</div>}
         {collapsed && <div className="my-2 border-t border-white/10" />}
         {/* Don't flash "No projects yet" while the list is still loading (looks like the

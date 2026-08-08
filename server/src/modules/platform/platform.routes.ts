@@ -285,4 +285,69 @@ router.delete(
   }),
 );
 
+// ---------------------------------------------------------------------------
+// Guest / Google-user management. Guests (self-signup or Google) are role GUEST,
+// each sandboxed in their OWN personal tenant — so they never appear in a tenant's
+// Admin → Users. This platform view lists them across all personal tenants and lets
+// an admin deactivate/reactivate or delete them (+ their sandbox).
+// ---------------------------------------------------------------------------
+
+// GET /admin/tenants/guests — every guest / Google-linked account (User is a global model).
+router.get(
+  '/guests',
+  asyncHandler(async (_req, res) => {
+    const guests = await prisma.user.findMany({
+      where: { OR: [{ isGuest: true }, { googleSub: { not: null } }] },
+      select: { id: true, name: true, email: true, isActive: true, createdAt: true, googleSub: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({
+      guests: guests.map((g) => ({
+        id: g.id, name: g.name, email: g.email, isActive: g.isActive,
+        createdAt: g.createdAt, viaGoogle: !!g.googleSub,
+      })),
+    });
+  }),
+);
+
+// PATCH /admin/tenants/guests/:id — deactivate/reactivate. Deactivating bumps tokenVersion +
+// revokes refresh tokens so the guest is signed out immediately and can't sign back in.
+router.patch(
+  '/guests/:id',
+  validateBody(z.object({ isActive: z.boolean() })),
+  asyncHandler(async (req, res) => {
+    const g = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, isGuest: true, googleSub: true, isPlatformAdmin: true } });
+    if (!g || (!g.isGuest && !g.googleSub)) throw NotFound('Guest not found');
+    if (g.isPlatformAdmin) throw Forbidden('Cannot modify a platform admin here');
+    const active = req.body.isActive as boolean;
+    await prisma.user.update({ where: { id: g.id }, data: { isActive: active, ...(active ? {} : { tokenVersion: { increment: 1 } }) } });
+    if (!active) await prisma.refreshToken.updateMany({ where: { userId: g.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    await writeAudit({ userId: req.user!.id, entity: 'User', entityId: g.id, action: 'UPDATE', after: { isActive: active, guestMgmt: true } });
+    res.json({ ok: true });
+  }),
+);
+
+// DELETE /admin/tenants/guests/:id — remove the guest AND their sandbox. Order matters (Project.tenant
+// is SetNull, not Cascade): delete their personal-tenant projects → the personal tenants → the user.
+router.delete(
+  '/guests/:id',
+  asyncHandler(async (req, res) => {
+    const g = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, email: true, isGuest: true, googleSub: true, isPlatformAdmin: true } });
+    if (!g || (!g.isGuest && !g.googleSub)) throw NotFound('Guest not found');
+    if (g.isPlatformAdmin) throw Forbidden('Cannot delete a platform admin');
+    if (g.id === req.user!.id) throw BadRequest('You cannot delete yourself');
+    const personal = await prisma.membership.findMany({ where: { userId: g.id, tenant: { isPersonal: true } }, select: { tenantId: true } });
+    const tids = personal.map((m) => m.tenantId);
+    await runAsSystem(() => prisma.$transaction(async (tx) => {
+      if (tids.length) {
+        await tx.project.deleteMany({ where: { tenantId: { in: tids } } });   // Project is tenant-scoped
+        await tx.tenant.deleteMany({ where: { id: { in: tids } } });          // cascades memberships
+      }
+      await tx.user.delete({ where: { id: g.id } });                          // cascades tokens; audit userId → null
+    }));
+    await writeAudit({ userId: req.user!.id, entity: 'User', entityId: g.id, action: 'DELETE', before: { email: g.email, guest: true } });
+    res.json({ ok: true });
+  }),
+);
+
 export default router;
