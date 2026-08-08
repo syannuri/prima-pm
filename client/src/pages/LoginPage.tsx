@@ -239,7 +239,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-100 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
+    <div className="relative min-h-screen overflow-x-hidden bg-slate-100 text-slate-800 antialiased lg:h-screen lg:overflow-hidden dark:bg-slate-950 dark:text-slate-200">
       <div className="pointer-events-none absolute -right-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-blue-400/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 right-1/3 h-[34rem] w-[34rem] rounded-full bg-blue-500/10 blur-3xl" />
 
@@ -253,9 +253,9 @@ export default function LoginPage() {
         ))}
       </div>
 
-      <div className="relative z-10 flex min-h-screen">
+      <div className="relative z-10 flex min-h-screen lg:h-screen">
         {/* ---------- LEFT · charcoal brand panel (lg+) — mirrors the app's dark chrome ---------- */}
-        <div className="relative hidden flex-1 flex-col justify-between overflow-hidden bg-slate-900 p-12 text-white lg:flex xl:p-16">
+        <div className="relative hidden flex-1 flex-col justify-between overflow-hidden bg-slate-900 p-8 text-white lg:flex xl:p-12">
           <div className="pointer-events-none absolute -left-20 top-1/3 h-[26rem] w-[26rem] rounded-full bg-blue-600/20 blur-3xl" />
           <span className="relative z-10 self-start inline-block border-[3px] border-white px-4 py-2 font-brand text-3xl font-bold tracking-wide text-white">
             PRISMATIX
@@ -263,11 +263,11 @@ export default function LoginPage() {
           </span>
 
           <div className="relative z-10 max-w-xl">
-            <h2 className="text-3xl font-bold leading-[1.15] text-white xl:text-4xl">
+            <h2 className="text-2xl font-bold leading-[1.15] text-white xl:text-3xl">
               <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">{tx.tagAccent}</span>{' '}{tx.tagRest}
             </h2>
-            <p className="mt-3 max-w-md text-base text-slate-300">{tx.pitch}</p>
-            <ul className="mt-7 space-y-3 text-sm text-slate-200">
+            <p className="mt-2.5 max-w-md text-sm text-slate-300">{tx.pitch}</p>
+            <ul className="mt-5 space-y-2 text-sm text-slate-200">
               {tx.highlights.map((h) => (
                 <li key={h} className="flex items-center gap-3">
                   <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-500/20 ring-1 ring-blue-400/40">
@@ -278,7 +278,7 @@ export default function LoginPage() {
               ))}
             </ul>
             {/* framed product shot — mirrors the landing hero, fills the panel */}
-            <div className="mt-8 overflow-hidden rounded-xl border border-white/10 bg-white shadow-2xl ring-1 ring-black/30">
+            <div className="mt-6 max-w-lg overflow-hidden rounded-xl border border-white/10 bg-white shadow-2xl ring-1 ring-black/30">
               <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-3 py-2">
                 <span className="h-2 w-2 rounded-full bg-red-400/70" />
                 <span className="h-2 w-2 rounded-full bg-amber-400/70" />
@@ -292,9 +292,9 @@ export default function LoginPage() {
         </div>
 
         {/* ---------- RIGHT · sign-in card ---------- */}
-        <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[42%] lg:justify-center lg:pr-12 xl:pr-16">
+        <div className="flex w-full items-center justify-center p-6 sm:p-8 lg:h-screen lg:w-[42%] lg:overflow-y-auto lg:py-8 lg:pr-12 xl:pr-16">
           <div className="w-full max-w-sm">
-            <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-300/40 sm:p-8 dark:border-slate-700 dark:bg-slate-900">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/40 sm:p-7 dark:border-slate-700 dark:bg-slate-900">
               <div className="mb-6 flex justify-center lg:hidden">
                 <span className="relative inline-block border-[3px] border-slate-900 px-3 py-1.5 font-brand text-lg font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
                   PRISMATIX
@@ -322,12 +322,12 @@ export default function LoginPage() {
                 </div>
               ) : (
               <>
-              <div className="mb-7 text-center">
+              <div className="mb-5 text-center">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{workspace ? tx.signInTo(workspace.name) : isOrg ? tx.createOrg : isGuest ? tx.tryFree : tx.welcome}</h1>
                 <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? tx.workspaceOn(workspace.name) : isOrg ? tx.createOrgSub : isGuest ? tx.tryFreeSub : tx.welcomeSub}</p>
               </div>
 
-              <form onSubmit={submit} className="space-y-4">
+              <form onSubmit={submit} className="space-y-3.5">
                 {isOrg && (
                   <Field label={tx.orgName}>
                     <Input type="text" autoComplete="organization" placeholder="Acme Corp" value={orgName} onChange={(e) => setOrgName(e.target.value)} required state={!orgName ? undefined : orgName.trim().length >= 2 ? 'valid' : 'invalid'} />
