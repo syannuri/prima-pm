@@ -266,7 +266,15 @@ router.delete(
       await tx.conversation.deleteMany({ where: { tenantId } });
       await tx.pushSubscription.deleteMany({ where: { tenantId } });
       await tx.attachment.deleteMany({ where: { tenantId } });
-      // Projects cascade all their children (charter/cost/risk/task/CR/…) via onDelete: Cascade.
+      // Sprint & BacklogItem are RESTRICT on projectId (not Cascade) — clear the agile stream first
+      // (SprintSnapshot cascades off Sprint) so the project delete below doesn't trip the FK.
+      const projs = await tx.project.findMany({ where: { tenantId }, select: { id: true } });
+      const pids = projs.map((p) => p.id);
+      if (pids.length) {
+        await tx.backlogItem.deleteMany({ where: { projectId: { in: pids } } });
+        await tx.sprint.deleteMany({ where: { projectId: { in: pids } } });
+      }
+      // Projects cascade all their other children (charter/cost/risk/task/CR/…) via onDelete: Cascade.
       await tx.project.deleteMany({ where: { tenantId } });
       // Standalone roots (Resource before RateCard: Resource.rateCardId → RateCard).
       await tx.resource.deleteMany({ where: { tenantId } });
@@ -340,6 +348,15 @@ router.delete(
     const tids = personal.map((m) => m.tenantId);
     await runAsSystem(() => prisma.$transaction(async (tx) => {
       if (tids.length) {
+        // Sprint & BacklogItem are RESTRICT on projectId (not Cascade) — clear the agile stream first
+        // (SprintSnapshot cascades off Sprint) or project.deleteMany trips the FK. Guests always get an
+        // agile sample project, so every guest has these rows.
+        const projs = await tx.project.findMany({ where: { tenantId: { in: tids } }, select: { id: true } });
+        const pids = projs.map((p) => p.id);
+        if (pids.length) {
+          await tx.backlogItem.deleteMany({ where: { projectId: { in: pids } } });
+          await tx.sprint.deleteMany({ where: { projectId: { in: pids } } });
+        }
         await tx.project.deleteMany({ where: { tenantId: { in: tids } } });   // Project is tenant-scoped
         await tx.tenant.deleteMany({ where: { id: { in: tids } } });          // cascades memberships
       }

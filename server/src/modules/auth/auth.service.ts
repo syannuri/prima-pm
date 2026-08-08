@@ -8,6 +8,7 @@ import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled, isOrgSignupEnabled } from '../settings/settings.service.js';
 import { multitenancyEnforced, runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
+import { seedGuestSampleProjects } from '../guest/guest-seed.service.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput, OrgSignupInput } from './auth.schemas.js';
 
 // The membership a freshly-minted token should be pinned to: the caller's chosen tenant when it is
@@ -52,7 +53,7 @@ async function assertNotFullySuspended(userId: string): Promise<void> {
 // from the corporate portfolio). `Tenant`/`Membership` are GLOBAL models, so this is safe on the
 // context-less public register / Google paths. Idempotent: slug `guest-<userId>` is the stable key,
 // matching the backfill migration, so a retry (or a user backfilled then re-registering) is a no-op.
-async function provisionPersonalTenant(user: User): Promise<void> {
+async function provisionPersonalTenant(user: User): Promise<string> {
   const slug = `guest-${user.id}`;
   const tenant = await prisma.tenant.upsert({
     where: { slug },
@@ -65,6 +66,7 @@ async function provisionPersonalTenant(user: User): Promise<void> {
     create: { userId: user.id, tenantId: tenant.id, role: 'GUEST' },
     update: {},
   });
+  return tenant.id;
 }
 
 // Write an audit for a PUBLIC auth flow (login/register/google) — these run with NO request tenant
@@ -168,8 +170,9 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
       isGuest: true,
     },
   });
-  await provisionPersonalTenant(user);
+  const personalTid = await provisionPersonalTenant(user);
   await auditInUserTenant(user.id, { userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
+  await seedGuestSampleProjects(user, personalTid); // best-effort demo projects so the sandbox isn't empty
   return issueTokenPair(user);
 }
 
@@ -278,8 +281,9 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
   const created = await prisma.user.create({
     data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST', isGuest: true },
   });
-  await provisionPersonalTenant(created);
+  const personalTid = await provisionPersonalTenant(created);
   await auditInUserTenant(created.id, { userId: created.id, entity: 'User', entityId: created.id, action: 'CREATE', after: { email: created.email, role: 'GUEST', via: 'google', self: true } });
+  await seedGuestSampleProjects(created, personalTid); // best-effort demo projects so the sandbox isn't empty
   return issueTokenPair(created);
 }
 
