@@ -406,11 +406,13 @@ export default function HomePage() {
 
       <main className="relative z-10">
         {/* ---------- hero (2-col: copy left · product shot right) ---------- */}
-        <section className="mx-auto max-w-6xl px-5 pb-12 pt-28 sm:px-8 sm:pt-36">
+        <section className="relative mx-auto max-w-6xl px-5 pb-12 pt-28 sm:px-8 sm:pt-36">
+          {/* subtle dot-grid, faded toward the edges so the space reads designed, not blank */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] opacity-60 [background-size:24px_24px] [mask-image:radial-gradient(ellipse_75%_60%_at_50%_20%,#000,transparent)]" />
           <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
             {/* LEFT — copy */}
             <div ref={heroRef} className="text-center will-change-transform lg:text-left">
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-1.5 text-xs font-medium text-slate-600 backdrop-blur">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-4 py-1.5 text-xs font-medium text-slate-600 backdrop-blur">
                 <span className="h-1.5 w-1.5 rounded-full bg-brand-400" /> {t.hero.badge}
               </div>
               <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl">
@@ -427,13 +429,22 @@ export default function HomePage() {
                 </Link>
                 <button
                   onClick={explore}
-                  className="rounded-xl border border-slate-300 bg-slate-100 px-7 py-3 text-base font-semibold text-slate-700 backdrop-blur transition hover:bg-slate-200"
+                  className="rounded-xl border border-slate-300 bg-white/70 px-7 py-3 text-base font-semibold text-slate-700 backdrop-blur transition hover:bg-slate-100"
                 >
                   {t.hero.explore} ↓
                 </button>
               </div>
+              {/* trust / credential strip */}
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+                {['PMBOK-aligned', 'Earned-Value core', 'Predictive', 'Agile', 'Hybrid'].map((c) => (
+                  <span key={c} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/70 px-2.5 py-1 text-xs font-medium text-slate-600 backdrop-blur">
+                    <svg viewBox="0 0 20 20" className="h-3 w-3 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 10 3.5 3.5L15 6" /></svg>
+                    {c}
+                  </span>
+                ))}
+              </div>
             </div>
-            {/* RIGHT — framed light-mode dashboard illustration (on-brand SVG, signed in as Mamed). */}
+            {/* RIGHT — framed light-mode dashboard illustration (Mamed) + glanceable callouts */}
             <div className="pmx-float relative" style={{ animation: reduced ? undefined : 'pmx-float 8s ease-in-out infinite' }}>
               <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-blue-500/20 via-indigo-500/15 to-sky-400/20 blur-3xl" />
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200">
@@ -444,8 +455,30 @@ export default function HomePage() {
                 </div>
                 <HeroMockup className="block w-full" />
               </div>
+              {/* floating glanceable callouts (desktop only) */}
+              <div className="pointer-events-none absolute -left-5 top-10 hidden rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg lg:block">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> On track · SPI 1.04</div>
+              </div>
+              <div className="pointer-events-none absolute -right-5 top-1/2 hidden rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg lg:block">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Forecast (EAC)</div>
+                <div className="text-xs font-bold text-blue-600">On budget</div>
+              </div>
+              <div className="pointer-events-none absolute -left-4 bottom-9 hidden rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg lg:block">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="text-amber-500">▲</span> 2 risks flagged</div>
+              </div>
             </div>
           </div>
+
+          {/* key-metric stat band — bridges the hero into the page */}
+          <dl className="mt-14 grid grid-cols-2 gap-x-6 gap-y-6 border-t border-slate-200 pt-8 sm:grid-cols-4">
+            {[['5', 'EVM metrics', 'CPI · SPI · EAC · EMV · TCPI'], ['3', 'delivery modes', 'Predictive · Agile · Hybrid'], ['Real-time', 'value tracking', 'Earned value, not gut feel'], ['PMBOK', 'aligned', 'Charter → closeout']].map(([v, l, s]) => (
+              <div key={l} className="text-center sm:text-left">
+                <dt className="bg-gradient-to-r from-sky-600 to-blue-700 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">{v}</dt>
+                <dd className="mt-1 text-sm font-semibold text-slate-700">{l}</dd>
+                <dd className="text-xs text-slate-500">{s}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
 
         {/* ---------- why ---------- */}
