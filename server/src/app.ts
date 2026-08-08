@@ -112,7 +112,11 @@ export function createApp() {
             strictTransportSecurity: env.secure
               ? { maxAge: 31536000, includeSubDomains: true, preload: true }
               : false,
-            crossOriginOpenerPolicy: env.secure ? undefined : false,
+            // 'same-origin-allow-popups' (not helmet's default 'same-origin') so the Google
+            // Sign-In popup keeps its window.opener link and can postMessage the credential back —
+            // COOP 'same-origin' severs that and breaks GIS ("Cannot read properties of null
+            // (reading 'postMessage')" → blank after 2FA). Still isolates from cross-origin openers.
+            crossOriginOpenerPolicy: env.secure ? { policy: 'same-origin-allow-popups' } : false,
             originAgentCluster: env.secure ? undefined : false,
           }
         : undefined,
