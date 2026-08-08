@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang, type Lang } from '../context/LanguageContext';
+import HeroMockup from '../components/HeroMockup';
 
 
 /**
@@ -414,8 +415,7 @@ export default function HomePage() {
                 </button>
               </div>
             </div>
-            {/* RIGHT — framed product shot. ⚠️ /hero-dashboard.png is still the DARK + coral UI;
-                replace it with a LIGHT-mode capture at the same path to match the theme. */}
+            {/* RIGHT — framed light-mode dashboard illustration (on-brand SVG, signed in as Mamed). */}
             <div className="pmx-float relative" style={{ animation: reduced ? undefined : 'pmx-float 8s ease-in-out infinite' }}>
               <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-blue-500/20 via-indigo-500/15 to-sky-400/20 blur-3xl" />
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200">
@@ -424,15 +424,7 @@ export default function HomePage() {
                   <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
                   <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
                 </div>
-                <img
-                  src="/hero-dashboard.png"
-                  width={1600}
-                  height={1000}
-                  loading="eager"
-                  decoding="async"
-                  alt="Prismatix dashboard — portfolio health, EVM KPIs and project status at a glance"
-                  className="block w-full"
-                />
+                <HeroMockup className="block w-full" />
               </div>
             </div>
           </div>
