@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang, type Lang } from '../context/LanguageContext';
 import HeroMockup from '../components/HeroMockup';
+import MockGantt from '../components/mocks/MockGantt';
+import MockSCurve from '../components/mocks/MockSCurve';
+import MockCharts from '../components/mocks/MockCharts';
 
 
 /**
@@ -232,6 +235,21 @@ function Wordmark({ small = false, bare = false }: { small?: boolean; bare?: boo
 // HomePage) imperatively adds `.in` when the element scrolls into view — driven by the
 // scroll container's own 'scroll' event, which is far more reliable across environments
 // than an IntersectionObserver rooted in a custom scroll container.
+// A framed "browser window" wrapper for the SVG product mockups in the showcase.
+function Shot({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <figure className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl ring-1 ring-slate-200">
+      <figcaption className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
+        <span className="ml-3 text-sm font-medium text-slate-700">{label}</span>
+      </figcaption>
+      {children}
+    </figure>
+  );
+}
+
 function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   return (
     <div className={`reveal ${className}`} style={{ transitionDelay: `${delay}ms` }}>
@@ -468,6 +486,21 @@ export default function HomePage() {
                 </div>
               </Reveal>
             ))}
+          </div>
+        </section>
+
+        {/* ---------- showcase: on-brand product mockups (Gantt · S-curve · charts) ---------- */}
+        <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+          <Reveal className="mb-10 text-center">
+            <SectionTitle>{t.showcase.title}</SectionTitle>
+            <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.showcase.sub}</p>
+          </Reveal>
+          <Reveal className="reveal-zoom">
+            <Shot label="Interactive WBS & Gantt"><MockGantt className="block w-full" /></Shot>
+          </Reveal>
+          <div className="mt-6 grid gap-6 md:grid-cols-2">
+            <Reveal className="reveal-left"><Shot label="Earned-Value S-curve · SPI · CPI"><MockSCurve className="block w-full" /></Shot></Reveal>
+            <Reveal className="reveal-right" delay={90}><Shot label="Portfolio status charts"><MockCharts className="block w-full" /></Shot></Reveal>
           </div>
         </section>
 
