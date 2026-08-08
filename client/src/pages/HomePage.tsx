@@ -386,36 +386,56 @@ export default function HomePage() {
       </header>
 
       <main className="relative z-10">
-        {/* ---------- hero ---------- */}
-        <section className="mx-auto flex max-w-6xl flex-col items-center px-5 pb-16 pt-32 text-center sm:px-8 sm:pt-40">
-          <div ref={heroRef} className="flex flex-col items-center will-change-transform">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-1.5 text-xs font-medium text-slate-600 backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-400" /> {t.hero.badge}
+        {/* ---------- hero (2-col: copy left · product shot right) ---------- */}
+        <section className="mx-auto max-w-6xl px-5 pb-12 pt-28 sm:px-8 sm:pt-36">
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+            {/* LEFT — copy */}
+            <div ref={heroRef} className="text-center will-change-transform lg:text-left">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-1.5 text-xs font-medium text-slate-600 backdrop-blur">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-400" /> {t.hero.badge}
+              </div>
+              <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl">
+                {t.hero.titlePre}
+                <span className="pmx-accent bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-500 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
+              </h1>
+              <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-600 lg:mx-0">{t.hero.sub}</p>
+              <div className="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+                <Link
+                  to="/login"
+                  className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-7 py-3 text-base font-semibold text-white shadow-xl shadow-brand-500/30 transition hover:-translate-y-0.5 hover:from-brand-600 hover:to-brand-700"
+                >
+                  {t.hero.enter}
+                </Link>
+                <button
+                  onClick={explore}
+                  className="rounded-xl border border-slate-300 bg-slate-100 px-7 py-3 text-base font-semibold text-slate-700 backdrop-blur transition hover:bg-slate-200"
+                >
+                  {t.hero.explore} ↓
+                </button>
+              </div>
+            </div>
+            {/* RIGHT — framed product shot. ⚠️ /hero-dashboard.png is still the DARK + coral UI;
+                replace it with a LIGHT-mode capture at the same path to match the theme. */}
+            <div className="pmx-float relative" style={{ animation: reduced ? undefined : 'pmx-float 8s ease-in-out infinite' }}>
+              <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-blue-500/20 via-indigo-500/15 to-sky-400/20 blur-3xl" />
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
+                </div>
+                <img
+                  src="/hero-dashboard.png"
+                  width={1600}
+                  height={1000}
+                  loading="eager"
+                  decoding="async"
+                  alt="Prismatix dashboard — portfolio health, EVM KPIs and project status at a glance"
+                  className="block w-full"
+                />
+              </div>
+            </div>
           </div>
-          <h1 className="max-w-3xl text-5xl font-bold leading-[1.08] tracking-tight text-slate-900 sm:text-6xl">
-            {t.hero.titlePre}
-            <span className="pmx-accent bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-500 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">{t.hero.sub}</p>
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/login"
-              className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-7 py-3 text-base font-semibold text-white shadow-xl shadow-brand-500/30 transition hover:-translate-y-0.5 hover:from-brand-600 hover:to-brand-700"
-            >
-              {t.hero.enter}
-            </Link>
-            <button
-              onClick={explore}
-              className="rounded-xl border border-slate-300 bg-slate-100 px-7 py-3 text-base font-semibold text-slate-700 backdrop-blur transition hover:bg-slate-200"
-            >
-              {t.hero.explore} ↓
-            </button>
-          </div>
-          </div>
-
-          {/* Hero screenshot temporarily removed: the old /hero-dashboard.png is the DARK + coral UI
-              and clashes with the new light theme. Re-add a fresh LIGHT-mode capture here (drop it
-              at client/public/hero-dashboard.png) and restore the framed <img> block. */}
         </section>
 
         {/* ---------- why ---------- */}
