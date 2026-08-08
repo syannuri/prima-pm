@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
 import { Card, EmptyState } from './ui';
+import RagGlyph from './RagGlyph';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import MobileDashboardSkeleton from './MobileDashboardSkeleton';
@@ -121,7 +122,7 @@ export default function MobileDashboard() {
         <div className="relative mt-3 flex flex-wrap justify-center gap-2">
           {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
             <span key={h} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 ${light ? 'bg-slate-100 text-slate-600 ring-slate-200' : 'bg-white/10 ring-white/10 backdrop-blur-sm'}`}>
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: RAG[h].dot }} />{RAG[h].label} {data.byHealth[h]}
+              <RagGlyph status={h} size={10} />{RAG[h].label} {data.byHealth[h]}
             </span>
           ))}
         </div>

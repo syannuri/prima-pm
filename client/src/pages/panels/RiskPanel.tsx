@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Risk, RiskAnalysis } from '../../api/types';
-import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, PanelLoading } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, PanelLoading, Skeleton } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatIdr } from '../../lib/format';
@@ -46,7 +46,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <SectionTitle sub="Probability × Impact (5×5)">Risk Heatmap</SectionTitle>
-          {a && <Heatmap cells={a.heatmap} />}
+          {a ? <Heatmap cells={a.heatmap} /> : <Skeleton className="h-64 w-full max-w-[19rem]" />}
         </Card>
         <Card>
           <SectionTitle sub="Quantitative — EMV drives the contingency reserve">Reserve &amp; Severity</SectionTitle>
@@ -217,31 +217,55 @@ function DeleteRisk({ base, id, title, onDone }: { base: string; id: string; tit
   return <button onClick={onClick} className="text-xs text-red-500 hover:underline">delete</button>;
 }
 
+// Severity bands for a 5×5 risk matrix (score = probability × impact, 1–25). Vivid, theme-stable
+// fills so the grid reads clearly: populated cells are solid + counted; empty cells show the same
+// hue faint so the risk gradient stays visible underneath.
+const RISK_BAND = (score: number) =>
+  score <= 4 ? { fill: 'bg-emerald-500', faint: 'bg-emerald-500/15', ring: 'ring-emerald-600/50', sw: 'bg-emerald-500' }
+  : score <= 9 ? { fill: 'bg-amber-500', faint: 'bg-amber-500/15', ring: 'ring-amber-600/50', sw: 'bg-amber-500' }
+  : score <= 14 ? { fill: 'bg-orange-500', faint: 'bg-orange-500/15', ring: 'ring-orange-600/50', sw: 'bg-orange-500' }
+  : { fill: 'bg-red-500', faint: 'bg-red-500/15', ring: 'ring-red-600/50', sw: 'bg-red-500' };
+const RISK_LEGEND = [
+  { sw: 'bg-emerald-500', label: 'Low' }, { sw: 'bg-amber-500', label: 'Moderate' },
+  { sw: 'bg-orange-500', label: 'High' }, { sw: 'bg-red-500', label: 'Severe' },
+];
+
 function Heatmap({ cells }: { cells: RiskAnalysis['heatmap'] }) {
   // probability rows (5 -> 1, top to bottom), impact columns (1 -> 5)
-  const color = (score: number) =>
-    score <= 5 ? 'bg-green-100' : score <= 12 ? 'bg-amber-100' : score <= 19 ? 'bg-orange-200' : 'bg-red-200';
   const get = (p: number, i: number) => cells.find((c) => c.probability === p && c.impact === i);
   return (
     <div className="inline-block">
       <div className="flex">
         <div className="w-6" />
-        {[1, 2, 3, 4, 5].map((i) => <div key={i} className="w-12 text-center text-xs text-slate-500 dark:text-slate-400">{i}</div>)}
+        {[1, 2, 3, 4, 5].map((i) => <div key={i} className="w-12 text-center text-xs font-medium text-slate-500 dark:text-slate-400">{i}</div>)}
       </div>
       {[5, 4, 3, 2, 1].map((p) => (
         <div key={p} className="flex items-center">
-          <div className="w-6 text-center text-xs text-slate-500 dark:text-slate-400">{p}</div>
+          <div className="w-6 text-center text-xs font-medium text-slate-500 dark:text-slate-400">{p}</div>
           {[1, 2, 3, 4, 5].map((i) => {
             const cell = get(p, i);
+            const b = RISK_BAND(p * i);
+            const on = !!cell && cell.count > 0;
             return (
-              <div key={i} className={`m-0.5 grid h-11 w-11 place-items-center rounded ${color(p * i)} text-sm font-semibold text-slate-700 dark:text-slate-200`}>
-                {cell && cell.count > 0 ? cell.count : ''}
+              <div
+                key={i}
+                title={`Probability ${p} × Impact ${i} = ${p * i}${on ? ` · ${cell!.count} risk${cell!.count > 1 ? 's' : ''}` : ''}`}
+                className={`m-0.5 grid h-11 w-11 place-items-center rounded-md text-sm font-bold transition ${on ? `${b.fill} text-white shadow-sm ring-1 ${b.ring}` : `${b.faint} text-transparent`}`}
+              >
+                {on ? cell!.count : ''}
               </div>
             );
           })}
         </div>
       ))}
-      <div className="mt-1 text-center text-xs text-slate-500 dark:text-slate-400">Impact → / Probability ↑</div>
+      <div className="mt-1.5 flex items-center justify-between pl-6 pr-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <span>Impact →</span><span>↑ Probability</span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-[11px] text-slate-500 dark:text-slate-400">
+        {RISK_LEGEND.map((l) => (
+          <span key={l.label} className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ${l.sw}`} />{l.label}</span>
+        ))}
+      </div>
     </div>
   );
 }

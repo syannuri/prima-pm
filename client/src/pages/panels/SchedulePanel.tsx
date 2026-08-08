@@ -32,17 +32,17 @@ function ManpowerSync({ rows }: { rows: ManpowerSyncRow[] }) {
       <table className="prima-rows w-full text-sm">
         <thead>
           <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-            <th className="py-2">Task</th><th className="text-right">Sched. days</th><th className="text-right">Mandays</th>
-            <th className="text-right">Variance</th>
+            <th className="py-2">Task</th><th className="text-right tabular-nums">Sched. days</th><th className="text-right tabular-nums">Mandays</th>
+            <th className="text-right tabular-nums">Variance</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.taskId} className="border-b border-slate-100 dark:border-slate-800">
               <td className="py-2">{r.taskName}</td>
-              <td className="text-right">{r.scheduleWorkingDays}</td>
-              <td className="text-right">{formatNum(r.linkedPlanMandays)}</td>
-              <td className="text-right">{formatNum(r.variance)}</td>
+              <td className="text-right tabular-nums">{r.scheduleWorkingDays}</td>
+              <td className="text-right tabular-nums">{formatNum(r.linkedPlanMandays)}</td>
+              <td className="text-right tabular-nums">{formatNum(r.variance)}</td>
             </tr>
           ))}
           {!rows.length && <tr><td colSpan={4} className="py-3 text-center text-slate-500 dark:text-slate-400">No tasks.</td></tr>}
