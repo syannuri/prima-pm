@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { EvmTrend, PortfolioEvmTrend as Trend } from '../api/types';
-import { Button, Card, Input, SectionTitle, Spinner } from './ui';
+import { Button, Card, EmptyState, Input, SectionTitle, Spinner } from './ui';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
 import { formatIdr, formatDate, formatDateInput, formatNum } from '../lib/format';
@@ -75,7 +75,7 @@ export default function PortfolioEvmTrend() {
       </div>
 
       {series.length === 0 ? (
-        <Card><p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No portfolio snapshots yet.{canWrite ? ' Press “Capture all” to freeze a status point for every project at once.' : ' Ask a PMO/PM to capture a portfolio status.'}</p></Card>
+        <Card><EmptyState title="No portfolio snapshots yet" hint={canWrite ? 'Press “Capture all” to freeze a status point for every project at once.' : 'Ask a PMO/PM to capture a portfolio status.'} /></Card>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-4">

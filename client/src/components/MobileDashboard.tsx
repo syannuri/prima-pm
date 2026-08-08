@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
-import { Card } from './ui';
+import { Card, EmptyState } from './ui';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import MobileDashboardSkeleton from './MobileDashboardSkeleton';
@@ -65,7 +65,7 @@ export default function MobileDashboard() {
   const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
 
   if (isLoading) return <MobileDashboardSkeleton />;
-  if (!data || data.totals.count === 0) return <Card><p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No projects in the portfolio yet.</p></Card>;
+  if (!data || data.totals.count === 0) return <Card><EmptyState title="No projects yet" hint="Projects in your portfolio will show up here with their live health." /></Card>;
 
   const t = data.totals;
   const pct = Math.round(t.scheduleProgress * 100);

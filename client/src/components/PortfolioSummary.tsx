@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
 import NeonGauge from './NeonGauge';
+import RagGlyph from './RagGlyph';
 import { Badge, Card, Skeleton } from './ui';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../lib/format';
 import { computeMargin, likelyEac } from '../lib/margin';
@@ -179,7 +180,7 @@ export default function PortfolioSummary() {
             <div className="flex flex-wrap items-center gap-1.5">
               {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
                 <span key={h} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs ring-1 ring-slate-200 dark:bg-white/10 dark:ring-white/10">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: HEALTH_META[h].dot }} />
+                  <RagGlyph status={h} size={10} />
                   <span className="text-slate-600 dark:text-white/80">{HEALTH_META[h].label}</span>
                   <span className="font-bold tabular-nums">{data.byHealth[h]}</span>
                 </span>

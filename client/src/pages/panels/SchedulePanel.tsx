@@ -29,7 +29,7 @@ function ManpowerSync({ rows }: { rows: ManpowerSyncRow[] }) {
   return (
     <Card>
       <SectionTitle sub="Reconcile Cost manpower mandays against schedule duration">Manpower ↔ Schedule Sync</SectionTitle>
-      <table className="w-full text-sm">
+      <table className="prima-rows w-full text-sm">
         <thead>
           <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
             <th className="py-2">Task</th><th className="text-right">Sched. days</th><th className="text-right">Mandays</th>
