@@ -5,6 +5,7 @@ import HeroMockup from '../components/HeroMockup';
 import MockGantt from '../components/mocks/MockGantt';
 import MockSCurve from '../components/mocks/MockSCurve';
 import MockCharts from '../components/mocks/MockCharts';
+import ProductTour from '../components/ProductTour';
 
 
 /**
@@ -479,6 +480,15 @@ export default function HomePage() {
               </div>
             ))}
           </dl>
+        </section>
+
+        {/* ---------- see it in action (auto-playing product tour) ---------- */}
+        <section className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
+          <Reveal className="mb-10 text-center">
+            <SectionTitle>{lang === 'id' ? 'Lihat langsung' : 'See it in action'}</SectionTitle>
+            <p className="mx-auto mt-4 max-w-2xl text-slate-500">{lang === 'id' ? 'Tur singkat: dashboard, jadwal Gantt, earned value, dan grafik portofolio.' : 'A quick tour — dashboard, Gantt schedule, earned value and portfolio charts.'}</p>
+          </Reveal>
+          <Reveal className="reveal-zoom"><ProductTour /></Reveal>
         </section>
 
         {/* ---------- why ---------- */}

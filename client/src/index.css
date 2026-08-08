@@ -55,6 +55,9 @@
   }
 }
 
+/* Product-tour segment progress bar: the active dot fills over the scene duration. */
+@keyframes pmx-seg { from { width: 0 } to { width: 100% } }
+
 /* Sidebar (always-dark charcoal rail): a slim scrollbar that BLENDS into the surface — a
    transparent track + a faint translucent-white thumb — instead of the OS-default light
    scrollbar showing through on the dark background in light theme. */
