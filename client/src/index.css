@@ -58,6 +58,11 @@
 /* Product-tour segment progress bar: the active dot fills over the scene duration. */
 @keyframes pmx-seg { from { width: 0 } to { width: 100% } }
 
+/* Product-tour scene entrance — the incoming scene fades + rises so switches feel live. */
+@keyframes pmx-scene-in { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
+.pmx-scene-in { animation: pmx-scene-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .pmx-scene-in { animation: none; } }
+
 /* Sidebar (always-dark charcoal rail): a slim scrollbar that BLENDS into the surface — a
    transparent track + a faint translucent-white thumb — instead of the OS-default light
    scrollbar showing through on the dark background in light theme. */

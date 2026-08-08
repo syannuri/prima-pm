@@ -1,14 +1,55 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLang, type Lang } from '../context/LanguageContext';
 import { Button, Field, Input } from '../components/ui';
+import HeroMockup from '../components/HeroMockup';
 import { api, ApiError } from '../api/client';
 import { isEmailValid } from '../lib/formValidation';
 
-const HIGHLIGHTS = [
-  'See every project’s true health at a glance',
-  'Catch slips, overruns and risks before they grow',
-  'Keep schedules, budgets and people in sync',
-];
+// Bilingual copy (EN/ID) — the sign-in screen follows the same language toggle as the landing.
+const TXT: Record<Lang, {
+  tagAccent: string; tagRest: string; pitch: string; highlights: string[];
+  welcome: string; welcomeSub: string; tryFree: string; tryFreeSub: string; createOrg: string; createOrgSub: string;
+  signInTo: (n: string) => string; workspaceOn: (n: string) => string;
+  orgName: string; yourName: string; name: string; email: string; emailBad: string; password: string; pwHint: string; show: string; hide: string;
+  submitSignin: string; submitGuest: string; submitOrg: string; signingIn: string; settingUp: string;
+  or: string; sandbox: string; haveAccount: string; newHere: string; createOrgLink: string;
+  forgot: string; secure: string;
+  notFound: string; notFoundSub: (h: string) => string; goMain: string; awaiting: string; awaitingSub: (o: string) => string; back: string;
+}> = {
+  en: {
+    tagAccent: 'Clarity', tagRest: 'in every project.',
+    pitch: 'Plan, track and report cost, schedule and risk — with earned-value truth, not gut feel.',
+    highlights: ['See every project’s true health at a glance', 'Catch slips, overruns and risks before they grow', 'Keep schedules, budgets and people in sync'],
+    welcome: 'Welcome back', welcomeSub: 'Sign in to your Prismatix workspace',
+    tryFree: 'Try Prismatix free', tryFreeSub: 'Explore in your own private sandbox — no invite needed',
+    createOrg: 'Create your organization', createOrgSub: 'Set up a new workspace for your team — you’ll be its admin once an admin approves it',
+    signInTo: (n) => `Sign in to ${n}`, workspaceOn: (n) => `${n} workspace on Prismatix`,
+    orgName: 'Organization name', yourName: 'Your name', name: 'Name', email: 'Email', emailBad: 'Enter a valid email address',
+    password: 'Password', pwHint: 'At least 10 characters, with a letter and a number.', show: 'Show password', hide: 'Hide password',
+    submitSignin: 'Sign in', submitGuest: 'Start exploring', submitOrg: 'Create organization', signingIn: 'Signing in…', settingUp: 'Setting up…',
+    or: 'or', sandbox: 'Explore Prismatix in your own sandbox.', haveAccount: 'Have an account? Sign in', newHere: 'New here? Try Prismatix free', createOrgLink: 'Create an organization',
+    forgot: 'Forgot your password? Ask your workspace admin to reset it.', secure: 'Encrypted in transit · your data stays in your workspace',
+    notFound: 'Workspace not found', notFoundSub: (h) => `There’s no workspace at ${h}. Check the address, or head to the main site to sign in.`, goMain: 'Go to Prismatix',
+    awaiting: 'Awaiting approval', awaitingSub: (o) => `Your request for the ${o} workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.`, back: 'Back to sign in',
+  },
+  id: {
+    tagAccent: 'Kejelasan', tagRest: 'di setiap proyek.',
+    pitch: 'Rencanakan, pantau, dan laporkan biaya, jadwal, dan risiko — dengan kebenaran earned value, bukan perkiraan.',
+    highlights: ['Lihat kesehatan tiap proyek dalam sekejap', 'Tangkap keterlambatan, pembengkakan, dan risiko sejak dini', 'Jaga jadwal, anggaran, dan tim tetap selaras'],
+    welcome: 'Selamat datang kembali', welcomeSub: 'Masuk ke workspace Prismatix Anda',
+    tryFree: 'Coba Prismatix gratis', tryFreeSub: 'Jelajahi di sandbox pribadi Anda — tanpa undangan',
+    createOrg: 'Buat organisasi Anda', createOrgSub: 'Siapkan workspace baru untuk tim Anda — Anda menjadi admin-nya setelah disetujui',
+    signInTo: (n) => `Masuk ke ${n}`, workspaceOn: (n) => `Workspace ${n} di Prismatix`,
+    orgName: 'Nama organisasi', yourName: 'Nama Anda', name: 'Nama', email: 'Email', emailBad: 'Masukkan alamat email yang valid',
+    password: 'Kata sandi', pwHint: 'Minimal 10 karakter, dengan huruf dan angka.', show: 'Tampilkan sandi', hide: 'Sembunyikan sandi',
+    submitSignin: 'Masuk', submitGuest: 'Mulai menjelajah', submitOrg: 'Buat organisasi', signingIn: 'Sedang masuk…', settingUp: 'Menyiapkan…',
+    or: 'atau', sandbox: 'Jelajahi Prismatix di sandbox Anda sendiri.', haveAccount: 'Sudah punya akun? Masuk', newHere: 'Baru di sini? Coba gratis', createOrgLink: 'Buat organisasi',
+    forgot: 'Lupa kata sandi? Minta admin workspace Anda untuk meresetnya.', secure: 'Terenkripsi saat transit · data Anda tetap di workspace Anda',
+    notFound: 'Workspace tidak ditemukan', notFoundSub: (h) => `Tidak ada workspace di ${h}. Periksa alamatnya, atau buka situs utama untuk masuk.`, goMain: 'Ke Prismatix',
+    awaiting: 'Menunggu persetujuan', awaitingSub: (o) => `Permintaan untuk workspace ${o} telah diterima. Administrator akan meninjau dan mengaktifkannya — Anda dapat masuk setelah disetujui.`, back: 'Kembali ke masuk',
+  },
+};
 
 // Google Identity Services is injected at runtime (not bundled) — the button only appears when
 // the deployment enables Google sign-in (GOOGLE_CLIENT_ID set), fetched from /auth/providers.
@@ -55,8 +96,13 @@ function loadGoogleIdentityServices(): Promise<void> {
   return gisPromise;
 }
 
+const Eye = () => <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>;
+const EyeOff = () => <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 7 10 7a13 13 0 0 1-2.16 2.95M6.7 6.7A13 13 0 0 0 2 12s3.5 7 10 7a9 9 0 0 0 3.3-.6M3 3l18 18M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>;
+
 export default function LoginPage() {
   const { login, guestRegister, signupOrg, loginWithGoogle } = useAuth();
+  const { lang, setLang } = useLang();
+  const tx = TXT[lang];
   const [mode, setMode] = useState<'signin' | 'guest' | 'org'>('signin');
   const [name, setName] = useState('');
   const [orgName, setOrgName] = useState('');
@@ -74,6 +120,7 @@ export default function LoginPage() {
   const [workspaceNotFound, setWorkspaceNotFound] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
   const [captchaToken, setCaptchaToken] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const turnstileRef = useRef<HTMLDivElement>(null);
   const turnstileWidgetId = useRef<string | null>(null);
@@ -192,51 +239,62 @@ export default function LoginPage() {
   };
 
   return (
-    // `dark` forces this subtree into dark mode so the aurora-dark background reads correctly
-    // regardless of the app theme — matching the always-dark landing page (HomePage).
     <div className="relative min-h-screen overflow-hidden bg-slate-100 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
-      {/* Light theme matching the app (charcoal chrome + blue accent + slate canvas). Subtle blue
-          depth glows on the light canvas replace the old midnight-aurora backdrop. */}
       <div className="pointer-events-none absolute -right-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-blue-400/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 right-1/3 h-[34rem] w-[34rem] rounded-full bg-blue-500/10 blur-3xl" />
 
+      {/* language toggle (matches the landing) */}
+      <div className="absolute right-4 top-4 z-20 inline-flex rounded-lg border border-slate-200 bg-white/80 p-0.5 shadow-sm backdrop-blur">
+        {(['en', 'id'] as Lang[]).map((l) => (
+          <button key={l} type="button" onClick={() => setLang(l)} aria-pressed={lang === l}
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase transition ${lang === l ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
       <div className="relative z-10 flex min-h-screen">
         {/* ---------- LEFT · charcoal brand panel (lg+) — mirrors the app's dark chrome ---------- */}
-        <div className="relative hidden flex-1 flex-col justify-between overflow-hidden bg-slate-900 p-12 text-white lg:flex xl:p-20">
+        <div className="relative hidden flex-1 flex-col justify-between overflow-hidden bg-slate-900 p-12 text-white lg:flex xl:p-16">
           <div className="pointer-events-none absolute -left-20 top-1/3 h-[26rem] w-[26rem] rounded-full bg-blue-600/20 blur-3xl" />
           <span className="relative z-10 self-start inline-block border-[3px] border-white px-4 py-2 font-brand text-3xl font-bold tracking-wide text-white">
             PRISMATIX
             <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-blue-500" />
           </span>
 
-          <div className="relative z-10 max-w-2xl">
+          <div className="relative z-10 max-w-xl">
             <h2 className="text-3xl font-bold leading-[1.15] text-white xl:text-4xl">
-              <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">Clarity</span>{' '}
-              in every project.
+              <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">{tx.tagAccent}</span>{' '}{tx.tagRest}
             </h2>
-            <p className="mt-3 max-w-md text-base text-slate-300">
-              Plan, track and report cost, schedule and risk — with earned-value truth, not gut feel.
-            </p>
-            <ul className="mt-9 space-y-3.5 text-sm text-slate-200">
-              {HIGHLIGHTS.map((t) => (
-                <li key={t} className="flex items-center gap-3">
+            <p className="mt-3 max-w-md text-base text-slate-300">{tx.pitch}</p>
+            <ul className="mt-7 space-y-3 text-sm text-slate-200">
+              {tx.highlights.map((h) => (
+                <li key={h} className="flex items-center gap-3">
                   <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-500/20 ring-1 ring-blue-400/40">
                     <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
                   </span>
-                  {t}
+                  {h}
                 </li>
               ))}
             </ul>
+            {/* framed product shot — mirrors the landing hero, fills the panel */}
+            <div className="mt-8 overflow-hidden rounded-xl border border-white/10 bg-white shadow-2xl ring-1 ring-black/30">
+              <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-3 py-2">
+                <span className="h-2 w-2 rounded-full bg-red-400/70" />
+                <span className="h-2 w-2 rounded-full bg-amber-400/70" />
+                <span className="h-2 w-2 rounded-full bg-green-400/70" />
+              </div>
+              <HeroMockup className="block w-full" />
+            </div>
           </div>
 
           <p className="relative z-10 text-xs text-slate-400">© 2026 Prismatix</p>
         </div>
 
-        {/* ---------- RIGHT · sign-in card (right-aligned) ---------- */}
+        {/* ---------- RIGHT · sign-in card ---------- */}
         <div className="flex w-full items-center justify-center p-6 sm:p-10 lg:w-[42%] lg:justify-center lg:pr-12 xl:pr-16">
           <div className="w-full max-w-sm">
             <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-300/40 sm:p-8 dark:border-slate-700 dark:bg-slate-900">
-              {/* logo on small screens (left pane hidden) */}
               <div className="mb-6 flex justify-center lg:hidden">
                 <span className="relative inline-block border-[3px] border-slate-900 px-3 py-1.5 font-brand text-lg font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
                   PRISMATIX
@@ -249,44 +307,50 @@ export default function LoginPage() {
                   <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-200">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-7 w-7"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-3.5-3.5M11 8v3.5" /><circle cx="11" cy="14.6" r=".55" fill="currentColor" stroke="none" /></svg>
                   </div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Workspace not found</h1>
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">There’s no workspace at <span className="font-semibold text-slate-700 dark:text-slate-200">{attemptedHost}</span>. Check the address, or head to the main site to sign in.</p>
-                  <a href={mainSiteUrl} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Go to Prismatix</a>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{tx.notFound}</h1>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{tx.notFoundSub(attemptedHost)}</p>
+                  <a href={mainSiteUrl} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">{tx.goMain}</a>
                 </div>
               ) : pendingOrg ? (
                 <div className="py-4 text-center">
                   <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-200">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-7 w-7"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 2" /></svg>
                   </div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Awaiting approval</h1>
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Your request for the <span className="font-semibold text-slate-700 dark:text-slate-200">{pendingOrg}</span> workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.</p>
-                  <button type="button" onClick={() => { setPendingOrg(null); setMode('signin'); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">Back to sign in</button>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{tx.awaiting}</h1>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{tx.awaitingSub(pendingOrg)}</p>
+                  <button type="button" onClick={() => { setPendingOrg(null); setMode('signin'); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">{tx.back}</button>
                 </div>
               ) : (
               <>
               <div className="mb-7 text-center">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{workspace ? `Sign in to ${workspace.name}` : isOrg ? 'Create your organization' : isGuest ? 'Try Prismatix free' : 'Welcome back'}</h1>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? `${workspace.name} workspace on Prismatix` : isOrg ? 'Set up a new workspace for your team — you’ll be its admin once an admin approves it' : isGuest ? 'Explore in your own private sandbox — no invite needed' : 'Sign in to your Prismatix workspace'}</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{workspace ? tx.signInTo(workspace.name) : isOrg ? tx.createOrg : isGuest ? tx.tryFree : tx.welcome}</h1>
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? tx.workspaceOn(workspace.name) : isOrg ? tx.createOrgSub : isGuest ? tx.tryFreeSub : tx.welcomeSub}</p>
               </div>
 
               <form onSubmit={submit} className="space-y-4">
                 {isOrg && (
-                  <Field label="Organization name">
+                  <Field label={tx.orgName}>
                     <Input type="text" autoComplete="organization" placeholder="Acme Corp" value={orgName} onChange={(e) => setOrgName(e.target.value)} required state={!orgName ? undefined : orgName.trim().length >= 2 ? 'valid' : 'invalid'} />
                   </Field>
                 )}
                 {isSignup && (
-                  <Field label={isOrg ? 'Your name' : 'Name'}>
-                    <Input type="text" autoComplete="name" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required state={!name ? undefined : name.trim().length >= 2 ? 'valid' : 'invalid'} />
+                  <Field label={isOrg ? tx.yourName : tx.name}>
+                    <Input type="text" autoComplete="name" placeholder={tx.yourName} value={name} onChange={(e) => setName(e.target.value)} required state={!name ? undefined : name.trim().length >= 2 ? 'valid' : 'invalid'} />
                   </Field>
                 )}
-                <Field label="Email">
+                <Field label={tx.email}>
                   <Input type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required state={!email ? undefined : emailOk ? 'valid' : 'invalid'} />
-                  {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">Enter a valid email address</span>}
+                  {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">{tx.emailBad}</span>}
                 </Field>
-                <Field label="Password">
-                  <Input type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? (isSignup && password.length < 10 ? 'invalid' : 'valid') : undefined} />
-                  {isSignup && <span className="mt-1 block text-xs text-slate-400">At least 10 characters, with a letter and a number.</span>}
+                <Field label={tx.password}>
+                  <div className="relative">
+                    <Input type={showPw ? 'text' : 'password'} autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? (isSignup && password.length < 10 ? 'invalid' : 'valid') : undefined} className="pr-10" />
+                    <button type="button" onClick={() => setShowPw((s) => !s)} aria-label={showPw ? tx.hide : tx.show} className="absolute inset-y-0 right-0 grid w-10 place-items-center text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200">
+                      {showPw ? <EyeOff /> : <Eye />}
+                    </button>
+                  </div>
+                  {isSignup && <span className="mt-1 block text-xs text-slate-400">{tx.pwHint}</span>}
+                  {!isSignup && !workspace && <p className="mt-1.5 text-right text-xs text-slate-400">{tx.forgot}</p>}
                 </Field>
                 {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
                 {/* Cloudflare Turnstile — only rendered when the deployment enables it. */}
@@ -296,37 +360,43 @@ export default function LoginPage() {
                   disabled={!canSubmit}
                   className="w-full bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 text-white shadow-lg shadow-brand-500/30 hover:from-brand-600 hover:to-brand-700"
                 >
-                  {busy ? (isSignup ? 'Setting up…' : 'Signing in…') : isOrg ? 'Create organization' : isGuest ? 'Start exploring' : 'Sign in'}
+                  {busy ? (isSignup ? tx.settingUp : tx.signingIn) : isOrg ? tx.submitOrg : isGuest ? tx.submitGuest : tx.submitSignin}
                 </Button>
               </form>
 
               {googleClientId && (
                 <>
                   <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                    <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" /> or <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" />
+                    <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" /> {tx.or} <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" />
                   </div>
                   {/* Google Identity Services renders its own button into this container. */}
                   <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />
-                  <p className="mt-2 text-center text-[11px] text-slate-400">Explore Prismatix in your own sandbox.</p>
+                  <p className="mt-2 text-center text-[11px] text-slate-400">{tx.sandbox}</p>
                 </>
               )}
 
+              {/* trust / security note at the point of sign-in */}
+              <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                {tx.secure}
+              </p>
+
               {(guestEnabled || orgEnabled || isSignup) && (
-                <div className="mt-6 flex flex-col gap-1.5 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
+                <div className="mt-5 flex flex-col gap-1.5 border-t border-slate-200/70 pt-4 text-center dark:border-slate-700/60">
                   {isSignup ? (
                     <button type="button" onClick={() => { setMode('signin'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
-                      Have an account? Sign in
+                      {tx.haveAccount}
                     </button>
                   ) : (
                     <>
                       {guestEnabled && (
                         <button type="button" onClick={() => { setMode('guest'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
-                          New here? Try Prismatix free
+                          {tx.newHere}
                         </button>
                       )}
                       {orgEnabled && (
                         <button type="button" onClick={() => { setMode('org'); setError(''); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
-                          Create an organization
+                          {tx.createOrgLink}
                         </button>
                       )}
                     </>

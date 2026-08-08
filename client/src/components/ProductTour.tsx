@@ -56,7 +56,7 @@ export default function ProductTour({ className }: { className?: string }) {
             blends with the light mockups) */}
         <div className="relative aspect-[16/10] bg-white">
           {SCENES.map(({ Comp }, n) => (
-            <div key={n} aria-hidden={n !== i} className={`absolute inset-0 transition-opacity duration-700 ${n === i ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
+            <div key={n} aria-hidden={n !== i} className={`absolute inset-0 transition-opacity duration-700 ${n === i ? 'opacity-100 pmx-scene-in' : 'pointer-events-none opacity-0'}`}>
               <Comp className="h-full w-full" />
             </div>
           ))}

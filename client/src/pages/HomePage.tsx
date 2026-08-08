@@ -29,6 +29,8 @@ type Content = {
   principles: { title: string; chips: string[] };
   community: { eyebrow: string; title: string; body: string };
   audience: { title: string; chips: string[] };
+  quote: { text: string; who: string };
+  faq: { title: string; items: { q: string; a: string }[] };
   cta: { title: string; enter: string; note: string };
   footer: { tagline: string; rights: string };
 };
@@ -113,6 +115,19 @@ const COPY: Record<Lang, Content> = {
       title: 'Made for the whole delivery team',
       chips: ['PMO', 'Project Managers', 'Finance', 'Risk Officers', 'Delivery teams'],
     },
+    quote: {
+      text: 'Finally, one honest view of cost, schedule and risk — the drift shows up while it’s still small enough to fix.',
+      who: 'Built with, and for, the project-management community',
+    },
+    faq: {
+      title: 'Frequently asked',
+      items: [
+        { q: 'Who is Prismatix for?', a: 'PMOs, project managers, finance and delivery teams who want one honest, role-aware view of cost, schedule and risk.' },
+        { q: 'Is it free to explore?', a: 'Yes — start a private sandbox instantly. No invite and no credit card needed; your data stays in your own workspace.' },
+        { q: 'Predictive, Agile or Hybrid?', a: 'All three. The schedule and Earned-Value engine works from WBS tasks, agile story points, or a blend of both.' },
+        { q: 'Is my data secure?', a: 'Encrypted in transit, isolated per workspace, with role-aware access, refresh-token rotation and a full audit trail.' },
+      ],
+    },
     cta: {
       title: 'See exactly where your projects stand.',
       enter: 'Enter Prismatix',
@@ -195,6 +210,19 @@ const COPY: Record<Lang, Content> = {
       title: 'Untuk seluruh tim proyek',
       chips: ['PMO', 'Project Manager', 'Finance', 'Risk Officer', 'Tim pelaksana'],
     },
+    quote: {
+      text: 'Akhirnya, satu tampilan jujur untuk biaya, jadwal, dan risiko — penyimpangan terlihat selagi masih kecil dan mudah diperbaiki.',
+      who: 'Dibangun bersama, dan untuk, komunitas manajemen proyek',
+    },
+    faq: {
+      title: 'Pertanyaan umum',
+      items: [
+        { q: 'Untuk siapa Prismatix?', a: 'PMO, project manager, finance, dan tim pelaksana yang ingin satu tampilan jujur dan sesuai peran atas biaya, jadwal, dan risiko.' },
+        { q: 'Apakah gratis untuk dicoba?', a: 'Ya — mulai sandbox pribadi seketika. Tanpa undangan dan tanpa kartu kredit; data Anda tetap di workspace Anda sendiri.' },
+        { q: 'Predictive, Agile, atau Hybrid?', a: 'Ketiganya. Mesin jadwal dan Earned Value bekerja dari tugas WBS, story point agile, atau perpaduan keduanya.' },
+        { q: 'Apakah data saya aman?', a: 'Terenkripsi saat transit, terisolasi per workspace, dengan akses sesuai peran, rotasi refresh-token, dan jejak audit lengkap.' },
+      ],
+    },
     cta: {
       title: 'Lihat dengan pasti posisi proyek Anda.',
       enter: 'Masuk Prismatix',
@@ -236,6 +264,32 @@ function Wordmark({ small = false, bare = false }: { small?: boolean; bare?: boo
 // HomePage) imperatively adds `.in` when the element scrolls into view — driven by the
 // scroll container's own 'scroll' event, which is far more reliable across environments
 // than an IntersectionObserver rooted in a custom scroll container.
+// Counts an integer up from 0 when it scrolls into view (non-numeric values render as-is).
+function CountUp({ value }: { value: string }) {
+  const target = parseInt(value, 10);
+  const numeric = !Number.isNaN(target) && String(target) === value;
+  const ref = useRef<HTMLSpanElement>(null);
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!numeric || !ref.current || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return;
+      io.disconnect();
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setN(target); return; }
+      const dur = 900, t0 = performance.now();
+      const tick = (now: number) => {
+        const p = Math.min(1, (now - t0) / dur);
+        setN(Math.round(target * (1 - Math.pow(1 - p, 3))));
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, { threshold: 0.6 });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [numeric, target]);
+  return <span ref={ref}>{numeric ? n : value}</span>;
+}
+
 // A framed "browser window" wrapper for the SVG product mockups in the showcase.
 function Shot({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -271,6 +325,7 @@ export default function HomePage() {
   const { lang, setLang } = useLang();
   const t = COPY[lang];
   const [scrolled, setScrolled] = useState(false);
+  const [progress, setProgress] = useState(0); // 0..1 read progress → top progress bar
   // Parallax targets: the aurora backdrop drifts slower than the page (depth), and the hero
   // copy gently fades + lifts as it scrolls away. Both are transform/opacity only.
   const auroraRef = useRef<HTMLDivElement>(null);
@@ -287,6 +342,8 @@ export default function HomePage() {
     const onScroll = () => {
       const y = window.scrollY;
       setScrolled(y > 48);
+      const docH = document.documentElement.scrollHeight - window.innerHeight;
+      setProgress(docH > 0 ? Math.min(1, y / docH) : 0);
       const trigger = window.innerHeight * 0.9;
       document.querySelectorAll('.reveal:not(.in)').forEach((el) => {
         if (el.getBoundingClientRect().top < trigger) el.classList.add('in');
@@ -318,6 +375,8 @@ export default function HomePage() {
 
   return (
     <div className="relative isolate min-h-screen overflow-x-clip bg-slate-100 text-slate-700 antialiased">
+      {/* scroll-progress bar pinned to the very top */}
+      <div aria-hidden className="fixed inset-x-0 top-0 z-40 h-0.5 origin-left bg-gradient-to-r from-sky-500 to-blue-600" style={{ transform: `scaleX(${progress})` }} />
       <style>{`
         @keyframes pmx-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
 
@@ -474,7 +533,7 @@ export default function HomePage() {
           <dl className="mt-14 grid grid-cols-2 gap-x-6 gap-y-6 border-t border-slate-200 pt-8 sm:grid-cols-4">
             {[['5', 'EVM metrics', 'CPI · SPI · EAC · EMV · TCPI'], ['3', 'delivery modes', 'Predictive · Agile · Hybrid'], ['Real-time', 'value tracking', 'Earned value, not gut feel'], ['PMBOK', 'aligned', 'Charter → closeout']].map(([v, l, s]) => (
               <div key={l} className="text-center sm:text-left">
-                <dt className="bg-gradient-to-r from-sky-600 to-blue-700 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">{v}</dt>
+                <dt className="bg-gradient-to-r from-sky-600 to-blue-700 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent"><CountUp value={v} /></dt>
                 <dd className="mt-1 text-sm font-semibold text-slate-700">{l}</dd>
                 <dd className="text-xs text-slate-500">{s}</dd>
               </div>
@@ -581,6 +640,33 @@ export default function HomePage() {
               </div>
             </div>
           </Reveal>
+        </section>
+
+        {/* ---------- community quote ---------- */}
+        <section className="mx-auto max-w-3xl px-5 py-12 text-center sm:px-8">
+          <Reveal>
+            <div aria-hidden className="mx-auto mb-3 font-brand text-5xl leading-none text-blue-500/30">“</div>
+            <blockquote className="text-xl font-medium leading-relaxed text-slate-700 sm:text-2xl">{t.quote.text}</blockquote>
+            <p className="mt-4 text-sm font-medium text-slate-500">{t.quote.who}</p>
+          </Reveal>
+        </section>
+
+        {/* ---------- FAQ ---------- */}
+        <section className="mx-auto max-w-3xl px-5 py-12 sm:px-8">
+          <Reveal className="mb-8 text-center"><SectionTitle>{t.faq.title}</SectionTitle></Reveal>
+          <div className="space-y-3">
+            {t.faq.items.map((f) => (
+              <Reveal key={f.q}>
+                <details className="group rounded-xl border border-slate-200 bg-white px-5 py-4 transition open:shadow-sm [&_summary::-webkit-details-marker]:hidden">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-semibold text-slate-800">
+                    {f.q}
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                  </summary>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-600">{f.a}</p>
+                </details>
+              </Reveal>
+            ))}
+          </div>
         </section>
 
         {/* ---------- final CTA (bookend) ---------- */}
