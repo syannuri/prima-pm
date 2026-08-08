@@ -403,6 +403,23 @@ model RefreshToken {
   @@index([userId])
 }
 
+// Platform-level denylist for self-service sign-up (guest + Google + org). Deleting a guest only
+// removes their data — open Google/guest sign-up would let them re-register — so an admin may also
+// BLOCK the identity here. Checked (fail-closed) before any account is created/matched on the public
+// auth paths. Matches on email OR googleSub. Global model (NOT tenant-scoped): it gates the
+// context-less public auth routes, like User/Tenant. Email is always stored lowercase.
+model BlockedIdentity {
+  id          String   @id @default(uuid())
+  email       String?  @unique
+  googleSub   String?  @unique
+  reason      String?
+  createdById String? // the platform admin who blocked it (no FK: survives that admin's deletion)
+  createdAt   DateTime @default(now())
+
+  @@index([email])
+  @@index([googleSub])
+}
+
 // =====================================================================
 // PROJECT + CHARTER (Module 1)
 // =====================================================================

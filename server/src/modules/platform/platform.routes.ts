@@ -15,6 +15,7 @@ import { UPLOAD_DIR } from '../attachment/attachment.service.js';
 import { Unauthorized, Forbidden, Conflict, BadRequest, NotFound } from '../../lib/errors.js';
 import { strongPassword } from '../auth/auth.schemas.js';
 import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
+import { blockIdentity, listBlocked, unblock } from '../auth/denylist.service.js';
 
 // Platform (super-admin) console — tenant provisioning & lifecycle (Phase 5). Operates ACROSS tenants
 // on the GLOBAL models (Tenant / User / Membership), so nothing here is tenant-scoped; the security
@@ -339,6 +340,7 @@ router.patch(
 // is SetNull, not Cascade): delete their personal-tenant projects → the personal tenants → the user.
 router.delete(
   '/guests/:id',
+  validateBody(z.object({ block: z.boolean().optional() })),
   asyncHandler(async (req, res) => {
     const g = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, email: true, isGuest: true, googleSub: true, isPlatformAdmin: true } });
     if (!g || (!g.isGuest && !g.googleSub)) throw NotFound('Guest not found');
@@ -362,7 +364,52 @@ router.delete(
       }
       await tx.user.delete({ where: { id: g.id } });                          // cascades tokens; audit userId → null
     }));
-    await writeAudit({ userId: req.user!.id, entity: 'User', entityId: g.id, action: 'DELETE', before: { email: g.email, guest: true } });
+    // Optional permanent ban: delete only wipes data, so open Google/guest sign-up would let them
+    // re-register — record the identity on the denylist to keep them out for good.
+    if (req.body.block) {
+      await blockIdentity({ email: g.email, googleSub: g.googleSub, reason: 'Blocked on guest deletion', createdById: req.user!.id });
+    }
+    await writeAudit({ userId: req.user!.id, entity: 'User', entityId: g.id, action: 'DELETE', before: { email: g.email, guest: true, blocked: !!req.body.block } });
+    res.json({ ok: true });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Denylist — identities (email / Google account) barred from self-service sign-up.
+// A guest can be deleted+blocked (above), or an admin can block/unblock manually here.
+// ---------------------------------------------------------------------------
+
+// GET /admin/tenants/denylist — all blocked identities.
+router.get(
+  '/denylist',
+  asyncHandler(async (_req, res) => {
+    const entries = await listBlocked();
+    res.json({ entries });
+  }),
+);
+
+// POST /admin/tenants/denylist — block an email and/or Google subject manually.
+router.post(
+  '/denylist',
+  validateBody(z.object({
+    email: z.string().email().optional(),
+    googleSub: z.string().min(1).optional(),
+    reason: z.string().max(500).optional(),
+  }).refine((d) => !!d.email || !!d.googleSub, { message: 'Provide an email or a Google account' })),
+  asyncHandler(async (req, res) => {
+    const entry = await blockIdentity({ email: req.body.email, googleSub: req.body.googleSub, reason: req.body.reason, createdById: req.user!.id });
+    await writeAudit({ userId: req.user!.id, entity: 'BlockedIdentity', entityId: entry.id, action: 'CREATE', after: { email: entry.email, googleSub: !!entry.googleSub } });
+    res.status(201).json({ entry });
+  }),
+);
+
+// DELETE /admin/tenants/denylist/:id — unblock (removes the entry).
+router.delete(
+  '/denylist/:id',
+  asyncHandler(async (req, res) => {
+    const removed = await unblock(req.params.id);
+    if (removed.count === 0) throw NotFound('Blocked identity not found');
+    await writeAudit({ userId: req.user!.id, entity: 'BlockedIdentity', entityId: req.params.id, action: 'DELETE' });
     res.json({ ok: true });
   }),
 );

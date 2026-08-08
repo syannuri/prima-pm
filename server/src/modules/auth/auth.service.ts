@@ -9,6 +9,7 @@ import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled, isOrgSignupEnabled } from '../settings/settings.service.js';
 import { multitenancyEnforced, runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
 import { seedGuestSampleProjects } from '../guest/guest-seed.service.js';
+import { isIdentityBlocked } from './denylist.service.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput, OrgSignupInput } from './auth.schemas.js';
 
 // The membership a freshly-minted token should be pinned to: the caller's chosen tenant when it is
@@ -159,6 +160,7 @@ export async function login(input: LoginInput, opts: { hostTenantId?: string } =
 // deployment must opt in. Auto-logs in on success (returns a token pair like login).
 export async function guestRegister(input: GuestRegisterInput): Promise<AuthResult> {
   if (!(await isGuestSignupEnabled())) throw Forbidden('Guest signup is not enabled');
+  if (await isIdentityBlocked({ email: input.email })) throw Forbidden('This email is blocked from signing up.');
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
   if (existing) throw Conflict('That email is already registered');
   const user = await prisma.user.create({
@@ -220,6 +222,7 @@ async function notifyPlatformAdminsOfSignup(orgName: string): Promise<void> {
 // signup (a sandboxed personal tenant that auto-logs in).
 export async function registerOrg(input: OrgSignupInput): Promise<{ pending: true; orgName: string }> {
   if (!(await isOrgSignupEnabled())) throw Forbidden('Organization signup is not enabled');
+  if (await isIdentityBlocked({ email: input.email })) throw Forbidden('This email is blocked from signing up.');
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
   if (existing) throw Conflict('That email is already registered');
   const slug = await uniqueTenantSlug(input.orgName);
@@ -257,6 +260,10 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
     throw Unauthorized('Invalid Google token');
   }
   if (!identity.emailVerified) throw Unauthorized('Your Google account email is not verified');
+
+  // Platform denylist: refuse a blocked email/Google account BEFORE matching or auto-provisioning, so
+  // deleting-then-blocking a guest truly keeps them out (open Google sign-in would otherwise re-create them).
+  if (await isIdentityBlocked({ email: identity.email, googleSub: identity.sub })) throw Forbidden('This account has been blocked. Contact the administrator.');
 
   // 1) Already linked to this Google identity → that account.
   const bySub = await prisma.user.findUnique({ where: { googleSub: identity.sub } });
