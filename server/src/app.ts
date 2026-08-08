@@ -71,11 +71,16 @@ export function createApp() {
               useDefaults: false,
               directives: {
                 defaultSrc: ["'self'"],
-                // The hash whitelists the inline pre-paint theme script in
-                // client/index.html (anti-FOUC) WITHOUT opening up 'unsafe-inline'.
-                // If that <script> body changes, regenerate the hash (the browser
-                // console reports the expected sha256 when it blocks it).
-                scriptSrc: ["'self'", "'sha256-gJ9Qv9VU/346gdpDRI3qPE9+6RkSI+W4FxyEcgZFlyY='",
+                // Hashes whitelist the two inline scripts in the built index.html WITHOUT opening
+                // 'unsafe-inline': (1) the pre-paint theme script (anti-FOUC), (2) the prerender's
+                // #root-clear snippet (wipes the prerendered landing on non-landing routes). Both
+                // are fixed strings so their hashes are stable. If either <script> body changes,
+                // regenerate the hash (the browser console reports the expected sha256 when blocked).
+                scriptSrc: ["'self'",
+                  "'sha256-gJ9Qv9VU/346gdpDRI3qPE9+6RkSI+W4FxyEcgZFlyY='", // pre-paint theme script
+                  "'sha256-hlEddLEYaHG6RXY0nLDhaOX/rz/CKjL/h5Z3HrkkRd0='", // prerender #root-clear script
+                  // Cloudflare Web Analytics beacon (auto-injected when the site is CF-proxied).
+                  'https://static.cloudflareinsights.com',
                   // Google Identity Services (the "Sign in with Google" button) — only when enabled.
                   ...(env.googleClientId ? ['https://accounts.google.com/gsi/client'] : []),
                   // Cloudflare Turnstile CAPTCHA widget script — only when enabled.
@@ -84,6 +89,7 @@ export function createApp() {
                   ...(env.googleClientId ? ['https://accounts.google.com/gsi/style'] : [])],
                 imgSrc: ["'self'", 'data:'],
                 connectSrc: ["'self'",
+                  'https://cloudflareinsights.com', // Web Analytics beacon POST target
                   ...(env.googleClientId ? ['https://accounts.google.com/gsi/'] : [])],
                 // Third-party iframes: GIS button/one-tap, and Turnstile's challenge — each only when enabled.
                 ...(cspFrameSrc.length ? { frameSrc: cspFrameSrc } : {}),
