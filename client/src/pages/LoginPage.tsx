@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLang, type Lang } from '../context/LanguageContext';
 import { Button, Field, Input } from '../components/ui';
-import HeroMockup from '../components/HeroMockup';
 import { api, ApiError } from '../api/client';
 import { isEmailValid } from '../lib/formValidation';
 
@@ -239,69 +238,30 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-slate-100 text-slate-800 antialiased lg:h-screen lg:overflow-hidden dark:bg-slate-950 dark:text-slate-200">
-      <div className="pointer-events-none absolute -right-32 -top-28 h-[32rem] w-[32rem] rounded-full bg-blue-400/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 right-1/3 h-[34rem] w-[34rem] rounded-full bg-blue-500/10 blur-3xl" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-x-hidden bg-slate-100 px-6 py-10 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
+      <div className="pointer-events-none absolute -right-24 -top-24 h-[28rem] w-[28rem] rounded-full bg-blue-400/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 left-1/4 h-[30rem] w-[30rem] rounded-full bg-blue-500/10 blur-3xl" />
 
       {/* language toggle (matches the landing) */}
-      <div className="absolute right-4 top-4 z-20 inline-flex rounded-lg border border-slate-200 bg-white/80 p-0.5 shadow-sm backdrop-blur">
+      <div className="absolute right-4 top-4 z-20 inline-flex rounded-lg border border-slate-200 bg-white/80 p-0.5 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-800/80">
         {(['en', 'id'] as Lang[]).map((l) => (
           <button key={l} type="button" onClick={() => setLang(l)} aria-pressed={lang === l}
-            className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase transition ${lang === l ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase transition ${lang === l ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
             {l}
           </button>
         ))}
       </div>
 
-      <div className="relative z-10 flex min-h-screen lg:h-screen">
-        {/* ---------- LEFT · charcoal brand panel (lg+) — mirrors the app's dark chrome ---------- */}
-        <div className="relative hidden flex-1 flex-col justify-between overflow-hidden bg-slate-900 p-8 text-white lg:flex xl:p-12">
-          <div className="pointer-events-none absolute -left-20 top-1/3 h-[26rem] w-[26rem] rounded-full bg-blue-600/20 blur-3xl" />
-          <span className="relative z-10 self-start inline-block border-[3px] border-white px-4 py-2 font-brand text-3xl font-bold tracking-wide text-white">
+      <div className="relative z-10 w-full max-w-sm">
+        {/* logo — centered above the card */}
+        <div className="mb-6 flex justify-center">
+          <span className="relative inline-block border-[3px] border-slate-900 px-3.5 py-1.5 font-brand text-xl font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
             PRISMATIX
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-blue-500" />
+            <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
           </span>
-
-          <div className="relative z-10 max-w-xl">
-            <h2 className="text-2xl font-bold leading-[1.15] text-white xl:text-3xl">
-              <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">{tx.tagAccent}</span>{' '}{tx.tagRest}
-            </h2>
-            <p className="mt-2.5 max-w-md text-sm text-slate-300">{tx.pitch}</p>
-            <ul className="mt-5 space-y-2 text-sm text-slate-200">
-              {tx.highlights.map((h) => (
-                <li key={h} className="flex items-center gap-3">
-                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-500/20 ring-1 ring-blue-400/40">
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
-                  </span>
-                  {h}
-                </li>
-              ))}
-            </ul>
-            {/* framed product shot — mirrors the landing hero, fills the panel */}
-            <div className="mt-6 max-w-lg overflow-hidden rounded-xl border border-white/10 bg-white shadow-2xl ring-1 ring-black/30">
-              <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-3 py-2">
-                <span className="h-2 w-2 rounded-full bg-red-400/70" />
-                <span className="h-2 w-2 rounded-full bg-amber-400/70" />
-                <span className="h-2 w-2 rounded-full bg-green-400/70" />
-              </div>
-              <HeroMockup className="block w-full" />
-            </div>
-          </div>
-
-          <p className="relative z-10 text-xs text-slate-400">© 2026 Prismatix</p>
         </div>
 
-        {/* ---------- RIGHT · sign-in card ---------- */}
-        <div className="flex w-full items-center justify-center p-6 sm:p-8 lg:h-screen lg:w-[42%] lg:overflow-y-auto lg:py-8 lg:pr-12 xl:pr-16">
-          <div className="w-full max-w-sm">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/40 sm:p-7 dark:border-slate-700 dark:bg-slate-900">
-              <div className="mb-6 flex justify-center lg:hidden">
-                <span className="relative inline-block border-[3px] border-slate-900 px-3 py-1.5 font-brand text-lg font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
-                  PRISMATIX
-                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
-                </span>
-              </div>
-
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/40 sm:p-7 dark:border-slate-700 dark:bg-slate-900">
               {workspaceNotFound ? (
                 <div className="py-4 text-center">
                   <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-200">
@@ -326,6 +286,16 @@ export default function LoginPage() {
                 <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{workspace ? tx.signInTo(workspace.name) : isOrg ? tx.createOrg : isGuest ? tx.tryFree : tx.welcome}</h1>
                 <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{workspace ? tx.workspaceOn(workspace.name) : isOrg ? tx.createOrgSub : isGuest ? tx.tryFreeSub : tx.welcomeSub}</p>
               </div>
+
+              {/* Social sign-in first (Asana-style); Google Identity Services renders its own button here. */}
+              {googleClientId && (
+                <>
+                  <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />
+                  <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                    <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" /> {tx.or} <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+                  </div>
+                </>
+              )}
 
               <form onSubmit={submit} className="space-y-3.5">
                 {isOrg && (
@@ -364,17 +334,6 @@ export default function LoginPage() {
                 </Button>
               </form>
 
-              {googleClientId && (
-                <>
-                  <div className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                    <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" /> {tx.or} <span className="h-px flex-1 bg-slate-200/70 dark:bg-slate-700/60" />
-                  </div>
-                  {/* Google Identity Services renders its own button into this container. */}
-                  <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />
-                  <p className="mt-2 text-center text-[11px] text-slate-400">{tx.sandbox}</p>
-                </>
-              )}
-
               {/* trust / security note at the point of sign-in */}
               <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
@@ -405,8 +364,6 @@ export default function LoginPage() {
               )}
               </>
               )}
-            </div>
-          </div>
         </div>
       </div>
     </div>
