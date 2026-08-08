@@ -163,7 +163,7 @@ export default function DashboardPage() {
           mobile dashboard hero + quick actions + bottom tab bar handle greeting and navigation. */}
       <div className="hidden flex-wrap items-center justify-between gap-3 sm:flex">
         <div className="hidden sm:block">
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{greeting}, {firstName} 👋</h1>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{greeting}, {firstName}</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
