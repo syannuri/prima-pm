@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang, type Lang } from '../context/LanguageContext';
-import HeroMockup from '../components/HeroMockup';
 import MockGantt from '../components/mocks/MockGantt';
 import MockSCurve from '../components/mocks/MockSCurve';
 import MockCharts from '../components/mocks/MockCharts';
@@ -504,28 +503,11 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
-            {/* RIGHT — framed light-mode dashboard illustration (Mamed) + glanceable callouts */}
-            <div className="pmx-float relative" style={{ animation: reduced ? undefined : 'pmx-float 8s ease-in-out infinite' }}>
-              <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-blue-500/20 via-indigo-500/15 to-sky-400/20 blur-3xl" />
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200">
-                <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
-                </div>
-                <HeroMockup className="block w-full" />
-              </div>
-              {/* floating glanceable callouts (desktop only) */}
-              <div className="pointer-events-none absolute -left-5 top-10 hidden rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg lg:block">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> On track · SPI 1.04</div>
-              </div>
-              <div className="pointer-events-none absolute -right-5 top-1/2 hidden rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg lg:block">
-                <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Forecast (EAC)</div>
-                <div className="text-xs font-bold text-blue-600">On budget</div>
-              </div>
-              <div className="pointer-events-none absolute -left-4 bottom-9 hidden rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg lg:block">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="text-amber-500">▲</span> 2 risks flagged</div>
-              </div>
+            {/* RIGHT — the live auto-playing "quick tour" IS the hero visual (it carries its own
+                browser-chrome frame + play/dots controls). A soft glow halo sits behind it. */}
+            <div className="relative">
+              <div aria-hidden className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-blue-500/20 via-indigo-500/15 to-sky-400/20 blur-3xl" />
+              <ProductTour />
             </div>
           </div>
 
@@ -539,15 +521,6 @@ export default function HomePage() {
               </div>
             ))}
           </dl>
-        </section>
-
-        {/* ---------- see it in action (auto-playing product tour) ---------- */}
-        <section className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
-          <Reveal className="mb-10 text-center">
-            <SectionTitle>{lang === 'id' ? 'Lihat langsung' : 'See it in action'}</SectionTitle>
-            <p className="mx-auto mt-4 max-w-2xl text-slate-500">{lang === 'id' ? 'Tur singkat: dashboard, jadwal Gantt, earned value, dan grafik portofolio.' : 'A quick tour — dashboard, Gantt schedule, earned value and portfolio charts.'}</p>
-          </Reveal>
-          <Reveal className="reveal-zoom"><ProductTour /></Reveal>
         </section>
 
         {/* ---------- why ---------- */}
