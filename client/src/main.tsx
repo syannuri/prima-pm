@@ -8,6 +8,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 import '@fontsource/poppins/latin-700.css'; // geometric sans-serif for the brand wordmark
 import './index.css';
 
@@ -24,7 +25,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <AuthProvider>
             <ToastProvider>
               <ConfirmProvider>
-                <App />
+                <ErrorBoundary>
+                  <App />
+                </ErrorBoundary>
               </ConfirmProvider>
             </ToastProvider>
           </AuthProvider>

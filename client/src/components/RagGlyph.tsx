@@ -5,7 +5,7 @@ import { RAG } from '../lib/rag';
 // (● on track · ◆ at risk · ▲ behind · ◌ no data), so status is legible without relying on
 // hue alone. Drop-in replacement for the bare coloured status dots across the app.
 export default function RagGlyph({ status, size = 10, className = '' }: { status: PortfolioHealth; size?: number; className?: string }) {
-  const { solid, shape, label } = RAG[status];
+  const { solid, shape, label } = RAG[status] ?? RAG.NO_DATA;
   const s = size, c = s / 2;
   return (
     <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} className={`inline-block shrink-0 ${className}`} role="img" aria-label={label}>
