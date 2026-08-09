@@ -104,3 +104,38 @@ export function enforceTenantRate(tenantId: string, res: Response): void {
   }
   bucket.count += 1;
 }
+
+// --- Per-API-KEY rate limiter (T3.5) ---------------------------------------------------------
+// A fixed-window budget PER API KEY so one integration can't hammer the public API — a tighter,
+// separate budget from the per-tenant one. Counts EVERY keyed request, keyed by the key id. Called
+// from the API-key branch of requireAuth. In-memory (single process); live env config; max<=0 = off.
+export function apiKeyRateLimitConfig(): { windowMs: number; max: number } {
+  return {
+    windowMs: Number(process.env.API_KEY_RATE_LIMIT_WINDOW_MS) || 60_000,
+    max: Number(process.env.API_KEY_RATE_LIMIT_MAX ?? 120),
+  };
+}
+
+const apiKeyBuckets = new Map<string, Bucket>();
+
+export function enforceApiKeyRate(keyId: string, res: Response): void {
+  const { windowMs, max } = apiKeyRateLimitConfig();
+  if (max <= 0) return; // disabled
+  const now = Date.now();
+  if (apiKeyBuckets.size > 10_000) {
+    for (const [k, b] of apiKeyBuckets) if (now > b.resetAt) apiKeyBuckets.delete(k);
+  }
+  let bucket = apiKeyBuckets.get(keyId);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + windowMs };
+    apiKeyBuckets.set(keyId, bucket);
+  }
+  if (bucket.count >= max) {
+    res.setHeader('Retry-After', Math.ceil((bucket.resetAt - now) / 1000));
+    throw TooManyRequests('API rate limit exceeded for this key. Please slow down.');
+  }
+  bucket.count += 1;
+}
+
+// Test-only: clear the per-key buckets so limits don't leak across tests.
+export function __resetApiKeyRateBuckets(): void { apiKeyBuckets.clear(); }

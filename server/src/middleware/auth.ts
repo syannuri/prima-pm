@@ -5,8 +5,9 @@ import { Unauthorized, Forbidden } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { AT_COOKIE } from '../lib/cookies.js';
 import { bindTenantContext, multitenancyEnforced, runAsSystem } from '../lib/tenant/context.js';
-import { enforceTenantRate } from './rateLimit.js';
+import { enforceTenantRate, enforceApiKeyRate } from './rateLimit.js';
 import { hashApiKey, looksLikeApiKey } from '../lib/apiKey.js';
+import { writeAudit } from '../lib/audit.js';
 
 // Authenticated user attached to the request by requireAuth.
 export interface AuthUser {
@@ -59,6 +60,9 @@ async function authenticateWithApiKey(token: string, req: Request, res: Response
   // Domain pinning: a key issued for tenant A may not be used on tenant B's subdomain/custom domain.
   if (req.hostTenant && key.tenantId && req.hostTenant.id !== key.tenantId) throw Forbidden('This API key is for a different workspace than this domain.');
 
+  // Per-key throughput budget (throws 429 + Retry-After when exceeded).
+  enforceApiKeyRate(key.id, res);
+
   req.user = { id: `apikey:${key.id}`, role: key.role, email: `apikey:${key.id}`, tid: key.tenantId ?? undefined, tenantIsPersonal: key.tenant?.isPersonal ?? false, isApiKey: true };
   req.apiKey = { id: key.id, tenantId: key.tenantId };
   // Best-effort, throttled "last used" stamp (skip if updated within the last 5 min) — never blocks.
@@ -66,13 +70,18 @@ async function authenticateWithApiKey(token: string, req: Request, res: Response
     void runAsSystem(() => prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } })).catch(() => {});
   }
 
+  // Append an access record to the audit trail (fire-and-forget; never blocks). Written inside the
+  // bound context so AuditLog.tenantId is stamped; the no-context branch falls back to system.
+  const audit = () => void writeAudit({ userId: null, entity: 'ApiKey', entityId: key.id, action: 'API_ACCESS', after: { method: req.method, path: req.path } });
+
   // Under enforcement a key MUST be tenant-bound — scope the request to its tenant. With enforcement
   // off (single-tenant deploy) there's no tenant to bind; the key just authenticates.
   if (multitenancyEnforced()) {
     if (!key.tenantId || !key.tenant) throw Unauthorized('Invalid API key');
     enforceTenantRate(key.tenantId, res);
-    bindTenantContext(key.tenantId, key.tenant.isPersonal, () => next());
+    bindTenantContext(key.tenantId, key.tenant.isPersonal, () => { audit(); next(); });
   } else {
+    audit();
     next();
   }
 }

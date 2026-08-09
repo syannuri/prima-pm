@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
 import { hashApiKey } from '../../lib/apiKey.js';
+import { __resetApiKeyRateBuckets } from '../../middleware/rateLimit.js';
 
 const app = createApp();
 const api = (p: string) => `/api/v1${p}`;
@@ -79,5 +80,37 @@ describe('API key management + auth (T3.1)', () => {
   it('rejects an unknown key with 401', async () => {
     const res = await request(app).get(api('/notifications')).set(auth('pk_live_totally-made-up-key-value-xxxxxxxx'));
     expect(res.status).toBe(401);
+  });
+
+  it('records an API_ACCESS audit entry for a keyed request', async () => {
+    const created = await request(app).post(api('/api-keys')).set(auth(adminToken)).send({ name: 'audited', role: 'VIEWER' });
+    const key: string = created.body.key;
+    await request(app).get(api('/notifications')).set(auth(key));
+    // Audit is fire-and-forget; poll briefly for the row.
+    let row = null;
+    for (let i = 0; i < 20 && !row; i++) {
+      row = await prisma.auditLog.findFirst({ where: { action: 'API_ACCESS', entityId: created.body.id } });
+      if (!row) await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(row).toBeTruthy();
+    expect((row!.after as { method?: string })?.method).toBe('GET');
+  });
+
+  it('rate-limits a key with 429 + Retry-After once its budget is exceeded', async () => {
+    const created = await request(app).post(api('/api-keys')).set(auth(adminToken)).send({ name: 'rl', role: 'VIEWER' });
+    const key: string = created.body.key;
+    const prev = process.env.API_KEY_RATE_LIMIT_MAX;
+    process.env.API_KEY_RATE_LIMIT_MAX = '2';
+    __resetApiKeyRateBuckets();
+    try {
+      expect((await request(app).get(api('/notifications')).set(auth(key))).status).toBe(200);
+      expect((await request(app).get(api('/notifications')).set(auth(key))).status).toBe(200);
+      const blocked = await request(app).get(api('/notifications')).set(auth(key));
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers['retry-after']).toBeDefined();
+    } finally {
+      process.env.API_KEY_RATE_LIMIT_MAX = prev;
+      __resetApiKeyRateBuckets();
+    }
   });
 });

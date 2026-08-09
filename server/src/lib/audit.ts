@@ -21,7 +21,8 @@ type AuditAction =
   | 'ARCHIVE'
   | 'UNARCHIVE'
   | 'IMPERSONATE'
-  | 'EXPORT';
+  | 'EXPORT'
+  | 'API_ACCESS';
 
 interface AuditInput {
   userId?: string | null;
