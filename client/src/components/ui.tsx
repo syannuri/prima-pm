@@ -312,8 +312,10 @@ export function Modal({
   }, []);
 
   return createPortal(
+    // Mobile: a slide-up bottom-sheet flush to the bottom edge (native feel). Desktop (sm+): a
+    // centered dialog, as before.
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
       onMouseDown={closeOnBackdrop ? () => onCloseRef.current() : undefined}
     >
       <div
@@ -322,13 +324,18 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`max-h-[90vh] w-full ${MODAL_SIZE[size]} overflow-y-auto rounded-xl bg-white p-6 shadow-xl outline-none dark:bg-slate-900 ${panelClassName}`}
+        className={`prima-slide-up flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl outline-none dark:bg-slate-900 sm:max-h-[90vh] sm:rounded-xl ${MODAL_SIZE[size]} ${panelClassName}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 id={titleId} className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">
-          {title}
-        </h2>
-        {children}
+        {/* Drag-handle affordance — bottom-sheet (mobile) only. */}
+        <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-slate-300 dark:bg-slate-700 sm:hidden" aria-hidden />
+        {/* Scrollable content; extra bottom padding clears the iOS home indicator on the sheet. */}
+        <div className="overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-6">
+          <h2 id={titleId} className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">
+            {title}
+          </h2>
+          {children}
+        </div>
       </div>
     </div>,
     container ?? document.body,
