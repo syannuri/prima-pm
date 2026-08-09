@@ -212,6 +212,10 @@ export function createApp() {
     // on refresh/deep-link. API paths fall through to the JSON 404 handler.
     app.get('*', (req, res, next) => {
       if (req.path.startsWith('/api/')) return next();
+      // NEVER serve the HTML shell for a missing hashed build asset — return a clean 404 so a stale
+      // tab gets a real chunk-load error (→ the client auto-reloads) instead of executing index.html
+      // as JavaScript ("'text/html' is not a valid JavaScript MIME type").
+      if (req.path.startsWith('/assets/')) return res.status(404).end();
       res.sendFile(path.join(clientDist, 'index.html'));
     });
     console.log(`[prima-pm] serving client from ${clientDist}`);

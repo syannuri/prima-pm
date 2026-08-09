@@ -1,22 +1,38 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { isChunkLoadError, reloadForStaleChunk } from '../lib/staleChunk';
 
 // Global crash guard — turns an unexpected render error from a BLANK white screen into a readable
-// message with a reload, and logs the error (so it's diagnosable instead of silent).
-export default class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state: { error: Error | null } = { error: null };
+// message with a reload, and logs the error (so it's diagnosable instead of silent). A stale-deploy
+// chunk-load error self-heals: we reload once instead of showing the crash screen.
+export default class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null; recovering: boolean }> {
+  state: { error: Error | null; recovering: boolean } = { error: null, recovering: false };
 
   static getDerivedStateFromError(error: Error) {
-    return { error };
+    return { error, recovering: isChunkLoadError(error) };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    if (isChunkLoadError(error)) {
+      // A new build shipped while this tab was open — reload once to pick up the fresh chunks.
+      if (reloadForStaleChunk()) return; // reload triggered; keep the "Updating…" state
+      this.setState({ recovering: false }); // cooldown hit → fall through to the error UI
+      return;
+    }
     // eslint-disable-next-line no-console
     console.error('App crashed:', error, info.componentStack);
   }
 
   render() {
-    const { error } = this.state;
+    const { error, recovering } = this.state;
     if (!error) return this.props.children;
+    // Chunk error → we're reloading; show a calm "updating" splash, not the scary crash card.
+    if (recovering) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6 text-center dark:bg-slate-950">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Updating to the latest version…</p>
+        </div>
+      );
+    }
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6 text-center dark:bg-slate-950">
         <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-700 dark:bg-slate-900">

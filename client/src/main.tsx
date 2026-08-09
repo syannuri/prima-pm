@@ -9,8 +9,14 @@ import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
+import { reloadForStaleChunk } from './lib/staleChunk';
 import '@fontsource/poppins/latin-700.css'; // geometric sans-serif for the brand wordmark
 import './index.css';
+
+// After a deploy an open tab points at old chunk hashes that no longer exist. Vite fires
+// `vite:preloadError` when a lazy chunk fails to load — recover by reloading once (loop-guarded) so
+// the new build's index.html + hashes take over, instead of hitting the crash screen.
+window.addEventListener('vite:preloadError', (e) => { e.preventDefault(); reloadForStaleChunk(); });
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
