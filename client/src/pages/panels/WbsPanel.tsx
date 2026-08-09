@@ -5,6 +5,7 @@ import { api, ApiError } from '../../api/client';
 import type { CpmResult, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
+import ImportTasksModal from '../../components/ImportTasksModal';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -408,6 +409,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const base = `/projects/${projectId}/schedule`;
   const canEdit = useProjectWrite(projectId);
+  const [importOpen, setImportOpen] = useState(false);
 
   const ganttQ = useQuery({
     queryKey: ['gantt', projectId],
@@ -982,6 +984,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     {/* In full view the card is a flex column: header stays put, the timeline gets ALL remaining
         height (no magic max-h that breaks when the toolbar wraps or a banner appears). */}
     <Card className={fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}>
+    {importOpen && (
+      <ImportTasksModal
+        projectId={projectId}
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          qc.invalidateQueries({ queryKey: ['gantt', projectId] });
+          qc.invalidateQueries({ queryKey: ['cpm', projectId] });
+          qc.invalidateQueries({ queryKey: ['evm', base] });
+          qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
+        }}
+      />
+    )}
       {/* iOS (and any platform where orientation-lock isn't available) can't auto-rotate — nudge
           the user to turn the device so the timeline gets the full landscape width. */}
       {fullscreen && isTouch && portrait && (
@@ -1010,6 +1024,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           {rows.length > 0 && showGantt && axis?.todayPct != null && (
             <button onClick={scrollToToday} title="Scroll the timeline to today" className={CTRL_BTN}>
               ↦ Today
+            </button>
+          )}
+          {/* Bulk-import tasks from a spreadsheet — only when the plan is editable (write + baseline unlocked). */}
+          {canPlan && (
+            <button onClick={() => setImportOpen(true)} title="Import tasks from Excel/CSV" className={CTRL_BTN}>
+              ⬆ Import
             </button>
           )}
           {rows.length > 0 && (
