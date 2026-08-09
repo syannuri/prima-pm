@@ -171,7 +171,10 @@ export default function ProjectPage() {
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* Primary stage action stays prominent; secondary actions tuck into "⋯ More". */}
-            <LifecycleActions project={project} onReview={() => setReviewOpen(true)} />
+            {/* Corporate governors (ADMIN/PMO) go through the PMO activation-review card; a guest
+                self-governs their personal project, so they get the self-serve ActivateModal
+                (onReview omitted) — the review endpoint is ADMIN/PMO-only and would 403 a guest. */}
+            <LifecycleActions project={project} onReview={user?.role === 'GUEST' ? undefined : () => setReviewOpen(true)} />
             <CloseProjectModal project={project} />
             {/* "⋯ More" (edit + exports + jump-to) is desktop-only; phones keep the header lean. */}
             {!isMobile && (
@@ -223,7 +226,7 @@ export default function ProjectPage() {
 
       {/* Activation review modal still mounts — it's opened from the bell's "activation ready"
           deep-link (?review=activation) or the lifecycle action, not an inline banner. */}
-      {reviewOpen && canEdit && <ActivationReviewModal projectId={projectId} onClose={closeReview} />}
+      {reviewOpen && canEdit && user?.role !== 'GUEST' && <ActivationReviewModal projectId={projectId} onClose={closeReview} />}
 
       <div ref={tabsAnchorRef} className="scroll-mt-4" />
       {/* Tab strip + active panel share one wrapper with a viewport-tall min-height (desktop only)
