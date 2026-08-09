@@ -8,6 +8,7 @@ import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import ApiKeysCard from '../components/ApiKeysCard';
 import WebhooksCard from '../components/WebhooksCard';
+import AutomationsCard from '../components/AutomationsCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
@@ -30,6 +31,7 @@ export default function SettingsPage() {
       {/* Public REST API keys + webhooks — tenant-ADMIN concerns (management APIs are ADMIN-gated). */}
       {user?.role === 'ADMIN' && <ApiKeysCard />}
       {user?.role === 'ADMIN' && <WebhooksCard />}
+      {user?.role === 'ADMIN' && <AutomationsCard />}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import {
   buildCharterSnapshot,
 } from './charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
-import { enqueueWebhookEvent } from '../webhook/webhook.service.js';
+import { emitDomainEvent } from '../events/dispatch.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import type { UpsertCharterInput, ChangeRequestInput } from './charter.schemas.js';
 
@@ -304,7 +304,7 @@ export async function decideChangeRequest(
     });
   }
   if (decision === 'APPROVED') {
-    await enqueueWebhookEvent('change_request.approved', { projectId, changeRequestId: crId, title: cr.title });
+    await emitDomainEvent('change_request.approved', { projectId, changeRequestId: crId, title: cr.title });
   }
   return { changeRequest: result, baselineUnlocked };
 }

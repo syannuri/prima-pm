@@ -7,7 +7,7 @@ import { assertCanCreateProject } from '../../lib/tenant/quota.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
-import { enqueueWebhookEvent } from '../webhook/webhook.service.js';
+import { emitDomainEvent } from '../events/dispatch.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
 import { getClosureReadiness } from './closure.js';
 import { getActivationReadiness } from './activation.js';
@@ -157,7 +157,7 @@ export async function createProject(input: CreateProjectInput, actorId: string, 
   await writeAudit({ projectId: project.id, userId: actorId, entity: 'Project', entityId: project.id, action: 'CREATE', after: project });
   await notifyPmAssigned(project.pmUserId, actorId, project);
   // Fire the public-API webhook (best-effort; never blocks or fails project creation).
-  await enqueueWebhookEvent('project.created', { id: project.id, code: project.code, name: project.name, status: project.status, deliveryApproach: project.deliveryApproach });
+  await emitDomainEvent('project.created', { id: project.id, code: project.code, name: project.name, status: project.status, deliveryApproach: project.deliveryApproach });
   return project;
 }
 
@@ -297,7 +297,7 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   });
   // Notify integrations of a real status transition (best-effort).
   if (input.status && input.status !== before.status) {
-    await enqueueWebhookEvent('project.status_changed', { id: project.id, code: project.code, name: project.name, from: before.status, to: project.status });
+    await emitDomainEvent('project.status_changed', { id: project.id, code: project.code, name: project.name, from: before.status, to: project.status });
   }
   return project;
 }

@@ -1,7 +1,7 @@
 import { prisma, type TxClient } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
-import { enqueueWebhookEvent } from '../webhook/webhook.service.js';
+import { emitDomainEvent } from '../events/dispatch.js';
 
 // TxClient (derived from the extended client) accepts both the full client and an interactive tx.
 type Db = TxClient;
@@ -56,7 +56,7 @@ export async function setBaselineLock(projectId: string, locked: boolean, reason
   });
   // Emit only on a real lock transition (not on unlock or a re-lock no-op). Best-effort.
   if (locked && !wasLocked) {
-    await enqueueWebhookEvent('baseline.locked', { projectId, lockedAt: project.baselineLockedAt, lockedById: actorId });
+    await emitDomainEvent('baseline.locked', { projectId, lockedAt: project.baselineLockedAt, lockedById: actorId });
   }
   return project;
 }

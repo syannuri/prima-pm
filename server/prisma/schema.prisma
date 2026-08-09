@@ -315,6 +315,7 @@ model Tenant {
   apiKeys  ApiKey[]
   webhookSubscriptions  WebhookSubscription[]
   webhookDeliveries  WebhookDelivery[]
+  automationRules  AutomationRule[]
   projects  Project[]
   projectBookmarks  ProjectBookmark[]
   rateCards  RateCard[]
@@ -511,6 +512,29 @@ enum WebhookFormat {
   GENERIC
   SLACK
   TEAMS
+}
+
+// A no-code automation rule: when `event` fires in the tenant (and an optional field condition
+// matches), run `actionType`. MVP action = NOTIFY (in-app notification to the project PM and/or a
+// role). Rides the same domain-event bus as webhooks. Tenant-scoped (in SCOPED_MODELS).
+model AutomationRule {
+  id              String   @id @default(uuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  event           String   // one of the domain event names (see WEBHOOK_EVENTS)
+  // Optional condition: deliver only when payload[conditionField] === conditionEquals (string match).
+  conditionField  String?
+  conditionEquals String?
+  actionType      String   @default("NOTIFY") // MVP: NOTIFY only
+  notifyPm        Boolean  @default(false)    // notify the affected project's PM
+  notifyRole      Role?                        // notify every member holding this role
+  messageTemplate String?  // optional custom notification title
+  active          Boolean  @default(true)
+  createdById     String?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 // =====================================================================
