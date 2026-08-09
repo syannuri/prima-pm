@@ -30,6 +30,7 @@ import membersRoutes from './modules/members/members.routes.js';
 import apiKeyRoutes from './modules/apikey/apikey.routes.js';
 import webhookRoutes from './modules/webhook/webhook.routes.js';
 import openapiRoutes from './modules/openapi/openapi.routes.js';
+import importRoutes from './modules/import/import.routes.js';
 import platformRoutes from './modules/platform/platform.routes.js';
 import billingRoutes from './modules/billing/billing.routes.js';
 import { lemonsqueezyWebhook } from './modules/billing/lemonsqueezy.webhook.js';
@@ -184,6 +185,7 @@ export function createApp() {
   api.use('/auth', authRoutes);
   api.use('/users', usersRoutes);
   api.use('/projects', projectsRoutes); // includes nested /:projectId/charter and /cost
+  api.use('/projects/:projectId/import', importRoutes); // spreadsheet import (T4.3)
   api.use('/ratecards', rateCardRoutes);
   api.use('/portfolio', portfolioRoutes);
   api.use('/notifications', notificationRoutes);
