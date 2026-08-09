@@ -7,6 +7,7 @@ import { useLang, type Lang } from '../context/LanguageContext';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import ApiKeysCard from '../components/ApiKeysCard';
+import WebhooksCard from '../components/WebhooksCard';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 export default function SettingsPage() {
@@ -23,8 +24,9 @@ export default function SettingsPage() {
       </div>
       <AppearanceCard />
       <SecurityCard />
-      {/* Public REST API keys — a tenant-ADMIN concern (management API is ADMIN-gated). */}
+      {/* Public REST API keys + webhooks — tenant-ADMIN concerns (management APIs are ADMIN-gated). */}
       {user?.role === 'ADMIN' && <ApiKeysCard />}
+      {user?.role === 'ADMIN' && <WebhooksCard />}
     </div>
   );
 }
