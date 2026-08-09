@@ -27,6 +27,7 @@ import adminAuditRoutes from './modules/audit/adminAudit.routes.js';
 import adminSettingsRoutes from './modules/settings/settings.routes.js';
 import messagesRoutes from './modules/messages/messages.routes.js';
 import membersRoutes from './modules/members/members.routes.js';
+import apiKeyRoutes from './modules/apikey/apikey.routes.js';
 import platformRoutes from './modules/platform/platform.routes.js';
 import billingRoutes from './modules/billing/billing.routes.js';
 import { lemonsqueezyWebhook } from './modules/billing/lemonsqueezy.webhook.js';
@@ -184,6 +185,7 @@ export function createApp() {
   api.use('/admin/settings', adminSettingsRoutes);
   api.use('/messages', messagesRoutes);
   api.use('/members', membersRoutes);
+  api.use('/api-keys', apiKeyRoutes);
   api.use('/billing', billingRoutes);
   api.use('/admin/tenants', platformRoutes);
   app.use('/api/v1', api);

@@ -309,6 +309,7 @@ model Tenant {
 
   memberships Membership[]
   billingEvents  BillingEvent[]
+  apiKeys  ApiKey[]
   projects  Project[]
   projectBookmarks  ProjectBookmark[]
   rateCards  RateCard[]
@@ -418,6 +419,34 @@ model BlockedIdentity {
 
   @@index([email])
   @@index([googleSub])
+}
+
+// A per-tenant API key for the public REST API (T3). The plaintext secret (pk_live_<random>) is
+// shown ONCE at creation and never stored — only its SHA-256 (`hashedKey`). A request presenting
+// `Authorization: Bearer pk_...` authenticates as a synthetic principal with this key's `role`
+// inside its tenant (RBAC reuses req.user.role); the tenant-scope extension then isolates it.
+// Tenant-scoped (in SCOPED_MODELS) so admin list/create/revoke auto-scope; the auth-time lookup by
+// hashedKey runs via runAsSystem (no tenant context yet — the key is what selects the tenant).
+model ApiKey {
+  id          String    @id @default(uuid())
+  // Nullable + nullable relation to match the other scoped models (Phase 2a): the tenant-scope
+  // extension stamps tenantId on create at runtime, so app code never sets it explicitly.
+  tenantId    String?
+  tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  // Display prefix (e.g. "pk_live_a1b2c3") shown in the UI to identify a key without revealing it.
+  prefix      String
+  // SHA-256 of the full secret; unique so a presented key resolves to exactly one row.
+  hashedKey   String    @unique
+  // The principal role this key acts as within its tenant. Default VIEWER (read-only) — least privilege.
+  role        Role      @default(VIEWER)
+  createdById String? // the admin who created it (no FK: survives that user's deletion)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
 }
 
 // =====================================================================

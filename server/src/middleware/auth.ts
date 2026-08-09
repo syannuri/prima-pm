@@ -4,8 +4,9 @@ import { verifyAccessToken } from '../lib/jwt.js';
 import { Unauthorized, Forbidden } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { AT_COOKIE } from '../lib/cookies.js';
-import { bindTenantContext, multitenancyEnforced } from '../lib/tenant/context.js';
+import { bindTenantContext, multitenancyEnforced, runAsSystem } from '../lib/tenant/context.js';
 import { enforceTenantRate } from './rateLimit.js';
+import { hashApiKey, looksLikeApiKey } from '../lib/apiKey.js';
 
 // Authenticated user attached to the request by requireAuth.
 export interface AuthUser {
@@ -19,6 +20,8 @@ export interface AuthUser {
   tenantIsPersonal?: boolean;
   // True when a platform super-admin is IMPERSONATING inside this tenant (not a real member).
   impersonating?: boolean;
+  // True when the caller authenticated with a public API key (Bearer pk_...) rather than a session.
+  isApiKey?: boolean;
 }
 
 declare global {
@@ -26,7 +29,51 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthUser;
+      // Set when the request authenticated via a public API key. tenantId is null only on a
+      // single-tenant deploy (enforcement off), where keys aren't tenant-scoped.
+      apiKey?: { id: string; tenantId: string | null };
     }
+  }
+}
+
+// Mutating methods are refused for API-key callers in T3.1 — the public API is read-only for now
+// (write scopes + a service-principal actor come in a later ticket). Session/impersonation auth is
+// unaffected.
+const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+// Authenticate a `Bearer pk_...` request: resolve the key by its hash (context-less, so via
+// runAsSystem — the key is what SELECTS the tenant), then act as a synthetic principal with the
+// key's role inside its tenant and bind the tenant context so the Prisma extension isolates it.
+async function authenticateWithApiKey(token: string, req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!READ_ONLY_METHODS.has(req.method)) throw Forbidden('API keys are read-only');
+
+  const key = await runAsSystem(() => prisma.apiKey.findUnique({
+    where: { hashedKey: hashApiKey(token) },
+    select: { id: true, tenantId: true, role: true, lastUsedAt: true, revokedAt: true, expiresAt: true, tenant: { select: { status: true, isPersonal: true } } },
+  }));
+  if (!key || key.revokedAt) throw Unauthorized('Invalid API key');
+  if (key.expiresAt && key.expiresAt.getTime() < Date.now()) throw Unauthorized('API key has expired');
+  // Tenant checks apply only to a tenant-bound key (single-tenant deploys run enforcement-off, where
+  // tenantId is null and the row isn't scoped — see below).
+  if (key.tenant && key.tenant.status !== 'ACTIVE') throw Forbidden('This workspace is not active.');
+  // Domain pinning: a key issued for tenant A may not be used on tenant B's subdomain/custom domain.
+  if (req.hostTenant && key.tenantId && req.hostTenant.id !== key.tenantId) throw Forbidden('This API key is for a different workspace than this domain.');
+
+  req.user = { id: `apikey:${key.id}`, role: key.role, email: `apikey:${key.id}`, tid: key.tenantId ?? undefined, tenantIsPersonal: key.tenant?.isPersonal ?? false, isApiKey: true };
+  req.apiKey = { id: key.id, tenantId: key.tenantId };
+  // Best-effort, throttled "last used" stamp (skip if updated within the last 5 min) — never blocks.
+  if (!key.lastUsedAt || Date.now() - key.lastUsedAt.getTime() > 5 * 60 * 1000) {
+    void runAsSystem(() => prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } })).catch(() => {});
+  }
+
+  // Under enforcement a key MUST be tenant-bound — scope the request to its tenant. With enforcement
+  // off (single-tenant deploy) there's no tenant to bind; the key just authenticates.
+  if (multitenancyEnforced()) {
+    if (!key.tenantId || !key.tenant) throw Unauthorized('Invalid API key');
+    enforceTenantRate(key.tenantId, res);
+    bindTenantContext(key.tenantId, key.tenant.isPersonal, () => next());
+  } else {
+    next();
   }
 }
 
@@ -44,6 +91,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       ? header.slice('Bearer '.length).trim()
       : req.cookies?.[AT_COOKIE];
     if (!token) throw Unauthorized('Missing authentication');
+
+    // A public API key (Bearer pk_...) authenticates differently from a JWT session — resolve it
+    // and (when it binds tenant context) run the rest of the chain inside that scope, then return.
+    if (looksLikeApiKey(token)) {
+      await authenticateWithApiKey(token, req, res, next);
+      return;
+    }
 
     let payload;
     try {
