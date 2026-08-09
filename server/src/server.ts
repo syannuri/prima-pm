@@ -3,6 +3,7 @@ import { env } from './config/env.js';
 import { prisma } from './lib/prisma.js';
 import { pruneExpiredRefreshTokens } from './modules/auth/auth.service.js';
 import { runWeeklyAutoCaptureIfDueAllTenants } from './modules/evm/evm.portfolio.js';
+import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
 
 // Defense-in-depth: a stray rejection should be logged, not take down the
 // whole server for every user (the root cause is still fixed at the source).
@@ -51,10 +52,26 @@ async function main() {
   const autoCaptureTimer = setInterval(() => void autoCapture(), AUTO_CAPTURE_CHECK_MS);
   autoCaptureTimer.unref();
 
+  // Outbound webhook retry sweep (T3.3): deliveries are attempted immediately on emit; this drains
+  // any PENDING ones whose backoff has elapsed. Every 60s; a no-op (one cheap query) when idle.
+  const WEBHOOK_SWEEP_MS = 60 * 1000;
+  const sweepWebhooks = async () => {
+    try {
+      const n = await deliverDueDeliveries();
+      if (n > 0) console.log(`[prima-pm] delivered ${n} pending webhook(s)`);
+    } catch (err) {
+      console.error('[prima-pm] webhook delivery sweep failed', err);
+    }
+  };
+  void sweepWebhooks();
+  const webhookTimer = setInterval(() => void sweepWebhooks(), WEBHOOK_SWEEP_MS);
+  webhookTimer.unref();
+
   const shutdown = async (signal: string) => {
     console.log(`[prima-pm] ${signal} received, shutting down...`);
     clearInterval(pruneTimer);
     clearInterval(autoCaptureTimer);
+    clearInterval(webhookTimer);
     server.close();
     await prisma.$disconnect();
     process.exit(0);

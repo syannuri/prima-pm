@@ -7,6 +7,7 @@ import { assertCanCreateProject } from '../../lib/tenant/quota.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
+import { enqueueWebhookEvent } from '../webhook/webhook.service.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
 import { getClosureReadiness } from './closure.js';
 import { getActivationReadiness } from './activation.js';
@@ -155,6 +156,8 @@ export async function createProject(input: CreateProjectInput, actorId: string, 
 
   await writeAudit({ projectId: project.id, userId: actorId, entity: 'Project', entityId: project.id, action: 'CREATE', after: project });
   await notifyPmAssigned(project.pmUserId, actorId, project);
+  // Fire the public-API webhook (best-effort; never blocks or fails project creation).
+  await enqueueWebhookEvent('project.created', { id: project.id, code: project.code, name: project.name, status: project.status, deliveryApproach: project.deliveryApproach });
   return project;
 }
 

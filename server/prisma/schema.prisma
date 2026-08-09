@@ -310,6 +310,8 @@ model Tenant {
   memberships Membership[]
   billingEvents  BillingEvent[]
   apiKeys  ApiKey[]
+  webhookSubscriptions  WebhookSubscription[]
+  webhookDeliveries  WebhookDelivery[]
   projects  Project[]
   projectBookmarks  ProjectBookmark[]
   rateCards  RateCard[]
@@ -447,6 +449,55 @@ model ApiKey {
   createdAt   DateTime  @default(now())
 
   @@index([tenantId])
+}
+
+// An outbound webhook endpoint for the public API (T3.3). When a subscribed event fires in the
+// tenant, we POST the event payload here, HMAC-signed with `secret` (the receiver verifies it).
+// `events` lists the event names to deliver ('*' = all). Tenant-scoped (in SCOPED_MODELS).
+model WebhookSubscription {
+  id          String    @id @default(uuid())
+  tenantId    String?
+  tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url         String
+  events      String[] // event names to deliver; ['*'] = everything
+  // Shared signing secret (whsec_...). Shown to the admin once at creation; stored to sign deliveries.
+  secret      String
+  active      Boolean   @default(true)
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  deliveries  WebhookDelivery[]
+
+  @@index([tenantId])
+}
+
+// One delivery attempt-record per (event, subscription): the payload, its status, and retry state.
+// Doubles as the delivery LOG the UI shows and the RETRY QUEUE the background sweep drains.
+model WebhookDelivery {
+  id             String                @id @default(uuid())
+  tenantId       String?
+  tenant         Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   WebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  event          String
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  responseStatus Int?
+  error          String?
+  nextAttemptAt  DateTime              @default(now())
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
+
+  @@index([tenantId])
+  @@index([status, nextAttemptAt])
+  @@index([subscriptionId])
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }
 
 // =====================================================================

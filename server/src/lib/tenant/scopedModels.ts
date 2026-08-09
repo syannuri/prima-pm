@@ -7,7 +7,7 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   // roots (tenantId -> owning tenant directly)
   'Project', 'ProjectBookmark', 'RateCard', 'Resource', 'AuditLog', 'Notification',
   'Conversation', 'ConversationMember', 'Message', 'PushSubscription', 'MessageReaction',
-  'AppSetting', 'ApiKey',
+  'AppSetting', 'ApiKey', 'WebhookSubscription', 'WebhookDelivery',
   // project-children / grandchildren (tenantId denormalized from Project)
   'ProjectCharter', 'CharterVersion', 'CostItemDirect', 'CostItemIndirect', 'CostBaseline',
   'ActualCostEntry', 'MandayEntry', 'Risk', 'Issue', 'Stakeholder', 'Procurement', 'Assumption',
