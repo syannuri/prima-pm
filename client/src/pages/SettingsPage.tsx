@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Button, Card, Field, Input, SectionTitle, Toggle } from '../components/ui';
@@ -14,25 +14,53 @@ import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/fo
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
-      <div>
+    <div className="mx-auto max-w-3xl space-y-7 pb-12">
+      {/* Page header */}
+      <header className="border-b border-slate-200 pb-4 dark:border-slate-800">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Settings</h1>
         {user && (
           <p className="mt-1 break-words text-sm text-slate-500 dark:text-slate-400">
-            Signed in as {user.name} · {user.email}
+            Signed in as <span className="font-medium text-slate-700 dark:text-slate-300">{user.name}</span> · {user.email}
           </p>
         )}
-      </div>
-      <AppearanceCard />
-      <SecurityCard />
-      {/* Personal iCal calendar feed — available to every signed-in user. */}
-      <CalendarFeedCard />
-      {/* Public REST API keys + webhooks — tenant-ADMIN concerns (management APIs are ADMIN-gated). */}
-      {user?.role === 'ADMIN' && <ApiKeysCard />}
-      {user?.role === 'ADMIN' && <WebhooksCard />}
-      {user?.role === 'ADMIN' && <AutomationsCard />}
+      </header>
+
+      {/* Grouped so related cards sit together instead of one long loose stack. */}
+      <SettingsSection title="Preferences" sub="How Prismatix looks and speaks on this device.">
+        <AppearanceCard />
+      </SettingsSection>
+
+      <SettingsSection title="Account" sub="Your password and personal calendar feed.">
+        <SecurityCard />
+        {/* Personal iCal calendar feed — available to every signed-in user. */}
+        <CalendarFeedCard />
+      </SettingsSection>
+
+      {/* Workspace-level developer tools — tenant-ADMIN only (management APIs are ADMIN-gated). */}
+      {isAdmin && (
+        <SettingsSection title="Developer & integrations" sub="Workspace-wide — API access, webhooks and automations.">
+          <ApiKeysCard />
+          <WebhooksCard />
+          <AutomationsCard />
+        </SettingsSection>
+      )}
     </div>
+  );
+}
+
+// A labelled group of setting cards: a small caption + a tight stack, so related settings read
+// as one block and distinct groups are clearly separated.
+function SettingsSection({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <div className="px-0.5">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{title}</h2>
+        {sub && <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{sub}</p>}
+      </div>
+      {children}
+    </section>
   );
 }
 
