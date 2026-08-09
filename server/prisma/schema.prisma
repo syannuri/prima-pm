@@ -221,6 +221,9 @@ model User {
   // Google account subject (the stable per-user `sub` claim). Set when a user signs in with
   // Google; unique so an account binds to exactly one Google identity. Null for password users.
   googleSub    String?  @unique
+  // Unguessable token for the user's personal iCal calendar feed (T4.2). Null until they enable it;
+  // the feed URL embeds it (calendar apps poll the URL unauthenticated, like a Slack webhook URL).
+  calendarFeedToken String? @unique
   role         Role     @default(VIEWER)
   // Account TYPE (global identity), distinct from the per-tenant Membership.role: true for a
   // self-service GUEST sandbox account, false for staff. This is what corporate features gate on

@@ -8,6 +8,7 @@ import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import ApiKeysCard from '../components/ApiKeysCard';
 import WebhooksCard from '../components/WebhooksCard';
+import CalendarFeedCard from '../components/CalendarFeedCard';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 export default function SettingsPage() {
@@ -24,6 +25,8 @@ export default function SettingsPage() {
       </div>
       <AppearanceCard />
       <SecurityCard />
+      {/* Personal iCal calendar feed — available to every signed-in user. */}
+      <CalendarFeedCard />
       {/* Public REST API keys + webhooks — tenant-ADMIN concerns (management APIs are ADMIN-gated). */}
       {user?.role === 'ADMIN' && <ApiKeysCard />}
       {user?.role === 'ADMIN' && <WebhooksCard />}

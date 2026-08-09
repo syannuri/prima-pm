@@ -31,6 +31,7 @@ import apiKeyRoutes from './modules/apikey/apikey.routes.js';
 import webhookRoutes from './modules/webhook/webhook.routes.js';
 import openapiRoutes from './modules/openapi/openapi.routes.js';
 import importRoutes from './modules/import/import.routes.js';
+import calendarRoutes from './modules/calendar/calendar.routes.js';
 import platformRoutes from './modules/platform/platform.routes.js';
 import billingRoutes from './modules/billing/billing.routes.js';
 import { lemonsqueezyWebhook } from './modules/billing/lemonsqueezy.webhook.js';
@@ -198,6 +199,7 @@ export function createApp() {
   api.use('/members', membersRoutes);
   api.use('/api-keys', apiKeyRoutes);
   api.use('/webhooks', webhookRoutes);
+  api.use('/calendar', calendarRoutes);
   api.use('/billing', billingRoutes);
   api.use('/admin/tenants', platformRoutes);
   app.use('/api/v1', api);
