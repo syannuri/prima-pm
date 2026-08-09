@@ -391,7 +391,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
               // Every group shows its domain label (e.g. "Schedule"); the stable
               // aria-label lets tests/AT target the group by that label. role="tab" +
               // aria-selected expose the active section to assistive tech (not colour alone).
-              <button key={g.label} ref={active ? activeBtnRef : undefined} role="tab" aria-selected={active} aria-label={g.label} data-tour={g.label === 'Schedule & WBS' ? 'tab-schedule' : g.label === 'Monitoring' ? 'tab-monitoring' : undefined} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
+              <button key={g.label} ref={active ? activeBtnRef : undefined} role="tab" aria-selected={active} aria-label={g.label} data-tour={g.label === 'Schedule & WBS' ? 'tab-schedule' : g.label === 'Monitoring' ? 'tab-monitoring' : g.label === 'Risk' ? 'tab-risk' : undefined} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
                 {g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
               </button>
             );

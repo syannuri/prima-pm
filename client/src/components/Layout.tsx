@@ -131,6 +131,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
           {/* Command palette trigger — pill on desktop, icon on mobile */}
           <button
+            data-tour="search"
             onClick={() => setCmdOpen(true)}
             className="ml-1 hidden w-64 items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-slate-300 transition hover:border-white/25 hover:text-white sm:flex lg:w-80"
             title="Search & jump (Ctrl/⌘ K)"
@@ -141,6 +142,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           </button>
           <div className="flex-1" />
           <button
+            data-tour="search"
             onClick={() => setCmdOpen(true)}
             aria-label="Search"
             className="grid h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white sm:hidden"
@@ -151,6 +153,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           {/* Guests can replay the getting-started tour anytime. */}
           {user?.role === 'GUEST' && (
             <button
+              data-tour="tour-replay"
               onClick={startTour}
               title={lang === 'id' ? 'Panduan penggunaan' : 'Getting-started tour'}
               aria-label={lang === 'id' ? 'Panduan penggunaan' : 'Getting-started tour'}

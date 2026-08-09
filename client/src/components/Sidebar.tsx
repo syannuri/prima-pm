@@ -119,7 +119,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {/* Reports — PM status report (weekly/monthly); PMs run them, ADMIN/PMO oversee. A guest
             gets the same hub scoped to their own personal projects. */}
         {!!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'GUEST'].includes(user.role) && (
-          <NavLink to="/reports" onClick={onNavigate} aria-label={user.role === 'GUEST' ? 'My Reports' : 'Reports'} className={({ isActive }) => cx(isActive)}>
+          <NavLink to="/reports" data-tour="nav-reports" onClick={onNavigate} aria-label={user.role === 'GUEST' ? 'My Reports' : 'Reports'} className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.reports} /> {!collapsed && (user.role === 'GUEST' ? 'My Reports' : 'Reports')}
           </NavLink>
         )}
