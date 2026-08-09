@@ -4,7 +4,7 @@ import { pushRecentProject } from '../lib/recentProjects';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
-import { Badge, Card, Spinner } from '../components/ui';
+import { Badge, Card, Modal, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
@@ -327,16 +327,11 @@ const GROUP_LABEL_ID: Record<string, string> = {
   'Governance & Audit': 'Tata Kelola & Audit',
 };
 
-// Domain groups hidden from the phone tab bar (still reachable on desktop) — keeps the
-// mobile strip focused on the core delivery domains.
-const MOBILE_HIDDEN_GROUPS = new Set(['Quality', 'Closing', 'Governance & Audit']);
 // Individual sub-tabs hidden on phones (kept on desktop).
-const MOBILE_HIDDEN_TABS = new Set<Tab>(['Kick-Off']);
-
 function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tabs: Tab[]; activeTab: Tab; changeCount: number; isMobile: boolean; onSelect: (t: Tab) => void }) {
   const groups = TAB_GROUPS
-    .map((g) => ({ label: g.label, tabs: g.tabs.filter((t) => tabs.includes(t) && !(isMobile && MOBILE_HIDDEN_TABS.has(t))) }))
-    .filter((g) => g.tabs.length > 0 && !(isMobile && MOBILE_HIDDEN_GROUPS.has(g.label)));
+    .map((g) => ({ label: g.label, tabs: g.tabs.filter((t) => tabs.includes(t)) }))
+    .filter((g) => g.tabs.length > 0);
   // The active group is whichever contains the active tab — its sub-tabs get the second row.
   const activeGroup = groups.find((g) => g.tabs.includes(activeTab)) ?? groups[0];
 
@@ -375,6 +370,11 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white'
     }`;
 
+  // Mobile: replace the cramped horizontal tab strip with a single "Sections" trigger that opens a
+  // bottom-sheet picker — one tap to any section, and it surfaces EVERY section (the old strip hid
+  // several). Hooks above always run, so this conditional return doesn't break the Rules of Hooks.
+  if (isMobile) return <MobileSectionNav groups={groups} activeTab={activeTab} changeCount={changeCount} onSelect={onSelect} />;
+
   return (
     // Freeze the whole tab strip at the top of the scroll area so it stays visible while the
     // panel content scrolls under it. Negative insets let the opaque bg span edge-to-edge under
@@ -411,6 +411,63 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// Mobile project-section navigator: a sticky "current section" trigger + a bottom-sheet picker of
+// every section grouped by domain. One tap to jump; far easier than swiping a long horizontal strip.
+function MobileSectionNav({ groups, activeTab, changeCount, onSelect }: { groups: { label: string; tabs: Tab[] }[]; activeTab: Tab; changeCount: number; onSelect: (t: Tab) => void }) {
+  const [open, setOpen] = useState(false);
+  const { lang } = useLang();
+  const activeGroup = groups.find((g) => g.tabs.includes(activeTab));
+  const tabLabel = (t: Tab) => (t === 'Schedule' ? 'Timeline' : t); // mirror the sidebar drawer
+  const groupLabel = (l: string) => (lang === 'id' ? GROUP_LABEL_ID[l] ?? l : l);
+
+  return (
+    <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-100 px-4 pb-3 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <button
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-left shadow-sm transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span aria-hidden className="text-base">{TAB_ICONS[activeTab]}</span>
+          <span className="min-w-0 truncate text-sm font-bold text-slate-800 dark:text-slate-100">
+            {activeGroup && groupLabel(activeGroup.label) !== tabLabel(activeTab) ? `${groupLabel(activeGroup.label)} · ` : ''}{tabLabel(activeTab)}
+          </span>
+        </span>
+        <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+
+      {open && (
+        <Modal title={lang === 'id' ? 'Bagian proyek' : 'Project sections'} onClose={() => setOpen(false)}>
+          <div className="space-y-4">
+            {groups.map((g) => (
+              <div key={g.label}>
+                <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{groupLabel(g.label)}</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {g.tabs.map((t) => {
+                    const active = activeTab === t;
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => { onSelect(t); setOpen(false); }}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition active:scale-[0.98] ${active ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}
+                      >
+                        <span aria-hidden>{TAB_ICONS[t]}</span>
+                        <span className="min-w-0 truncate">{tabLabel(t)}</span>
+                        {t === 'Audit' && changeCount > 0 && <span className="ml-auto grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-black/10 px-1 text-xs font-semibold dark:bg-white/15">{changeCount}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
       )}
     </div>
   );
