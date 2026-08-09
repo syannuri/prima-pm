@@ -22,6 +22,8 @@ const eventEnum = z.enum([...WEBHOOK_EVENTS, '*'] as [string, ...string[]]);
 const createSchema = z.object({
   url: z.string().url().refine((u) => u.startsWith('https://'), 'URL must be https'),
   events: z.array(eventEnum).min(1),
+  // GENERIC = signed JSON; SLACK/TEAMS = a chat message to that platform's incoming-webhook URL.
+  format: z.enum(['GENERIC', 'SLACK', 'TEAMS']).default('GENERIC'),
 });
 
 // The event catalogue, so the UI can render the available choices without hardcoding them.

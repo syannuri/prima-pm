@@ -95,6 +95,23 @@ describe('Outbound webhooks (T3.3)', () => {
     void fetchMock;
   });
 
+  it('delivers a Slack-format subscription as a { text } chat message, unsigned', async () => {
+    const sub = await webhooks.createSubscription({ url: 'https://hooks.slack.test/xxx', events: ['project.created'], format: 'SLACK' }, adminId);
+    const fetchMock = mockFetch({ ok: true, status: 200 } as Response);
+
+    await webhooks.enqueueWebhookEvent('project.created', { name: 'Acme Revamp', code: 'PRJ-9' });
+    await webhooks.deliverDueDeliveries();
+
+    const call = fetchMock.mock.calls.find((c) => c[0] === 'https://hooks.slack.test/xxx') as [string, RequestInit & { headers: Record<string, string> }] | undefined;
+    expect(call).toBeTruthy();
+    const [, opts] = call!;
+    expect(JSON.parse(opts.body as string).text).toContain('Acme Revamp');
+    expect(opts.headers[SIGNATURE_HEADER]).toBeUndefined(); // chat deliveries are unsigned (URL is the secret)
+
+    const delivery = await prisma.webhookDelivery.findFirst({ where: { subscriptionId: sub.id }, orderBy: { createdAt: 'desc' } });
+    expect(delivery?.status).toBe('SUCCESS');
+  });
+
   it('retries (stays PENDING with backoff) when the endpoint returns a non-2xx', async () => {
     const sub = await webhooks.createSubscription({ url: 'https://example.test/flaky', events: ['project.created'] }, adminId);
     mockFetch({ ok: false, status: 500 } as Response);

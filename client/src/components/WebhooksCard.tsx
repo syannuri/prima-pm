@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import { Badge, Button, Card, Field, Input, SectionTitle, Spinner } from './ui';
+import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from './ui';
 import { useToast } from './Toast';
 
+type WebhookFormat = 'GENERIC' | 'SLACK' | 'TEAMS';
 interface Subscription {
   id: string;
   url: string;
   events: string[];
+  format: WebhookFormat;
   active: boolean;
   createdAt: string;
 }
@@ -33,6 +35,7 @@ export default function WebhooksCard() {
   const qc = useQueryClient();
   const toast = useToast();
   const [url, setUrl] = useState('');
+  const [format, setFormat] = useState<WebhookFormat>('GENERIC');
   const [selected, setSelected] = useState<string[]>([]);
   const [allEvents, setAllEvents] = useState(false);
   const [justCreated, setJustCreated] = useState<CreatedSubscription | null>(null);
@@ -44,10 +47,12 @@ export default function WebhooksCard() {
   const chosenEvents = allEvents ? ['*'] : selected;
 
   const create = useMutation({
-    mutationFn: () => api.post<CreatedSubscription>('/webhooks', { url: url.trim(), events: chosenEvents }),
+    mutationFn: () => api.post<CreatedSubscription>('/webhooks', { url: url.trim(), events: chosenEvents, format }),
     onSuccess: (s) => {
-      setJustCreated(s);
-      setUrl(''); setSelected([]); setAllEvents(false);
+      // Slack/Teams use the URL as the secret — only surface the signing secret for GENERIC.
+      setJustCreated(s.format === 'GENERIC' ? s : null);
+      if (s.format !== 'GENERIC') toast.success('Webhook added');
+      setUrl(''); setSelected([]); setAllEvents(false); setFormat('GENERIC');
       qc.invalidateQueries({ queryKey: ['webhooks'] });
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not create the webhook'),
@@ -92,9 +97,22 @@ export default function WebhooksCard() {
 
       {/* Create form */}
       <form onSubmit={(e) => { e.preventDefault(); if (canCreate) create.mutate(); }} className="mt-3 space-y-3">
-        <Field label="Endpoint URL" hint="Must be https.">
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://api.acme.com/prismatix-hook" state={url ? (urlOk ? 'valid' : 'invalid') : undefined} />
-        </Field>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[12rem] flex-1">
+            <Field label="Endpoint URL" hint={format === 'GENERIC' ? 'Must be https.' : `Paste your ${format === 'SLACK' ? 'Slack' : 'Teams'} incoming-webhook URL.`}>
+              <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" state={url ? (urlOk ? 'valid' : 'invalid') : undefined} />
+            </Field>
+          </div>
+          <div className="w-36">
+            <Field label="Format">
+              <Select value={format} onChange={(e) => setFormat(e.target.value as WebhookFormat)}>
+                <option value="GENERIC">Signed JSON</option>
+                <option value="SLACK">Slack</option>
+                <option value="TEAMS">Teams</option>
+              </Select>
+            </Field>
+          </div>
+        </div>
         <div>
           <div className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">Events</div>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -128,6 +146,7 @@ export default function WebhooksCard() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{s.url}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    {s.format !== 'GENERIC' && <Badge color="violet">{s.format === 'SLACK' ? 'Slack' : 'Teams'}</Badge>}
                     {s.events.map((ev) => <Badge key={ev} color="slate">{ev}</Badge>)}
                     <span>· Added {fmt(s.createdAt)}</span>
                   </div>

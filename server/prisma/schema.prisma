@@ -460,6 +460,9 @@ model WebhookSubscription {
   tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   url         String
   events      String[] // event names to deliver; ['*'] = everything
+  // Payload shape: GENERIC = signed JSON envelope (verify with the secret); SLACK/TEAMS = a plain
+  // { text } chat message posted to that platform's incoming-webhook URL (the URL is the secret).
+  format      WebhookFormat @default(GENERIC)
   // Shared signing secret (whsec_...). Shown to the admin once at creation; stored to sign deliveries.
   secret      String
   active      Boolean   @default(true)
@@ -498,6 +501,13 @@ enum WebhookDeliveryStatus {
   PENDING
   SUCCESS
   FAILED
+}
+
+// Delivery payload shape for a webhook subscription (T4.1).
+enum WebhookFormat {
+  GENERIC
+  SLACK
+  TEAMS
 }
 
 // =====================================================================

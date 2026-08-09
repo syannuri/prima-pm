@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, WebhookFormat } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { NotFound } from '../../lib/errors.js';
@@ -23,20 +23,21 @@ const TIMEOUT_MS = 10_000;
 // ---- Subscription management (tenant-scoped; ADMIN only via the routes) ---------------------------
 
 // Never selects `secret` — it's returned only once, by createSubscription.
-const subSelect = { id: true, url: true, events: true, active: true, createdAt: true } as const;
+const subSelect = { id: true, url: true, events: true, format: true, active: true, createdAt: true } as const;
 
 export async function listSubscriptions() {
   return prisma.webhookSubscription.findMany({ orderBy: { createdAt: 'desc' }, select: subSelect });
 }
 
-export async function createSubscription(input: { url: string; events: string[] }, actorId: string) {
+export async function createSubscription(input: { url: string; events: string[]; format?: WebhookFormat }, actorId: string) {
   const secret = generateWebhookSecret();
   const row = await prisma.webhookSubscription.create({
-    data: { url: input.url, events: input.events, secret, createdById: actorId },
+    data: { url: input.url, events: input.events, format: input.format ?? 'GENERIC', secret, createdById: actorId },
     select: subSelect,
   });
-  await writeAudit({ userId: actorId, entity: 'WebhookSubscription', entityId: row.id, action: 'CREATE', after: { url: row.url, events: row.events } });
-  // The signing secret is shown to the caller this one time only (needed to verify deliveries).
+  await writeAudit({ userId: actorId, entity: 'WebhookSubscription', entityId: row.id, action: 'CREATE', after: { url: row.url, events: row.events, format: row.format } });
+  // GENERIC subscriptions verify deliveries with this secret; Slack/Teams use the URL as the secret,
+  // so it's irrelevant there — still returned once for consistency.
   return { ...row, secret };
 }
 
@@ -92,7 +93,7 @@ export async function deliverDueDeliveries(limit = 20): Promise<number> {
       where: { status: 'PENDING', nextAttemptAt: { lte: new Date() } },
       orderBy: { nextAttemptAt: 'asc' },
       take: limit,
-      include: { subscription: { select: { url: true, secret: true, active: true } } },
+      include: { subscription: { select: { url: true, secret: true, active: true, format: true } } },
     });
     let delivered = 0;
     for (const d of due) {
@@ -112,13 +113,39 @@ export async function deliverDueDeliveries(limit = 20): Promise<number> {
   });
 }
 
-type DueDelivery = Prisma.WebhookDeliveryGetPayload<{ include: { subscription: { select: { url: true; secret: true; active: true } } } }>;
+type DueDelivery = Prisma.WebhookDeliveryGetPayload<{ include: { subscription: { select: { url: true; secret: true; active: true; format: true } } } }>;
 
-// POST one delivery, HMAC-signed; record the outcome and schedule a retry (with backoff) or give up.
-// Assumes it's already running inside runAsSystem (so the scoped updates aren't tenant-filtered).
+// Human-readable one-liner for Slack/Teams chat deliveries. Falls back to the event name.
+function formatChatMessage(event: string, payload: Prisma.JsonValue): string {
+  const d = (payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}) as Record<string, unknown>;
+  const name = (d.name as string) || (d.code as string) || (d.projectId as string) || '';
+  switch (event) {
+    case 'project.created': return `🆕 Project created: ${name}`;
+    case 'project.status_changed': return `🔄 Project ${name} status: ${d.from ?? '?'} → ${d.to ?? '?'}`;
+    case 'baseline.locked': return `🔒 Baseline locked${name ? ` on ${name}` : ''}`;
+    case 'risk.created': return `⚠️ New risk${d.code ? ` ${d.code}` : ''}: ${d.title ?? ''}`.trim();
+    case 'change_request.approved': return `✅ Change request approved: ${d.title ?? ''}`.trim();
+    default: return `Prismatix event: ${event}`;
+  }
+}
+
+// POST one delivery; record the outcome and schedule a retry (with backoff) or give up. GENERIC =
+// HMAC-signed JSON envelope; SLACK/TEAMS = a plain { text } chat message (the URL is the secret, so
+// no signature). Assumes it's running inside runAsSystem (so the scoped updates aren't tenant-filtered).
 async function attemptDelivery(d: DueDelivery): Promise<boolean> {
-  const body = JSON.stringify({ id: d.id, event: d.event, createdAt: d.createdAt, data: d.payload });
+  const isChat = d.subscription.format === 'SLACK' || d.subscription.format === 'TEAMS';
+  const body = isChat
+    ? JSON.stringify({ text: formatChatMessage(d.event, d.payload) })
+    : JSON.stringify({ id: d.id, event: d.event, createdAt: d.createdAt, data: d.payload });
   const ts = Math.floor(Date.now() / 1000);
+  const headers: Record<string, string> = isChat
+    ? { 'content-type': 'application/json' }
+    : {
+        'content-type': 'application/json',
+        [EVENT_HEADER]: d.event,
+        [DELIVERY_HEADER]: d.id,
+        [SIGNATURE_HEADER]: `t=${ts},v1=${signWebhook(d.subscription.secret, ts, body)}`,
+      };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   let responseStatus: number | null = null;
@@ -128,12 +155,7 @@ async function attemptDelivery(d: DueDelivery): Promise<boolean> {
     const res = await fetch(d.subscription.url, {
       method: 'POST',
       signal: ctrl.signal,
-      headers: {
-        'content-type': 'application/json',
-        [EVENT_HEADER]: d.event,
-        [DELIVERY_HEADER]: d.id,
-        [SIGNATURE_HEADER]: `t=${ts},v1=${signWebhook(d.subscription.secret, ts, body)}`,
-      },
+      headers,
       body,
     });
     responseStatus = res.status;
