@@ -36,7 +36,10 @@ export default function PortfolioSummary() {
   const showPmCharts = !!user && ['PROJECT_MANAGER', 'FINANCE'].includes(user.role);
   // Who can open a project detail: ADMIN/PMO (any) or PM (their list is owned-only).
   // FINANCE sees the portfolio for oversight but can't drill in, so names aren't links.
-  const canOpen = !!user && ['ADMIN', 'PMO', 'PROJECT_MANAGER'].includes(user.role);
+  // Any signed-in viewer can open a project that already appears in their (access-scoped) portfolio
+  // list — the row is only shown for projects they can see, and ProjectPage re-checks access. Was
+  // wrongly limited to ADMIN/PMO/PM, leaving guests/viewers/finance with a dead, unclickable name.
+  const canOpen = !!user;
   const isPM = user?.role === 'PROJECT_MANAGER';
   // Cost & revenue table: ADMIN/PMO (whole portfolio) + PM (their OWN assigned projects —
   // data.projects is already scoped to owned projects by the API for a PM).
