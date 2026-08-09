@@ -29,6 +29,7 @@ import messagesRoutes from './modules/messages/messages.routes.js';
 import membersRoutes from './modules/members/members.routes.js';
 import apiKeyRoutes from './modules/apikey/apikey.routes.js';
 import webhookRoutes from './modules/webhook/webhook.routes.js';
+import openapiRoutes from './modules/openapi/openapi.routes.js';
 import platformRoutes from './modules/platform/platform.routes.js';
 import billingRoutes from './modules/billing/billing.routes.js';
 import { lemonsqueezyWebhook } from './modules/billing/lemonsqueezy.webhook.js';
@@ -86,7 +87,11 @@ export function createApp() {
                   // Google Identity Services (the "Sign in with Google" button) — only when enabled.
                   ...(env.googleClientId ? ['https://accounts.google.com/gsi/client'] : []),
                   // Cloudflare Turnstile CAPTCHA widget script — only when enabled.
-                  ...(captchaEnabled() ? ['https://challenges.cloudflare.com'] : [])],
+                  ...(captchaEnabled() ? ['https://challenges.cloudflare.com'] : []),
+                  // Redoc (public API reference at /api/v1/docs) is loaded from its CDN.
+                  'https://cdn.redocly.com'],
+                // Redoc renders via a web worker created from a blob URL.
+                workerSrc: ["'self'", 'blob:'],
                 styleSrc: ["'self'", "'unsafe-inline'",
                   ...(env.googleClientId ? ['https://accounts.google.com/gsi/style'] : [])],
                 imgSrc: ["'self'", 'data:'],
@@ -173,6 +178,9 @@ export function createApp() {
   // CSRF double-submit guard on all mutating API requests (skips Bearer-authed calls and
   // login — see middleware/csrf.ts).
   api.use(csrfGuard);
+  // Public API docs (spec + reference page) — no auth; mounted first so /openapi.json and /docs
+  // are reachable without a key.
+  api.use(openapiRoutes);
   api.use('/auth', authRoutes);
   api.use('/users', usersRoutes);
   api.use('/projects', projectsRoutes); // includes nested /:projectId/charter and /cost
