@@ -6,7 +6,7 @@ vi.mock('../../lib/prisma.js', () => ({
 }));
 
 import { prisma } from '../../lib/prisma.js';
-import { requireRole, requireProjectAccess } from '../rbac.js';
+import { requireRole, requireProjectAccess, requireProjectGovernance } from '../rbac.js';
 
 const findUnique = prisma.project.findUnique as unknown as ReturnType<typeof vi.fn>;
 
@@ -116,5 +116,40 @@ describe('requireProjectAccess', () => {
       { write: true, allowRoles: ['VIEWER'] },
     );
     expect(errOf(next)?.statusCode).toBe(403);
+  });
+});
+
+// The guard behind every lifecycle mutation (PATCH /:id activate/hold/resume/close/reopen). A guest
+// self-governs in their personal tenant; a corporate actor must hold ADMIN/PMO.
+describe('requireProjectGovernance', () => {
+  const run = async (reqOver: any) => {
+    const next = vi.fn();
+    await requireProjectGovernance('ADMIN', 'PMO')(mkReq(reqOver) as any, res, next);
+    return next;
+  };
+  const errOf = (next: ReturnType<typeof vi.fn>) => next.mock.calls[0][0];
+
+  it('lets a personal-tenant GUEST self-govern their project (the activation-403 fix)', async () => {
+    findUnique.mockResolvedValue({ id: 'p1', deletedAt: null });
+    const next = await run({ user: { id: 'g1', role: 'GUEST', tenantIsPersonal: true }, params: { id: 'p1' } });
+    expect(next).toHaveBeenCalledWith(); // allowed — no ADMIN/PMO required in a personal tenant
+  });
+
+  it('forbids a non-personal actor without a governing role (403)', async () => {
+    findUnique.mockResolvedValue({ id: 'p1', deletedAt: null });
+    const next = await run({ user: { id: 'u1', role: 'PROJECT_MANAGER', tenantIsPersonal: false }, params: { id: 'p1' } });
+    expect(errOf(next)?.statusCode).toBe(403);
+  });
+
+  it('lets a corporate ADMIN govern', async () => {
+    findUnique.mockResolvedValue({ id: 'p1', deletedAt: null });
+    const next = await run({ user: { id: 'u1', role: 'ADMIN', tenantIsPersonal: false }, params: { id: 'p1' } });
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('404 when the project is missing/soft-deleted', async () => {
+    findUnique.mockResolvedValue(null);
+    const next = await run({ user: { id: 'g1', role: 'GUEST', tenantIsPersonal: true }, params: { id: 'p1' } });
+    expect(errOf(next)?.statusCode).toBe(404);
   });
 });
