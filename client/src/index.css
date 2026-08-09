@@ -185,3 +185,10 @@ body.has-install-banner .fab {
 @media (prefers-reduced-motion: reduce) {
   .prima-rise { animation: none; }
 }
+
+/* Mobile tap feel: remove the grey tap-highlight flash and the legacy 300ms tap delay on
+   interactive elements so taps register instantly and cleanly (progressive; desktop unaffected). */
+button, a, [role="button"], [role="switch"], label, select, summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}

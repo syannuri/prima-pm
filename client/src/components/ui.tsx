@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { createPortal } from 'react-dom';
 import { useLang } from '../context/LanguageContext';
+import { haptic } from '../lib/haptics';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
@@ -26,6 +27,7 @@ type BtnVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 export function Button({
   variant = 'primary',
   className = '',
+  onClick,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; 'data-tour'?: string }) {
   const styles: Record<BtnVariant, string> = {
@@ -37,7 +39,10 @@ export function Button({
   };
   return (
     <button
-      className={`inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed ${styles[variant]} ${className}`}
+      // A light haptic on the intentful CTAs (primary/commit + danger); a no-op off Android Chrome.
+      onClick={(e) => { if (!e.currentTarget.disabled && (variant === 'primary' || variant === 'danger')) haptic(); onClick?.(e); }}
+      // active:scale gives a tactile "press" on tap (mobile) and click (desktop); disabled stays still.
+      className={`inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100 ${styles[variant]} ${className}`}
       {...props}
     />
   );
@@ -220,7 +225,7 @@ export function Toggle({
       aria-checked={checked}
       aria-label={label}
       disabled={disabled}
-      onClick={() => !disabled && onChange(!checked)}
+      onClick={() => { if (!disabled) { haptic(); onChange(!checked); } }}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
         disabled ? 'cursor-not-allowed opacity-50' : ''
       } ${checked ? 'bg-brand-600' : 'bg-slate-300 dark:bg-slate-700'}`}
