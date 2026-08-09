@@ -5,8 +5,12 @@ import { useLang } from '../context/LanguageContext';
 import { haptic } from '../lib/haptics';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
+  // Unified card look across the app: softer rounded-2xl, a hairline border + a faint top sheen
+  // (matches the dashboard tiles for one consistent language), denser padding on phones. The sheen
+  // is a rounded ::before so we DON'T need overflow-hidden — that would clip dropdowns/popovers
+  // rendered inside cards. It sits behind content (::before paints under the element's children).
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900 dark:shadow-lg dark:shadow-black/20 ${className}`}>
+    <div className={`relative rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-14 before:rounded-t-2xl before:bg-gradient-to-b before:from-slate-50/80 before:to-transparent dark:border-slate-700/60 dark:bg-slate-900 dark:shadow-lg dark:shadow-black/20 dark:before:from-white/[0.03] sm:p-5 ${className}`}>
       {children}
     </div>
   );
