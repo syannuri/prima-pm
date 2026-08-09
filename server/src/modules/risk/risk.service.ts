@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { recomputeBaseline } from '../cost/cost.service.js';
+import { enqueueWebhookEvent } from '../webhook/webhook.service.js';
 import {
   deriveRiskMetrics,
   generateRiskCode,
@@ -78,6 +79,7 @@ export async function createRisk(projectId: string, input: UpsertRiskInput, acto
   });
 
   await writeAudit({ projectId, userId: actorId, entity: 'Risk', entityId: risk.id, action: 'CREATE', after: risk });
+  await enqueueWebhookEvent('risk.created', { projectId, riskId: risk.id, code: risk.code, title: risk.title, severity: risk.severity });
   return risk;
 }
 

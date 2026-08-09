@@ -295,6 +295,10 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
     before,
     after: isReopening ? { ...project, reopenReason } : activateReason ? { ...project, activateReason } : project,
   });
+  // Notify integrations of a real status transition (best-effort).
+  if (input.status && input.status !== before.status) {
+    await enqueueWebhookEvent('project.status_changed', { id: project.id, code: project.code, name: project.name, from: before.status, to: project.status });
+  }
   return project;
 }
 

@@ -8,7 +8,10 @@ import { generateWebhookSecret, signWebhook, SIGNATURE_HEADER, EVENT_HEADER, DEL
 // The event names a subscription may listen for (plus '*' = all). Keep in sync with the emit points.
 export const WEBHOOK_EVENTS = [
   'project.created',
+  'project.status_changed',
   'baseline.locked',
+  'risk.created',
+  'change_request.approved',
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 

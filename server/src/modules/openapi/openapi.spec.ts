@@ -72,22 +72,16 @@ export function buildOpenApiSpec() {
     },
     // OpenAPI 3.1 `webhooks`: events Prismatix POSTs to a subscribed endpoint. Each is signed with
     // the subscription secret (see the security note in the schema). Return any 2xx to acknowledge.
-    webhooks: {
-      'project.created': {
+    // Generated from the WEBHOOK_EVENTS catalogue so docs never drift from what actually fires.
+    webhooks: Object.fromEntries(
+      WEBHOOK_EVENTS.map((event) => [event, {
         post: {
-          summary: 'A project was created',
+          summary: `The "${event}" event`,
           requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/WebhookEnvelope' } } } },
           responses: { '2XX': { description: 'Acknowledged' } },
         },
-      },
-      'baseline.locked': {
-        post: {
-          summary: 'A project baseline was locked',
-          requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/WebhookEnvelope' } } } },
-          responses: { '2XX': { description: 'Acknowledged' } },
-        },
-      },
-    },
+      }]),
+    ),
     components: {
       securitySchemes: {
         apiKey: {
