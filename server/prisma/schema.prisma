@@ -358,6 +358,8 @@ model Tenant {
   requirements  Requirement[]
   requirementTaskLinks  RequirementTaskLink[]
   projectCommentaries  ProjectCommentary[]
+  approvalWorkflows  ApprovalWorkflow[]
+  approvalRequests  ApprovalRequest[]
 }
 
 // Append-only audit trail of Lemon Squeezy billing webhooks (what event flipped which plan).
@@ -626,6 +628,7 @@ model Project {
   bookmarks        ProjectBookmark[]
   requirements     Requirement[]
   commentaries     ProjectCommentary[]
+  approvalRequests ApprovalRequest[]
 
   @@index([status])
   @@index([pmUserId])
@@ -1389,6 +1392,122 @@ model ChangeRequest {
 
   @@index([projectId, status])
   @@index([tenantId])
+}
+
+// =====================================================================
+// APPROVAL WORKFLOWS — admin-configured, multi-step approval routing.
+// Phase 1 routes Change Requests; appliesTo is an enum so more entity
+// kinds (cost baseline, closure) can be added later without a reshape.
+// =====================================================================
+
+enum ApprovalAppliesTo {
+  CHANGE_REQUEST
+}
+
+enum ApprovalStepMode {
+  ANY // one approver in the step is enough to clear it
+  ALL // every approver in the step must approve
+}
+
+enum ApprovalApproverKind {
+  ROLE       // every ACTIVE member holding `role` in the tenant
+  USER       // one specific user
+  PROJECT_PM // the PM of the entity's project (Project.pmUserId), resolved at runtime
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalDecisionKind {
+  APPROVED
+  REJECTED
+}
+
+// A reusable, admin-defined approval chain. Matched to an entity by `appliesTo` + optional
+// conditions; a match routes the entity through the ordered steps instead of the legacy
+// single-decider path. Tenant-scoped (see scopedModels.ts).
+model ApprovalWorkflow {
+  id               String            @id @default(uuid())
+  tenantId         String?
+  tenant           Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  appliesTo        ApprovalAppliesTo @default(CHANGE_REQUEST)
+  enabled          Boolean           @default(true)
+  // Optional matching conditions — every one that is set must hold; NULL means "any".
+  condMagnitude    ChangeMagnitude?  // only CRs of this magnitude
+  condChargeable   Boolean?          // only chargeable (true) / only non-chargeable (false)
+  condMinAmountIdr Decimal?          @db.Decimal(18, 2) // only when amountIdr >= this
+  createdById      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  steps            ApprovalStep[]
+  requests         ApprovalRequest[]
+
+  @@index([tenantId])
+}
+
+model ApprovalStep {
+  id         String                 @id @default(uuid())
+  workflowId String
+  workflow   ApprovalWorkflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  order      Int                    // 1-based position in the chain
+  name       String
+  mode       ApprovalStepMode       @default(ANY)
+  approvers  ApprovalStepApprover[]
+
+  @@index([workflowId])
+}
+
+model ApprovalStepApprover {
+  id     String               @id @default(uuid())
+  stepId String
+  step   ApprovalStep         @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  kind   ApprovalApproverKind
+  role   Role?                // when kind = ROLE
+  userId String?              // when kind = USER (FK-less id, like AutomationRule.createdById)
+
+  @@index([stepId])
+}
+
+// A runtime instance: one entity travelling through one workflow. Tenant-scoped so the approver
+// inbox and every read is auto-filtered to the active tenant by the Prisma extension.
+model ApprovalRequest {
+  id           String                @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowId   String
+  workflow     ApprovalWorkflow      @relation(fields: [workflowId], references: [id])
+  entityType   ApprovalAppliesTo     // what kind of entity is under approval
+  entityId     String                // the target id (a ChangeRequest id in Phase 1)
+  projectId    String
+  project      Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status       ApprovalRequestStatus @default(PENDING)
+  currentOrder Int                   @default(1) // the step order currently awaiting decisions
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  decisions    ApprovalDecision[]
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([projectId])
+}
+
+model ApprovalDecision {
+  id         String               @id @default(uuid())
+  requestId  String
+  request    ApprovalRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  stepId     String               // the ApprovalStep this decision was cast on
+  stepOrder  Int                  // denormalized for per-step evaluation without a join
+  approverId String               // the deciding user (FK-less id)
+  decision   ApprovalDecisionKind
+  comment    String?
+  decidedAt  DateTime             @default(now())
+
+  @@index([requestId])
 }
 
 model AuditLog {

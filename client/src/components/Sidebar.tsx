@@ -29,6 +29,7 @@ const ICONS = {
   org: 'M3 21h18M6 21V7l6-4 6 4v14M10 9h.01M14 9h.01M10 13h.01M14 13h.01M10 17h.01M14 17h.01',
   tenants: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z',
   billing: 'M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7zM2 10h20M6 15h4',
+  approvals: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14l2 2 4-4',
 };
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
@@ -64,6 +65,14 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
     refetchInterval: 30_000,
   });
   const chatUnreadCount = chatUnread?.unread ?? 0;
+  // Pending approvals routed to this user by an approval workflow — drives the Approvals nav badge.
+  const { data: approvalsCount } = useQuery({
+    queryKey: ['my-approvals-count'],
+    queryFn: () => api.get<{ count: number }>('/approvals/mine/count'),
+    enabled: !!user && !isGuest,
+    refetchInterval: 60_000,
+  });
+  const pendingApprovals = approvalsCount?.count ?? 0;
   const [showAllProjects, setShowAllProjects] = useState(false);
   // Collapsed icon-rail hover tooltip: one delegated handler reads the hovered link's aria-label
   // and shows a portal tooltip (portaled + fixed so it escapes the nav's overflow clipping).
@@ -113,6 +122,17 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-800" />
             ) : (
               <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{chatUnreadCount}</span>
+            ))}
+          </NavLink>
+        )}
+        {/* Approvals — items routed to this user by an approval workflow's current step. */}
+        {!!user && !isGuest && (
+          <NavLink to="/approvals" onClick={onNavigate} aria-label={pendingApprovals > 0 ? `Approvals — ${pendingApprovals} pending` : 'Approvals'} className={({ isActive }) => `relative ${cx(isActive)}`}>
+            <Icon path={ICONS.approvals} /> {!collapsed && 'Approvals'}
+            {pendingApprovals > 0 && (collapsed ? (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-800" />
+            ) : (
+              <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{pendingApprovals}</span>
             ))}
           </NavLink>
         )}

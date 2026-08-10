@@ -33,6 +33,7 @@ import openapiRoutes from './modules/openapi/openapi.routes.js';
 import importRoutes from './modules/import/import.routes.js';
 import calendarRoutes from './modules/calendar/calendar.routes.js';
 import automationRoutes from './modules/automation/automation.routes.js';
+import { workflowRouter as approvalWorkflowRoutes, inboxRouter as approvalInboxRoutes } from './modules/approval/approval.routes.js';
 import platformRoutes from './modules/platform/platform.routes.js';
 import billingRoutes from './modules/billing/billing.routes.js';
 import { lemonsqueezyWebhook } from './modules/billing/lemonsqueezy.webhook.js';
@@ -202,6 +203,8 @@ export function createApp() {
   api.use('/webhooks', webhookRoutes);
   api.use('/calendar', calendarRoutes);
   api.use('/automations', automationRoutes);
+  api.use('/approval-workflows', approvalWorkflowRoutes);
+  api.use('/approvals', approvalInboxRoutes);
   api.use('/billing', billingRoutes);
   api.use('/admin/tenants', platformRoutes);
   app.use('/api/v1', api);

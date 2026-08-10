@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import ApiKeysCard from '../components/ApiKeysCard';
 import WebhooksCard from '../components/WebhooksCard';
 import AutomationsCard from '../components/AutomationsCard';
+import ApprovalWorkflowsCard from '../components/ApprovalWorkflowsCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
 import PlatformSettings from '../components/PlatformSettings';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
@@ -46,6 +47,13 @@ export default function SettingsPage() {
               <ApiKeysCard />
               <WebhooksCard />
               <AutomationsCard />
+            </SettingsSection>
+          )}
+
+          {/* Change-control governance — tenant-ADMIN only. */}
+          {isAdmin && (
+            <SettingsSection title="Governance" sub="Workspace-wide — multi-step approval routing for change requests.">
+              <ApprovalWorkflowsCard />
             </SettingsSection>
           )}
         </div>

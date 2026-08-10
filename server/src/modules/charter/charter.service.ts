@@ -174,7 +174,24 @@ export async function createChangeRequest(
     },
   });
   await writeAudit({ projectId, userId: actorId, entity: 'ChangeRequest', entityId: cr.id, action: 'CREATE', after: cr });
-  // Notify the approvers (ADMIN/PMO) that a change request awaits their decision.
+
+  // If an admin-configured approval workflow matches this CR, route it through the multi-step chain
+  // instead of the legacy single-decider notification. Dynamic import keeps the module graph acyclic
+  // (approval.service statically imports decideChangeRequest from here). Best-effort: a routing
+  // failure must never block raising the CR — fall through to the legacy notification.
+  try {
+    const { startApprovalForCr } = await import('../approval/approval.service.js');
+    const routed = await startApprovalForCr(cr, actorId);
+    if (routed) {
+      // The workflow owns the notifications now; mark the CR under review so the decider guard passes.
+      const updated = await prisma.changeRequest.update({ where: { id: cr.id }, data: { status: 'UNDER_REVIEW' } });
+      return updated;
+    }
+  } catch (err) {
+    console.error('[approval] failed to route change request through a workflow', err);
+  }
+
+  // Legacy path — notify the approvers (ADMIN/PMO) that a change request awaits their decision.
   const [project, approvers] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true } }),
     tenantMemberUserIds(['ADMIN', 'PMO'], { excludeUserId: actorId }),

@@ -958,3 +958,48 @@ export interface ChatThread extends ChatConversationBase {
   conversationId: string;
   messages: ChatMessage[];
 }
+
+// ---- Approval workflows (admin-configured, multi-step CR approval) ----
+export type ApprovalApproverKind = 'ROLE' | 'USER' | 'PROJECT_PM';
+export interface ApprovalApprover {
+  id?: string;
+  kind: ApprovalApproverKind;
+  role: Role | null;
+  userId: string | null;
+}
+export interface ApprovalStep {
+  id?: string;
+  order?: number;
+  name: string;
+  mode: 'ANY' | 'ALL';
+  approvers: ApprovalApprover[];
+}
+export interface ApprovalWorkflow {
+  id: string;
+  name: string;
+  appliesTo: 'CHANGE_REQUEST';
+  enabled: boolean;
+  condMagnitude: 'MINOR' | 'MAJOR' | null;
+  condChargeable: boolean | null;
+  condMinAmountIdr: string | number | null;
+  steps: ApprovalStep[];
+  _count?: { requests: number };
+}
+export interface MyApproval {
+  id: string;
+  workflowName: string;
+  stepName: string;
+  stepOrder: number;
+  totalSteps: number;
+  mode: 'ANY' | 'ALL';
+  alreadyVoted: boolean;
+  createdAt: string;
+  project: { id: string; name: string; code: string } | null;
+  changeRequest: {
+    title: string;
+    description: string;
+    magnitude: 'MINOR' | 'MAJOR';
+    chargeable: boolean;
+    amountIdr: number | null;
+  } | null;
+}

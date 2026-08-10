@@ -25,6 +25,7 @@ const AdminResourcesPage = lazy(() => import('./pages/AdminResourcesPage'));
 const AdminAuditPage = lazy(() => import('./pages/AdminAuditPage'));
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const ApprovalsPage = lazy(() => import('./pages/ApprovalsPage'));
 const ManualPage = lazy(() => import('./pages/ManualPage'));
 const MyTimesheetPage = lazy(() => import('./pages/MyTimesheetPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/admin/audit" element={<AdminAuditPage />} />
           <Route path="/admin/billing" element={<AdminBillingPage />} />
           <Route path="/my-timesheet" element={<MyTimesheetPage />} />
+          <Route path="/approvals" element={<ApprovalsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/manual" element={<ManualPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
