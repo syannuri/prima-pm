@@ -180,10 +180,11 @@ router.patch(
   requireProjectGovernance('ADMIN', 'PMO', 'PROJECT_MANAGER'),
   validateBody(baselineLockSchema),
   asyncHandler(async (req, res) => {
-    const project = await setBaselineLock(req.params.id, req.body.locked, req.body.reason, req.user!.id);
-    // Locking a baseline may complete the set → tell ADMIN/PMO it's ready to activate (once).
-    if (req.body.locked) await notifyActivationReady(req.params.id, req.user!.id);
-    res.json({ project });
+    const { project, approvalPending } = await setBaselineLock(req.params.id, req.body.locked, req.body.reason, req.user!.id);
+    // Locking a baseline may complete the set → tell ADMIN/PMO it's ready to activate (once). Skip
+    // when the lock is only pending approval (it hasn't actually locked yet).
+    if (req.body.locked && !approvalPending) await notifyActivationReady(req.params.id, req.user!.id);
+    res.json({ project, approvalPending });
   }),
 );
 

@@ -21,6 +21,7 @@ export interface ApproverInput { kind: ApproverKind; role?: Role | null; userId?
 export interface StepInput { name: string; mode: 'ANY' | 'ALL'; approvers: ApproverInput[] }
 export interface WorkflowInput {
   name: string;
+  appliesTo?: 'CHANGE_REQUEST' | 'COST_BASELINE' | 'PROJECT_CLOSURE';
   enabled?: boolean;
   condMagnitude?: ChangeMagnitude | null;
   condChargeable?: boolean | null;
@@ -57,7 +58,7 @@ export async function createWorkflow(input: WorkflowInput, actorId: string) {
     data: {
       name: input.name,
       enabled: input.enabled ?? true,
-      appliesTo: 'CHANGE_REQUEST',
+      appliesTo: input.appliesTo ?? 'CHANGE_REQUEST',
       condMagnitude: input.condMagnitude ?? null,
       condChargeable: input.condChargeable ?? null,
       condMinAmountIdr: input.condMinAmountIdr ?? null,
@@ -81,6 +82,7 @@ export async function updateWorkflow(id: string, input: WorkflowInput, actorId: 
       where: { id },
       data: {
         name: input.name,
+        appliesTo: input.appliesTo ?? 'CHANGE_REQUEST',
         enabled: input.enabled ?? true,
         condMagnitude: input.condMagnitude ?? null,
         condChargeable: input.condChargeable ?? null,
@@ -106,23 +108,42 @@ export async function deleteWorkflow(id: string, actorId: string) {
 // Engine
 // ---------------------------------------------------------------------------
 
+type EntityType = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'PROJECT_CLOSURE';
 interface CrLike { id: string; projectId: string; magnitude: ChangeMagnitude; chargeable: boolean; amountIdr: unknown }
 type WorkflowWithSteps = Awaited<ReturnType<typeof listWorkflows>>[number];
 type StepWithApprovers = WorkflowWithSteps['steps'][number];
+// A request under approval, identified enough to route, finalise and describe it.
+interface EntityRef { id: string; entityType: EntityType; entityId: string; projectId: string }
 
-// First enabled workflow (oldest first, so ordering is stable & predictable) whose conditions all
-// hold for this CR. Every set condition must match; NULL conditions mean "any". Null → no match.
-export async function resolveWorkflowForCr(cr: CrLike): Promise<WorkflowWithSteps | null> {
+// First enabled workflow (oldest first, so ordering is stable & predictable) that targets this
+// entity type and — for Change Requests only — whose conditions all hold. Null → no match.
+export async function resolveWorkflow(entityType: EntityType, matchCtx?: CrLike | null): Promise<WorkflowWithSteps | null> {
   const workflows = await listWorkflows();
-  const amount = cr.amountIdr == null ? 0 : Number(cr.amountIdr);
+  const amount = matchCtx?.amountIdr == null ? 0 : Number(matchCtx.amountIdr);
   const match = workflows.find((w) => {
-    if (!w.enabled || w.appliesTo !== 'CHANGE_REQUEST' || w.steps.length === 0) return false;
-    if (w.condMagnitude && w.condMagnitude !== cr.magnitude) return false;
-    if (w.condChargeable != null && w.condChargeable !== cr.chargeable) return false;
-    if (w.condMinAmountIdr != null && amount < Number(w.condMinAmountIdr)) return false;
+    if (!w.enabled || w.appliesTo !== entityType || w.steps.length === 0) return false;
+    // The magnitude/chargeable/amount conditions only make sense for a CR.
+    if (entityType === 'CHANGE_REQUEST' && matchCtx) {
+      if (w.condMagnitude && w.condMagnitude !== matchCtx.magnitude) return false;
+      if (w.condChargeable != null && w.condChargeable !== matchCtx.chargeable) return false;
+      if (w.condMinAmountIdr != null && amount < Number(w.condMinAmountIdr)) return false;
+    }
     return true;
   });
   return match ?? null;
+}
+
+// Back-compat wrapper for the CR call-site.
+export const resolveWorkflowForCr = (cr: CrLike) => resolveWorkflow('CHANGE_REQUEST', cr);
+
+// Human label for the entity under approval — used in notifications and the inbox.
+async function entityLabel(ref: Pick<EntityRef, 'entityType' | 'entityId'>): Promise<string> {
+  if (ref.entityType === 'CHANGE_REQUEST') {
+    const cr = await prisma.changeRequest.findUnique({ where: { id: ref.entityId }, select: { title: true } });
+    return `change request "${cr?.title ?? ''}"`;
+  }
+  if (ref.entityType === 'COST_BASELINE') return 'a cost baseline lock';
+  return 'a project closure';
 }
 
 // Resolve a step's approvers to concrete, de-duplicated user ids for the CURRENT state of the tenant
@@ -144,20 +165,20 @@ async function resolveStepApproverIds(step: StepWithApprovers, projectId: string
   return [...ids];
 }
 
-async function notifyStepApprovers(req: { projectId: string; entityId: string }, step: StepWithApprovers, excludeUserId: string | null) {
-  const ids = (await resolveStepApproverIds(step, req.projectId)).filter((id) => id !== excludeUserId);
+async function notifyStepApprovers(ref: EntityRef, step: StepWithApprovers, excludeUserId: string | null) {
+  const ids = (await resolveStepApproverIds(step, ref.projectId)).filter((id) => id !== excludeUserId);
   if (!ids.length) return;
-  const [project, cr] = await Promise.all([
-    prisma.project.findUnique({ where: { id: req.projectId }, select: { name: true, code: true } }),
-    prisma.changeRequest.findUnique({ where: { id: req.entityId }, select: { title: true } }),
+  const [project, label] = await Promise.all([
+    prisma.project.findUnique({ where: { id: ref.projectId }, select: { name: true, code: true } }),
+    entityLabel(ref),
   ]);
   const where = `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`;
   await Promise.all(ids.map((id) => createNotification({
     userId: id,
     type: 'APPROVAL_PENDING',
     title: 'Approval needed',
-    body: `Change request "${cr?.title ?? ''}" ${where} needs your approval (step "${step.name}").`,
-    projectId: req.projectId,
+    body: `${cap(label)} ${where} needs your approval (step "${step.name}").`,
+    projectId: ref.projectId,
   })));
 }
 
@@ -165,65 +186,111 @@ async function notifyStepApprovers(req: { projectId: string; entityId: string },
 // resolve to zero approvers so a misconfigured middle step never deadlocks the chain). When no
 // actionable step remains, the chain is fully approved → finalize.
 async function routeFrom(
-  req: { id: string; projectId: string; entityType: 'CHANGE_REQUEST'; entityId: string },
+  ref: EntityRef,
   workflow: { steps: StepWithApprovers[] },
   fromOrder: number,
   actorId: string,
+  opts: FinalizeOpts = {},
 ): Promise<'PENDING' | 'APPROVED'> {
   for (const step of workflow.steps) {
     if (step.order < fromOrder) continue;
-    const eligible = await resolveStepApproverIds(step, req.projectId);
+    const eligible = await resolveStepApproverIds(step, ref.projectId);
     if (eligible.length === 0) continue; // empty step → skip
-    await prisma.approvalRequest.update({ where: { id: req.id }, data: { currentOrder: step.order } });
-    await notifyStepApprovers(req, step, actorId);
+    await prisma.approvalRequest.update({ where: { id: ref.id }, data: { currentOrder: step.order } });
+    await notifyStepApprovers(ref, step, actorId);
     return 'PENDING';
   }
-  await finalize(req, 'APPROVED', actorId);
+  await finalize(ref, 'APPROVED', actorId, opts);
   return 'APPROVED';
 }
 
-async function finalize(
-  req: { id: string; projectId: string; entityType: 'CHANGE_REQUEST'; entityId: string },
-  outcome: 'APPROVED' | 'REJECTED',
-  actorId: string,
-) {
-  await prisma.approvalRequest.update({ where: { id: req.id }, data: { status: outcome } });
+interface FinalizeOpts { applyToRevenue?: boolean }
+
+// Close out a request and apply the pending action for its entity type. Change Requests reuse the
+// existing decider (baseline unlock, revenue, charter versioning, notify, event). Cost-baseline and
+// closure requests replay their stored payload; closure application lands in Phase 2b.
+async function finalize(ref: EntityRef, outcome: 'APPROVED' | 'REJECTED', actorId: string, opts: FinalizeOpts = {}) {
+  const row = await prisma.approvalRequest.update({ where: { id: ref.id }, data: { status: outcome } });
   await writeAudit({
-    projectId: req.projectId,
+    projectId: ref.projectId,
     userId: actorId,
     entity: 'ApprovalRequest',
-    entityId: req.id,
+    entityId: ref.id,
     action: outcome === 'APPROVED' ? 'APPROVE' : 'REJECT',
-    after: { status: outcome, entityId: req.entityId },
+    after: { status: outcome, entityType: ref.entityType, entityId: ref.entityId },
   });
-  // Apply the entity side-effects through the existing decider (baseline unlock, revenue, charter
-  // versioning, requester notification, domain event) — no duplication of that battle-tested logic.
-  if (req.entityType === 'CHANGE_REQUEST') {
-    await decideChangeRequest(req.projectId, req.entityId, outcome, actorId);
+
+  if (ref.entityType === 'CHANGE_REQUEST') {
+    await decideChangeRequest(ref.projectId, ref.entityId, outcome, actorId, opts.applyToRevenue ?? false);
+    return;
   }
+
+  if (ref.entityType === 'COST_BASELINE') {
+    const payload = (row.payload ?? {}) as { reason?: string; requestedById?: string };
+    if (outcome === 'APPROVED') {
+      // Dynamic import breaks the baseline.service ⇄ approval.service cycle (baseline calls startApproval).
+      const { applyBaselineLock } = await import('../projects/baseline.service.js');
+      await applyBaselineLock(ref.projectId, payload.reason, actorId);
+    }
+    await notifyRequester(payload.requestedById, actorId, ref.projectId, outcome, 'Cost baseline lock');
+  }
+  // PROJECT_CLOSURE application is wired in Phase 2b.
 }
 
-// Route a freshly-submitted CR into a matching workflow. Returns the created request, or null when
-// no workflow matches OR the whole workflow has no resolvable approvers (→ caller uses the legacy
-// single-decider path so the CR is never left un-actionable).
-export async function startApprovalForCr(cr: CrLike, actorId: string) {
-  const workflow = await resolveWorkflowForCr(cr);
+async function notifyRequester(requesterId: string | undefined, actorId: string, projectId: string, outcome: 'APPROVED' | 'REJECTED', subject: string) {
+  if (!requesterId || requesterId === actorId) return;
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true } });
+  const where = `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`;
+  await createNotification({
+    userId: requesterId,
+    type: outcome === 'APPROVED' ? 'APPROVAL_APPROVED' : 'APPROVAL_REJECTED',
+    title: `${subject} ${outcome === 'APPROVED' ? 'approved' : 'rejected'}`,
+    body: `Your ${subject.toLowerCase()} ${where} was ${outcome === 'APPROVED' ? 'approved' : 'rejected'}.`,
+    projectId,
+  });
+}
+
+// Route an entity into a matching workflow. Returns the created request, or null when no workflow
+// matches OR the whole workflow has no resolvable approvers (→ caller applies its default path so
+// the action is never left un-actionable).
+export async function startApproval(
+  ref: { entityType: EntityType; entityId: string; projectId: string; payload?: Record<string, unknown> | null; matchCtx?: CrLike | null },
+  actorId: string,
+) {
+  const workflow = await resolveWorkflow(ref.entityType, ref.matchCtx ?? null);
   if (!workflow) return null;
   let anyActionable = false;
   for (const s of workflow.steps) {
-    if ((await resolveStepApproverIds(s, cr.projectId)).length) { anyActionable = true; break; }
+    if ((await resolveStepApproverIds(s, ref.projectId)).length) { anyActionable = true; break; }
   }
   if (!anyActionable) return null;
   const req = await prisma.approvalRequest.create({
-    data: { workflowId: workflow.id, entityType: 'CHANGE_REQUEST', entityId: cr.id, projectId: cr.projectId, currentOrder: 1 },
+    data: {
+      workflowId: workflow.id,
+      entityType: ref.entityType,
+      entityId: ref.entityId,
+      projectId: ref.projectId,
+      payload: (ref.payload ?? undefined) as never,
+      currentOrder: 1,
+    },
   });
-  await writeAudit({ projectId: cr.projectId, userId: actorId, entity: 'ApprovalRequest', entityId: req.id, action: 'CREATE', after: { workflow: workflow.name, entityId: cr.id } });
-  await routeFrom({ id: req.id, projectId: cr.projectId, entityType: 'CHANGE_REQUEST', entityId: cr.id }, workflow, 1, actorId);
+  await writeAudit({ projectId: ref.projectId, userId: actorId, entity: 'ApprovalRequest', entityId: req.id, action: 'CREATE', after: { workflow: workflow.name, entityType: ref.entityType, entityId: ref.entityId } });
+  await routeFrom({ id: req.id, entityType: ref.entityType, entityId: ref.entityId, projectId: ref.projectId }, workflow, 1, actorId);
   return req;
 }
 
+// Back-compat wrapper for the CR call-site.
+export const startApprovalForCr = (cr: CrLike, actorId: string) =>
+  startApproval({ entityType: 'CHANGE_REQUEST', entityId: cr.id, projectId: cr.projectId, matchCtx: cr }, actorId);
+
 // One approver casts a decision on the request's current step.
-export async function decideApproval(requestId: string, approverId: string, decision: 'APPROVED' | 'REJECTED', comment?: string | null) {
+export async function decideApproval(
+  requestId: string,
+  approverId: string,
+  decision: 'APPROVED' | 'REJECTED',
+  comment?: string | null,
+  opts: FinalizeOpts = {},
+) {
   const req = await prisma.approvalRequest.findUnique({
     where: { id: requestId },
     include: { workflow: { include: stepsInclude } },
@@ -242,10 +309,10 @@ export async function decideApproval(requestId: string, approverId: string, deci
     data: { requestId, stepId: step.id, stepOrder: step.order, approverId, decision, comment: comment ?? null },
   });
 
-  const ctx = { id: req.id, projectId: req.projectId, entityType: req.entityType, entityId: req.entityId } as const;
+  const ref: EntityRef = { id: req.id, projectId: req.projectId, entityType: req.entityType, entityId: req.entityId };
 
   if (decision === 'REJECTED') {
-    await finalize(ctx, 'REJECTED', approverId);
+    await finalize(ref, 'REJECTED', approverId, opts);
     return { status: 'REJECTED' as const };
   }
 
@@ -255,7 +322,7 @@ export async function decideApproval(requestId: string, approverId: string, deci
   const passed = step.mode === 'ALL' ? eligible.every((id) => approvals.includes(id)) : approvals.length >= 1;
   if (!passed) return { status: 'PENDING' as const, step: step.order };
 
-  const outcome = await routeFrom(ctx, req.workflow, step.order + 1, approverId);
+  const outcome = await routeFrom(ref, req.workflow, step.order + 1, approverId, opts);
   return { status: outcome };
 }
 
@@ -275,11 +342,17 @@ export async function listMyApprovals(userId: string) {
     if (!eligible.includes(userId)) continue;
     const [voted, cr, project] = await Promise.all([
       prisma.approvalDecision.findFirst({ where: { requestId: r.id, stepOrder: step.order, approverId: userId } }),
-      prisma.changeRequest.findUnique({ where: { id: r.entityId }, select: { title: true, description: true, magnitude: true, chargeable: true, amountIdr: true } }),
+      r.entityType === 'CHANGE_REQUEST'
+        ? prisma.changeRequest.findUnique({ where: { id: r.entityId }, select: { title: true, description: true, magnitude: true, chargeable: true, amountIdr: true } })
+        : Promise.resolve(null),
       prisma.project.findUnique({ where: { id: r.projectId }, select: { id: true, name: true, code: true } }),
     ]);
+    const payload = (r.payload ?? null) as { reason?: string } | null;
     out.push({
       id: r.id,
+      entityType: r.entityType,
+      actionLabel: cap(await entityLabel({ entityType: r.entityType, entityId: r.entityId })),
+      reason: payload?.reason ?? null,
       workflowName: r.workflow.name,
       stepName: step.name,
       stepOrder: step.order,
@@ -298,3 +371,5 @@ export async function listMyApprovals(userId: string) {
 export async function countMyApprovals(userId: string) {
   return (await listMyApprovals(userId)).length;
 }
+
+const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);

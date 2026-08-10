@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import type { ApprovalApproverKind, ApprovalWorkflow, Role, TenantMember } from '../api/types';
+import type { ApprovalAppliesTo, ApprovalApproverKind, ApprovalWorkflow, Role, TenantMember } from '../api/types';
 import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner, Toggle } from './ui';
 import { useToast } from './Toast';
 
@@ -11,6 +11,7 @@ interface ApproverDraft { kind: ApprovalApproverKind; role: Role | ''; userId: s
 interface StepDraft { name: string; mode: 'ANY' | 'ALL'; approvers: ApproverDraft[] }
 interface FormState {
   name: string;
+  appliesTo: ApprovalAppliesTo;
   enabled: boolean;
   condMagnitude: '' | 'MINOR' | 'MAJOR';
   condChargeable: '' | 'yes' | 'no';
@@ -18,8 +19,15 @@ interface FormState {
   steps: StepDraft[];
 }
 
+// The action a workflow gates. PROJECT_CLOSURE is reserved for Phase 2b, so it's not offered yet.
+const APPLIES_TO: { value: ApprovalAppliesTo; label: string; hint: string }[] = [
+  { value: 'CHANGE_REQUEST', label: 'Change request', hint: 'A submitted CR is routed for sign-off before it can be decided.' },
+  { value: 'COST_BASELINE', label: 'Cost baseline lock', hint: 'Locking the baseline (PMB/BAC) is routed for sign-off before it takes effect.' },
+];
+const appliesLabel = (v: ApprovalAppliesTo) => APPLIES_TO.find((a) => a.value === v)?.label ?? v;
+
 const emptyStep = (): StepDraft => ({ name: '', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'PMO', userId: '' }] });
-const emptyForm = (): FormState => ({ name: '', enabled: true, condMagnitude: '', condChargeable: '', condMinAmountIdr: '', steps: [emptyStep()] });
+const emptyForm = (): FormState => ({ name: '', appliesTo: 'CHANGE_REQUEST', enabled: true, condMagnitude: '', condChargeable: '', condMinAmountIdr: '', steps: [emptyStep()] });
 
 // Tenant-ADMIN builder for multi-step Change Request approval chains. A CR that matches a workflow's
 // conditions is routed through its ordered steps instead of the single-decider path.
@@ -35,12 +43,15 @@ export default function ApprovalWorkflowsCard() {
 
   const reset = () => { setForm(emptyForm()); setEditingId(null); };
 
+  const isCr = form.appliesTo === 'CHANGE_REQUEST';
   const buildPayload = () => ({
     name: form.name.trim(),
+    appliesTo: form.appliesTo,
     enabled: form.enabled,
-    condMagnitude: form.condMagnitude || null,
-    condChargeable: form.condChargeable === '' ? null : form.condChargeable === 'yes',
-    condMinAmountIdr: form.condMinAmountIdr.trim() ? Number(form.condMinAmountIdr) : null,
+    // Conditions only apply to Change Requests; other entity types match unconditionally.
+    condMagnitude: isCr ? form.condMagnitude || null : null,
+    condChargeable: isCr && form.condChargeable !== '' ? form.condChargeable === 'yes' : null,
+    condMinAmountIdr: isCr && form.condMinAmountIdr.trim() ? Number(form.condMinAmountIdr) : null,
     steps: form.steps.map((s) => ({
       name: s.name.trim(),
       mode: s.mode,
@@ -80,6 +91,7 @@ export default function ApprovalWorkflowsCard() {
     setEditingId(w.id);
     setForm({
       name: w.name,
+      appliesTo: w.appliesTo,
       enabled: w.enabled,
       condMagnitude: (w.condMagnitude ?? '') as FormState['condMagnitude'],
       condChargeable: w.condChargeable == null ? '' : w.condChargeable ? 'yes' : 'no',
@@ -127,6 +139,7 @@ export default function ApprovalWorkflowsCard() {
                     {!w.enabled && <Badge color="slate">off</Badge>}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <Badge color="violet">{appliesLabel(w.appliesTo)}</Badge>
                     <Badge color="blue">{w.steps.length} step{w.steps.length === 1 ? '' : 's'}</Badge>
                     {condSummary(w).map((c) => <span key={c}>· {c}</span>)}
                     <span className="text-slate-400">· {w.steps.map((s) => s.name).join(' → ')}</span>
@@ -154,12 +167,20 @@ export default function ApprovalWorkflowsCard() {
           <div className="min-w-[12rem] flex-1">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Major/chargeable change sign-off" maxLength={80} /></Field>
           </div>
+          <div className="w-52">
+            <Field label="Gates" hint={APPLIES_TO.find((a) => a.value === form.appliesTo)?.hint}>
+              <Select value={form.appliesTo} onChange={(e) => setForm({ ...form, appliesTo: e.target.value as ApprovalAppliesTo })}>
+                {APPLIES_TO.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+              </Select>
+            </Field>
+          </div>
           <label className="flex items-center gap-2 pb-2 text-sm text-slate-700 dark:text-slate-300">
             <Toggle checked={form.enabled} onChange={(v) => setForm({ ...form, enabled: v })} label="Enabled" /> Enabled
           </label>
         </div>
 
-        {/* Conditions */}
+        {/* Conditions — Change Requests only (other entity types match unconditionally). */}
+        {isCr && (
         <div>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Apply only when (all optional)</p>
           <div className="flex flex-wrap items-end gap-3">
@@ -188,6 +209,7 @@ export default function ApprovalWorkflowsCard() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Steps */}
         <div className="space-y-3">
@@ -263,6 +285,7 @@ export default function ApprovalWorkflowsCard() {
 function serialize(w: ApprovalWorkflow) {
   return {
     name: w.name,
+    appliesTo: w.appliesTo,
     condMagnitude: w.condMagnitude,
     condChargeable: w.condChargeable,
     condMinAmountIdr: w.condMinAmountIdr == null ? null : Number(w.condMinAmountIdr),

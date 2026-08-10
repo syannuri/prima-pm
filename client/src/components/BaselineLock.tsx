@@ -37,20 +37,26 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
   const canManage = !!data?.project && canGovernProject(user, data.project, ['ADMIN', 'PMO', 'PROJECT_MANAGER']);
 
   const toggle = useMutation({
-    mutationFn: (body: { locked: boolean; reason?: string }) => api.patch(`/projects/${projectId}/baseline-lock`, body),
-    onSuccess: (_d, body) => {
+    mutationFn: (body: { locked: boolean; reason?: string }) => api.patch<{ project: unknown; approvalPending: boolean }>(`/projects/${projectId}/baseline-lock`, body),
+    onSuccess: (res, body) => {
       qc.invalidateQueries({ queryKey: ['project', projectId] });
       qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
       // The WBS Gantt derives baselineLocked (→ canPlan → whether plan dates are editable) from
       // the ['gantt', projectId] query, so it must refetch here — otherwise unlocking flips the
       // badge but the Gantt keeps its stale locked state and plan dates stay un-editable.
       qc.invalidateQueries({ queryKey: ['gantt', projectId] });
-      // On lock, confirm the baseline is now complete (both baselines for a WBS project).
-      toast.success(
-        body.locked
-          ? (hasWbs ? 'Baseline locked ✓ (2 of 2) — cost + schedule baseline set. Ready to activate.' : 'Baseline locked ✓ — ready to activate.')
-          : 'Baseline unlocked',
-      );
+      // A matching approval workflow routes the lock for sign-off instead of applying it now.
+      if (res.approvalPending) {
+        qc.invalidateQueries({ queryKey: ['my-approvals-count'] });
+        toast.success('Baseline lock submitted for approval — it will lock once approved.');
+      } else {
+        // On lock, confirm the baseline is now complete (both baselines for a WBS project).
+        toast.success(
+          body.locked
+            ? (hasWbs ? 'Baseline locked ✓ (2 of 2) — cost + schedule baseline set. Ready to activate.' : 'Baseline locked ✓ — ready to activate.')
+            : 'Baseline unlocked',
+        );
+      }
       setUnlockOpen(false);
       setReason('');
     },

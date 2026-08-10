@@ -959,8 +959,11 @@ export interface ChatThread extends ChatConversationBase {
   messages: ChatMessage[];
 }
 
-// ---- Approval workflows (admin-configured, multi-step CR approval) ----
+// ---- Approval workflows (admin-configured, multi-step approval) ----
 export type ApprovalApproverKind = 'ROLE' | 'USER' | 'PROJECT_PM';
+// What kind of action a workflow gates. CHANGE_REQUEST + COST_BASELINE are wired; PROJECT_CLOSURE
+// is reserved (Phase 2b).
+export type ApprovalAppliesTo = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'PROJECT_CLOSURE';
 export interface ApprovalApprover {
   id?: string;
   kind: ApprovalApproverKind;
@@ -977,7 +980,7 @@ export interface ApprovalStep {
 export interface ApprovalWorkflow {
   id: string;
   name: string;
-  appliesTo: 'CHANGE_REQUEST';
+  appliesTo: ApprovalAppliesTo;
   enabled: boolean;
   condMagnitude: 'MINOR' | 'MAJOR' | null;
   condChargeable: boolean | null;
@@ -987,6 +990,9 @@ export interface ApprovalWorkflow {
 }
 export interface MyApproval {
   id: string;
+  entityType: ApprovalAppliesTo;
+  actionLabel: string;
+  reason: string | null;
   workflowName: string;
   stepName: string;
   stepOrder: number;

@@ -19,6 +19,10 @@ export async function assertBaselineUnlocked(projectId: string, db: Db = prisma)
 
 // Lock or unlock the baseline. Unlocking requires a reason (it re-opens the PMB/BAC to
 // change — the deliberate control the change-request process should drive). Audited.
+//
+// If a COST_BASELINE approval workflow matches, a real LOCK is not applied immediately: it is
+// submitted for approval and applied on final sign-off (`applyBaselineLock`). Unlocking and a
+// re-lock no-op are never gated. Returns `{ project, approvalPending }`.
 export async function setBaselineLock(projectId: string, locked: boolean, reason: string | undefined, actorId: string) {
   const before = await prisma.project.findFirst({
     where: { id: projectId, deletedAt: null },
@@ -29,15 +33,42 @@ export async function setBaselineLock(projectId: string, locked: boolean, reason
   if (!locked && wasLocked && !reason?.trim()) {
     throw BadRequest('Unlocking the baseline requires a reason.');
   }
+  const isLockTransition = locked && !wasLocked;
   // Ordering guard: locking freezes the schedule baseline too (assertBaselineUnlocked blocks
   // setScheduleBaseline). If a WBS project hasn't captured its schedule baseline yet, locking
   // now would trap it — the baseline could never be set without unlocking. Require it first.
-  if (locked && !wasLocked && !before.scheduleBaselinedAt) {
+  if (isLockTransition && !before.scheduleBaselinedAt) {
     const hasWbs = (await prisma.task.count({ where: { projectId } })) > 0;
     if (hasWbs) {
       throw BadRequest('Capture the schedule baseline (Schedule tab) before locking — it can’t be set once the baseline is locked.');
     }
   }
+
+  // Gate a real lock through an approval workflow when one matches. Dynamic import breaks the
+  // approval.service ⇄ baseline.service cycle (the finalizer calls applyBaselineLock below).
+  if (isLockTransition) {
+    const { startApproval } = await import('../approval/approval.service.js');
+    const routed = await startApproval(
+      { entityType: 'COST_BASELINE', entityId: projectId, projectId, payload: { reason: reason?.trim() || null, requestedById: actorId } },
+      actorId,
+    );
+    if (routed) {
+      const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+      return { project, approvalPending: true as const };
+    }
+  }
+
+  const project = await applyBaselineLock(projectId, reason, actorId, locked);
+  return { project, approvalPending: false as const };
+}
+
+// Apply the lock/unlock to the DB (no approval gate). Called directly by setBaselineLock when no
+// workflow matches, and by the approval finalizer when a gated lock is approved (locked defaults
+// to true there). Audited; emits baseline.locked only on a real lock transition.
+export async function applyBaselineLock(projectId: string, reason: string | undefined, actorId: string, locked = true) {
+  const before = await prisma.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { baselineLockedAt: true } });
+  if (!before) throw NotFound('Project not found');
+  const wasLocked = before.baselineLockedAt != null;
 
   const project = await prisma.project.update({
     where: { id: projectId },

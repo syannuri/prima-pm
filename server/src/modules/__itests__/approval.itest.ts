@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
 import { createChangeRequest } from '../charter/charter.service.js';
+import { setBaselineLock } from '../projects/baseline.service.js';
 import { createWorkflow, decideApproval, listMyApprovals, resolveWorkflowForCr } from '../approval/approval.service.js';
 
 const app = createApp();
@@ -57,6 +58,8 @@ beforeEach(async () => {
   await prisma.approvalRequest.deleteMany({});
   await prisma.approvalWorkflow.deleteMany({});
   await prisma.changeRequest.deleteMany({});
+  // Reset project state touched by the baseline/revenue tests so each starts unlocked with no revenue.
+  await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null, totalRevenueIdr: null } });
 });
 
 describe('Approval workflows', () => {
@@ -166,5 +169,56 @@ describe('Approval workflows', () => {
     // Now at step 2 finance sees it, the PM no longer does.
     expect(await listMyApprovals(financeId)).toHaveLength(1);
     expect(await listMyApprovals(pmId)).toHaveLength(0);
+  });
+});
+
+describe('Approval Phase 2 — cost baseline gating & applyToRevenue', () => {
+  it('locks the baseline immediately when no COST_BASELINE workflow matches', async () => {
+    const res = await setBaselineLock(projectId, true, undefined, adminId);
+    expect(res.approvalPending).toBe(false);
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))?.baselineLockedAt).not.toBeNull();
+  });
+
+  it('routes a baseline lock for approval and only locks on final sign-off', async () => {
+    await createWorkflow({ name: 'Baseline gate', appliesTo: 'COST_BASELINE', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    const res = await setBaselineLock(projectId, true, 'lock it', pmId);
+    expect(res.approvalPending).toBe(true);
+    // Not locked yet — still awaiting approval.
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))?.baselineLockedAt).toBeNull();
+    const req = await prisma.approvalRequest.findFirst({ where: { entityType: 'COST_BASELINE', projectId } });
+    expect(req?.status).toBe('PENDING');
+    // Finance approves → the lock is applied.
+    expect((await decideApproval(req!.id, financeId, 'APPROVED')).status).toBe('APPROVED');
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))?.baselineLockedAt).not.toBeNull();
+  });
+
+  it('a rejected baseline-lock request leaves the baseline unlocked', async () => {
+    await createWorkflow({ name: 'Baseline gate', appliesTo: 'COST_BASELINE', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    await setBaselineLock(projectId, true, 'lock it', pmId);
+    const req = await prisma.approvalRequest.findFirst({ where: { entityType: 'COST_BASELINE', projectId } });
+    await decideApproval(req!.id, financeId, 'REJECTED', 'not yet');
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))?.baselineLockedAt).toBeNull();
+  });
+
+  it('a CHANGE_REQUEST workflow does not match a baseline lock (appliesTo isolation)', async () => {
+    await createWorkflow({ name: 'CR only', appliesTo: 'CHANGE_REQUEST', steps: [{ name: 'PM', mode: 'ANY', approvers: [{ kind: 'PROJECT_PM' }] }] }, adminId);
+    const res = await setBaselineLock(projectId, true, undefined, adminId);
+    expect(res.approvalPending).toBe(false); // no COST_BASELINE workflow → applied directly
+  });
+
+  it('adds a chargeable CR amount to project revenue when the final approver opts in', async () => {
+    await createWorkflow({ name: 'Chargeable gate', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    const cr = await createChangeRequest(projectId, crInput({ chargeable: true, amountIdr: 5_000_000 }), adminId);
+    const req = await prisma.approvalRequest.findFirst({ where: { entityId: cr.id } });
+    await decideApproval(req!.id, financeId, 'APPROVED', null, { applyToRevenue: true });
+    expect(Number((await prisma.project.findUnique({ where: { id: projectId } }))?.totalRevenueIdr)).toBe(5_000_000);
+  });
+
+  it('leaves revenue untouched when the approver does not opt in', async () => {
+    await createWorkflow({ name: 'Chargeable gate', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    const cr = await createChangeRequest(projectId, crInput({ chargeable: true, amountIdr: 5_000_000 }), adminId);
+    const req = await prisma.approvalRequest.findFirst({ where: { entityId: cr.id } });
+    await decideApproval(req!.id, financeId, 'APPROVED');
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))?.totalRevenueIdr).toBeNull();
   });
 });

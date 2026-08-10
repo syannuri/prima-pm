@@ -25,6 +25,7 @@ const stepSchema = z.object({
 
 const workflowSchema = z.object({
   name: z.string().trim().min(1).max(80),
+  appliesTo: z.enum(['CHANGE_REQUEST', 'COST_BASELINE', 'PROJECT_CLOSURE']).default('CHANGE_REQUEST'),
   enabled: z.boolean().default(true),
   condMagnitude: magnitudeEnum.optional().nullable(),
   condChargeable: z.boolean().optional().nullable(),
@@ -68,6 +69,9 @@ export const inboxRouter = Router();
 const decideSchema = z.object({
   decision: z.enum(['APPROVED', 'REJECTED']),
   comment: z.string().trim().max(500).optional().nullable(),
+  // Only meaningful when a chargeable Change Request is being finally approved: add its agreed
+  // amount to the project's Total Revenue (mirrors the legacy single-decider option).
+  applyToRevenue: z.boolean().optional(),
 });
 
 inboxRouter.use(requireAuth, denyApiKeyAuth);
@@ -81,5 +85,5 @@ inboxRouter.get('/mine/count', asyncHandler(async (req, res) => {
 }));
 
 inboxRouter.post('/:id/decide', validateBody(decideSchema), asyncHandler(async (req, res) => {
-  res.json(await service.decideApproval(req.params.id, req.user!.id, req.body.decision, req.body.comment));
+  res.json(await service.decideApproval(req.params.id, req.user!.id, req.body.decision, req.body.comment, { applyToRevenue: req.body.applyToRevenue }));
 }));

@@ -42,9 +42,18 @@ function ApprovalRow({ a }: { a: MyApproval }) {
   const toast = useToast();
   const [comment, setComment] = useState('');
   const cr = a.changeRequest;
+  // Final approver of a chargeable CR can add its agreed amount to project revenue (mirrors the
+  // legacy single-decider option). Only offered on the LAST step so it's applied once, at sign-off.
+  const isFinalStep = a.stepOrder >= a.totalSteps;
+  const showApplyRevenue = !!cr?.chargeable && cr.amountIdr != null && isFinalStep;
+  const [applyToRevenue, setApplyToRevenue] = useState(false);
 
   const decide = useMutation({
-    mutationFn: (decision: 'APPROVED' | 'REJECTED') => api.post(`/approvals/${a.id}/decide`, { decision, comment: comment.trim() || null }),
+    mutationFn: (decision: 'APPROVED' | 'REJECTED') => api.post(`/approvals/${a.id}/decide`, {
+      decision,
+      comment: comment.trim() || null,
+      applyToRevenue: showApplyRevenue && decision === 'APPROVED' ? applyToRevenue : undefined,
+    }),
     onSuccess: (_r, decision) => {
       qc.invalidateQueries({ queryKey: ['my-approvals'] });
       qc.invalidateQueries({ queryKey: ['my-approvals-count'] });
@@ -58,9 +67,10 @@ function ApprovalRow({ a }: { a: MyApproval }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{cr?.title ?? 'Change request'}</span>
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{cr?.title ?? a.actionLabel}</span>
             {cr?.magnitude === 'MAJOR' && <Badge color="amber">Major</Badge>}
             {cr?.chargeable && <Badge color="blue">Chargeable</Badge>}
+            {!cr && <Badge color="violet">{a.actionLabel}</Badge>}
           </div>
           {a.project && (
             <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
@@ -73,6 +83,7 @@ function ApprovalRow({ a }: { a: MyApproval }) {
       </div>
 
       {cr?.description && <p className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{cr.description}</p>}
+      {!cr && a.reason && <p className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">Reason: {a.reason}</p>}
       {cr?.chargeable && cr.amountIdr != null && (
         <p className="text-sm text-slate-600 dark:text-slate-300">Amount: <span className="font-medium">Rp {cr.amountIdr.toLocaleString('id-ID')}</span></p>
       )}
@@ -83,6 +94,12 @@ function ApprovalRow({ a }: { a: MyApproval }) {
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">You have already decided on this step — waiting on the other approver(s).</p>
       ) : (
         <>
+          {showApplyRevenue && (
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={applyToRevenue} onChange={(e) => setApplyToRevenue(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+              On approval, add Rp {cr!.amountIdr!.toLocaleString('id-ID')} to project Total Revenue
+            </label>
+          )}
           <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Optional comment…" rows={2} maxLength={500} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="danger" onClick={() => decide.mutate('REJECTED')} disabled={decide.isPending}>Reject</Button>

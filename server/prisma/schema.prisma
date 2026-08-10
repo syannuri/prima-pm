@@ -1402,6 +1402,8 @@ model ChangeRequest {
 
 enum ApprovalAppliesTo {
   CHANGE_REQUEST
+  COST_BASELINE   // committing/locking the cost baseline (the PMB/BAC)
+  PROJECT_CLOSURE // moving a project to CLOSED (wired in Phase 2b)
 }
 
 enum ApprovalStepMode {
@@ -1482,7 +1484,10 @@ model ApprovalRequest {
   workflowId   String
   workflow     ApprovalWorkflow      @relation(fields: [workflowId], references: [id])
   entityType   ApprovalAppliesTo     // what kind of entity is under approval
-  entityId     String                // the target id (a ChangeRequest id in Phase 1)
+  entityId     String                // the target id (a ChangeRequest id, or the projectId for baseline/closure)
+  // Parameters of the pending action, applied verbatim on final approval (e.g. the baseline-lock
+  // reason, or the closure note/forceClose flag). Null for Change Requests (the CR row holds its own).
+  payload      Json?
   projectId    String
   project      Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   status       ApprovalRequestStatus @default(PENDING)
