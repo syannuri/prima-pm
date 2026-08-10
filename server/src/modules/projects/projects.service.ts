@@ -161,7 +161,7 @@ export async function createProject(input: CreateProjectInput, actorId: string, 
   return project;
 }
 
-export async function updateProject(id: string, input: UpdateProjectInput, actorId: string) {
+export async function updateProject(id: string, input: UpdateProjectInput, actorId: string, opts: { skipApprovalGate?: boolean } = {}) {
   const before = await prisma.project.findFirst({ where: { id, deletedAt: null } });
   if (!before) throw NotFound('Project not found');
   // A corporate project may never be handed to a guest account. In a guest's personal tenant the
@@ -258,6 +258,27 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
         : input.categoryOther === undefined
           ? undefined
           : (input.categoryOther?.trim() || null);
+
+  // Closure gate (Phase 2b): if a PROJECT_CLOSURE approval workflow matches, the closure is not
+  // applied now — it's routed for sign-off and applied on final approval (via this same function with
+  // skipApprovalGate). Runs AFTER the readiness/force validation above, so only a valid closure is
+  // submitted. Dynamic import breaks the approval.service ⇄ projects.service cycle.
+  if (isClosing && !opts.skipApprovalGate) {
+    const { startApproval } = await import('../approval/approval.service.js');
+    const routed = await startApproval(
+      {
+        entityType: 'PROJECT_CLOSURE',
+        entityId: id,
+        projectId: id,
+        payload: { closureNote: (statusData.closureNote as string | null) ?? null, forceClose: !!input.forceClose, requestedById: actorId },
+      },
+      actorId,
+    );
+    if (routed) {
+      const current = await prisma.project.findUniqueOrThrow({ where: { id } });
+      return Object.assign(current, { approvalPending: true as const });
+    }
+  }
 
   const project = await prisma.project.update({
     where: { id },

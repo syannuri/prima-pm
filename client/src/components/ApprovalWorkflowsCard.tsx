@@ -8,7 +8,7 @@ import { useToast } from './Toast';
 const ROLES: Role[] = ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER'];
 
 interface ApproverDraft { kind: ApprovalApproverKind; role: Role | ''; userId: string }
-interface StepDraft { name: string; mode: 'ANY' | 'ALL'; approvers: ApproverDraft[] }
+interface StepDraft { name: string; mode: 'ANY' | 'ALL'; slaHours: string; approvers: ApproverDraft[] }
 interface FormState {
   name: string;
   appliesTo: ApprovalAppliesTo;
@@ -16,18 +16,20 @@ interface FormState {
   condMagnitude: '' | 'MINOR' | 'MAJOR';
   condChargeable: '' | 'yes' | 'no';
   condMinAmountIdr: string;
+  escalationUserId: string;
   steps: StepDraft[];
 }
 
-// The action a workflow gates. PROJECT_CLOSURE is reserved for Phase 2b, so it's not offered yet.
+// The action a workflow gates.
 const APPLIES_TO: { value: ApprovalAppliesTo; label: string; hint: string }[] = [
   { value: 'CHANGE_REQUEST', label: 'Change request', hint: 'A submitted CR is routed for sign-off before it can be decided.' },
   { value: 'COST_BASELINE', label: 'Cost baseline lock', hint: 'Locking the baseline (PMB/BAC) is routed for sign-off before it takes effect.' },
+  { value: 'PROJECT_CLOSURE', label: 'Project closure', hint: 'Closing a project is routed for sign-off before it actually closes.' },
 ];
 const appliesLabel = (v: ApprovalAppliesTo) => APPLIES_TO.find((a) => a.value === v)?.label ?? v;
 
-const emptyStep = (): StepDraft => ({ name: '', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'PMO', userId: '' }] });
-const emptyForm = (): FormState => ({ name: '', appliesTo: 'CHANGE_REQUEST', enabled: true, condMagnitude: '', condChargeable: '', condMinAmountIdr: '', steps: [emptyStep()] });
+const emptyStep = (): StepDraft => ({ name: '', mode: 'ANY', slaHours: '', approvers: [{ kind: 'ROLE', role: 'PMO', userId: '' }] });
+const emptyForm = (): FormState => ({ name: '', appliesTo: 'CHANGE_REQUEST', enabled: true, condMagnitude: '', condChargeable: '', condMinAmountIdr: '', escalationUserId: '', steps: [emptyStep()] });
 
 // Tenant-ADMIN builder for multi-step Change Request approval chains. A CR that matches a workflow's
 // conditions is routed through its ordered steps instead of the single-decider path.
@@ -52,9 +54,11 @@ export default function ApprovalWorkflowsCard() {
     condMagnitude: isCr ? form.condMagnitude || null : null,
     condChargeable: isCr && form.condChargeable !== '' ? form.condChargeable === 'yes' : null,
     condMinAmountIdr: isCr && form.condMinAmountIdr.trim() ? Number(form.condMinAmountIdr) : null,
+    escalationUserId: form.escalationUserId || null,
     steps: form.steps.map((s) => ({
       name: s.name.trim(),
       mode: s.mode,
+      slaHours: s.slaHours.trim() ? Number(s.slaHours) : null,
       approvers: s.approvers.map((a) => ({
         kind: a.kind,
         role: a.kind === 'ROLE' ? a.role || null : null,
@@ -96,9 +100,11 @@ export default function ApprovalWorkflowsCard() {
       condMagnitude: (w.condMagnitude ?? '') as FormState['condMagnitude'],
       condChargeable: w.condChargeable == null ? '' : w.condChargeable ? 'yes' : 'no',
       condMinAmountIdr: w.condMinAmountIdr == null ? '' : String(w.condMinAmountIdr),
+      escalationUserId: w.escalationUserId ?? '',
       steps: w.steps.map((s) => ({
         name: s.name,
         mode: s.mode,
+        slaHours: s.slaHours == null ? '' : String(s.slaHours),
         approvers: s.approvers.map((a) => ({ kind: a.kind, role: (a.role ?? '') as Role | '', userId: a.userId ?? '' })),
       })),
     });
@@ -229,6 +235,11 @@ export default function ApprovalWorkflowsCard() {
                     </Select>
                   </Field>
                 </div>
+                <div className="w-28">
+                  <Field label="SLA (hrs)" hint="optional">
+                    <Input type="number" min={1} value={step.slaHours} onChange={(e) => patchStep(si, { slaHours: e.target.value })} placeholder="—" />
+                  </Field>
+                </div>
                 {form.steps.length > 1 && (
                   <Button type="button" variant="ghost" onClick={() => setForm((f) => ({ ...f, steps: f.steps.filter((_, j) => j !== si) }))}>Remove step</Button>
                 )}
@@ -273,6 +284,16 @@ export default function ApprovalWorkflowsCard() {
           <Button type="button" variant="ghost" onClick={() => setForm((f) => ({ ...f, steps: [...f.steps, emptyStep()] }))}>+ Add step</Button>
         </div>
 
+        {/* Escalation — who to nudge when a step blows its SLA (defaults to the workspace admins). */}
+        <div className="w-72">
+          <Field label="Escalate overdue steps to" hint="optional — defaults to workspace admins">
+            <Select value={form.escalationUserId} onChange={(e) => setForm({ ...form, escalationUserId: e.target.value })}>
+              <option value="">Workspace admins</option>
+              {members.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.role})</option>)}
+            </Select>
+          </Field>
+        </div>
+
         <div className="flex justify-end gap-2">
           <Button type="submit" disabled={!canSave}>{save.isPending ? 'Saving…' : editingId ? 'Save changes' : 'Create workflow'}</Button>
         </div>
@@ -289,9 +310,11 @@ function serialize(w: ApprovalWorkflow) {
     condMagnitude: w.condMagnitude,
     condChargeable: w.condChargeable,
     condMinAmountIdr: w.condMinAmountIdr == null ? null : Number(w.condMinAmountIdr),
+    escalationUserId: w.escalationUserId,
     steps: w.steps.map((s) => ({
       name: s.name,
       mode: s.mode,
+      slaHours: s.slaHours ?? null,
       approvers: s.approvers.map((a) => ({ kind: a.kind, role: a.role, userId: a.userId })),
     })),
   };

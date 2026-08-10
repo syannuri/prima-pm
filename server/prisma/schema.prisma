@@ -360,6 +360,7 @@ model Tenant {
   projectCommentaries  ProjectCommentary[]
   approvalWorkflows  ApprovalWorkflow[]
   approvalRequests  ApprovalRequest[]
+  approvalDelegations  ApprovalDelegation[]
 }
 
 // Append-only audit trail of Lemon Squeezy billing webhooks (what event flipped which plan).
@@ -1443,6 +1444,8 @@ model ApprovalWorkflow {
   condMagnitude    ChangeMagnitude?  // only CRs of this magnitude
   condChargeable   Boolean?          // only chargeable (true) / only non-chargeable (false)
   condMinAmountIdr Decimal?          @db.Decimal(18, 2) // only when amountIdr >= this
+  // Optional escalation target: who to notify when a step blows its SLA. Null → the tenant's ADMINs.
+  escalationUserId String?           // FK-less user id, like createdById
   createdById      String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -1459,6 +1462,7 @@ model ApprovalStep {
   order      Int                    // 1-based position in the chain
   name       String
   mode       ApprovalStepMode       @default(ANY)
+  slaHours   Int?                   // optional deadline: escalate if the step is unresolved this long after it starts
   approvers  ApprovalStepApprover[]
 
   @@index([workflowId])
@@ -1492,6 +1496,8 @@ model ApprovalRequest {
   project      Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   status       ApprovalRequestStatus @default(PENDING)
   currentOrder Int                   @default(1) // the step order currently awaiting decisions
+  dueAt        DateTime?             // deadline for the current step (from its slaHours); null = no SLA
+  escalatedAt  DateTime?             // set once the current step has been escalated (so it fires only once)
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
   decisions    ApprovalDecision[]
@@ -1499,6 +1505,7 @@ model ApprovalRequest {
   @@index([tenantId])
   @@index([entityType, entityId])
   @@index([projectId])
+  @@index([status, dueAt])
 }
 
 model ApprovalDecision {
@@ -1513,6 +1520,22 @@ model ApprovalDecision {
   decidedAt  DateTime             @default(now())
 
   @@index([requestId])
+}
+
+// "While I'm away, X may approve on my behalf." An active (unexpired) delegation makes `toUser` an
+// eligible approver anywhere `fromUser` is. Tenant-scoped; user ids are FK-less (like the approvers).
+model ApprovalDelegation {
+  id         String    @id @default(uuid())
+  tenantId   String?
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromUserId String    // the delegating approver
+  toUserId   String    // who may act on their behalf
+  note       String?
+  expiresAt  DateTime? // null = until revoked
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([fromUserId])
 }
 
 model AuditLog {

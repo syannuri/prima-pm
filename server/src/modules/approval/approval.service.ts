@@ -1,9 +1,10 @@
 import type { ChangeMagnitude, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
-import { Conflict, Forbidden, NotFound } from '../../lib/errors.js';
+import { BadRequest, Conflict, Forbidden, NotFound } from '../../lib/errors.js';
 import { createNotification } from '../notification/notification.service.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
+import { getTenantStore, runAsSystem, runWithTenant } from '../../lib/tenant/context.js';
 import { decideChangeRequest } from '../charter/charter.service.js';
 
 // Admin-configured, multi-step approval routing (Phase 1: Change Requests). A workflow is a chain
@@ -18,7 +19,7 @@ import { decideChangeRequest } from '../charter/charter.service.js';
 
 export type ApproverKind = 'ROLE' | 'USER' | 'PROJECT_PM';
 export interface ApproverInput { kind: ApproverKind; role?: Role | null; userId?: string | null }
-export interface StepInput { name: string; mode: 'ANY' | 'ALL'; approvers: ApproverInput[] }
+export interface StepInput { name: string; mode: 'ANY' | 'ALL'; approvers: ApproverInput[]; slaHours?: number | null }
 export interface WorkflowInput {
   name: string;
   appliesTo?: 'CHANGE_REQUEST' | 'COST_BASELINE' | 'PROJECT_CLOSURE';
@@ -26,6 +27,7 @@ export interface WorkflowInput {
   condMagnitude?: ChangeMagnitude | null;
   condChargeable?: boolean | null;
   condMinAmountIdr?: number | null;
+  escalationUserId?: string | null;
   steps: StepInput[];
 }
 
@@ -36,6 +38,7 @@ function stepData(steps: StepInput[]) {
     order: i + 1,
     name: s.name,
     mode: s.mode,
+    slaHours: s.slaHours ?? null,
     approvers: {
       create: s.approvers.map((a) => ({
         kind: a.kind,
@@ -62,6 +65,7 @@ export async function createWorkflow(input: WorkflowInput, actorId: string) {
       condMagnitude: input.condMagnitude ?? null,
       condChargeable: input.condChargeable ?? null,
       condMinAmountIdr: input.condMinAmountIdr ?? null,
+      escalationUserId: input.escalationUserId ?? null,
       createdById: actorId,
       steps: { create: stepData(input.steps) },
     },
@@ -87,6 +91,7 @@ export async function updateWorkflow(id: string, input: WorkflowInput, actorId: 
         condMagnitude: input.condMagnitude ?? null,
         condChargeable: input.condChargeable ?? null,
         condMinAmountIdr: input.condMinAmountIdr ?? null,
+        escalationUserId: input.escalationUserId ?? null,
         steps: { create: stepData(input.steps) },
       },
       include: stepsInclude,
@@ -162,6 +167,16 @@ async function resolveStepApproverIds(step: StepWithApprovers, projectId: string
     const p = await prisma.project.findUnique({ where: { id: projectId }, select: { pmUserId: true } });
     if (p?.pmUserId) ids.add(p.pmUserId);
   }
+  // Expand with active delegations (Phase 2b): anyone a resolved approver has delegated to may also
+  // act on their behalf. One query over the base set; expired delegations are ignored.
+  const base = [...ids];
+  if (base.length) {
+    const dels = await prisma.approvalDelegation.findMany({
+      where: { fromUserId: { in: base }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+      select: { toUserId: true },
+    });
+    for (const d of dels) ids.add(d.toUserId);
+  }
   return [...ids];
 }
 
@@ -196,7 +211,9 @@ async function routeFrom(
     if (step.order < fromOrder) continue;
     const eligible = await resolveStepApproverIds(step, ref.projectId);
     if (eligible.length === 0) continue; // empty step → skip
-    await prisma.approvalRequest.update({ where: { id: ref.id }, data: { currentOrder: step.order } });
+    // Set (or clear) the SLA deadline for the new current step, and reset the escalation flag.
+    const dueAt = step.slaHours ? new Date(Date.now() + step.slaHours * 3_600_000) : null;
+    await prisma.approvalRequest.update({ where: { id: ref.id }, data: { currentOrder: step.order, dueAt, escalatedAt: null } });
     await notifyStepApprovers(ref, step, actorId);
     return 'PENDING';
   }
@@ -233,8 +250,23 @@ async function finalize(ref: EntityRef, outcome: 'APPROVED' | 'REJECTED', actorI
       await applyBaselineLock(ref.projectId, payload.reason, actorId);
     }
     await notifyRequester(payload.requestedById, actorId, ref.projectId, outcome, 'Cost baseline lock');
+    return;
   }
-  // PROJECT_CLOSURE application is wired in Phase 2b.
+
+  if (ref.entityType === 'PROJECT_CLOSURE') {
+    const payload = (row.payload ?? {}) as { closureNote?: string | null; forceClose?: boolean; requestedById?: string };
+    if (outcome === 'APPROVED') {
+      // Apply the closure through updateProject with the gate skipped so it doesn't re-route.
+      const { updateProject } = await import('../projects/projects.service.js');
+      await updateProject(
+        ref.projectId,
+        { status: 'CLOSED', closureNote: payload.closureNote ?? undefined, forceClose: payload.forceClose || undefined },
+        actorId,
+        { skipApprovalGate: true },
+      );
+    }
+    await notifyRequester(payload.requestedById, actorId, ref.projectId, outcome, 'Project closure');
+  }
 }
 
 async function notifyRequester(requesterId: string | undefined, actorId: string, projectId: string, outcome: 'APPROVED' | 'REJECTED', subject: string) {
@@ -360,6 +392,7 @@ export async function listMyApprovals(userId: string) {
       mode: step.mode,
       alreadyVoted: !!voted,
       createdAt: r.createdAt,
+      dueAt: r.dueAt,
       project,
       changeRequest: cr ? { ...cr, amountIdr: cr.amountIdr == null ? null : Number(cr.amountIdr) } : null,
     });
@@ -373,3 +406,91 @@ export async function countMyApprovals(userId: string) {
 }
 
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// ---------------------------------------------------------------------------
+// Delegation (Phase 2b) — "while I'm away, X approves on my behalf".
+// ---------------------------------------------------------------------------
+
+export async function getMyDelegation(userId: string) {
+  const d = await prisma.approvalDelegation.findFirst({ where: { fromUserId: userId }, orderBy: { createdAt: 'desc' } });
+  if (!d) return null;
+  const to = await prisma.user.findUnique({ where: { id: d.toUserId }, select: { id: true, name: true, email: true } });
+  return { ...d, toUser: to };
+}
+
+export async function setDelegation(fromUserId: string, toUserId: string, opts: { expiresAt?: Date | null; note?: string | null } = {}) {
+  if (toUserId === fromUserId) throw BadRequest('You cannot delegate to yourself');
+  const target = await prisma.user.findUnique({ where: { id: toUserId }, select: { id: true } });
+  if (!target) throw NotFound('User not found');
+  // A user has at most one active delegation — replace any existing one.
+  await prisma.approvalDelegation.deleteMany({ where: { fromUserId } });
+  const row = await prisma.approvalDelegation.create({ data: { fromUserId, toUserId, expiresAt: opts.expiresAt ?? null, note: opts.note ?? null } });
+  await writeAudit({ userId: fromUserId, entity: 'ApprovalDelegation', entityId: row.id, action: 'CREATE', after: { toUserId, expiresAt: row.expiresAt } });
+  return row;
+}
+
+export async function clearDelegation(fromUserId: string) {
+  await prisma.approvalDelegation.deleteMany({ where: { fromUserId } });
+  return { ok: true };
+}
+
+// Active members of the current tenant a user can delegate to (id + name). Available to any signed-in
+// user (unlike the ADMIN-only /members), so an approver can pick a delegate. Mirrors the off-mode
+// fallback used by tenantMemberUserIds.
+export async function listDelegatableMembers(excludeUserId: string) {
+  const tenantId = getTenantStore()?.tenantId;
+  if (!tenantId) {
+    return prisma.user.findMany({
+      where: { isActive: true, role: { not: 'GUEST' }, id: { not: excludeUserId } },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+  const ms = await prisma.membership.findMany({
+    where: { tenantId, user: { isActive: true, id: { not: excludeUserId } } },
+    select: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { user: { name: 'asc' } },
+  });
+  return ms.map((m) => m.user);
+}
+
+// SLA escalation sweep (Phase 2b) — called on a timer. Finds every PENDING request whose current
+// step has blown its deadline and hasn't been escalated yet, notifies the escalation target (the
+// workflow's escalationUserId, else the tenant's ADMINs) and stamps escalatedAt so it fires once.
+// Reads across ALL tenants (runAsSystem) then acts inside each request's own tenant scope.
+export async function escalateOverdueApprovals(now = new Date()) {
+  const due = await runAsSystem(() =>
+    prisma.approvalRequest.findMany({
+      where: { status: 'PENDING', escalatedAt: null, dueAt: { not: null, lt: now } },
+      include: { workflow: { include: stepsInclude } },
+    }),
+  );
+  let escalated = 0;
+  for (const r of due) {
+    const act = async () => {
+      const step = r.workflow.steps.find((s) => s.order === r.currentOrder);
+      const targets = r.workflow.escalationUserId ? [r.workflow.escalationUserId] : await tenantMemberUserIds(['ADMIN']);
+      if (targets.length) {
+        const [project, label] = await Promise.all([
+          prisma.project.findUnique({ where: { id: r.projectId }, select: { name: true, code: true } }),
+          entityLabel({ entityType: r.entityType, entityId: r.entityId }),
+        ]);
+        const where = `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`;
+        await Promise.all(targets.map((id) => createNotification({
+          userId: id,
+          type: 'APPROVAL_OVERDUE',
+          title: 'Approval overdue',
+          body: `${cap(label)} ${where} is past its deadline at step "${step?.name ?? ''}".`,
+          projectId: r.projectId,
+        })));
+      }
+      await prisma.approvalRequest.update({ where: { id: r.id }, data: { escalatedAt: now } });
+    };
+    // Act inside the request's tenant so notifications/queries are correctly scoped. Rows with no
+    // tenant (enforcement off / single-tenant) act directly.
+    if (r.tenantId) await runWithTenant(r.tenantId, act);
+    else await act();
+    escalated++;
+  }
+  return { escalated, checked: due.length };
+}

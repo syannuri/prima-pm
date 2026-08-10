@@ -6,7 +6,8 @@ import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
 import { createChangeRequest } from '../charter/charter.service.js';
 import { setBaselineLock } from '../projects/baseline.service.js';
-import { createWorkflow, decideApproval, listMyApprovals, resolveWorkflowForCr } from '../approval/approval.service.js';
+import { updateProject } from '../projects/projects.service.js';
+import { createWorkflow, decideApproval, listMyApprovals, resolveWorkflowForCr, escalateOverdueApprovals, setDelegation } from '../approval/approval.service.js';
 
 const app = createApp();
 const api = (p: string) => `/api/v1${p}`;
@@ -57,9 +58,12 @@ beforeAll(async () => {
 beforeEach(async () => {
   await prisma.approvalRequest.deleteMany({});
   await prisma.approvalWorkflow.deleteMany({});
+  await prisma.approvalDelegation.deleteMany({});
   await prisma.changeRequest.deleteMany({});
-  // Reset project state touched by the baseline/revenue tests so each starts unlocked with no revenue.
-  await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null, totalRevenueIdr: null } });
+  await prisma.notification.deleteMany({});
+  // Reset project state touched by the baseline/revenue/closure tests so each starts fresh: unlocked,
+  // no revenue, IN_PROGRESS (not closed).
+  await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null, totalRevenueIdr: null, status: 'IN_PROGRESS', closedAt: null, closedById: null, closureNote: null } });
 });
 
 describe('Approval workflows', () => {
@@ -220,5 +224,46 @@ describe('Approval Phase 2 — cost baseline gating & applyToRevenue', () => {
     const req = await prisma.approvalRequest.findFirst({ where: { entityId: cr.id } });
     await decideApproval(req!.id, financeId, 'APPROVED');
     expect((await prisma.project.findUnique({ where: { id: projectId } }))?.totalRevenueIdr).toBeNull();
+  });
+});
+
+describe('Approval Phase 2b — closure gating, SLA escalation, delegation', () => {
+  it('routes a project closure for approval and only closes on final sign-off', async () => {
+    await createWorkflow({ name: 'Closure gate', appliesTo: 'PROJECT_CLOSURE', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    // Force-close (no schedule) — routed to Finance for sign-off, not applied yet.
+    const result = await updateProject(projectId, { status: 'CLOSED', forceClose: true, closureNote: 'done' }, adminId) as { approvalPending?: boolean };
+    expect(result.approvalPending).toBe(true);
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))?.status).toBe('IN_PROGRESS');
+    const req = await prisma.approvalRequest.findFirst({ where: { entityType: 'PROJECT_CLOSURE', projectId } });
+    expect(req?.status).toBe('PENDING');
+    // Finance approves → the project actually closes.
+    expect((await decideApproval(req!.id, financeId, 'APPROVED')).status).toBe('APPROVED');
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))?.status).toBe('CLOSED');
+  });
+
+  it('escalates an overdue step to the workspace admins', async () => {
+    await createWorkflow({ name: 'SLA gate', steps: [{ name: 'Finance', mode: 'ANY', slaHours: 24, approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    const cr = await createChangeRequest(projectId, crInput(), adminId);
+    const req = await prisma.approvalRequest.findFirst({ where: { entityId: cr.id } });
+    expect(req?.dueAt).not.toBeNull();
+    // Force the deadline into the past, then sweep.
+    await prisma.approvalRequest.update({ where: { id: req!.id }, data: { dueAt: new Date(Date.now() - 3600_000) } });
+    const r = await escalateOverdueApprovals();
+    expect(r.escalated).toBe(1);
+    expect((await prisma.approvalRequest.findUnique({ where: { id: req!.id } }))?.escalatedAt).not.toBeNull();
+    expect(await prisma.notification.count({ where: { userId: adminId, type: 'APPROVAL_OVERDUE' } })).toBeGreaterThanOrEqual(1);
+    // A second sweep does not re-escalate.
+    expect((await escalateOverdueApprovals()).escalated).toBe(0);
+  });
+
+  it('lets a delegate approve on the delegator’s behalf', async () => {
+    await createWorkflow({ name: 'Finance gate', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    // Finance delegates to otherPm (a PROJECT_MANAGER, normally NOT eligible).
+    await setDelegation(financeId, otherPmId);
+    const cr = await createChangeRequest(projectId, crInput(), adminId);
+    const req = await prisma.approvalRequest.findFirst({ where: { entityId: cr.id } });
+    // The delegate can see it and clear the step.
+    expect(await listMyApprovals(otherPmId)).toHaveLength(1);
+    expect((await decideApproval(req!.id, otherPmId, 'APPROVED')).status).toBe('APPROVED');
   });
 });

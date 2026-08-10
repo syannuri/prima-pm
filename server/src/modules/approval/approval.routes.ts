@@ -20,6 +20,7 @@ const approverSchema = z.object({
 const stepSchema = z.object({
   name: z.string().trim().min(1).max(80),
   mode: z.enum(['ANY', 'ALL']).default('ANY'),
+  slaHours: z.number().int().positive().max(8760).optional().nullable(),
   approvers: z.array(approverSchema).min(1, 'Each step needs at least one approver'),
 });
 
@@ -30,6 +31,7 @@ const workflowSchema = z.object({
   condMagnitude: magnitudeEnum.optional().nullable(),
   condChargeable: z.boolean().optional().nullable(),
   condMinAmountIdr: z.number().nonnegative().optional().nullable(),
+  escalationUserId: z.string().uuid().optional().nullable(),
   steps: z.array(stepSchema).min(1, 'A workflow needs at least one step'),
 });
 
@@ -86,4 +88,28 @@ inboxRouter.get('/mine/count', asyncHandler(async (req, res) => {
 
 inboxRouter.post('/:id/decide', validateBody(decideSchema), asyncHandler(async (req, res) => {
   res.json(await service.decideApproval(req.params.id, req.user!.id, req.body.decision, req.body.comment, { applyToRevenue: req.body.applyToRevenue }));
+}));
+
+// Delegation — the signed-in user hands their approvals to someone else while away.
+const delegationSchema = z.object({
+  toUserId: z.string().uuid(),
+  expiresAt: z.string().datetime().optional().nullable(),
+  note: z.string().trim().max(200).optional().nullable(),
+});
+
+inboxRouter.get('/members', asyncHandler(async (req, res) => {
+  res.json({ members: await service.listDelegatableMembers(req.user!.id) });
+}));
+
+inboxRouter.get('/delegation', asyncHandler(async (req, res) => {
+  res.json({ delegation: await service.getMyDelegation(req.user!.id) });
+}));
+
+inboxRouter.put('/delegation', validateBody(delegationSchema), asyncHandler(async (req, res) => {
+  const expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
+  res.json({ delegation: await service.setDelegation(req.user!.id, req.body.toUserId, { expiresAt, note: req.body.note }) });
+}));
+
+inboxRouter.delete('/delegation', asyncHandler(async (req, res) => {
+  res.json(await service.clearDelegation(req.user!.id));
 }));

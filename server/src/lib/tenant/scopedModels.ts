@@ -8,7 +8,7 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   'Project', 'ProjectBookmark', 'RateCard', 'Resource', 'AuditLog', 'Notification',
   'Conversation', 'ConversationMember', 'Message', 'PushSubscription', 'MessageReaction',
   'AppSetting', 'ApiKey', 'WebhookSubscription', 'WebhookDelivery', 'AutomationRule',
-  'ApprovalWorkflow', 'ApprovalRequest',
+  'ApprovalWorkflow', 'ApprovalRequest', 'ApprovalDelegation',
   // project-children / grandchildren (tenantId denormalized from Project)
   'ProjectCharter', 'CharterVersion', 'CostItemDirect', 'CostItemIndirect', 'CostBaseline',
   'ActualCostEntry', 'MandayEntry', 'Risk', 'Issue', 'Stakeholder', 'Procurement', 'Assumption',

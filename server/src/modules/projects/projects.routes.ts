@@ -163,7 +163,9 @@ router.patch(
   validateBody(updateProjectSchema),
   asyncHandler(async (req, res) => {
     const project = await svc.updateProject(req.params.id, req.body, req.user!.id);
-    res.json({ project });
+    // A closure may be routed for approval instead of applied — surface that to the client.
+    const { approvalPending } = project as typeof project & { approvalPending?: boolean };
+    res.json({ project, approvalPending: approvalPending ?? false });
   }),
 );
 

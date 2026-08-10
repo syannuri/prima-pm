@@ -975,6 +975,7 @@ export interface ApprovalStep {
   order?: number;
   name: string;
   mode: 'ANY' | 'ALL';
+  slaHours?: number | null;
   approvers: ApprovalApprover[];
 }
 export interface ApprovalWorkflow {
@@ -985,8 +986,17 @@ export interface ApprovalWorkflow {
   condMagnitude: 'MINOR' | 'MAJOR' | null;
   condChargeable: boolean | null;
   condMinAmountIdr: string | number | null;
+  escalationUserId: string | null;
   steps: ApprovalStep[];
   _count?: { requests: number };
+}
+export interface ApprovalDelegation {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  note: string | null;
+  expiresAt: string | null;
+  toUser: { id: string; name: string; email: string } | null;
 }
 export interface MyApproval {
   id: string;
@@ -1000,6 +1010,7 @@ export interface MyApproval {
   mode: 'ANY' | 'ALL';
   alreadyVoted: boolean;
   createdAt: string;
+  dueAt: string | null;
   project: { id: string; name: string; code: string } | null;
   changeRequest: {
     title: string;

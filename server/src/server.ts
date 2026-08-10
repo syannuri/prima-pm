@@ -4,6 +4,7 @@ import { prisma } from './lib/prisma.js';
 import { pruneExpiredRefreshTokens } from './modules/auth/auth.service.js';
 import { runWeeklyAutoCaptureIfDueAllTenants } from './modules/evm/evm.portfolio.js';
 import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
+import { escalateOverdueApprovals } from './modules/approval/approval.service.js';
 
 // Defense-in-depth: a stray rejection should be logged, not take down the
 // whole server for every user (the root cause is still fixed at the source).
@@ -67,11 +68,27 @@ async function main() {
   const webhookTimer = setInterval(() => void sweepWebhooks(), WEBHOOK_SWEEP_MS);
   webhookTimer.unref();
 
+  // Approval SLA escalation sweep (Phase 2b): notify escalation targets for any approval step that
+  // has blown its deadline. Every 5 min; a no-op (one cheap indexed query) when nothing is overdue.
+  const APPROVAL_SLA_SWEEP_MS = 5 * 60 * 1000;
+  const sweepApprovals = async () => {
+    try {
+      const r = await escalateOverdueApprovals();
+      if (r.escalated > 0) console.log(`[prima-pm] escalated ${r.escalated} overdue approval(s)`);
+    } catch (err) {
+      console.error('[prima-pm] approval SLA sweep failed', err);
+    }
+  };
+  void sweepApprovals();
+  const approvalSlaTimer = setInterval(() => void sweepApprovals(), APPROVAL_SLA_SWEEP_MS);
+  approvalSlaTimer.unref();
+
   const shutdown = async (signal: string) => {
     console.log(`[prima-pm] ${signal} received, shutting down...`);
     clearInterval(pruneTimer);
     clearInterval(autoCaptureTimer);
     clearInterval(webhookTimer);
+    clearInterval(approvalSlaTimer);
     server.close();
     await prisma.$disconnect();
     process.exit(0);

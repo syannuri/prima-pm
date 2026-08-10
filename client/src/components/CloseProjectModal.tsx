@@ -55,17 +55,23 @@ export default function CloseProjectModal({ project }: { project: Project }) {
 
   const close = useMutation({
     mutationFn: (force: boolean) =>
-      api.patch(`/projects/${project.id}`, {
+      api.patch<{ project: unknown; approvalPending: boolean }>(`/projects/${project.id}`, {
         status: 'CLOSED',
         forceClose: force || undefined,
         closureNote: note.trim() || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['project', project.id] });
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: ['portfolio'] });
       qc.invalidateQueries({ queryKey: ['next-steps', project.id] });
-      toast.success('Project closed');
+      // A matching PROJECT_CLOSURE workflow routes the closure for sign-off instead of closing now.
+      if (res.approvalPending) {
+        qc.invalidateQueries({ queryKey: ['my-approvals-count'] });
+        toast.success('Closure submitted for approval — the project will close once approved.');
+      } else {
+        toast.success('Project closed');
+      }
       setOpen(false);
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to close the project'),
