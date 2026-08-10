@@ -10,13 +10,17 @@ import ApiKeysCard from '../components/ApiKeysCard';
 import WebhooksCard from '../components/WebhooksCard';
 import AutomationsCard from '../components/AutomationsCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
+import PlatformSettings from '../components/PlatformSettings';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
+  // Deployment-wide sign-up/access lives on the single global AppSetting row → super-admin only.
+  // Moved here from the Tenants console so ALL settings sit on one full-screen page.
+  const isPlatformAdmin = !!user?.isPlatformAdmin;
   return (
-    <div className="mx-auto max-w-3xl space-y-7 pb-12">
+    <div className="space-y-7 pb-12">
       {/* Page header */}
       <header className="border-b border-slate-200 pb-4 dark:border-slate-800">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Settings</h1>
@@ -27,25 +31,40 @@ export default function SettingsPage() {
         )}
       </header>
 
-      {/* Grouped so related cards sit together instead of one long loose stack. */}
-      <SettingsSection title="Preferences" sub="How Prismatix looks and speaks on this device.">
-        <AppearanceCard />
-      </SettingsSection>
+      {/* Full-screen, two-column layout (like the other pages) — each column is an independent
+          vertical stack so sections balance across the width with no ragged grid gaps. Collapses
+          to a single column below `lg`. Related cards stay grouped inside each section. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-7">
+        <div className="space-y-7">
+          <SettingsSection title="Preferences" sub="How Prismatix looks and speaks on this device.">
+            <AppearanceCard />
+          </SettingsSection>
 
-      <SettingsSection title="Account" sub="Your password and personal calendar feed.">
-        <SecurityCard />
-        {/* Personal iCal calendar feed — available to every signed-in user. */}
-        <CalendarFeedCard />
-      </SettingsSection>
+          {/* Workspace-level developer tools — tenant-ADMIN only (management APIs are ADMIN-gated). */}
+          {isAdmin && (
+            <SettingsSection title="Developer & integrations" sub="Workspace-wide — API access, webhooks and automations.">
+              <ApiKeysCard />
+              <WebhooksCard />
+              <AutomationsCard />
+            </SettingsSection>
+          )}
+        </div>
 
-      {/* Workspace-level developer tools — tenant-ADMIN only (management APIs are ADMIN-gated). */}
-      {isAdmin && (
-        <SettingsSection title="Developer & integrations" sub="Workspace-wide — API access, webhooks and automations.">
-          <ApiKeysCard />
-          <WebhooksCard />
-          <AutomationsCard />
-        </SettingsSection>
-      )}
+        <div className="space-y-7">
+          <SettingsSection title="Account" sub="Your password and personal calendar feed.">
+            <SecurityCard />
+            {/* Personal iCal calendar feed — available to every signed-in user. */}
+            <CalendarFeedCard />
+          </SettingsSection>
+
+          {/* Deployment-wide sign-up & access — super-admin only. */}
+          {isPlatformAdmin && (
+            <SettingsSection title="Platform (super-admin)" sub="Deployment-wide — sign-up & access across ALL tenants.">
+              <PlatformSettings />
+            </SettingsSection>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
