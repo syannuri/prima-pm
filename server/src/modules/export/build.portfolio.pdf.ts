@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { formatIdr } from '../../calc/money.js';
+import { eacScenarios } from '../forecast/forecast.service.js';
 import type { PortfolioExport } from './export.portfolio.data.js';
 
 const ACCENT = '#2563eb'; // brand blue (matches the app + per-project report)
@@ -203,8 +204,36 @@ export function buildPortfolioPdf(data: PortfolioExport): Promise<Buffer> {
   kv('% Complete (EV / BAC)', pct(t.percentComplete));
   kv('Schedule progress (WBS)', pct(t.scheduleProgress));
 
-  // ---------- 2. Per-project EVM (worst-first) ----------
-  heading('2. Projects');
+  // ---------- 2. Projected Margin (revenue-bearing projects only) ----------
+  // Profit = revenue − forecast EAC, as a likely/worst band (mirrors the on-screen Portfolio
+  // forecast + each project's Forecast tab: same eacScenarios maths). False-loss guard: only
+  // projects with a contract value set (revenue > 0) enter the margin roll-up, so a cost-only
+  // project doesn't drag the portfolio into a phantom loss. BAC/EV totals above still span all.
+  const revProjects = data.summary.projects.filter((p) => Number(p.revenue) > 0);
+  if (revProjects.length) {
+    let totRev = 0, bacSum = 0, likelySum = 0, worstSum = 0;
+    for (const p of revProjects) {
+      const bac = Number(p.bac), ev = Number(p.ev), ac = Number(p.ac), cpi = Number(p.cpi), spi = Number(p.spi);
+      const { likely, pessimistic } = eacScenarios(bac, ev, ac, cpi, spi);
+      totRev += Number(p.revenue); bacSum += bac; likelySum += likely; worstSum += pessimistic;
+    }
+    const plannedMargin = totRev - bacSum;
+    const projMargin = totRev - likelySum;
+    const worstMargin = totRev - worstSum;
+    const withPct = (m: number) => `${formatIdr(m)}${totRev > 0 ? ` (${Math.round((m / totRev) * 100)}%)` : ''}`;
+    heading('2. Projected Margin');
+    kv('Revenue (contracted)', formatIdr(totRev));
+    kv('Planned margin (Rev − BAC)', withPct(plannedMargin), plannedMargin < 0 ? RED : undefined);
+    kv('Projected margin (Rev − likely EAC)', withPct(projMargin), projMargin < 0 ? RED : projMargin < plannedMargin ? AMBER : GREEN);
+    kv('Worst case (Rev − pessimistic EAC)', withPct(worstMargin), worstMargin < 0 ? RED : AMBER);
+    if (revProjects.length < data.summary.projects.length) {
+      doc.moveDown(0.2).fillColor(GRAY).font('Helvetica').fontSize(7.5)
+        .text(`Margins cover the ${revProjects.length} of ${data.summary.projects.length} projects with a contract value set; BAC/EV totals span all.`, left, doc.y, { width });
+    }
+  }
+
+  // ---------- 3. Per-project EVM (worst-first) ----------
+  heading('3. Projects');
   const projects = [...data.summary.projects].sort(
     (a, b) => (HEALTH_RANK[a.health] ?? 9) - (HEALTH_RANK[b.health] ?? 9) || a.spi - b.spi,
   );
@@ -220,8 +249,8 @@ export function buildPortfolioPdf(data: PortfolioExport): Promise<Buffer> {
     ]),
   );
 
-  // ---------- 3. Portfolio EVM trend ----------
-  heading('3. EVM Trend (portfolio status history)');
+  // ---------- 4. Portfolio EVM trend ----------
+  heading('4. EVM Trend (portfolio status history)');
   if (data.trend.series.length) {
     table(
       [
