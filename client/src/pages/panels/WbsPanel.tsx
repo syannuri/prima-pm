@@ -44,14 +44,19 @@ function statusOf(pct: number): { label: string; color: string } {
   return { label: 'Not started', color: 'slate' };
 }
 
-// Gantt bar palette (monday.com style): a light status-tinted track with a vivid
-// rounded progress fill. 'slate' (not started) reads as the brand/blue tint.
+// Gantt bar palette: a soft status-tinted reference track + a vivid, gently GRADIENT
+// progress fill (top-lit → deeper base) so bars read with depth, not flat colour —
+// "colourful yet elegant". Colour still encodes RAG (green on-track · amber active ·
+// red late · slate not-started). Pair every fill with SHEEN for the premium top-gloss.
 const BAR: Record<string, { track: string; fill: string }> = {
-  green: { track: 'bg-emerald-400/40 dark:bg-emerald-500/30', fill: 'bg-emerald-500' },
-  amber: { track: 'bg-amber-400/40 dark:bg-amber-500/30', fill: 'bg-amber-500' },
-  red: { track: 'bg-red-400/40 dark:bg-red-500/30', fill: 'bg-red-500' }, // late / overdue
-  slate: { track: 'bg-slate-300/70 dark:bg-slate-600/50', fill: 'bg-slate-400 dark:bg-slate-500' },
+  green: { track: 'bg-emerald-400/30 dark:bg-emerald-500/25', fill: 'bg-gradient-to-b from-emerald-400 to-emerald-600' },
+  amber: { track: 'bg-amber-400/30 dark:bg-amber-500/25', fill: 'bg-gradient-to-b from-amber-300 to-amber-500' },
+  red: { track: 'bg-red-400/30 dark:bg-red-500/25', fill: 'bg-gradient-to-b from-rose-400 to-red-600' }, // late / overdue
+  slate: { track: 'bg-slate-300/60 dark:bg-slate-600/45', fill: 'bg-gradient-to-b from-slate-300 to-slate-400 dark:from-slate-500 dark:to-slate-600' },
 };
+// Elegant top-gloss + hairline base-shade applied to every solid bar/fill/milestone — the
+// single touch that turns a flat pill into a modern, dimensional one. Colour-agnostic.
+const SHEEN = 'shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(15,23,42,0.08)]';
 
 // Left accent rail on the (frozen) task-name cell by RAG status — greens on-track/done, amber
 // in progress, red late/overdue, transparent not-started. A slim rail keeps the Gantt health
@@ -96,7 +101,10 @@ const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 // left-20 (5rem). Header cells sit above everything (z-30); body cells above normal cells (z-10)
 // but below the sticky header. Body cells carry an opaque bg + group-hover so the row highlight
 // still reads across the frozen boundary.
-const FROZEN_TH = 'sticky !z-30 bg-slate-50 dark:bg-slate-800';
+// Header band: a faint brand tint across the whole header (frozen pane + scrolling
+// timeline share the SAME bg so there's no seam at the frozen edge). Opaque so scrolled
+// bars never bleed through the sticky header.
+const FROZEN_TH = 'sticky !z-30 bg-brand-50 dark:bg-slate-800';
 const FROZEN_TD = 'sticky z-10'; // opaque zebra bg + group-hover are applied per-row (see rowBg)
 const FROZEN_EDGE = 'border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-3px_rgba(15,23,42,0.25)]';
 
@@ -447,7 +455,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // narrow so the row-level header sticky doesn't re-freeze the columns horizontally.
   const isNarrow = useIsMobile();
   const stickyCol = !isNarrow;
-  const frozenTh = stickyCol ? FROZEN_TH : 'bg-slate-50 dark:bg-slate-800';
+  const frozenTh = stickyCol ? FROZEN_TH : 'bg-brand-50 dark:bg-slate-800';
   const frozenTd = stickyCol ? FROZEN_TD : '';
   const frozenEdge = stickyCol ? FROZEN_EDGE : '';
   const frozenLeft = (n: number, rest: CSSProperties = {}) => (stickyCol ? { left: n, ...rest } : rest);
@@ -1165,7 +1173,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {/* Row 1 — ✓/WBS/Task are frozen (sticky-left). Plan & Actual groups + Dur/Budget
                   appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
                   then (rowSpan=hrs), 1 otherwise. */}
-              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
+              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
@@ -1197,7 +1205,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each group (spreadsheet view only). */}
               {showDates && (
-                <tr className="text-left text-[11px] uppercase text-slate-500 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
+                <tr className="text-left text-[11px] uppercase text-slate-500 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
                   <th>Start</th>
                   <th>Finish</th>
                   <th>Start</th>
@@ -1386,10 +1394,10 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       >
                         {/* month/period gridlines + today marker for orientation */}
                         {axis?.ticks.filter((t) => t.major).map((t) => (
-                          <div key={t.key} className="absolute inset-y-0 w-px bg-slate-100 dark:bg-slate-800/80" style={{ left: `${t.leftPct}%` }} />
+                          <div key={t.key} className="absolute inset-y-0 w-px bg-slate-200/70 dark:bg-slate-700/50" style={{ left: `${t.leftPct}%` }} />
                         ))}
                         {axis?.todayPct != null && (
-                          <div className="absolute inset-y-0 z-10 w-0 border-l border-dashed border-brand-500/70" style={{ left: `${axis.todayPct}%` }} />
+                          <div className="absolute inset-y-0 z-10 w-px bg-brand-500/80 shadow-[0_0_6px_rgba(59,130,246,0.55)]" style={{ left: `${axis.todayPct}%` }} />
                         )}
                         {/* Variance connector — baseline finish → current/actual finish (red late, green early). */}
                         {showVarConnector && (
@@ -1412,7 +1420,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             {/* milestone diamond — draggable; sits at the confirmed date when reached, else the planned date */}
                             <div
                               onPointerDown={(e) => draggable && startDrag(e, node, 'move')}
-                              className={`absolute top-1/2 z-[5] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] shadow-sm ring-2 ring-white dark:ring-slate-900 ${draggable ? 'cursor-grab touch-none active:cursor-grabbing' : ''} ${dragging ? 'ring-brand-400' : ''} ${overdue ? 'bg-red-500' : r.pct >= 100 ? bar.fill : 'bg-brand-500'}`}
+                              className={`absolute top-1/2 z-[5] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] shadow-md ring-2 ring-white dark:ring-slate-900 ${SHEEN} ${draggable ? 'cursor-grab touch-none active:cursor-grabbing' : ''} ${dragging ? 'ring-brand-400' : ''} ${overdue ? BAR.red.fill : r.pct >= 100 ? bar.fill : 'bg-gradient-to-br from-brand-400 to-brand-600'}`}
                               style={{ left: `${dragging ? msLeft + dShiftPct : msLeft}%` }}
                               title={r.pct >= 100 && node.actualFinish ? `Milestone reached · ${formatDate(new Date(node.actualFinish))}` : `Milestone (planned) · ${formatDate(new Date(r.end))}`}
                             />
@@ -1431,7 +1439,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                               title={dragging ? 'Release to reschedule' : `Plan: ${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))}`}
                             >
                               {/* summary (parent) rows show rolled progress inside the plan track */}
-                              {r.isParent && <div className={`h-full rounded-full ${bar.fill}`} style={{ width: `${r.pct}%` }} />}
+                              {r.isParent && <div className={`h-full rounded-full ${SHEEN} ${bar.fill}`} style={{ width: `${r.pct}%` }} />}
                               {/* resize handles (leaf, editable) */}
                               {draggable && <span onPointerDown={(e) => startDrag(e, node, 'start')} className="absolute inset-y-0 left-0 w-2 cursor-ew-resize touch-none rounded-l-full bg-black/25 opacity-0 group-hover/track:opacity-100 dark:bg-white/25" />}
                               {draggable && <span onPointerDown={(e) => startDrag(e, node, 'end')} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize touch-none rounded-r-full bg-black/25 opacity-0 group-hover/track:opacity-100 dark:bg-white/25" />}
@@ -1439,7 +1447,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             {/* actual bar — vivid, at REAL dates, overlaid on the plan track (leaf tasks that started) */}
                             {started && (
                               <div
-                                className={`pointer-events-none absolute top-[13px] z-[6] h-[13px] rounded-full shadow-sm ${bar.fill} ${r.pct < 100 ? 'opacity-95' : ''}`}
+                                className={`pointer-events-none absolute top-[13px] z-[6] h-[13px] rounded-full shadow-sm ${SHEEN} ${bar.fill} ${r.pct < 100 ? 'opacity-95' : ''}`}
                                 style={{ left: `${actLeft}%`, width: `${actWidth}%` }}
                                 title={`${r.pct >= 100 ? 'Actual' : 'Actual so far'}: ${formatDate(new Date(actStart))} → ${r.pct >= 100 ? formatDate(new Date(actEnd)) : 'today'} · ${r.pct}%`}
                               />
