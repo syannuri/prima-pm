@@ -552,17 +552,24 @@ export async function getCostSummary(projectId: string) {
   // (consumed md × rate); material & indirect lines from attributed Actual Cost entries.
   const attributedDirect = [...directLineActual.values()].reduce((s, v) => s + v, 0);
   const attributedIndirect = [...indirectLineActual.values()].reduce((s, v) => s + v, 0);
+  // Available = budget still free to spend AND not yet obligated by a contract:
+  //   available = budget − actualToDate − committed  (⊂ remaining, which only nets actual).
+  // Lets a line read "budget left" (remaining) vs "truly uncommitted" (available) side by side.
   const directCostsWithSpend = directCosts.map((d) => {
     const budget = dec(d.type === 'MANPOWER' ? d.manpowerCost : d.amount);
     const actualToDate = d.type === 'MANPOWER'
       ? round2((consumedByLine.get(d.id) ?? 0) * dec(d.unitCostPerManday))
       : round2(directLineActual.get(d.id) ?? 0);
-    return { ...d, actualToDate, remaining: round2(budget - actualToDate), committed: round2(directLineCommitted.get(d.id) ?? 0) };
+    const committed = round2(directLineCommitted.get(d.id) ?? 0);
+    return { ...d, actualToDate, remaining: round2(budget - actualToDate), committed, available: round2(budget - actualToDate - committed) };
   });
   const indirectCostsWithSpend = indirectCosts.map((i) => {
     const actualToDate = round2(indirectLineActual.get(i.id) ?? 0);
-    return { ...i, actualToDate, remaining: round2(dec(i.amount) - actualToDate), committed: round2(indirectLineCommitted.get(i.id) ?? 0) };
+    const committed = round2(indirectLineCommitted.get(i.id) ?? 0);
+    return { ...i, actualToDate, remaining: round2(dec(i.amount) - actualToDate), committed, available: round2(dec(i.amount) - actualToDate - committed) };
   });
+  const availableDirect = round2(directCostsWithSpend.reduce((s, d) => s + d.available, 0));
+  const availableIndirect = round2(indirectCostsWithSpend.reduce((s, i) => s + i.available, 0));
 
   return {
     directCosts: directCostsWithSpend,
@@ -582,6 +589,10 @@ export async function getCostSummary(projectId: string) {
     committedDirect: round2(committedDirect),
     committedIndirect: round2(committedIndirect),
     committedTotal: round2(committedDirect + committedIndirect),
+    // Available (uncommitted) = budget − spent − committed, rolled up per category + overall.
+    availableDirect,
+    availableIndirect,
+    availableTotal: round2(availableDirect + availableIndirect),
     autoPostLabourAc: project?.autoPostLabourAc ?? false,
   };
 }

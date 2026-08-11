@@ -132,11 +132,13 @@ export default function CostPanel({ projectId, onNavigateTab }: { projectId: str
         <Stat label="BAC (PMB)" value={formatIdr(b?.costBaseline)} hint="Budget at Completion = direct + indirect + contingency (excl. mgmt reserve)" strong />
         <Stat label="Total Budget" value={formatIdr(b?.budgetAtCompletion)} hint="BAC + management reserve" />
       </div>
-      {/* Overall drawdown across Direct + Indirect: committed via contracts, total spent, remaining. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {/* Overall drawdown across Direct + Indirect: committed, spent, remaining (budget − spent),
+          and available (budget − spent − committed = truly free to commit). */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Committed" value={formatIdr(data?.committedTotal ?? 0)} hint="Awarded→delivered contracts charged to budget lines (Procurement). Obligated, not necessarily paid." />
         <Stat label="Spent to date" value={formatIdr(totalSpent)} hint="Direct + Indirect actuals (manpower from timesheet)" />
-        <Stat label="Remaining budget" value={formatIdr(totalRemaining)} hint="Direct + Indirect budget − spent" strong valueClass={totalRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} />
+        <Stat label="Remaining budget" value={formatIdr(totalRemaining)} hint="Direct + Indirect budget − spent (does not net open commitments)" valueClass={totalRemaining < 0 ? 'text-red-600 dark:text-red-400' : undefined} />
+        <Stat label="Available" value={formatIdr(data?.availableTotal ?? 0)} hint="Budget − spent − committed: what's still free to commit after open contracts/POs." strong valueClass={(data?.availableTotal ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} />
       </div>
       {data?.highLevelCharterCost != null && b && (
         <CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} />
@@ -563,6 +565,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
   const directTotal = data.directCosts.reduce((s, d) => s + Number((d.type === 'MANPOWER' ? d.manpowerCost : d.amount) ?? 0), 0);
   const directSpent = data.directCosts.reduce((s, d) => s + d.actualToDate, 0);
   const directRemaining = data.directCosts.reduce((s, d) => s + d.remaining, 0);
+  const directAvailable = data.directCosts.reduce((s, d) => s + d.available, 0);
   const directUntouched = data.directCosts.filter((d) => d.actualToDate === 0);
 
   // Group the lines into their category families (already sorted by sortOrder from the API).
@@ -695,7 +698,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
         <table className="prima-rows w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-              <th className="py-2">Type</th><th>Item</th><th>Detail</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th></th>
+              <th className="py-2">Type</th><th>Item</th><th>Detail</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th className="text-right" title="Budget − spent − committed">Available</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -707,7 +710,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
               return (
               <Fragment key={fam.key}>
                 <tr className="bg-slate-50/70 dark:bg-slate-800/40">
-                  <td colSpan={7} className="py-1.5">
+                  <td colSpan={8} className="py-1.5">
                     <div className="flex items-center gap-2">
                       <button onClick={() => toggleFam(fam.key)} aria-expanded={!famCollapsed} className="flex min-w-0 items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
                         <svg viewBox="0 0 24 24" className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${famCollapsed ? '' : 'rotate-90'}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
@@ -804,6 +807,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
                 </td>
                 <td className="text-right tabular-nums text-slate-500 dark:text-slate-400" title={isMp ? 'From timesheet (consumed man-days × rate)' : 'Actual Cost booked to this line'}>{formatIdr(d.actualToDate)}</td>
                 <td className={`text-right tabular-nums font-medium ${d.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`} title={d.remaining < 0 ? 'Over budget' : 'Budget still available'}>{formatIdr(d.remaining)}</td>
+                <td className={`text-right tabular-nums ${d.available < 0 ? 'text-red-600 dark:text-red-400' : d.committed > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`} title="Budget − spent − committed (free to commit)">{formatIdr(d.available)}</td>
                 <td className="text-right whitespace-nowrap">
                   {editing ? (
                     <>
@@ -830,7 +834,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
               </Fragment>
               );
             })}
-            {!data.directCosts.length && <tr><td colSpan={7} className="py-3 text-center text-slate-500 dark:text-slate-400">No direct costs yet.</td></tr>}
+            {!data.directCosts.length && <tr><td colSpan={8} className="py-3 text-center text-slate-500 dark:text-slate-400">No direct costs yet.</td></tr>}
           </tbody>
           {data.directCosts.length > 0 && (
             <tfoot>
@@ -839,6 +843,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
                 <td className="text-right tabular-nums text-slate-900 dark:text-white">{formatIdr(directTotal)}</td>
                 <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{formatIdr(directSpent)}</td>
                 <td className={`text-right tabular-nums ${directRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{formatIdr(directRemaining)}</td>
+                <td className={`text-right tabular-nums ${directAvailable < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{formatIdr(directAvailable)}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -918,6 +923,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
               <div className="mt-1 flex gap-4 text-xs">
                 <span className="text-slate-500 dark:text-slate-400">Spent: <span className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(d.actualToDate)}</span></span>
                 <span className="text-slate-500 dark:text-slate-400">Remaining: <span className={`tabular-nums font-medium ${d.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(d.remaining)}</span></span>
+                {d.committed > 0 && <span className="text-slate-500 dark:text-slate-400">Available: <span className={`tabular-nums font-medium ${d.available < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{formatIdr(d.available)}</span></span>}
               </div>
               {isMp && (
                 <div className="mt-2 flex flex-col gap-1.5">
@@ -960,6 +966,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
             <div className="mt-1 flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
               <span>Spent {formatIdr(directSpent)}</span>
               <span>Remaining <span className={`font-medium ${directRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(directRemaining)}</span></span>
+              <span>Available <span className={`font-medium ${directAvailable < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{formatIdr(directAvailable)}</span></span>
             </div>
           </div>
         )}
@@ -1008,6 +1015,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
   const indirectTotal = data.indirectCosts.reduce((s, i) => s + Number(i.amount ?? 0), 0);
   const indirectSpent = data.indirectCosts.reduce((s, i) => s + i.actualToDate, 0);
   const indirectRemaining = data.indirectCosts.reduce((s, i) => s + i.remaining, 0);
+  const indirectAvailable = data.indirectCosts.reduce((s, i) => s + i.available, 0);
   const indirectUntouched = data.indirectCosts.filter((i) => i.actualToDate === 0);
   const addAmount = Number(amount || 0);
 
@@ -1024,7 +1032,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
         <table className="prima-rows w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-              <th className="py-2">Type</th><th>Description</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th></th>
+              <th className="py-2">Type</th><th>Description</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th className="text-right" title="Budget − spent − committed">Available</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -1054,6 +1062,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
                 </td>
                 <td className="text-right tabular-nums text-slate-500 dark:text-slate-400" title="Actual Cost booked to this line">{formatIdr(i.actualToDate)}</td>
                 <td className={`text-right tabular-nums font-medium ${i.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`} title={i.remaining < 0 ? 'Over budget' : 'Budget still available'}>{formatIdr(i.remaining)}</td>
+                <td className={`text-right tabular-nums ${i.available < 0 ? 'text-red-600 dark:text-red-400' : i.committed > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`} title="Budget − spent − committed (free to commit)">{formatIdr(i.available)}</td>
                 <td className="text-right whitespace-nowrap">
                   {editing ? (
                     <>
@@ -1071,7 +1080,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
               </tr>
               );
             })}
-            {!data.indirectCosts.length && <tr><td colSpan={6} className="py-3 text-center text-slate-500 dark:text-slate-400">No indirect costs yet.</td></tr>}
+            {!data.indirectCosts.length && <tr><td colSpan={7} className="py-3 text-center text-slate-500 dark:text-slate-400">No indirect costs yet.</td></tr>}
           </tbody>
           {data.indirectCosts.length > 0 && (
             <tfoot>
@@ -1080,6 +1089,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
                 <td className="text-right tabular-nums text-slate-900 dark:text-white">{formatIdr(indirectTotal)}</td>
                 <td className="text-right tabular-nums text-slate-500 dark:text-slate-400">{formatIdr(indirectSpent)}</td>
                 <td className={`text-right tabular-nums ${indirectRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{formatIdr(indirectRemaining)}</td>
+                <td className={`text-right tabular-nums ${indirectAvailable < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{formatIdr(indirectAvailable)}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -1119,6 +1129,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
               <div className="mt-1 flex gap-4 text-xs">
                 <span className="text-slate-500 dark:text-slate-400">Spent: <span className="tabular-nums text-slate-700 dark:text-slate-200">{formatIdr(i.actualToDate)}</span></span>
                 <span className="text-slate-500 dark:text-slate-400">Remaining: <span className={`tabular-nums font-medium ${i.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(i.remaining)}</span></span>
+                {i.committed > 0 && <span className="text-slate-500 dark:text-slate-400">Available: <span className={`tabular-nums font-medium ${i.available < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{formatIdr(i.available)}</span></span>}
               </div>
               <div className="mt-2 flex gap-4">
                 <button onClick={() => onBookAc(`i:${i.id}`)} className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400">+ Record AC</button>
@@ -1138,6 +1149,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
             <div className="mt-1 flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
               <span>Spent {formatIdr(indirectSpent)}</span>
               <span>Remaining <span className={`font-medium ${indirectRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{formatIdr(indirectRemaining)}</span></span>
+              <span>Available <span className={`font-medium ${indirectAvailable < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{formatIdr(indirectAvailable)}</span></span>
             </div>
           </div>
         )}
