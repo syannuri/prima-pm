@@ -33,11 +33,13 @@ const ICONS = {
 };
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
-// Elegant dark charcoal rail in BOTH themes: idle = muted light-grey, hover = subtle white wash.
-const linkIdle = 'text-slate-300 hover:bg-white/10 hover:text-white';
-// Active item: a faint BLUE wash + blue-tinted glyph/label + a crisp blue left accent bar, so
-// "you are here" reads in the accent colour (matches the project tab accent), not just white.
-const linkActive = 'bg-blue-500/15 text-blue-100 shadow-[inset_2px_0_0_theme(colors.blue.500)]';
+// Elegant dark charcoal rail in BOTH themes: idle = muted light-grey, hover = subtle white wash +
+// a hairline ring tracing the rounded shape (transparent at rest → no layout shift).
+const linkIdle = 'text-slate-300 ring-1 ring-transparent hover:bg-white/10 hover:text-white hover:ring-white/15';
+// Active item: a faint BLUE wash + blue-tinted glyph/label + a crisp blue left accent bar AND a
+// delicate blue ring frame, so "you are here" reads in the accent colour (matches the project tab
+// accent), not just white.
+const linkActive = 'bg-blue-500/15 text-blue-100 ring-1 ring-inset ring-blue-400/30 shadow-[inset_2px_0_0_theme(colors.blue.500)]';
 // Small uppercase group heading between nav sections (Workspace / Manage / Projects).
 const sectionLabel = 'px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400';
 
