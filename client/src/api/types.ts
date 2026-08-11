@@ -335,6 +335,8 @@ export interface DirectCost {
   remaining: number;
   // Committed cost: value of awarded→delivered contracts charged to this line.
   committed: number;
+  // Available (uncommitted) = budget − spent − committed.
+  available: number;
 }
 
 export interface IndirectCost {
@@ -348,6 +350,8 @@ export interface IndirectCost {
   remaining: number;
   // Committed cost: value of awarded→delivered contracts charged to this line.
   committed: number;
+  // Available (uncommitted) = budget − spent − committed.
+  available: number;
 }
 
 export interface ActualCostEntry {
@@ -383,6 +387,10 @@ export interface CostSummary {
   committedDirect: number;
   committedIndirect: number;
   committedTotal: number;
+  // Available (uncommitted) budget = budget − spent − committed, per category + overall.
+  availableDirect: number;
+  availableIndirect: number;
+  availableTotal: number;
   // When true, each man-day mutation auto-refreshes the labour AC entry (no manual "Fill AC").
   autoPostLabourAc: boolean;
 }
