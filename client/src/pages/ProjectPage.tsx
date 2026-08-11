@@ -355,19 +355,22 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
 
   // Level 1: domain groups (underline tabs). Bold black type like the project title; the active
   // tab keeps its brand underline + tint as the accent, but the text stays black for legibility.
+  // A hairline `ring` traces each rounded tab on hover/active — transparent at rest (so there's
+  // no layout shift) → soft slate on hover → a delicate brand-tinted frame when active. The elegant
+  // "outlined chip" affordance.
   const groupBtn = (active: boolean) =>
-    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-2 text-sm font-bold transition ${
+    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-2 text-sm font-bold ring-1 ring-inset ring-transparent transition ${
       active
-        ? 'border-blue-600 bg-blue-50 text-slate-800 dark:bg-blue-900/30 dark:text-white'
-        : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-800/60 dark:hover:text-white'
+        ? 'border-blue-600 bg-blue-50 text-slate-800 ring-blue-200 dark:bg-blue-900/30 dark:text-white dark:ring-blue-500/30'
+        : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:ring-slate-200 dark:text-slate-200 dark:hover:bg-slate-800/60 dark:hover:text-white dark:hover:ring-slate-700'
     }`;
   // Level 2: sub-tabs of the active group (pills), always visible so the group's contents are
   // discoverable. Bold black; the active sub-tab is the filled brand pill (white text on brand).
   const subBtn = (active: boolean) =>
-    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-bold transition ${
+    `flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-bold ring-1 ring-transparent transition ${
       active
-        ? 'bg-blue-600 text-white shadow-sm'
-        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white'
+        ? 'bg-blue-600 text-white shadow-sm ring-inset ring-white/25'
+        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 hover:ring-slate-200 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white dark:hover:ring-slate-700'
     }`;
 
   // Mobile: replace the cramped horizontal tab strip with a single "Sections" trigger that opens a
