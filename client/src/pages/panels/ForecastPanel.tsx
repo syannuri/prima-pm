@@ -33,8 +33,10 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
   const figTone = status === 'over' ? 'text-red-600 dark:text-red-400'
     : status === 'watch' ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400';
   const statusIcon = status === 'ok' ? '✓' : '⚠'; // shape cue independent of colour
-  const marginDrop = f.margin.planned - f.margin.projected;
+  const m = f.margin;
+  const marginDrop = m.planned - m.projected;
   const days = f.schedule.varianceDays;
+  const pctLabel = (p: number | null) => (p == null ? '' : ` (${p > 0 ? '+' : ''}${formatNum(p, 1)}%)`);
 
   return (
     <div className="space-y-4">
@@ -62,10 +64,27 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
               — <strong>{isOver ? `over budget by ${money(Math.abs(costDelta))}` : `under budget by ${money(Math.abs(costDelta))}`}</strong>
               {days != null && (
                 <> and <strong>{days > 0 ? `${days} day${days === 1 ? '' : 's'} late` : days < 0 ? `${-days} day${days === -1 ? '' : 's'} early` : 'on schedule'}</strong></>
-              )}. Projected margin: <strong className={f.margin.projected < 0 ? 'text-red-600 dark:text-red-400' : ''}>{money(f.margin.projected)}</strong>
-              {marginDrop > 0.5 && <> (down {money(marginDrop)} from plan)</>}.
+              )}.
+              {m.hasRevenue ? (
+                <> Projected margin: <strong className={m.projected < 0 ? 'text-red-600 dark:text-red-400' : ''}>{money(m.projected)}{pctLabel(m.projectedPct)}</strong>
+                {marginDrop > 0.5 && <> (down {money(marginDrop)} from plan)</>}.</>
+              ) : (
+                <> <span className="text-slate-500 dark:text-slate-400">Set a contract value to see projected margin.</span></>
+              )}
             </p>
           </Card>
+
+          {/* Baseline-staleness caveat: revenue moved on an approved change but the cost baseline
+              may not reflect it yet, so the margin below is provisional. */}
+          {f.baselineUpdatePending && (
+            <Card className="!p-3 border-amber-200 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-900/10">
+              <p className="text-xs text-amber-800 dark:text-amber-300">
+                <span aria-hidden className="mr-1">⚠</span>
+                Approved change{f.pendingChangeTitle ? <> “{f.pendingChangeTitle}”</> : null} has raised revenue but isn’t
+                reflected in a re-locked cost baseline yet — the projected margin is provisional until the baseline is updated.
+              </p>
+            </Card>
+          )}
 
           {/* EAC scenarios */}
           <div className="grid gap-3 sm:grid-cols-3">
@@ -94,9 +113,16 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
 
             <Card className="!p-3">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Margin forecast</div>
-              <Row label="Revenue" value={money(f.margin.revenue)} />
-              <Row label="Planned margin (Rev − BAC)" value={money(f.margin.planned)} />
-              <Row label="Projected margin (Rev − EAC)" value={money(f.margin.projected)} tone={f.margin.projected < f.margin.planned ? 'red' : 'green'} strong />
+              {m.hasRevenue ? (
+                <>
+                  <Row label="Revenue" value={money(m.revenue)} />
+                  <Row label="Planned margin (Rev − BAC)" value={money(m.planned) + pctLabel(m.plannedPct)} />
+                  <Row label="Projected margin (Rev − EAC)" value={money(m.projected) + pctLabel(m.projectedPct)} tone={m.projected < m.planned ? 'red' : 'green'} strong />
+                  <Row label="Worst case (Rev − pessimistic)" value={money(m.projectedWorst) + pctLabel(m.projectedWorstPct)} tone={m.projectedWorst < 0 ? 'red' : undefined} hint="Downside profit if both cost & schedule drag continue (Rev − pessimistic EAC)." />
+                </>
+              ) : (
+                <p className="py-3 text-xs text-slate-500 dark:text-slate-400">No contract value set for this project — add Total Revenue in the project settings to forecast margin.</p>
+              )}
             </Card>
           </div>
 

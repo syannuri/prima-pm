@@ -9,6 +9,10 @@ import { evmPvSeries } from '../schedule/evm.batch.js';
 
 const DAY = 86_400_000;
 const r2 = (n: number) => Math.round(n * 100) / 100;
+// Margin % = profit ÷ revenue × 100, to 1 dp. Null when there's no revenue to divide by
+// (avoids a divide-by-zero reading as 0% and hides the "no contract value" case).
+const pct = (profit: number, revenue: number): number | null =>
+  revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : null;
 
 /**
  * The three EAC scenarios from different assumptions, clamped to a guaranteed
@@ -34,15 +38,31 @@ export function eacScenarios(bac: number, ev: number, ac: number, cpi: number, s
 export async function getProjectForecast(projectId: string, statusDate: Date) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, deletedAt: null },
-    select: { totalRevenueIdr: true },
+    select: { totalRevenueIdr: true, baselineLockedAt: true },
   });
   if (!project) throw NotFound('Project not found');
 
-  const [evm, charter, tasks, actuals] = await Promise.all([
+  const [evm, charter, tasks, actuals, pendingCr] = await Promise.all([
     getProjectEvm(projectId, undefined, statusDate),
     prisma.projectCharter.findUnique({ where: { projectId }, select: { hiScheduleStart: true, hiScheduleEnd: true } }),
     prisma.task.findMany({ where: { projectId }, select: { planStart: true, planEnd: true } }),
     prisma.actualCostEntry.findMany({ where: { projectId }, orderBy: { date: 'asc' }, select: { date: true, amount: true } }),
+    // Baseline-staleness signal for the profit numbers: an APPROVED change that raises
+    // revenue and/or adds cost (chargeable, or COST/SCHEDULE impact) whose cost side may not
+    // yet be reflected in the (re-locked) cost baseline. A chargeable CR bumps Total Revenue
+    // on approval, but BAC only moves when the PM re-plans & re-locks — so between the two the
+    // projected profit is overstated. We treat a lock as "stale" if a qualifying CR was decided
+    // after the last lock (or the baseline is currently unlocked → null lock counts as older).
+    prisma.changeRequest.findFirst({
+      where: {
+        projectId,
+        status: 'APPROVED',
+        OR: [{ impactAreas: { hasSome: ['COST', 'SCHEDULE'] } }, { chargeable: true }],
+        ...(project.baselineLockedAt ? { decidedAt: { gt: project.baselineLockedAt } } : {}),
+      },
+      orderBy: { decidedAt: 'desc' },
+      select: { title: true, decidedAt: true },
+    }),
   ]);
 
   const { bac, ev, ac, cpi, spi } = evm;
@@ -63,6 +83,9 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
   }
 
   const revenue = project.totalRevenueIdr == null ? 0 : Number(project.totalRevenueIdr);
+  // Distinguish "no contract value entered" from a genuine zero/loss: with no revenue set,
+  // margin = −cost would paint every un-priced project as a catastrophic loss. Gate on this.
+  const hasRevenue = revenue > 0;
   const hasData = ac > 0 || ev > 0;
 
   // --- S-curve: planned PV per date + cumulative AC to date + forecast line to EAC ---
@@ -100,7 +123,26 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
       forecastFinish: forecastFinish != null ? new Date(forecastFinish).toISOString() : null,
       varianceDays,
     },
-    margin: { revenue, planned: r2(revenue - bac), projected: r2(revenue - likely) },
+    // Profit = revenue − forecast cost at completion. Reported as a BAND (best/likely/worst
+    // mirror the EAC scenarios: lower EAC → higher profit) with margin % alongside the absolute
+    // figures. All null when no contract value is set (see hasRevenue) so the UI shows "—"
+    // instead of a false loss. `pct` = profit ÷ revenue × 100 — the erosion measure a cost
+    // controller reads on large contracts. Gross, pre-tax/financing/reserve.
+    margin: {
+      revenue,
+      hasRevenue,
+      planned: r2(revenue - bac),
+      projected: r2(revenue - likely),
+      projectedBest: r2(revenue - optimistic),
+      projectedWorst: r2(revenue - pessimistic),
+      plannedPct: pct(revenue - bac, revenue),
+      projectedPct: pct(revenue - likely, revenue),
+      projectedWorstPct: pct(revenue - pessimistic, revenue),
+    },
+    // True while an approved chargeable/cost change hasn't been folded into a re-locked baseline:
+    // revenue has moved but BAC may not have, so treat the projected profit as provisional.
+    baselineUpdatePending: !!pendingCr,
+    pendingChangeTitle: pendingCr?.title ?? null,
     hasData,
     sCurve,
   };
