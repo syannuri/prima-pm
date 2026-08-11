@@ -735,7 +735,19 @@ export interface Forecast {
     forecastFinish: string | null;
     varianceDays: number | null;
   };
-  margin: { revenue: number; planned: number; projected: number };
+  margin: {
+    revenue: number;
+    hasRevenue: boolean;
+    planned: number;
+    projected: number;      // likely-case profit (Rev − likely EAC)
+    projectedBest: number;  // best-case (Rev − optimistic EAC)
+    projectedWorst: number; // worst-case (Rev − pessimistic EAC)
+    plannedPct: number | null;
+    projectedPct: number | null;
+    projectedWorstPct: number | null;
+  };
+  baselineUpdatePending: boolean;
+  pendingChangeTitle: string | null;
   hasData: boolean;
   sCurve: { t: string; pv: number; ac: number | null; forecast: number | null }[];
 }
