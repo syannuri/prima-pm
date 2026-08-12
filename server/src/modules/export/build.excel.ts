@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { categoryLabel, flattenGantt, type ProjectExport } from './export.data.js';
+import { mdToPlain } from './markdown.js';
 
 const IDR = '"Rp"#,##0;[Red]-"Rp"#,##0';
 const num = (v: unknown) => (v == null ? 0 : Number(v));
@@ -35,14 +36,14 @@ export async function buildProjectWorkbook(data: ProjectExport): Promise<Buffer>
   const c = data.charter;
   if (c) {
     const rows: [string, string | number][] = [
-      ['Description', c.description],
-      ['Goals', c.goals],
+      ['Description', mdToPlain(c.description)],
+      ['Goals', mdToPlain(c.goals)],
       ['Category', categoryLabel(c.category, c.categoryOther)],
-      ['High-Level Scope', c.hiScope],
+      ['High-Level Scope', mdToPlain(c.hiScope)],
       ['High-Level Cost (IDR)', num(c.hiCostIdr)],
       ['Schedule Start', new Date(c.hiScheduleStart).toISOString().slice(0, 10)],
       ['Schedule End', new Date(c.hiScheduleEnd).toISOString().slice(0, 10)],
-      ['Deliverables', c.hiDeliverables],
+      ['Deliverables', mdToPlain(c.hiDeliverables)],
       ['Status', c.locked ? `Committed (v${c.version})` : 'Draft'],
     ];
     rows.forEach((r) => ch.addRow(r));

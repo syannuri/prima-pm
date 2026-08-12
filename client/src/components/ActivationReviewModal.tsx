@@ -6,6 +6,7 @@ import { Button, FormError, Modal, PanelLoading, Textarea } from './ui';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
 import { formatIdr } from '../lib/format';
+import { Markdown } from '../lib/markdown';
 
 function CheckRow({ item }: { item: ActivationItem }) {
   const mark = item.ok ? '✓' : item.severity === 'block' ? '✗' : '!';
@@ -97,9 +98,9 @@ export default function ActivationReviewModal({ projectId, onClose }: { projectI
           <Section icon="📋" title="Scope of Work · Charter">
             {data.charter ? (
               <dl className="space-y-2 text-sm">
-                <div><dt className="text-xs font-medium text-slate-500 dark:text-slate-400">Scope</dt><dd className="break-words text-slate-700 dark:text-slate-200">{data.charter.scope || '—'}</dd></div>
-                <div><dt className="text-xs font-medium text-slate-500 dark:text-slate-400">Deliverables</dt><dd className="break-words text-slate-700 dark:text-slate-200">{data.charter.deliverables || '—'}</dd></div>
-                <div><dt className="text-xs font-medium text-slate-500 dark:text-slate-400">Goals</dt><dd className="break-words text-slate-700 dark:text-slate-200">{data.charter.goals || '—'}</dd></div>
+                <div><dt className="text-xs font-medium text-slate-500 dark:text-slate-400">Scope</dt><dd className="break-words text-slate-700 dark:text-slate-200">{data.charter.scope ? <Markdown text={data.charter.scope} /> : '—'}</dd></div>
+                <div><dt className="text-xs font-medium text-slate-500 dark:text-slate-400">Deliverables</dt><dd className="break-words text-slate-700 dark:text-slate-200">{data.charter.deliverables ? <Markdown text={data.charter.deliverables} /> : '—'}</dd></div>
+                <div><dt className="text-xs font-medium text-slate-500 dark:text-slate-400">Goals</dt><dd className="break-words text-slate-700 dark:text-slate-200">{data.charter.goals ? <Markdown text={data.charter.goals} /> : '—'}</dd></div>
               </dl>
             ) : <p className="text-sm text-slate-500 dark:text-slate-400">No committed charter.</p>}
           </Section>
