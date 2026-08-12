@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import type { InputState } from './ui';
 import { Markdown } from '../lib/markdown';
 import { useLang } from '../context/LanguageContext';
 
 // Markdown-lite editor: a plain <textarea> (value stays plain markdown text — no schema/API
-// change) with a small toolbar that inserts markdown syntax, plus a Write/Preview toggle.
-// Rendering is done by <Markdown> which emits React elements (no HTML injection → no XSS).
+// change) with a toolbar that inserts markdown syntax, keyboard shortcuts, smart list
+// continuation, a Write/Preview toggle and a word/char counter. Rendering is done by
+// <Markdown> which emits React elements (no HTML injection → no XSS).
 
 const inputBase =
   'w-full rounded-b-lg border border-t-0 bg-white px-3 py-2 text-base sm:text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-1 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500';
@@ -37,6 +38,7 @@ export function MarkdownEditor({
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [preview, setPreview] = useState(false);
+  const [active, setActive] = useState({ bold: false, italic: false });
   const { lang } = useLang();
   const t = (id: string, en: string) => (lang === 'id' ? id : en);
 
@@ -45,7 +47,20 @@ export function MarkdownEditor({
     onChange(next);
     requestAnimationFrame(() => {
       const el = ref.current;
-      if (el) { el.focus(); el.setSelectionRange(selStart, selEnd); }
+      if (el) { el.focus(); el.setSelectionRange(selStart, selEnd); refreshActive(); }
+    });
+  };
+
+  // Reflect whether the current selection is already wrapped in bold/italic, for a pressed
+  // toolbar state. A lightweight boundary check — good enough as a cue, not a full parser.
+  const refreshActive = () => {
+    const el = ref.current;
+    if (!el) return setActive({ bold: false, italic: false });
+    const s = el.selectionStart, e = el.selectionEnd;
+    const b = value.slice(s - 1, s), a = value.slice(e, e + 1);
+    setActive({
+      bold: value.slice(s - 2, s) === '**' && value.slice(e, e + 2) === '**',
+      italic: (b === '*' && a === '*') || (b === '_' && a === '_'),
     });
   };
 
@@ -75,14 +90,63 @@ export function MarkdownEditor({
     apply(next, lineStart, lineStart + out.length);
   };
 
-  const Btn = ({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) => (
+  // Insert a [text](url) link around the selection (or a placeholder), caret landing in the URL.
+  const insertLink = () => {
+    const el = ref.current;
+    if (!el) return;
+    const s = el.selectionStart, e = el.selectionEnd;
+    const label = value.slice(s, e) || t('teks', 'text');
+    const url = 'https://';
+    const snippet = `[${label}](${url})`;
+    const next = value.slice(0, s) + snippet + value.slice(e);
+    const urlStart = s + 1 + label.length + 2; // "[" + label + "]("
+    apply(next, urlStart, urlStart + url.length);
+  };
+
+  const onKeyDown = (ev: KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = ref.current;
+    if (!el) return;
+    const meta = ev.ctrlKey || ev.metaKey;
+    if (meta && (ev.key === 'b' || ev.key === 'B')) { ev.preventDefault(); return wrap('**'); }
+    if (meta && (ev.key === 'i' || ev.key === 'I')) { ev.preventDefault(); return wrap('*'); }
+    if (meta && (ev.key === 'k' || ev.key === 'K')) { ev.preventDefault(); return insertLink(); }
+
+    // Smart list continuation: Enter on a list item carries the marker to the next line;
+    // Enter on an empty item exits the list (removes the dangling marker).
+    if (ev.key === 'Enter' && !ev.shiftKey && el.selectionStart === el.selectionEnd) {
+      const s = el.selectionStart;
+      const lineStart = value.lastIndexOf('\n', s - 1) + 1;
+      const line = value.slice(lineStart, s);
+      const bullet = /^(\s*)([-*])\s+(.*)$/.exec(line);
+      const ordered = /^(\s*)(\d+)\.\s+(.*)$/.exec(line);
+      if (bullet || ordered) {
+        ev.preventDefault();
+        const rest = (bullet ? bullet[3] : ordered![3]);
+        if (rest.trim() === '') {
+          // empty item → drop the marker, exit the list
+          const next = value.slice(0, lineStart) + value.slice(s);
+          return apply(next, lineStart, lineStart);
+        }
+        const ins = bullet
+          ? `\n${bullet[1]}${bullet[2]} `
+          : `\n${ordered![1]}${Number(ordered![2]) + 1}. `;
+        const next = value.slice(0, s) + ins + value.slice(el.selectionEnd);
+        return apply(next, s + ins.length, s + ins.length);
+      }
+    }
+  };
+
+  const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+
+  const Btn = ({ onClick, label, active: on, children }: { onClick: () => void; label: string; active?: boolean; children: React.ReactNode }) => (
     <button
       type="button"
       title={label}
       aria-label={label}
+      aria-pressed={on}
       onMouseDown={(ev) => ev.preventDefault() /* keep textarea focus/selection */}
       onClick={onClick}
-      className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+      className={`rounded px-1.5 py-0.5 text-xs font-medium hover:bg-slate-200 hover:text-slate-800 dark:hover:bg-slate-700 dark:hover:text-slate-100 ${on ? 'bg-brand-100 text-brand-700 dark:bg-brand-500/25 dark:text-brand-300' : 'text-slate-500 dark:text-slate-400'}`}
     >
       {children}
     </button>
@@ -91,12 +155,13 @@ export function MarkdownEditor({
   return (
     <div>
       <div className={`flex items-center gap-0.5 rounded-t-lg border bg-slate-50 px-1.5 py-1 dark:bg-slate-900/40 ${barBorder[state]}`}>
-        <Btn onClick={() => wrap('**')} label={t('Tebal', 'Bold')}><span className="font-bold">B</span></Btn>
-        <Btn onClick={() => wrap('*')} label={t('Miring', 'Italic')}><span className="italic">I</span></Btn>
+        <Btn onClick={() => wrap('**')} label={`${t('Tebal', 'Bold')} (Ctrl+B)`} active={active.bold}><span className="font-bold">B</span></Btn>
+        <Btn onClick={() => wrap('*')} label={`${t('Miring', 'Italic')} (Ctrl+I)`} active={active.italic}><span className="italic">I</span></Btn>
         <span className="mx-0.5 h-4 w-px bg-slate-300 dark:bg-slate-700" />
         <Btn onClick={() => prefixLines('- ')} label={t('Poin', 'Bullet list')}>• List</Btn>
         <Btn onClick={() => prefixLines('', true)} label={t('Bernomor', 'Numbered list')}>1. List</Btn>
         <Btn onClick={() => prefixLines('## ')} label={t('Judul', 'Heading')}>H</Btn>
+        <Btn onClick={insertLink} label={`${t('Tautan', 'Link')} (Ctrl+K)`}>🔗</Btn>
         <button
           type="button"
           onClick={() => setPreview((p) => !p)}
@@ -120,9 +185,16 @@ export function MarkdownEditor({
           value={value}
           onChange={(ev) => onChange(ev.target.value)}
           onBlur={onBlur}
+          onKeyDown={onKeyDown}
+          onSelect={refreshActive}
+          onClick={refreshActive}
           placeholder={placeholder}
         />
       )}
+      <div className="mt-1 flex justify-end gap-3 pr-1 text-[11px] tabular-nums text-slate-400 dark:text-slate-500">
+        <span>{words} {t('kata', words === 1 ? 'word' : 'words')}</span>
+        <span>{value.length} {t('karakter', 'chars')}</span>
+      </div>
     </div>
   );
 }

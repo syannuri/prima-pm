@@ -9,16 +9,34 @@ import { Fragment, type ReactNode } from 'react';
 //   - or *        bullet list
 //   1.            numbered list
 //   **bold**      bold        *italic* / _italic_   italic
+//   [text](url)   link (http/https/mailto only — others render as plain text)
 //   blank line    paragraph break;  single newline inside a paragraph → <br/>
 //
 // Anything else renders as plain text (the raw markers show), so old plain-text charters and
 // unknown syntax degrade gracefully.
 
-// --- inline: **bold**, *italic*, _italic_ ---
+// Only http(s)/mailto links are rendered as anchors — everything else (notably javascript:
+// and data: URLs) falls back to plain text, so a link can never become a script vector.
+export function safeUrl(url: string): string | null {
+  const u = url.trim();
+  return /^(https?:\/\/|mailto:)/i.test(u) ? u : null;
+}
+
+// --- inline: [text](url), **bold**, *italic*, _italic_ ---
+const INLINE_RE = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
+const LINK_RE = /^\[([^\]]+)\]\(([^)]+)\)$/;
+
 function renderInline(text: string): ReactNode {
   // Split on the markers, keeping the delimiters so we can pair them up.
-  const tokens = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g).filter((t) => t !== '');
+  const tokens = text.split(INLINE_RE).filter((t) => t !== '');
   return tokens.map((tok, i) => {
+    const link = LINK_RE.exec(tok);
+    if (link) {
+      const href = safeUrl(link[2]);
+      return href
+        ? <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline hover:text-brand-700 dark:text-brand-400">{link[1]}</a>
+        : <Fragment key={i}>{tok}</Fragment>; // unsafe URL → show the raw markdown, never a live link
+    }
     if (tok.startsWith('**') && tok.endsWith('**') && tok.length > 4)
       return <strong key={i}>{tok.slice(2, -2)}</strong>;
     if (tok.startsWith('*') && tok.endsWith('*') && tok.length > 2)

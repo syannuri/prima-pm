@@ -28,6 +28,10 @@ describe('mdToPlain', () => {
     expect(mdToPlain('  - nested')).toBe('  • nested');
   });
 
+  it('flattens links to "text (url)"', () => {
+    expect(mdToPlain('see [docs](https://example.com)')).toBe('see docs (https://example.com)');
+  });
+
   it('handles a mixed multi-line block', () => {
     const md = '# Goals\n- ship **v1**\n- reduce cost\n\nPlain closing line.';
     expect(mdToPlain(md)).toBe('Goals\n• ship v1\n• reduce cost\n\nPlain closing line.');

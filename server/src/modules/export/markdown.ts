@@ -10,6 +10,7 @@ export function mdToPlain(src: string | null | undefined): string {
     .map((line) => {
       let s = line.replace(/^(#{1,3})\s+/, '');          // drop heading markers
       s = s.replace(/^(\s*)[-*]\s+/, '$1• ');            // bullets → •
+      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)'); // [text](url) → text (url)
       s = s.replace(/\*\*([^*]+)\*\*/g, '$1');           // **bold**
       s = s.replace(/(^|[^*])\*([^*]+)\*/g, '$1$2');     // *italic* (not part of **)
       s = s.replace(/\b_([^_]+)_\b/g, '$1');             // _italic_

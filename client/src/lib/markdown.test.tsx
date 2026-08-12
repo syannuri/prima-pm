@@ -38,4 +38,18 @@ describe('Markdown', () => {
     expect(container.querySelectorAll('br')).toHaveLength(1);
     expect(container.textContent).toContain('line one');
   });
+
+  it('renders a safe http link as an anchor with rel=noopener', () => {
+    const { container } = render(<Markdown text={'see [docs](https://example.com)'} />);
+    const a = container.querySelector('a');
+    expect(a?.getAttribute('href')).toBe('https://example.com');
+    expect(a?.getAttribute('rel')).toContain('noopener');
+    expect(a?.textContent).toBe('docs');
+  });
+
+  it('never renders a javascript: link — falls back to raw text', () => {
+    const { container } = render(<Markdown text={'[x](javascript:alert(1))'} />);
+    expect(container.querySelector('a')).toBeNull();
+    expect(container.textContent).toContain('[x](javascript:alert(1))');
+  });
 });
