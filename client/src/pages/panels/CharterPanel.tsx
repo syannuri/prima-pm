@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Charter, DeliveryApproach, ProjectCategory, User } from '../../api/types';
-import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, PanelLoading, Textarea } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, MoneyInput, SectionTitle, Select, PanelLoading } from '../../components/ui';
 import type { InputState } from '../../components/ui';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useLang } from '../../context/LanguageContext';
@@ -13,6 +13,8 @@ import { formatDateInput, formatDate, formatIdr } from '../../lib/format';
 // charter's project is already HYBRID so its dropdown isn't blank (grandfathered).
 const APPROACHES: DeliveryApproach[] = ['PREDICTIVE', 'AGILE'];
 import Attachments from '../../components/Attachments';
+import { MarkdownEditor } from '../../components/MarkdownEditor';
+import { Markdown } from '../../lib/markdown';
 
 type Form = {
   description: string;
@@ -190,8 +192,8 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
           {docRows.map((r) => (
             <div key={r.label} className="py-3 first:pt-0">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{r.label}</div>
-              <div className={`mt-1 text-sm text-slate-700 dark:text-slate-200 ${r.long ? 'whitespace-pre-wrap leading-relaxed' : 'font-medium'}`}>
-                {r.value?.trim() ? r.value : '—'}
+              <div className={`mt-1 text-sm text-slate-700 dark:text-slate-200 ${r.long ? 'leading-relaxed' : 'font-medium'}`}>
+                {r.value?.trim() ? (r.long ? <Markdown text={r.value} /> : r.value) : '—'}
               </div>
             </div>
           ))}
@@ -200,14 +202,14 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
       <fieldset data-tour="charter-form" disabled={locked} className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <Field label="Project Description" required error={errText('description')}>
-            <Textarea state={errState('description')} value={form.description} onChange={(e) => set('description', e.target.value)} onBlur={() => touch('description')} />
+            <MarkdownEditor state={errState('description')} value={form.description} onChange={(v) => set('description', v)} onBlur={() => touch('description')} />
           </Field>
         </div>
         <Field label="Project Goals" required error={errText('goals')}>
-          <Textarea state={errState('goals')} value={form.goals} onChange={(e) => set('goals', e.target.value)} onBlur={() => touch('goals')} />
+          <MarkdownEditor state={errState('goals')} value={form.goals} onChange={(v) => set('goals', v)} onBlur={() => touch('goals')} />
         </Field>
         <Field label="High-Level Scope of Work" required error={errText('hiScope')}>
-          <Textarea state={errState('hiScope')} value={form.hiScope} onChange={(e) => set('hiScope', e.target.value)} onBlur={() => touch('hiScope')} />
+          <MarkdownEditor state={errState('hiScope')} value={form.hiScope} onChange={(v) => set('hiScope', v)} onBlur={() => touch('hiScope')} />
         </Field>
         <Field label="Project Category" required error={errText('categoryOther', t('Jelaskan kategori "Other"', 'Describe the "Other" category'))}>
           <Select value={form.category} onChange={(e) => set('category', e.target.value)}>
@@ -256,7 +258,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         </div>
         <div className="md:col-span-2">
           <Field label="High-Level Deliverables / Expected Outcome" required error={errText('hiDeliverables')}>
-            <Textarea state={errState('hiDeliverables')} value={form.hiDeliverables} onChange={(e) => set('hiDeliverables', e.target.value)} onBlur={() => touch('hiDeliverables')} />
+            <MarkdownEditor state={errState('hiDeliverables')} value={form.hiDeliverables} onChange={(v) => set('hiDeliverables', v)} onBlur={() => touch('hiDeliverables')} />
           </Field>
         </div>
       </fieldset>

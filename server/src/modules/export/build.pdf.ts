@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { formatIdr } from '../../calc/money.js';
 import { categoryLabel, flattenGantt, type ProjectExport } from './export.data.js';
+import { mdToPlain } from './markdown.js';
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const iso = (d: Date | string | null) => (d ? new Date(d).toISOString().slice(0, 10) : '—');
@@ -71,12 +72,12 @@ export function buildProjectPdf(data: ProjectExport): Promise<Buffer> {
   const c = data.charter;
   if (c) {
     kv('Category', categoryLabel(c.category, c.categoryOther));
-    kv('Description', c.description);
-    kv('Goals', c.goals);
-    kv('Scope of Work', c.hiScope);
+    kv('Description', mdToPlain(c.description));
+    kv('Goals', mdToPlain(c.goals));
+    kv('Scope of Work', mdToPlain(c.hiScope));
     kv('High-Level Cost', formatIdr(num(c.hiCostIdr)));
     kv('Schedule', `${iso(c.hiScheduleStart)} → ${iso(c.hiScheduleEnd)}`);
-    kv('Deliverables', c.hiDeliverables);
+    kv('Deliverables', mdToPlain(c.hiDeliverables));
     kv('Charter Status', c.locked ? `Committed (v${c.version})` : 'Draft');
   } else {
     doc.text('Charter not created yet.');
