@@ -57,9 +57,10 @@ async function seedRateCards() {
     { roleName: 'Security Analyst', level: 'Senior', unitCostPerManday: 2_800_000 },
   ];
   for (const c of cards) {
-    // (roleName, level) is unique per owner scope (corporate = personalOwnerId NULL) at the app
-    // layer now — there's no compound DB key to upsert on, so find-or-update by hand.
-    const existing = await prisma.rateCard.findFirst({ where: { roleName: c.roleName, level: c.level, personalOwnerId: null } });
+    // (roleName, level) is unique per tenant at the app layer now — there's no compound DB key to
+    // upsert on, so find-or-update by hand. (The old `personalOwnerId` scope column was dropped in
+    // the Phase-5 de-scatter; tenant isolation is handled by the tenant-scope extension.)
+    const existing = await prisma.rateCard.findFirst({ where: { roleName: c.roleName, level: c.level } });
     if (existing) await prisma.rateCard.update({ where: { id: existing.id }, data: { unitCostPerManday: c.unitCostPerManday } });
     else await prisma.rateCard.create({ data: c });
   }
