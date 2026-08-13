@@ -6,6 +6,7 @@ import type { CpmResult, GanttNode, ResourceItem, TaskDependency, WbsTemplateInf
 import { Badge, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import ImportTasksModal from '../../components/ImportTasksModal';
+import WeightEditorModal from '../../components/WeightEditorModal';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -423,6 +424,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const base = `/projects/${projectId}/schedule`;
   const canEdit = useProjectWrite(projectId);
   const [importOpen, setImportOpen] = useState(false);
+  const [weightsOpen, setWeightsOpen] = useState(false);
 
   const ganttQ = useQuery({
     queryKey: ['gantt', projectId],
@@ -1009,6 +1011,18 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         }}
       />
     )}
+    {weightsOpen && (
+      <WeightEditorModal
+        base={base}
+        phases={ganttQ.data?.tree ?? []}
+        onClose={() => setWeightsOpen(false)}
+        onSaved={() => {
+          qc.invalidateQueries({ queryKey: ['gantt', projectId] });
+          qc.invalidateQueries({ queryKey: ['evm', base] });
+          qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
+        }}
+      />
+    )}
       {/* iOS (and any platform where orientation-lock isn't available) can't auto-rotate — nudge
           the user to turn the device so the timeline gets the full landscape width. */}
       {fullscreen && isTouch && portrait && (
@@ -1043,6 +1057,12 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
           {canPlan && (
             <button onClick={() => setImportOpen(true)} title="Import tasks from Excel/CSV" className={CTRL_BTN}>
               ⬆ Import
+            </button>
+          )}
+          {/* Phase-weight editor — steer the % roll-up from the top level (needs write + unlocked baseline). */}
+          {canPlan && rows.length > 0 && (
+            <button onClick={() => setWeightsOpen(true)} title="Set phase weights to steer the project %" className={CTRL_BTN}>
+              ⚖ Weights
             </button>
           )}
           {rows.length > 0 && (
