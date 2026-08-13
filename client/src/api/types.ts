@@ -687,6 +687,8 @@ export interface Task {
   progressPct: number;
   /** Manual relative work-package weight (Model B). null = derive from cost/duration. */
   weight: number | null;
+  /** PMB snapshot of `weight`, frozen at schedule-baseline capture. EVM measures against this. */
+  baselineWeight: number | null;
   isMilestone: boolean;
   sortOrder: number;
 }

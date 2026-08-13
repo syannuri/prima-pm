@@ -1323,6 +1323,10 @@ model Task {
   // Manual relative work-package weight (Model B). null = derive from cost/duration proxy.
   // Set on a Main Task to steer the top-down % roll-up; distributed to its leaves pro-rata.
   weight       Float?
+  // PMB snapshot of `weight`, frozen when the schedule baseline is captured (like
+  // baselineStart/Finish). EVM measures against THIS so re-planning weights can't silently
+  // re-base EV/% complete. Re-captured on re-baseline. null until first baseline.
+  baselineWeight Float?
   isMilestone  Boolean   @default(false)
   sortOrder    Int       @default(0)
 

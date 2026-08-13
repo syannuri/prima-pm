@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
-import { getEvm, updateTask } from '../schedule/schedule.service.js';
+import { getEvm, updateTask, setScheduleBaseline } from '../schedule/schedule.service.js';
 
 // Model B — a manual `weight` on a Main Task steers the authoritative project % (weightedProgress).
 // Two equal-duration phases, one 100% done and one 0% done: with no weights the project is 50%;
@@ -74,5 +74,46 @@ describe('Model B — manual Main-Task weight steers project %', () => {
     await setWeight(p.id, pb, null);
     const evm = await getEvm(p.id, 0, STATUS);
     expect(evm.weightedProgress).toBeCloseTo(0.5, 4);
+  });
+});
+
+// Baseline weight lock (#2): once a schedule baseline is captured, EVM weights against the FROZEN
+// baselineWeight — re-planning weights can't silently re-base EV/% until a deliberate re-baseline.
+describe('Model B — baseline weight lock (PMB freeze)', () => {
+  beforeAll(async () => {
+    const rows = await prisma.$queryRaw<Array<{ tablename: string }>>`
+      SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '_prisma%'`;
+    if (rows.length) await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${rows.map((r) => `"${r.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
+    const pm = await prisma.user.create({ data: { name: 'BW PM', email: 'bw-pm@t.test', role: 'PROJECT_MANAGER', passwordHash: await hashPassword('x'), isActive: true } });
+    pmId = pm.id;
+  });
+  beforeEach(async () => { await prisma.project.deleteMany({}); });
+
+  it('freezes the weight distribution at baseline; later weight edits do NOT move %, re-baseline does', async () => {
+    const { p, pa, pb } = await twoPhaseProject();
+    await setWeight(p.id, pa, 90);
+    await setWeight(p.id, pb, 10);
+    // Before baselining: EVM uses the live weights → 90% of weight is complete.
+    expect((await getEvm(p.id, 0, STATUS)).weightedProgress).toBeCloseTo(0.9, 4);
+
+    // Capture the schedule baseline → snapshots baselineWeight (A=90, B=10). % unchanged.
+    await setScheduleBaseline(p.id, pmId);
+    expect((await getEvm(p.id, 0, STATUS)).weightedProgress).toBeCloseTo(0.9, 4);
+
+    // Re-plan the weights (baseline NOT locked, so the edit is allowed) — but EVM is FROZEN to the
+    // baseline distribution, so the project % must NOT move.
+    await setWeight(p.id, pa, 10);
+    await setWeight(p.id, pb, 90);
+    expect((await getEvm(p.id, 0, STATUS)).weightedProgress).toBeCloseTo(0.9, 4);
+
+    // A deliberate re-baseline adopts the new weights → NOW the % reflects them.
+    await setScheduleBaseline(p.id, pmId);
+    expect((await getEvm(p.id, 0, STATUS)).weightedProgress).toBeCloseTo(0.1, 4);
+  });
+
+  it('a weight-free project is still exactly duration-weighted after baselining (no drift)', async () => {
+    const { p } = await twoPhaseProject();
+    await setScheduleBaseline(p.id, pmId); // baselineWeight all null → falls back to duration proxy
+    expect((await getEvm(p.id, 0, STATUS)).weightedProgress).toBeCloseTo(0.5, 4);
   });
 });

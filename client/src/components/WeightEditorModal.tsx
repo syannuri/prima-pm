@@ -22,11 +22,13 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 export default function WeightEditorModal({
   base,
   phases,
+  baselined,
   onClose,
   onSaved,
 }: {
-  base: string; // /projects/:id
+  base: string; // /projects/:id/schedule
   phases: GanttNode[]; // top-level nodes (the tree roots)
+  baselined: boolean; // a schedule baseline exists → weights are frozen for EVM until re-baseline
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -92,6 +94,15 @@ export default function WeightEditorModal({
           <em>blank</em> to weight it automatically by cost/duration. Weights feed the same EVM
           engine, so this is the number that drives % complete, SPI and forecasts.
         </p>
+
+        {baselined && (
+          <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/50 dark:bg-sky-900/20 dark:text-sky-300">
+            <strong>A schedule baseline is set.</strong> The project&nbsp;% is measured against the
+            <em> baseline</em> weights (the &quot;Now&quot; column). Edits here update the plan but
+            only take effect once you <strong>re-capture the schedule baseline</strong> — so
+            re-planning weights can&apos;t silently re-base EV.
+          </div>
+        )}
 
         {partial && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
