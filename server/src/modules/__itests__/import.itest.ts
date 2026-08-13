@@ -72,8 +72,51 @@ describe('Spreadsheet task import (T4.3)', () => {
     expect(milestone?.isMilestone).toBe(true);
   });
 
+  it('imports a Weight column: persists numbers, blank → auto (null), rejects a bad value', async () => {
+    const proj = await prisma.project.create({ data: { code: 'IMP-W', name: 'Import Weights', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: (await prisma.user.findFirstOrThrow({ where: { email: 'imp-admin@corp.test' } })).id } });
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Tasks');
+    ws.addRow(['WBS', 'Name', 'Plan Start', 'Plan End', 'Progress %', 'Milestone', 'Weight']);
+    [
+      ['1', 'Heavy', '2026-01-01', '2026-01-10', 0, false, 60],
+      ['2', 'Light', '2026-01-11', '2026-01-20', 0, false, 40],
+      ['3', 'Auto', '2026-01-21', '2026-01-25', 0, false, ''], // blank → null
+    ].forEach((r) => ws.addRow(r));
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const ok = await request(app).post(api(`/projects/${proj.id}/import/tasks?dryRun=false`)).set(auth(adminToken)).attach('file', buf, 'tasks.xlsx');
+    expect(ok.status).toBe(201);
+    expect(ok.body.created).toBe(3);
+    expect((await prisma.task.findFirstOrThrow({ where: { projectId: proj.id, name: 'Heavy' } })).weight).toBe(60);
+    expect((await prisma.task.findFirstOrThrow({ where: { projectId: proj.id, name: 'Light' } })).weight).toBe(40);
+    expect((await prisma.task.findFirstOrThrow({ where: { projectId: proj.id, name: 'Auto' } })).weight).toBeNull();
+
+    // A negative weight is a row error → all-or-nothing commit refused, nothing added beyond the 3.
+    const wb2 = new ExcelJS.Workbook();
+    const ws2 = wb2.addWorksheet('Tasks');
+    ws2.addRow(['Name', 'Plan Start', 'Plan End', 'Weight']);
+    ws2.addRow(['Bad', '2026-02-01', '2026-02-05', -5]);
+    const bad = await request(app).post(api(`/projects/${proj.id}/import/tasks?dryRun=false`)).set(auth(adminToken)).attach('file', Buffer.from(await wb2.xlsx.writeBuffer()), 'tasks.xlsx');
+    expect(bad.status).toBe(400);
+    expect(await prisma.task.count({ where: { projectId: proj.id } })).toBe(3);
+  });
+
   it('rejects a non-spreadsheet file', async () => {
     const res = await request(app).post(api(`/projects/${projectId}/import/tasks`)).set(auth(adminToken)).attach('file', Buffer.from('nope'), 'notes.txt');
     expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('applying a WBS template seeds its curated weights (milestones stay auto)', async () => {
+    const adminId = (await prisma.user.findFirstOrThrow({ where: { email: 'imp-admin@corp.test' } })).id;
+    const proj = await prisma.project.create({ data: { code: 'IMP-T', name: 'Template Weights', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: adminId } });
+    const res = await request(app).post(api(`/projects/${proj.id}/schedule/apply-template`)).set(auth(adminToken)).send({ templateId: 'generic-it', startDate: '2026-01-01' });
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(300);
+    // Build/Development carries the curated weight 35; the Kick-Off milestone stays auto (null).
+    expect((await prisma.task.findFirstOrThrow({ where: { projectId: proj.id, name: 'Build / Development' } })).weight).toBe(35);
+    expect((await prisma.task.findFirstOrThrow({ where: { projectId: proj.id, name: 'Kick-Off Meeting' } })).weight).toBeNull();
+    // The work-package weights sum to ~100.
+    const tasks = await prisma.task.findMany({ where: { projectId: proj.id } });
+    const sum = tasks.reduce((s, t) => s + (t.weight ?? 0), 0);
+    expect(sum).toBe(100);
   });
 });

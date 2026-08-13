@@ -201,6 +201,7 @@ export async function applyTemplate(projectId: string, templateId: string, start
       deliverable: t.deliverable ?? null,
       acceptanceCriteria: t.acceptanceCriteria ?? null,
       progressPct: 0,
+      weight: t.weight ?? null,
     };
   });
   await prisma.task.createMany({ data: rows });

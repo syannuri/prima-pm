@@ -10,6 +10,9 @@ export interface TemplateTask {
   isMilestone?: boolean;
   deliverable?: string;
   acceptanceCriteria?: string;
+  // Manual work-package weight (Model B): a curated effort distribution so the seeded schedule's
+  // % roll-up reflects effort, not raw duration. Omitted on milestones (auto). Sum ≈ 100/template.
+  weight?: number;
 }
 
 export interface WbsTemplate {
@@ -28,15 +31,15 @@ export const WBS_TEMPLATES: WbsTemplate[] = [
     description: 'Assess → design → build → migrate → cut-over → UAT → go-live → hypercare.',
     tasks: [
       { name: 'Kick-Off Meeting', offsetDays: 0, durationDays: 0, isMilestone: true },
-      { name: 'Requirements & Assessment', offsetDays: 1, durationDays: 4, deliverable: 'Current-state assessment report' },
-      { name: 'Solution Design', offsetDays: 6, durationDays: 5, deliverable: 'Signed-off design document' },
-      { name: 'Procurement & Staging Setup', offsetDays: 12, durationDays: 3 },
-      { name: 'Installation & Configuration', offsetDays: 15, durationDays: 5 },
-      { name: 'Data Migration & Validation', offsetDays: 21, durationDays: 4, acceptanceCriteria: 'All data migrated with 0 validation errors' },
-      { name: 'Cut-Over', offsetDays: 26, durationDays: 2 },
-      { name: 'User Acceptance Test', offsetDays: 29, durationDays: 3, deliverable: 'UAT sign-off' },
+      { name: 'Requirements & Assessment', offsetDays: 1, durationDays: 4, deliverable: 'Current-state assessment report', weight: 10 },
+      { name: 'Solution Design', offsetDays: 6, durationDays: 5, deliverable: 'Signed-off design document', weight: 15 },
+      { name: 'Procurement & Staging Setup', offsetDays: 12, durationDays: 3, weight: 8 },
+      { name: 'Installation & Configuration', offsetDays: 15, durationDays: 5, weight: 20 },
+      { name: 'Data Migration & Validation', offsetDays: 21, durationDays: 4, acceptanceCriteria: 'All data migrated with 0 validation errors', weight: 20 },
+      { name: 'Cut-Over', offsetDays: 26, durationDays: 2, weight: 7 },
+      { name: 'User Acceptance Test', offsetDays: 29, durationDays: 3, deliverable: 'UAT sign-off', weight: 12 },
       { name: 'Go-Live', offsetDays: 33, durationDays: 0, isMilestone: true },
-      { name: 'Hypercare / Stabilization', offsetDays: 34, durationDays: 5 },
+      { name: 'Hypercare / Stabilization', offsetDays: 34, durationDays: 5, weight: 8 },
     ],
   },
   {
@@ -46,15 +49,15 @@ export const WBS_TEMPLATES: WbsTemplate[] = [
     description: 'Discovery → tenant design → build → identity/SSO → data migration → cut-over → UAT → go-live.',
     tasks: [
       { name: 'Kick-Off Meeting', offsetDays: 0, durationDays: 0, isMilestone: true },
-      { name: 'Discovery & Assessment', offsetDays: 1, durationDays: 5, deliverable: 'Discovery report & migration approach' },
-      { name: 'Tenant / Landing-Zone Design', offsetDays: 7, durationDays: 5, deliverable: 'Target tenant design' },
-      { name: 'Build Target Environment', offsetDays: 13, durationDays: 6 },
-      { name: 'Identity & SSO Configuration', offsetDays: 20, durationDays: 4, acceptanceCriteria: 'SSO works for all pilot users' },
-      { name: 'Mailbox / Data Migration', offsetDays: 25, durationDays: 6 },
-      { name: 'Cut-Over', offsetDays: 32, durationDays: 2 },
-      { name: 'User Acceptance Test', offsetDays: 35, durationDays: 3, deliverable: 'UAT sign-off' },
+      { name: 'Discovery & Assessment', offsetDays: 1, durationDays: 5, deliverable: 'Discovery report & migration approach', weight: 12 },
+      { name: 'Tenant / Landing-Zone Design', offsetDays: 7, durationDays: 5, deliverable: 'Target tenant design', weight: 13 },
+      { name: 'Build Target Environment', offsetDays: 13, durationDays: 6, weight: 18 },
+      { name: 'Identity & SSO Configuration', offsetDays: 20, durationDays: 4, acceptanceCriteria: 'SSO works for all pilot users', weight: 12 },
+      { name: 'Mailbox / Data Migration', offsetDays: 25, durationDays: 6, weight: 20 },
+      { name: 'Cut-Over', offsetDays: 32, durationDays: 2, weight: 8 },
+      { name: 'User Acceptance Test', offsetDays: 35, durationDays: 3, deliverable: 'UAT sign-off', weight: 10 },
       { name: 'Go-Live', offsetDays: 39, durationDays: 0, isMilestone: true },
-      { name: 'Stabilization', offsetDays: 40, durationDays: 5 },
+      { name: 'Stabilization', offsetDays: 40, durationDays: 5, weight: 7 },
     ],
   },
   {
@@ -64,13 +67,13 @@ export const WBS_TEMPLATES: WbsTemplate[] = [
     description: 'A lightweight lifecycle: initiation → requirements → design → build → test → deploy → closeout.',
     tasks: [
       { name: 'Kick-Off Meeting', offsetDays: 0, durationDays: 0, isMilestone: true },
-      { name: 'Requirements', offsetDays: 1, durationDays: 4, deliverable: 'Requirements document' },
-      { name: 'Design', offsetDays: 6, durationDays: 4, deliverable: 'Design document' },
-      { name: 'Build / Development', offsetDays: 11, durationDays: 10 },
-      { name: 'Testing / UAT', offsetDays: 22, durationDays: 4, deliverable: 'Test & UAT sign-off' },
-      { name: 'Deployment', offsetDays: 27, durationDays: 2 },
+      { name: 'Requirements', offsetDays: 1, durationDays: 4, deliverable: 'Requirements document', weight: 12 },
+      { name: 'Design', offsetDays: 6, durationDays: 4, deliverable: 'Design document', weight: 15 },
+      { name: 'Build / Development', offsetDays: 11, durationDays: 10, weight: 35 },
+      { name: 'Testing / UAT', offsetDays: 22, durationDays: 4, deliverable: 'Test & UAT sign-off', weight: 18 },
+      { name: 'Deployment', offsetDays: 27, durationDays: 2, weight: 10 },
       { name: 'Go-Live', offsetDays: 30, durationDays: 0, isMilestone: true },
-      { name: 'Closure & Handover', offsetDays: 31, durationDays: 3, deliverable: 'Lessons learned & handover' },
+      { name: 'Closure & Handover', offsetDays: 31, durationDays: 3, deliverable: 'Lessons learned & handover', weight: 10 },
     ],
   },
 ];
