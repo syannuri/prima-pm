@@ -1320,6 +1320,9 @@ model Task {
   picResource   Resource? @relation("TaskPicResource", fields: [picResourceId], references: [id])
 
   progressPct  Int       @default(0) // 0..100
+  // Manual relative work-package weight (Model B). null = derive from cost/duration proxy.
+  // Set on a Main Task to steer the top-down % roll-up; distributed to its leaves pro-rata.
+  weight       Float?
   isMilestone  Boolean   @default(false)
   sortOrder    Int       @default(0)
 

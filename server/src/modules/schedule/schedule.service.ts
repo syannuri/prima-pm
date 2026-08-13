@@ -15,6 +15,7 @@ import {
   reconcileManpower,
   isCostLoaded,
   computeCpm,
+  computeLeafWeights,
   type DependencyEdge,
   type CpmDepType,
 } from './schedule.helpers.js';
@@ -97,11 +98,36 @@ export async function getGantt(projectId: string) {
     prisma.project.findUnique({ where: { id: projectId }, select: { scheduleBaselinedAt: true, baselineLockedAt: true } }),
   ]);
 
+  // Effective work-package share per node (Model B) — the authoritative weight each task
+  // contributes to project %, honouring manual `weight` overrides. Lets the client show a
+  // Main Task's real share so partial/mixed weighting is self-correcting.
+  const parentIds = new Set(tasks.filter((t) => t.parentTaskId).map((t) => t.parentTaskId!));
+  const leafIds = tasks.filter((t) => !parentIds.has(t.id)).map((t) => t.id);
+  const leafDur = new Map(tasks.map((t) => [t.id, durationDays(t.planStart, t.planEnd)]));
+  const costLoaded = isCostLoaded(leafIds.map((id) => ({ cost: dc.get(id) ?? 0, durationDays: leafDur.get(id)! })));
+  const leafProxy = new Map(leafIds.map((id) => [id, costLoaded ? (dc.get(id) ?? 0) : leafDur.get(id)!]));
+  if ([...leafProxy.values()].every((v) => v === 0)) for (const k of leafProxy.keys()) leafProxy.set(k, 1);
+  const leafWeight = computeLeafWeights(
+    tasks.map((t) => ({ id: t.id, parentTaskId: t.parentTaskId, weight: t.weight, proxy: leafProxy.get(t.id) ?? 0 })),
+  );
+  const totalWeight = [...leafWeight.values()].reduce((s, w) => s + w, 0);
+  // Roll each leaf's weight up to all its ancestors so parents show their subtree share.
+  const parentById = new Map(tasks.map((t) => [t.id, t.parentTaskId]));
+  const subtreeWeight = new Map<string, number>();
+  for (const [leafId, w] of leafWeight) {
+    for (let cursor: string | null = leafId, hops = 0; cursor && hops <= tasks.length; hops++) {
+      subtreeWeight.set(cursor, (subtreeWeight.get(cursor) ?? 0) + w);
+      cursor = parentById.get(cursor) ?? null;
+    }
+  }
+
   const enriched = tasks.map((t) => ({
     ...t,
     durationDays: durationDays(t.planStart, t.planEnd),
     budgetCost: dc.get(t.id) ?? 0,
     linkedPlanMandays: mp.mandays.get(t.id) ?? 0,
+    // Share of the project's total weight this task (or its subtree) carries, 0..100.
+    effectiveWeightPct: totalWeight > 0 ? Math.round(((subtreeWeight.get(t.id) ?? 0) / totalWeight) * 1000) / 10 : 0,
   }));
 
   // baselineLocked freezes task dates + dependencies (assertBaselineUnlocked), so the client
@@ -223,6 +249,7 @@ export async function createTask(projectId: string, input: UpsertTaskInput, acto
         picUserId,
         picResourceId: input.picResourceId ?? null,
         progressPct: input.progressPct,
+        weight: input.weight ?? null,
         isMilestone: input.isMilestone,
         sortOrder: input.sortOrder,
       },
@@ -280,6 +307,7 @@ export async function updateTask(
       picUserId,
       picResourceId: input.picResourceId ?? null,
       progressPct: input.progressPct,
+      weight: input.weight ?? null,
       isMilestone: input.isMilestone,
       sortOrder: input.sortOrder,
     },
@@ -473,6 +501,8 @@ export interface EvmTaskRow {
   planStart: Date;
   planEnd: Date;
   progressPct: number;
+  /** Manual relative weight (Model B) — overrides the cost/duration proxy when set. */
+  weight: number | null;
   baselineStart: Date | null;
   baselineFinish: Date | null;
 }
@@ -512,8 +542,19 @@ export function evmFromRows(r: EvmRows) {
   // disappear from EV/%complete (overstating progress — see isCostLoaded).
   const leafDur = new Map(leaves.map((t) => [t.id, durationDays(t.planStart, t.planEnd)]));
   const costLoaded = isCostLoaded(leaves.map((t) => ({ cost: costByTask.get(t.id) ?? 0, durationDays: leafDur.get(t.id)! })));
+  // Fallback proxy per leaf: linked cost when fully cost-loaded, else duration. All-milestone
+  // (every proxy 0) → equal weight so no leaf collapses to 0 and vanishes from EV/%complete.
+  const leafProxy = new Map(leaves.map((t) => [t.id, costLoaded ? (costByTask.get(t.id) ?? 0) : leafDur.get(t.id)!]));
+  if ([...leafProxy.values()].every((v) => v === 0)) for (const k of leafProxy.keys()) leafProxy.set(k, 1);
+
+  // Effective leaf weights honour manual `weight` overrides (Model B): a Main Task's weight is
+  // distributed across its leaves pro-rata by proxy. A weight-free WBS reproduces `leafProxy`
+  // EXACTLY, so EV/PV/CPI/SPI are unchanged for every project that doesn't opt in.
+  const leafWeight = computeLeafWeights(
+    tasks.map((t) => ({ id: t.id, parentTaskId: t.parentTaskId, weight: t.weight, proxy: leafProxy.get(t.id) ?? 0 })),
+  );
   const evmTasks: EvmTask[] = leaves.map((t) => ({
-    budgetCost: costLoaded ? (costByTask.get(t.id) ?? 0) : leafDur.get(t.id)!,
+    budgetCost: leafWeight.get(t.id) ?? 0,
     progressPct: t.progressPct,
     planStart: t.planStart,
     planEnd: t.planEnd,
@@ -521,10 +562,6 @@ export function evmFromRows(r: EvmRows) {
     baselineStart: t.baselineStart,
     baselineEnd: t.baselineFinish,
   }));
-  // All-milestone projects have zero duration everywhere → weight each leaf equally.
-  if (!costLoaded && evmTasks.every((t) => t.budgetCost === 0)) {
-    for (const t of evmTasks) t.budgetCost = 1;
-  }
   const totalWeight = evmTasks.reduce((s, t) => s + t.budgetCost, 0);
 
   // Authoritative BAC = the Performance Measurement Baseline (PMB): direct +
@@ -563,7 +600,7 @@ export type PredictiveEvm = ReturnType<typeof evmFromRows>;
  */
 export async function getEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
   const [tasks, costByTask, resolvedAc, project, baseline] = await Promise.all([
-    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, baselineStart: true, baselineFinish: true } }),
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, weight: true, baselineStart: true, baselineFinish: true } }),
     directCostByTask(projectId),
     // Use the explicit override if provided, else the stored time-phased AC.
     actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),

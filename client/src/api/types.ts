@@ -685,6 +685,8 @@ export interface Task {
   picUserId: string | null;
   picResourceId: string | null;
   progressPct: number;
+  /** Manual relative work-package weight (Model B). null = derive from cost/duration. */
+  weight: number | null;
   isMilestone: boolean;
   sortOrder: number;
 }
@@ -700,6 +702,8 @@ export interface TaskDependency {
 export interface GanttNode extends Task {
   durationDays: number;
   budgetCost: number;
+  /** Share of total project weight this task/subtree carries (0..100), honouring manual weights. */
+  effectiveWeightPct: number;
   linkedPlanMandays: number;
   pic?: { id: string; name: string } | null;
   picResource?: { id: string; name: string } | null;
