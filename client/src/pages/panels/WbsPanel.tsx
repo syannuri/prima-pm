@@ -478,6 +478,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   });
   const overallPct = (evmQ.data?.scheduleProgress ?? 0) * 100;
 
+  // Is the project % being steered by manual phase weights? (vs. auto cost/duration.) Once a
+  // baseline exists the frozen `baselineWeight` is what drives EV, so check that instead. Drives
+  // the header "⚖ Weighted" badge + the per-phase share chip in the compact view.
+  const weightsBaselined = !!baselinedAt;
+  const isWeighted = useMemo(() => {
+    const any = (nodes: GanttNode[]): boolean =>
+      nodes.some((n) => (weightsBaselined ? n.baselineWeight : n.weight) != null || any(n.children ?? []));
+    return any(ganttQ.data?.tree ?? []);
+  }, [ganttQ.data, weightsBaselined]);
+
   // Critical Path (CPM) — the set of tasks whose slip moves the whole project finish. Fetched
   // read-only to outline the critical bars on the Gantt (same data as the CPM panel).
   const cpmQ = useQuery({ queryKey: ['cpm', projectId], queryFn: () => api.get<CpmResult>(`${base}/cpm`) });
@@ -1116,6 +1126,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </OptionsMenu>
           )}
         </div>
+        {!fullscreen && rows.length > 0 && isWeighted && (
+          <button
+            type="button"
+            onClick={() => canPlan && setWeightsOpen(true)}
+            title={`Project % is steered by manual phase weights${weightsBaselined ? ', frozen at the baseline' : ''}.${canPlan ? ' Click to edit.' : ''}`}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700 dark:border-brand-900/50 dark:bg-brand-900/20 dark:text-brand-300 ${canPlan ? 'hover:bg-brand-100 dark:hover:bg-brand-900/40' : 'cursor-default'}`}
+          >
+            ⚖ Weighted{weightsBaselined ? ' · baseline' : ''}
+          </button>
+        )}
         {!fullscreen && rows.length > 0 && <ProgressBadge pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
         </div>
       </div>
@@ -1325,6 +1345,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         )}
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
                         <InlineName value={node.name} editable={canPlan} done={r.pct >= 100} depthZero={depth === 0} onSave={(name) => patchTask.mutate({ node, patch: { name } })} />
+                        {/* Compact view: surface each phase's weighted share here since the Weight column
+                            is hidden. Parents only, and only when weighting is actually in effect. */}
+                        {isWeighted && !showDates && hasKids && (
+                          <span title={`Weighted share of the project %${weightsBaselined ? ' (baseline)' : ''}`} className="shrink-0 rounded bg-brand-50 px-1 text-[10px] font-medium tabular-nums text-brand-600 dark:bg-brand-900/20 dark:text-brand-300">
+                            ⚖ {node.effectiveWeightPct}%
+                          </span>
+                        )}
                         {isCollapsed && hasKids && <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">⋯</span>}
                         {isCritical && <span className="shrink-0 text-[10px] font-bold text-red-500" title="On the critical path — a slip here delays the whole project">▲ CP</span>}
                         {canEdit && (
