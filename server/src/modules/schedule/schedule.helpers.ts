@@ -246,9 +246,75 @@ export function reconcileManpower(rows: ManpowerSyncInput[]): ManpowerSyncRow[] 
   });
 }
 
-// NOTE: the authoritative project progress is the flat leaf-weighted `weightedProgress`
-// computed inside the EVM engine (server/src/calc/evm.ts) and consumed by
-// schedule.service (`evm.weightedProgress`). A previous hierarchical, duration-weighted
-// roll-up (`weightedProgress`/`wbsProgress`) lived here but was only ever referenced by
-// its own tests — it was removed to avoid two divergent, dead "progress" helpers. The
-// Gantt view computes its own per-node display roll-up in the client.
+// --- Weighted work-package roll-up (Model B) ---
+// The authoritative project progress is the flat leaf-weighted `weightedProgress`
+// computed inside the EVM engine (server/src/calc/evm.ts). To let a PMO steer that
+// number top-down, any task may carry a manual relative `weight`. We convert the WBS
+// tree + manual weights into EFFECTIVE LEAF WEIGHTS which are fed to the SAME engine as
+// `budgetCost`, so `weightedProgress`, EV, PV, CPI and SPI stay one consistent number.
+//
+// Rule: a node's children split their parent's share by their manual `weight` when set,
+// else by the child subtree's fallback `proxy` (linked cost, or duration). A manual
+// weight on a Main Task therefore distributes across its leaves pro-rata by proxy.
+// When NO manual weight is set anywhere, each leaf's effective weight reproduces its own
+// proxy EXACTLY — so EVM is unchanged for every existing project (no drift).
+
+export interface WeightNode {
+  id: string;
+  parentTaskId: string | null;
+  /** Manual relative weight (>= 0). null/undefined = "use the fallback proxy". */
+  weight?: number | null;
+  /** Fallback weight for a LEAF (cost or duration). Ignored for parents (summed from leaves). */
+  proxy: number;
+}
+
+/**
+ * Distribute the WBS into effective leaf weights honouring manual `weight` overrides.
+ * Returns a Map<leafId, weight>. Pure & unit-tested. Callers must ensure leaf proxies are
+ * not all zero (e.g. all-milestone uncosted → pass proxy 1 each) so relative weights exist.
+ */
+export function computeLeafWeights(nodes: WeightNode[]): Map<string, number> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const childrenOf = new Map<string, WeightNode[]>();
+  for (const n of nodes) {
+    const parent = n.parentTaskId && byId.has(n.parentTaskId) ? n.parentTaskId : null;
+    if (parent) {
+      const arr = childrenOf.get(parent) ?? [];
+      arr.push(n);
+      childrenOf.set(parent, arr);
+    }
+  }
+  const kidsOf = (n: WeightNode) => childrenOf.get(n.id) ?? [];
+
+  // Subtree fallback proxy = Σ leaf proxies beneath the node (leaf = its own proxy).
+  const subtreeProxy = new Map<string, number>();
+  const subtreeOf = (n: WeightNode): number => {
+    const cached = subtreeProxy.get(n.id);
+    if (cached !== undefined) return cached;
+    const kids = kidsOf(n);
+    const v = kids.length ? kids.reduce((s, k) => s + subtreeOf(k), 0) : Math.max(0, n.proxy || 0);
+    subtreeProxy.set(n.id, v);
+    return v;
+  };
+  nodes.forEach(subtreeOf);
+
+  // Relative weight among siblings: manual weight when set (>= 0), else subtree proxy.
+  const rel = (n: WeightNode) => (n.weight != null && n.weight >= 0 ? n.weight : subtreeProxy.get(n.id)!);
+
+  const out = new Map<string, number>();
+  const distribute = (siblings: WeightNode[], incoming: number) => {
+    const total = siblings.reduce((s, n) => s + rel(n), 0);
+    for (const n of siblings) {
+      const share = total > 0 ? (incoming * rel(n)) / total : incoming / siblings.length;
+      const kids = kidsOf(n);
+      if (kids.length) distribute(kids, share);
+      else out.set(n.id, (out.get(n.id) ?? 0) + share);
+    }
+  };
+
+  const roots = nodes.filter((n) => !(n.parentTaskId && byId.has(n.parentTaskId)));
+  // Seed the root incoming with Σ subtree proxy so a weight-free WBS reproduces proxies exactly.
+  const rootTotal = roots.reduce((s, n) => s + subtreeOf(n), 0);
+  distribute(roots, rootTotal > 0 ? rootTotal : roots.length);
+  return out;
+}

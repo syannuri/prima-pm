@@ -113,25 +113,30 @@ const FROZEN_EDGE = 'border-r border-slate-200 dark:border-slate-800 shadow-[2px
 const SHOW_WBS_DICTIONARY = false;
 
 // Summary-task roll-up (MS-Project / WBS 100% rule): a parent's dates span its
-// descendants and its % is the duration-weighted average of theirs. Leaves keep
-// their own stored values. Returns a map of taskId → rolled metrics.
-interface Roll { start: number; end: number; dur: number; pct: number; budget: number; isParent: boolean; baseStart: number | null; baseEnd: number | null }
+// descendants and its % is the WEIGHT-weighted average of theirs — using each node's
+// effective work-package weight (`effectiveWeightPct`, which already honours any manual
+// Main-Task weights). With no manual weights that share equals the duration proportion,
+// so this stays identical to the old duration-weighted roll-up. The parent's % therefore
+// matches the authoritative project % from the EVM engine. Leaves keep their stored values.
+interface Roll { start: number; end: number; dur: number; wt: number; pct: number; budget: number; isParent: boolean; baseStart: number | null; baseEnd: number | null }
 const ts = (s: string | null) => (s ? +new Date(s) : null);
 function rollup(node: GanttNode, out: Map<string, Roll>): Roll {
   if (!node.children?.length) {
-    const r: Roll = { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: ts(node.baselineStart), baseEnd: ts(node.baselineFinish) };
+    // effectiveWeightPct may be 0 (or absent on a stale payload) → fall back to duration.
+    const wt = node.effectiveWeightPct || node.durationDays || 0;
+    const r: Roll = { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, wt, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: ts(node.baselineStart), baseEnd: ts(node.baselineFinish) };
     out.set(node.id, r);
     return r;
   }
   const kids = node.children.map((c) => rollup(c, out));
   const start = Math.min(...kids.map((k) => k.start));
   const end = Math.max(...kids.map((k) => k.end));
-  const totalDur = kids.reduce((s, k) => s + k.dur, 0) || 1;
-  const pct = Math.round(kids.reduce((s, k) => s + k.pct * k.dur, 0) / totalDur);
+  const totalWt = kids.reduce((s, k) => s + k.wt, 0) || 1;
+  const pct = Math.round(kids.reduce((s, k) => s + k.pct * k.wt, 0) / totalWt);
   const budget = kids.reduce((s, k) => s + k.budget, 0); // summary budget = Σ children
   const bs = kids.map((k) => k.baseStart).filter((x): x is number => x != null);
   const be = kids.map((k) => k.baseEnd).filter((x): x is number => x != null);
-  const r: Roll = { start, end, dur: Math.round((end - start) / day) + 1, pct, budget, isParent: true, baseStart: bs.length ? Math.min(...bs) : null, baseEnd: be.length ? Math.max(...be) : null };
+  const r: Roll = { start, end, dur: Math.round((end - start) / day) + 1, wt: kids.reduce((s, k) => s + k.wt, 0), pct, budget, isParent: true, baseStart: bs.length ? Math.min(...bs) : null, baseEnd: be.length ? Math.max(...be) : null };
   out.set(node.id, r);
   return r;
 }
@@ -803,7 +808,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         picUserId: node.picUserId ?? undefined, picResourceId: node.picResourceId ?? undefined,
         description: node.description ?? null, deliverable: node.deliverable ?? null, acceptanceCriteria: node.acceptanceCriteria ?? null,
         actualStart: node.actualStart ?? undefined, actualFinish: node.actualFinish ?? undefined,
-        progressPct: node.progressPct, isMilestone: node.isMilestone,
+        progressPct: node.progressPct, isMilestone: node.isMilestone, weight: node.weight,
       }),
     onSuccess: invalidate,
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to reschedule'); },
@@ -815,7 +820,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
     mutationFn: ({ node, patch }: { node: GanttNode; patch: Record<string, unknown> }) =>
       api.put(`${base}/tasks/${node.id}`, {
         name: node.name, planStart: node.planStart, planEnd: node.planEnd,
-        progressPct: node.progressPct, isMilestone: node.isMilestone,
+        progressPct: node.progressPct, isMilestone: node.isMilestone, weight: node.weight,
         parentTaskId: node.parentTaskId, sortOrder: node.sortOrder,
         picUserId: node.picUserId ?? undefined, picResourceId: node.picResourceId ?? undefined,
         description: node.description ?? null, deliverable: node.deliverable ?? null, acceptanceCriteria: node.acceptanceCriteria ?? null,
@@ -1184,6 +1189,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Actual start & finish (tracking)">Actual</th>
                     <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Dur</th>
                     <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
+                    <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Manual work-package weight. Set it on a Main Task to steer the top-down % roll-up; the grey % is the effective share of the whole project (blank = auto from cost/duration).">Weight</th>
                   </>
                 )}
                 <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
@@ -1215,7 +1221,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             </thead>
             <tbody>
               {rows.map(({ node, depth, wbs }, rowIdx) => {
-                const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null };
+                const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, wt: node.effectiveWeightPct || node.durationDays || 0, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null };
                 const st = statusOf(r.pct);
                 // Zebra striping — the opaque frozen cells carry the same bg so the stripe + hover
                 // read continuously across the frozen/scroll boundary.
@@ -1354,6 +1360,28 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                         <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
                         <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
                           {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                        </td>
+                        {/* Manual work-package weight (Model B) + the effective project share it resolves to. */}
+                        <td className="whitespace-nowrap text-right">
+                          {canPlan ? (
+                            <input
+                              type="number" min={0} step="any" defaultValue={node.weight ?? ''} key={`w-${node.weight}`}
+                              placeholder="auto" aria-label={`Weight for ${node.name}`}
+                              title="Manual weight — set on a Main Task to steer the % roll-up. Blank = auto (cost/duration)."
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim();
+                                const v = raw === '' ? null : Math.max(0, Number(raw));
+                                if (v !== (node.weight ?? null)) patchTask.mutate({ node, patch: { weight: v } });
+                              }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                              className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums placeholder:text-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600"
+                            />
+                          ) : node.weight != null ? (
+                            <span className="tabular-nums text-xs text-slate-600 dark:text-slate-300">{node.weight}</span>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600">auto</span>
+                          )}
+                          <span className="ml-1 tabular-nums text-[10px] text-slate-400 dark:text-slate-500" title="Effective share of the whole project this task/phase carries">{r.wt > 0 ? `${node.effectiveWeightPct}%` : ''}</span>
                         </td>
                       </>
                     )}

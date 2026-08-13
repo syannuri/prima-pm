@@ -18,6 +18,8 @@ export const upsertTaskSchema = z
     picUserId: z.string().uuid().nullable().optional(),
     picResourceId: z.string().uuid().nullable().optional(),
     progressPct: z.coerce.number().int().min(0).max(100).default(0),
+    // Manual relative work-package weight (Model B). null/omitted = derive from cost/duration.
+    weight: z.coerce.number().min(0).max(1_000_000).nullable().optional(),
     isMilestone: z.boolean().default(false),
     sortOrder: z.coerce.number().int().default(0),
   })
