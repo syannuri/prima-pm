@@ -107,8 +107,11 @@ export async function getGantt(projectId: string) {
   const costLoaded = isCostLoaded(leafIds.map((id) => ({ cost: dc.get(id) ?? 0, durationDays: leafDur.get(id)! })));
   const leafProxy = new Map(leafIds.map((id) => [id, costLoaded ? (dc.get(id) ?? 0) : leafDur.get(id)!]));
   if ([...leafProxy.values()].every((v) => v === 0)) for (const k of leafProxy.keys()) leafProxy.set(k, 1);
+  // Match the EVM engine: weight against the frozen baselineWeight once a baseline exists, so the
+  // displayed share == the number actually driving EV/% complete.
+  const baselined = !!project?.scheduleBaselinedAt;
   const leafWeight = computeLeafWeights(
-    tasks.map((t) => ({ id: t.id, parentTaskId: t.parentTaskId, weight: t.weight, proxy: leafProxy.get(t.id) ?? 0 })),
+    tasks.map((t) => ({ id: t.id, parentTaskId: t.parentTaskId, weight: baselined ? t.baselineWeight : t.weight, proxy: leafProxy.get(t.id) ?? 0 })),
   );
   const totalWeight = [...leafWeight.values()].reduce((s, w) => s + w, 0);
   // Roll each leaf's weight up to all its ancestors so parents show their subtree share.
@@ -376,14 +379,15 @@ export async function setTaskActuals(projectId: string, taskId: string, input: T
 }
 
 // Capture (or re-capture) the schedule baseline: snapshot every task's planned
-// dates into baselineStart/baselineFinish and stamp the project. Variance is then
-// current planEnd − baselineFinish.
+// dates into baselineStart/baselineFinish AND its work-package weight into baselineWeight,
+// then stamp the project. Variance is then current planEnd − baselineFinish; EVM weights against
+// the frozen baselineWeight so re-planning weights can't silently re-base EV/% complete.
 export async function setScheduleBaseline(projectId: string, actorId: string) {
   await ensureChartered(projectId);
   await assertBaselineUnlocked(projectId);
   const now = new Date();
   await prisma.$transaction([
-    prisma.$executeRaw`UPDATE "Task" SET "baselineStart" = "planStart", "baselineFinish" = "planEnd" WHERE "projectId" = ${projectId}`,
+    prisma.$executeRaw`UPDATE "Task" SET "baselineStart" = "planStart", "baselineFinish" = "planEnd", "baselineWeight" = "weight" WHERE "projectId" = ${projectId}`,
     prisma.project.update({ where: { id: projectId }, data: { scheduleBaselinedAt: now } }),
   ]);
   await writeAudit({ projectId, userId: actorId, entity: 'Project', entityId: projectId, action: 'UPDATE', after: { scheduleBaselinedAt: now } });
@@ -503,6 +507,8 @@ export interface EvmTaskRow {
   progressPct: number;
   /** Manual relative weight (Model B) — overrides the cost/duration proxy when set. */
   weight: number | null;
+  /** PMB snapshot of `weight` at baseline capture — EVM weights against this once baselined. */
+  baselineWeight: number | null;
   baselineStart: Date | null;
   baselineFinish: Date | null;
 }
@@ -550,8 +556,12 @@ export function evmFromRows(r: EvmRows) {
   // Effective leaf weights honour manual `weight` overrides (Model B): a Main Task's weight is
   // distributed across its leaves pro-rata by proxy. A weight-free WBS reproduces `leafProxy`
   // EXACTLY, so EV/PV/CPI/SPI are unchanged for every project that doesn't opt in.
+  // Once a schedule baseline exists, weight against the FROZEN `baselineWeight` (the PMB
+  // snapshot) — same principle as measuring PV against baseline dates: re-planning weights must
+  // not silently re-base EV/% complete. Re-capturing the baseline refreshes baselineWeight.
+  const baselined = !!scheduleBaselinedAt;
   const leafWeight = computeLeafWeights(
-    tasks.map((t) => ({ id: t.id, parentTaskId: t.parentTaskId, weight: t.weight, proxy: leafProxy.get(t.id) ?? 0 })),
+    tasks.map((t) => ({ id: t.id, parentTaskId: t.parentTaskId, weight: baselined ? t.baselineWeight : t.weight, proxy: leafProxy.get(t.id) ?? 0 })),
   );
   const evmTasks: EvmTask[] = leaves.map((t) => ({
     budgetCost: leafWeight.get(t.id) ?? 0,
@@ -600,7 +610,7 @@ export type PredictiveEvm = ReturnType<typeof evmFromRows>;
  */
 export async function getEvm(projectId: string, actualCost: number | undefined, statusDate: Date) {
   const [tasks, costByTask, resolvedAc, project, baseline] = await Promise.all([
-    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, weight: true, baselineStart: true, baselineFinish: true } }),
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, weight: true, baselineWeight: true, baselineStart: true, baselineFinish: true } }),
     directCostByTask(projectId),
     // Use the explicit override if provided, else the stored time-phased AC.
     actualCost !== undefined ? Promise.resolve(actualCost) : actualCostAsOf(projectId, statusDate),

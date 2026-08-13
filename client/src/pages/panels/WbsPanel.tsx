@@ -1015,6 +1015,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
       <WeightEditorModal
         base={base}
         phases={ganttQ.data?.tree ?? []}
+        baselined={!!baselinedAt}
         onClose={() => setWeightsOpen(false)}
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ['gantt', projectId] });

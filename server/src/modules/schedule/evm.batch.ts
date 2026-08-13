@@ -27,7 +27,7 @@ async function loadStaticRows(ids: string[]): Promise<Map<string, StaticEvmRows>
   const [taskRows, costRows, projs, baselines] = await Promise.all([
     prisma.task.findMany({
       where: { projectId: { in: ids } },
-      select: { id: true, projectId: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, weight: true, baselineStart: true, baselineFinish: true },
+      select: { id: true, projectId: true, parentTaskId: true, planStart: true, planEnd: true, progressPct: true, weight: true, baselineWeight: true, baselineStart: true, baselineFinish: true },
     }),
     prisma.costItemDirect.findMany({
       where: { projectId: { in: ids }, taskId: { not: null } },
@@ -41,7 +41,7 @@ async function loadStaticRows(ids: string[]): Promise<Map<string, StaticEvmRows>
   for (const t of taskRows) {
     let arr = tasksByProject.get(t.projectId);
     if (!arr) tasksByProject.set(t.projectId, (arr = []));
-    arr.push({ id: t.id, parentTaskId: t.parentTaskId, planStart: t.planStart, planEnd: t.planEnd, progressPct: t.progressPct, weight: t.weight, baselineStart: t.baselineStart, baselineFinish: t.baselineFinish });
+    arr.push({ id: t.id, parentTaskId: t.parentTaskId, planStart: t.planStart, planEnd: t.planEnd, progressPct: t.progressPct, weight: t.weight, baselineWeight: t.baselineWeight, baselineStart: t.baselineStart, baselineFinish: t.baselineFinish });
   }
 
   const costByProject = new Map<string, Map<string, number>>();
