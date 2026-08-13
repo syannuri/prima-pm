@@ -15,6 +15,7 @@ export interface ParsedTaskRow {
   planEnd: Date;
   progressPct: number;
   isMilestone: boolean;
+  weight: number | null; // manual work-package weight (Model B); null = auto (cost/duration)
 }
 export interface RowError { rowNum: number; message: string }
 export interface ImportPreview { rows: ParsedTaskRow[]; errors: RowError[]; total: number }
@@ -27,8 +28,9 @@ const HEADER_MAP: Record<string, keyof RawRow> = {
   planend: 'planEnd', end: 'planEnd', enddate: 'planEnd', finish: 'planEnd',
   progress: 'progressPct', 'progress%': 'progressPct', progresspct: 'progressPct', percent: 'progressPct',
   milestone: 'isMilestone', ismilestone: 'isMilestone',
+  weight: 'weight', wt: 'weight', 'weight%': 'weight', weightpct: 'weight',
 };
-interface RawRow { wbsCode?: string; name?: string; planStart?: unknown; planEnd?: unknown; progressPct?: unknown; isMilestone?: unknown }
+interface RawRow { wbsCode?: string; name?: string; planStart?: unknown; planEnd?: unknown; progressPct?: unknown; isMilestone?: unknown; weight?: unknown }
 
 const normHeader = (s: string) => s.toLowerCase().replace(/[\s_]+/g, '').trim();
 
@@ -84,7 +86,16 @@ function buildRows(headers: string[], readRow: (i: number) => (string | number |
     let progressPct = Number(raw.progressPct ?? 0);
     if (!Number.isFinite(progressPct)) progressPct = 0;
     progressPct = Math.max(0, Math.min(100, Math.round(progressPct)));
-    rows.push({ rowNum, wbsCode: cellText(raw.wbsCode) || undefined, name, planStart, planEnd, progressPct, isMilestone: toBool(raw.isMilestone) });
+    // Weight is optional: blank → null (auto). A present-but-negative/non-numeric value is an error
+    // (don't silently coerce it to 0, which would drop the work package out of the % roll-up).
+    let weight: number | null = null;
+    const weightText = cellText(raw.weight);
+    if (weightText) {
+      const w = Number(weightText);
+      if (!Number.isFinite(w) || w < 0) { errors.push({ rowNum, message: 'Weight must be a number ≥ 0 (or blank for auto).' }); continue; }
+      weight = w;
+    }
+    rows.push({ rowNum, wbsCode: cellText(raw.wbsCode) || undefined, name, planStart, planEnd, progressPct, isMilestone: toBool(raw.isMilestone), weight });
   }
   return { rows, errors, total };
 }
@@ -128,6 +139,7 @@ export async function commitTaskImport(projectId: string, rows: ParsedTaskRow[],
       planEnd: row.planEnd,
       progressPct: row.progressPct,
       isMilestone: row.isMilestone,
+      weight: row.weight,
       sortOrder: 0,
     }, actorId);
     created++;

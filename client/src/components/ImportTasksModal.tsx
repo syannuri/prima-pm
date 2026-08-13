@@ -47,8 +47,9 @@ export default function ImportTasksModal({ projectId, onClose, onImported }: { p
       <div className="space-y-4">
         <p className="text-sm text-slate-600 dark:text-slate-300">
           Upload an <strong>.xlsx</strong> or <strong>.csv</strong> with columns
-          {' '}<code className="rounded bg-slate-100 px-1 text-xs dark:bg-slate-800">WBS, Name, Plan Start, Plan End, Progress %, Milestone</code>.
-          We’ll preview it before anything is saved.
+          {' '}<code className="rounded bg-slate-100 px-1 text-xs dark:bg-slate-800">WBS, Name, Plan Start, Plan End, Progress %, Milestone, Weight</code>.
+          {' '}<span className="text-slate-500 dark:text-slate-400">Weight is optional — leave it blank to weight by cost/duration.</span>
+          {' '}We’ll preview it before anything is saved.
         </p>
 
         <input
