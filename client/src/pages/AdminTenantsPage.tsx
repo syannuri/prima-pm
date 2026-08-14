@@ -8,8 +8,9 @@ import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
-import { formatDate } from '../lib/format';
+import { formatDate, formatIdrShort } from '../lib/format';
 import { tenantStats, type Plan } from '../lib/tenantStats';
+import { Kpi, ConsoleHero, FilterChips } from '../components/platform/ConsoleUI';
 
 // Platform (super-admin) console — provision & manage TENANTS (organizations). Gated by the global
 // User.isPlatformAdmin flag; backed by the /admin/tenants API. Distinct from per-tenant admin.
@@ -38,19 +39,29 @@ export default function AdminTenantsPage() {
 
   return (
     <div className="space-y-5">
-      <ConsoleHero id={id} onProvision={() => setCreating(true)} />
+      <ConsoleHero
+        eyebrow={id ? 'Konsol Platform' : 'Platform Console'}
+        title={id ? 'Organisasi' : 'Organizations'}
+        subtitle={id ? 'Provisi, tangguhkan, dan kelola setiap organisasi lintas platform.' : 'Provision, suspend and manage every organization across the platform.'}
+        action={(
+          <button onClick={() => setCreating(true)} className="shrink-0 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-white/90">
+            + {id ? 'Buat organisasi' : 'Provision tenant'}
+          </button>
+        )}
+      />
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Spinner /></div>
       ) : (
         <>
           {/* Headline metrics — derived client-side from the tenant list. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Kpi label={id ? 'Organisasi' : 'Tenants'} value={stats.total} tone="indigo" />
             <Kpi label={id ? 'Aktif' : 'Active'} value={stats.active} tone="emerald" />
             <Kpi label={id ? 'Menunggu' : 'Pending'} value={stats.pending} tone="amber" pulse={stats.pending > 0} />
             <Kpi label={id ? 'Ditangguhkan' : 'Suspended'} value={stats.suspended} tone="red" />
-            <Kpi label={id ? 'Anggota' : 'Members'} value={stats.members} tone="slate" hint={stats.personal > 0 ? `+${stats.personal} ${id ? 'sandbox' : 'sandbox'}` : undefined} />
+            <Kpi label={id ? 'Anggota' : 'Members'} value={stats.members} tone="slate" hint={stats.personal > 0 ? `+${stats.personal} sandbox` : undefined} />
+            <Kpi label={id ? 'MRR (est.)' : 'MRR (est.)'} value={formatIdrShort(stats.mrr)} tone="violet" hint={stats.paying > 0 ? `${stats.paying} ${id ? 'berbayar' : 'paying'} · ARPA ${formatIdrShort(stats.arpa)}` : (id ? 'belum ada berbayar' : 'no paying tenants')} />
           </div>
 
           <PlanBar split={stats.planSplit} total={stats.total} id={id} />
@@ -70,52 +81,7 @@ export default function AdminTenantsPage() {
   );
 }
 
-// ── Platform-console presentational pieces ─────────────────────────────────────────────────────
-
-// Indigo→fuchsia "Control Plane" hero — the visual anchor that sets the platform console apart
-// from every tenant-scoped page.
-function ConsoleHero({ id, onProvision }: { id: boolean; onProvision: () => void }) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-violet-300/40 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 p-5 text-white shadow-lg dark:border-violet-500/30">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/70">
-            <span aria-hidden>◆</span> {id ? 'Konsol Platform' : 'Platform Console'}
-          </div>
-          <h1 className="mt-1 text-xl font-bold">{id ? 'Organisasi' : 'Organizations'}</h1>
-          <p className="mt-0.5 text-sm text-white/85">
-            {id ? 'Provisi, tangguhkan, dan kelola setiap organisasi lintas platform.' : 'Provision, suspend and manage every organization across the platform.'}
-          </p>
-        </div>
-        <button
-          onClick={onProvision}
-          className="shrink-0 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-white/90"
-        >
-          + {id ? 'Buat organisasi' : 'Provision tenant'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const KPI_TONE: Record<string, string> = {
-  indigo: 'text-indigo-600 dark:text-indigo-300',
-  emerald: 'text-emerald-600 dark:text-emerald-300',
-  amber: 'text-amber-600 dark:text-amber-300',
-  red: 'text-red-600 dark:text-red-300',
-  slate: 'text-slate-700 dark:text-slate-200',
-};
-
-function Kpi({ label, value, tone, hint, pulse }: { label: string; value: number; tone: keyof typeof KPI_TONE; hint?: string; pulse?: boolean }) {
-  return (
-    <div className="relative rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-      {pulse && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_0_3px_theme(colors.amber.400/0.2)] motion-safe:animate-pulse" />}
-      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-0.5 text-2xl font-bold tabular-nums ${KPI_TONE[tone]}`}>{value}</div>
-      {hint && <div className="text-[11px] text-slate-400 dark:text-slate-500">{hint}</div>}
-    </div>
-  );
-}
+// ── Platform-console presentational pieces (Kpi / ConsoleHero / FilterChips are shared) ─────────
 
 function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: number; id: boolean }) {
   const seg: { k: Plan; n: number; c: string }[] = [
@@ -174,23 +140,50 @@ function PendingItem({ t, onChange, id }: { t: PlatformTenant; onChange: () => v
 
 const STATUS_FILTERS = ['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
+const PLAN_RANK: Record<Plan, number> = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
+type SortKey = 'name' | 'memberCount' | 'plan' | 'createdAt' | 'updatedAt';
 
-// The tenant registry with a search box + status-filter chips. Table on sm+, cards on phones.
+// A clickable, sortable column header — toggles asc/desc, shows the active arrow.
+function SortTh({ label, k, sort, setSort, align }: { label: string; k: SortKey; sort: { key: SortKey; dir: 'asc' | 'desc' }; setSort: (s: { key: SortKey; dir: 'asc' | 'desc' }) => void; align?: 'right' }) {
+  const active = sort.key === k;
+  return (
+    <th
+      onClick={() => setSort(active ? { key: k, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: k === 'name' ? 'asc' : 'desc' })}
+      className={`cursor-pointer select-none whitespace-nowrap hover:text-slate-700 dark:hover:text-slate-200 ${align === 'right' ? 'text-right' : ''} ${active ? 'text-indigo-600 dark:text-indigo-300' : ''}`}
+    >
+      {label}<span className="ml-0.5 text-[9px]">{active ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}</span>
+    </th>
+  );
+}
+
+// The tenant registry with a search box, status-filter chips, and sortable columns. Table on sm+,
+// cards on phones. Default sort: newest first.
 function TenantTable({ corporate, personal, onChange, id }: { corporate: PlatformTenant[]; personal: number; onChange: () => void; id: boolean }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('ALL');
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'createdAt', dir: 'desc' });
   const filterLabel: Record<StatusFilter, string> = {
     ALL: id ? 'Semua' : 'All', ACTIVE: id ? 'Aktif' : 'Active', PENDING: id ? 'Menunggu' : 'Pending',
     SUSPENDED: id ? 'Ditangguhkan' : 'Suspended', REJECTED: id ? 'Ditolak' : 'Rejected',
   };
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return corporate.filter((t) => {
+    const filtered = corporate.filter((t) => {
       if (filter !== 'ALL' && t.status !== filter) return false;
       if (!needle) return true;
       return t.name.toLowerCase().includes(needle) || t.slug.toLowerCase().includes(needle) || (t.customDomain ?? '').toLowerCase().includes(needle);
     });
-  }, [corporate, q, filter]);
+    const cmp = (a: PlatformTenant, b: PlatformTenant): number => {
+      switch (sort.key) {
+        case 'name': return a.name.localeCompare(b.name);
+        case 'memberCount': return a.memberCount - b.memberCount;
+        case 'plan': return PLAN_RANK[a.plan] - PLAN_RANK[b.plan];
+        case 'createdAt': return +new Date(a.createdAt) - +new Date(b.createdAt);
+        case 'updatedAt': return +new Date(a.updatedAt) - +new Date(b.updatedAt);
+      }
+    };
+    return [...filtered].sort((a, b) => (sort.dir === 'asc' ? cmp(a, b) : -cmp(a, b)));
+  }, [corporate, q, filter, sort]);
 
   return (
     <Card>
@@ -198,17 +191,7 @@ function TenantTable({ corporate, personal, onChange, id }: { corporate: Platfor
         <div className="relative flex-1 min-w-[180px]">
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={id ? 'Cari nama / slug / domain…' : 'Search name / slug / domain…'} />
         </div>
-        <div className="flex flex-wrap gap-1">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${filter === f ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}
-            >
-              {filterLabel[f]}
-            </button>
-          ))}
-        </div>
+        <FilterChips options={STATUS_FILTERS} value={filter} onChange={setFilter} labels={filterLabel} />
       </div>
 
       {!corporate.length ? (
@@ -221,7 +204,14 @@ function TenantTable({ corporate, personal, onChange, id }: { corporate: Platfor
             <table className="prima-rows w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-                  <th className="py-2">{id ? 'Nama' : 'Name'}</th><th>Slug</th><th>{id ? 'Status' : 'Status'}</th><th>{id ? 'Paket' : 'Plan'}</th><th className="text-right">{id ? 'Anggota' : 'Members'}</th><th>{id ? 'Dibuat' : 'Created'}</th><th></th>
+                  <SortTh label={id ? 'Nama' : 'Name'} k="name" sort={sort} setSort={setSort} />
+                  <th>Slug</th>
+                  <th>{id ? 'Status' : 'Status'}</th>
+                  <SortTh label={id ? 'Paket' : 'Plan'} k="plan" sort={sort} setSort={setSort} />
+                  <SortTh label={id ? 'Anggota' : 'Members'} k="memberCount" sort={sort} setSort={setSort} align="right" />
+                  <SortTh label={id ? 'Dibuat' : 'Created'} k="createdAt" sort={sort} setSort={setSort} />
+                  <SortTh label={id ? 'Diubah' : 'Updated'} k="updatedAt" sort={sort} setSort={setSort} />
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -350,6 +340,7 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
       <td><PlanSelect t={t} onPlan={setPlan} disabled={patch.isPending} /></td>
       <td className="text-right text-slate-500 dark:text-slate-400">{t.memberCount}</td>
       <td className="text-slate-500 dark:text-slate-400">{formatDate(t.createdAt)}</td>
+      <td className="text-slate-500 dark:text-slate-400">{formatDate(t.updatedAt)}</td>
       <td className="text-right whitespace-nowrap">
         {pending && (
           <>

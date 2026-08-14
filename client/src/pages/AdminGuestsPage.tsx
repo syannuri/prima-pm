@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Badge, Button, Card, EmptyState, Input, SectionTitle, Spinner } from '../components/ui';
@@ -7,6 +7,10 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { formatDate } from '../lib/format';
+import { Kpi, ConsoleHero, FilterChips } from '../components/platform/ConsoleUI';
+
+const GUEST_FILTERS = ['ALL', 'ACTIVE', 'INACTIVE'] as const;
+type GuestFilter = typeof GUEST_FILTERS[number];
 
 type Guest = { id: string; name: string; email: string; isActive: boolean; createdAt: string; viaGoogle: boolean };
 type Blocked = { id: string; email: string | null; googleSub: string | null; reason: string | null; createdAt: string };
@@ -73,14 +77,35 @@ export default function AdminGuestsPage() {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
   });
 
+  // Search + status filter over the guest list (hooks stay above the platform-admin guard).
+  const [q, setQ] = useState('');
+  const [gfilter, setGfilter] = useState<GuestFilter>('ALL');
+  const guestsAll = data?.guests ?? [];
+  const blockedCount = denylistQ.data?.entries.length ?? 0;
+  const gStats = {
+    total: guestsAll.length,
+    active: guestsAll.filter((g) => g.isActive).length,
+    inactive: guestsAll.filter((g) => !g.isActive).length,
+    google: guestsAll.filter((g) => g.viaGoogle).length,
+  };
+  const filteredGuests = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return guestsAll.filter((g) => {
+      if (gfilter === 'ACTIVE' && !g.isActive) return false;
+      if (gfilter === 'INACTIVE' && g.isActive) return false;
+      if (!needle) return true;
+      return (g.name || '').toLowerCase().includes(needle) || g.email.toLowerCase().includes(needle);
+    });
+  }, [guestsAll, q, gfilter]);
+
   if (!user?.isPlatformAdmin) {
     return <Card><p className="py-6 text-center text-slate-500 dark:text-slate-400">{id ? 'Butuh hak Platform Admin untuk mengelola tamu.' : 'You need Platform Admin privilege to manage guests.'}</p></Card>;
   }
 
-  const guests = data?.guests ?? [];
   const statusBadge = (g: Guest) => g.isActive
     ? <Badge color="green">{id ? 'Aktif' : 'Active'}</Badge>
     : <Badge color="slate">{id ? 'Nonaktif' : 'Inactive'}</Badge>;
+  const filterLabel: Record<GuestFilter, string> = { ALL: id ? 'Semua' : 'All', ACTIVE: id ? 'Aktif' : 'Active', INACTIVE: id ? 'Nonaktif' : 'Inactive' };
   const confirmDelete = async (g: Guest) => {
     blockRef.current = true; // default ON
     if (await confirm({
@@ -104,15 +129,36 @@ export default function AdminGuestsPage() {
 
   return (
     <div className="space-y-5">
-      <SectionTitle sub={id ? 'Akun tamu & Google di seluruh sandbox pribadi' : 'Guest & Google accounts across all personal sandboxes'}>
-        {id ? 'Tamu (Platform)' : 'Guests (Platform)'}
-      </SectionTitle>
-      <Card>
-        {isLoading ? (
-          <div className="flex justify-center py-10"><Spinner /></div>
-        ) : guests.length === 0 ? (
-          <EmptyState title={id ? 'Belum ada tamu' : 'No guest accounts yet'} hint={id ? 'Pendaftaran tamu & login Google akan muncul di sini.' : 'Guest signups and Google logins will appear here.'} />
-        ) : (
+      <ConsoleHero
+        eyebrow={id ? 'Konsol Platform' : 'Platform Console'}
+        title={id ? 'Tamu' : 'Guests'}
+        subtitle={id ? 'Akun tamu & Google di seluruh sandbox pribadi, lintas platform.' : 'Guest & Google accounts across every personal sandbox on the platform.'}
+      />
+
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Spinner /></div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <Kpi label={id ? 'Tamu' : 'Guests'} value={gStats.total} tone="indigo" />
+            <Kpi label={id ? 'Aktif' : 'Active'} value={gStats.active} tone="emerald" />
+            <Kpi label={id ? 'Nonaktif' : 'Deactivated'} value={gStats.inactive} tone="slate" />
+            <Kpi label={id ? 'Diblokir' : 'Blocked'} value={blockedCount} tone="red" pulse={blockedCount > 0} />
+            <Kpi label={id ? 'Via Google' : 'Via Google'} value={gStats.google} tone="violet" hint={`${gStats.total - gStats.google} ${id ? 'via email' : 'via email'}`} />
+          </div>
+
+          <Card>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[180px]">
+                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={id ? 'Cari nama / email…' : 'Search name / email…'} />
+              </div>
+              <FilterChips options={GUEST_FILTERS} value={gfilter} onChange={setGfilter} labels={filterLabel} />
+            </div>
+            {gStats.total === 0 ? (
+              <EmptyState title={id ? 'Belum ada tamu' : 'No guest accounts yet'} hint={id ? 'Pendaftaran tamu & login Google akan muncul di sini.' : 'Guest signups and Google logins will appear here.'} />
+            ) : filteredGuests.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Tidak ada yang cocok dengan filter.' : 'Nothing matches the current filter.'}</p>
+            ) : (
           <>
             {/* desktop table */}
             <table className="prima-rows hidden w-full text-sm sm:table">
@@ -122,7 +168,7 @@ export default function AdminGuestsPage() {
                 </tr>
               </thead>
               <tbody>
-                {guests.map((g) => (
+                {filteredGuests.map((g) => (
                   <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800">
                     <td className="py-2 font-medium text-slate-800 dark:text-slate-100">{g.name || '—'}</td>
                     <td className="text-slate-600 dark:text-slate-300">{g.email}</td>
@@ -144,7 +190,7 @@ export default function AdminGuestsPage() {
 
             {/* mobile cards */}
             <div className="space-y-3 sm:hidden">
-              {guests.map((g) => (
+              {filteredGuests.map((g) => (
                 <div key={g.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -167,8 +213,10 @@ export default function AdminGuestsPage() {
               ))}
             </div>
           </>
-        )}
-      </Card>
+            )}
+          </Card>
+        </>
+      )}
 
       {/* Denylist — identities barred from self-service sign-up */}
       <SectionTitle sub={id ? 'Email / akun Google yang dilarang mendaftar ulang' : 'Emails / Google accounts barred from signing up again'}>

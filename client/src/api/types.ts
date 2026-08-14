@@ -27,6 +27,7 @@ export interface PlatformTenant {
   customDomain: string | null;
   isPersonal: boolean;
   createdAt: string;
+  updatedAt: string; // last change to the tenant record (rename / plan / status) — the "Updated" column
   memberCount: number;
 }
 

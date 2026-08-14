@@ -46,14 +46,14 @@ router.get(
     const tenants = await prisma.tenant.findMany({
       orderBy: [{ isPersonal: 'asc' }, { createdAt: 'asc' }],
       select: {
-        id: true, name: true, slug: true, status: true, plan: true, customDomain: true, isPersonal: true, createdAt: true,
+        id: true, name: true, slug: true, status: true, plan: true, customDomain: true, isPersonal: true, createdAt: true, updatedAt: true,
         _count: { select: { memberships: true } },
       },
     });
     res.json({
       tenants: tenants.map((t) => ({
         id: t.id, name: t.name, slug: t.slug, status: t.status, plan: t.plan, customDomain: t.customDomain, isPersonal: t.isPersonal,
-        createdAt: t.createdAt, memberCount: t._count.memberships,
+        createdAt: t.createdAt, updatedAt: t.updatedAt, memberCount: t._count.memberships,
       })),
     });
   }),
