@@ -812,10 +812,26 @@ export interface ProjectReportData {
     healthTo: 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
     healthChanged: boolean;
   } | null;
+  // UI hint: whether the "Draft dengan AI" action is offered (global key set + tenant opted in).
+  aiAvailable: boolean;
 }
 
 // Response of PUT /projects/:id/report/commentary (echoes the saved narrative).
 export type ProjectCommentary = ProjectReportData['commentary'];
+
+// Response of POST /projects/:id/report/commentary/ai-draft — a generated (unsaved) narrative draft.
+export interface AiNarrativeDraft {
+  executiveSummary: string;
+  highlights: string;
+  lowlights: string;
+  nextFocus: string;
+}
+
+// GET/PATCH /ai-settings — per-tenant opt-in. `configured` = global key set; `enabled` = opt-in.
+export interface AiSettings {
+  configured: boolean;
+  enabled: boolean;
+}
 
 // UAT (User Acceptance Test) — a structured, executable test-case template per project.
 export type UatStatus = 'NOT_RUN' | 'PASS' | 'FAIL' | 'BLOCKED';

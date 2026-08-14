@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { NotFound } from '../../lib/errors.js';
+import { getTenantStore } from '../../lib/tenant/context.js';
+import { aiEnabled } from '../../lib/ai.js';
 // Methodology dispatcher (AGILE → points, HYBRID → blend, else → WBS) so the report's EVM
 // matches the Dashboard/Forecast exactly.
 import { getProjectEvm } from '../agile/agile.service.js';
@@ -161,9 +163,15 @@ export async function saveCommentary(
 export async function getProjectReport(projectId: string, period: ReportPeriod, asOf: Date) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, deletedAt: null },
-    select: { code: true, name: true, status: true, deliveryApproach: true, pm: { select: { name: true } } },
+    select: { code: true, name: true, status: true, deliveryApproach: true, pm: { select: { name: true } }, tenantId: true, tenant: { select: { aiNarrativeEnabled: true } } },
   });
   if (!project) throw NotFound('Project not found');
+
+  // Whether the "Draft dengan AI" action is offered in the UI. Both gates the endpoint enforces:
+  // the global key (aiEnabled) AND the per-tenant opt-in. With no tenant (single-tenant deploy,
+  // enforcement off) the per-tenant gate doesn't apply and the env gate alone governs.
+  const hasTenant = Boolean(project.tenantId || getTenantStore()?.tenantId);
+  const aiAvailable = aiEnabled() && (hasTenant ? project.tenant?.aiNarrativeEnabled === true : true);
 
   const [evm, forecast, tasks, actuals, commentary] = await Promise.all([
     getProjectEvm(projectId, undefined, asOf),
@@ -281,5 +289,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
     commentary,
     // Trend vs the prior captured status (null when there's no earlier snapshot).
     delta,
+    // UI hint: show the "Draft dengan AI" action only when both AI gates pass.
+    aiAvailable,
   };
 }

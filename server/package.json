@@ -18,6 +18,7 @@
     "test:integration": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' MULTITENANCY_ENFORCE=false JWT_ACCESS_SECRET=test-access JWT_REFRESH_SECRET=test-refresh GUEST_SIGNUP_ENABLED=true NODE_ENV=test vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
     "@prisma/client": "^6.5.0",
     "@types/web-push": "^3.6.4",
     "bcryptjs": "^2.4.3",

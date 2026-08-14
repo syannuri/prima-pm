@@ -25,6 +25,7 @@ import myTimesheetRoutes from './modules/timesheet/timesheet.me.routes.js';
 import bookmarkRoutes from './modules/bookmark/bookmark.routes.js';
 import adminAuditRoutes from './modules/audit/adminAudit.routes.js';
 import adminSettingsRoutes from './modules/settings/settings.routes.js';
+import aiSettingsRoutes from './modules/settings/aiSettings.routes.js';
 import messagesRoutes from './modules/messages/messages.routes.js';
 import membersRoutes from './modules/members/members.routes.js';
 import apiKeyRoutes from './modules/apikey/apikey.routes.js';
@@ -197,6 +198,7 @@ export function createApp() {
   api.use('/bookmarks', bookmarkRoutes);
   api.use('/admin/audit', adminAuditRoutes);
   api.use('/admin/settings', adminSettingsRoutes);
+  api.use('/ai-settings', aiSettingsRoutes);
   api.use('/messages', messagesRoutes);
   api.use('/members', membersRoutes);
   api.use('/api-keys', apiKeyRoutes);

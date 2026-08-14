@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/client';
-import type { AgileBoard, Project, ProjectCommentary, ProjectReportData } from '../api/types';
+import { api, ApiError } from '../api/client';
+import type { AgileBoard, AiNarrativeDraft, Project, ProjectCommentary, ProjectReportData } from '../api/types';
 import { Badge, Button, Card, EmptyState, Select, Spinner } from '../components/ui';
 import { formatIdrShort, formatDate } from '../lib/format';
 import DonutChart from '../components/DonutChart';
@@ -268,7 +268,7 @@ function ReportBody({ r, projectId, period, canEdit }: { r: ProjectReportData; p
       </Card>
 
       {/* PM commentary — the story behind the numbers */}
-      <CommentarySection commentary={r.commentary} projectId={projectId} period={period} canEdit={canEdit} />
+      <CommentarySection commentary={r.commentary} projectId={projectId} period={period} canEdit={canEdit} aiAvailable={r.aiAvailable} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Task completion */}
@@ -347,12 +347,15 @@ const ACCENT_BAR: Record<string, string> = {
 
 // PM narrative for the reporting bucket — read view + inline editor (write access only). The story
 // the EVM KPIs can't tell, so a status report reads like a report, not a dashboard dump.
-function CommentarySection({ commentary, projectId, period, canEdit }: {
-  commentary: ProjectReportData['commentary']; projectId: string; period: Period; canEdit: boolean;
+function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable }: {
+  commentary: ProjectReportData['commentary']; projectId: string; period: Period; canEdit: boolean; aiAvailable: boolean;
 }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ highlights: '', lowlights: '', nextFocus: '' });
+  // Executive summary from the last AI draft — shown as a review banner above the editor (the three
+  // editable fields fill the commentary). Cleared once the user saves or cancels.
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
 
   const startEdit = () => {
     setDraft({
@@ -360,13 +363,32 @@ function CommentarySection({ commentary, projectId, period, canEdit }: {
       lowlights: commentary.lowlights ?? '',
       nextFocus: commentary.nextFocus ?? '',
     });
+    setAiSummary(null);
     setEditing(true);
   };
 
   const save = useMutation({
     mutationFn: () => api.put<ProjectCommentary>(`/projects/${projectId}/report/commentary?period=${period}`, draft),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['report', projectId, period] }); setEditing(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['report', projectId, period] }); setEditing(false); setAiSummary(null); },
   });
+
+  // Generate a DRAFT with Claude, then drop into edit mode with the fields pre-filled (still fully
+  // editable — human-in-the-loop). Never auto-saves; the PM saves via the normal Save button.
+  const aiDraft = useMutation({
+    mutationFn: () => api.post<AiNarrativeDraft>(`/projects/${projectId}/report/commentary/ai-draft?period=${period}`, {}),
+    onSuccess: (d) => {
+      setDraft({ highlights: d.highlights, lowlights: d.lowlights, nextFocus: d.nextFocus });
+      setAiSummary(d.executiveSummary);
+      setEditing(true);
+    },
+  });
+  const aiError = aiDraft.isError
+    ? aiDraft.error instanceof ApiError && aiDraft.error.status === 503
+      ? 'Fitur AI belum dikonfigurasi pada deployment ini.'
+      : aiDraft.error instanceof ApiError && aiDraft.error.status === 403
+        ? 'AI belum diaktifkan untuk workspace ini (Settings → Governance).'
+        : 'AI tidak dapat membuat draft. Coba lagi atau isi manual.'
+    : null;
 
   const hasAny = !!(commentary.highlights || commentary.lowlights || commentary.nextFocus);
 
@@ -375,12 +397,27 @@ function CommentarySection({ commentary, projectId, period, canEdit }: {
       <div className="flex items-start justify-between gap-3">
         <SectionHead title="PM commentary" sub="Narrative status — the story behind the numbers" />
         {canEdit && !editing && (
-          <Button variant="secondary" onClick={startEdit}>{hasAny ? '✎ Edit' : '+ Add commentary'}</Button>
+          <div className="flex shrink-0 gap-2">
+            {aiAvailable && (
+              <Button variant="secondary" onClick={() => aiDraft.mutate()} disabled={aiDraft.isPending}>
+                {aiDraft.isPending ? 'Menyusun…' : '✨ Draft dengan AI'}
+              </Button>
+            )}
+            <Button variant="secondary" onClick={startEdit}>{hasAny ? '✎ Edit' : '+ Add commentary'}</Button>
+          </div>
         )}
       </div>
+      {aiError && !editing && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{aiError}</p>}
 
       {editing ? (
         <div className="space-y-3">
+          {aiSummary && (
+            <div className="rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2 dark:border-violet-900/50 dark:bg-violet-950/20">
+              <div className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">✨ Ringkasan AI (draft)</div>
+              <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{aiSummary}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Tinjau &amp; sunting sebelum menyimpan — ini draft AI, bukan final.</p>
+            </div>
+          )}
           {COMMENTARY_FIELDS.map((f) => (
             <div key={f.key}>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{f.label}</label>
@@ -395,8 +432,14 @@ function CommentarySection({ commentary, projectId, period, canEdit }: {
             </div>
           ))}
           {save.isError && <p className="text-sm text-red-600 dark:text-red-400">Couldn’t save — please try again.</p>}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditing(false)} disabled={save.isPending}>Cancel</Button>
+          {aiError && <p className="text-sm text-red-600 dark:text-red-400">{aiError}</p>}
+          <div className="flex flex-wrap justify-end gap-2">
+            {aiAvailable && (
+              <Button variant="secondary" onClick={() => aiDraft.mutate()} disabled={aiDraft.isPending || save.isPending} className="mr-auto">
+                {aiDraft.isPending ? 'Menyusun…' : '✨ Draft dengan AI'}
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => { setEditing(false); setAiSummary(null); }} disabled={save.isPending}>Cancel</Button>
             <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save commentary'}</Button>
           </div>
         </div>

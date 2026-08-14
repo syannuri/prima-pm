@@ -307,6 +307,11 @@ model Tenant {
   subscriptionStatus String?
   renewsAt           DateTime?
   endsAt             DateTime?
+  // AI Status Narrative (first Claude-powered feature) — per-tenant opt-in. The feature is also
+  // gated globally by ANTHROPIC_API_KEY (aiEnabled() reads process.env live). Both must be true:
+  // env unset ⇒ 503; tenant not opted in ⇒ 403. Default off so metrics are only sent to the LLM
+  // provider when a tenant explicitly enables it.
+  aiNarrativeEnabled Boolean   @default(false)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
