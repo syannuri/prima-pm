@@ -7,6 +7,7 @@ import {
   reconcileManpower,
   isCostLoaded,
   computeLeafWeights,
+  deriveStepProgress,
   type WeightNode,
 } from '../schedule.helpers.js';
 
@@ -157,5 +158,23 @@ describe('schedule — effective leaf weights (computeLeafWeights, Model B)', ()
     ];
     const w = computeLeafWeights(nodes);
     expect(w.get('m1')).toBeCloseTo(w.get('m2')!, 9);
+  });
+});
+
+// --- Weighted progress steps (#5): derived % complete ---
+describe('schedule — weighted progress steps (deriveStepProgress)', () => {
+  it('equal-weight steps → simple done fraction', () => {
+    expect(deriveStepProgress([{ weight: 1, done: true }, { weight: 1, done: false }, { weight: 1, done: false }, { weight: 1, done: true }])).toBe(50);
+  });
+  it('honours step weights, not step count', () => {
+    expect(deriveStepProgress([{ weight: 10, done: false }, { weight: 30, done: false }, { weight: 60, done: true }])).toBe(60);
+  });
+  it('all done → 100, none done → 0', () => {
+    expect(deriveStepProgress([{ weight: 2, done: true }, { weight: 3, done: true }])).toBe(100);
+    expect(deriveStepProgress([{ weight: 2, done: false }, { weight: 3, done: false }])).toBe(0);
+  });
+  it('no steps or zero total weight → 0', () => {
+    expect(deriveStepProgress([])).toBe(0);
+    expect(deriveStepProgress([{ weight: 0, done: true }])).toBe(0);
   });
 });

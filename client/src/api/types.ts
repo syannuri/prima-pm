@@ -701,11 +701,21 @@ export interface TaskDependency {
   lagDays: number;
 }
 
+export interface TaskStep {
+  id: string;
+  name: string;
+  weight: number;
+  done: boolean;
+  sortOrder: number;
+}
+
 export interface GanttNode extends Task {
   durationDays: number;
   budgetCost: number;
   /** Share of total project weight this task/subtree carries (0..100), honouring manual weights. */
   effectiveWeightPct: number;
+  /** Count of weighted progress steps; when > 0 the task's % is derived (read-only) from them. */
+  stepCount: number;
   linkedPlanMandays: number;
   pic?: { id: string; name: string } | null;
   picResource?: { id: string; name: string } | null;

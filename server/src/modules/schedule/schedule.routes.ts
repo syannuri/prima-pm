@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
-import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema, taskActualsSchema, applyTemplateSchema } from './schedule.schemas.js';
+import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
 
@@ -74,6 +74,15 @@ router.post('/baseline', ...canWrite, asyncHandler(async (req, res) => {
 router.patch('/tasks/:taskId/progress', ...canWrite, validateBody(progressSchema), asyncHandler(async (req, res) => {
   const task = await svc.setTaskProgress(req.params.projectId, req.params.taskId, req.body.progressPct, req.user!.id);
   res.json({ task });
+}));
+
+// Weighted progress steps (P6-style): the task's % is derived from the done steps' weights.
+router.get('/tasks/:taskId/steps', canRead, asyncHandler(async (req, res) => {
+  res.json({ steps: await svc.getTaskSteps(req.params.projectId, req.params.taskId) });
+}));
+router.put('/tasks/:taskId/steps', ...canWrite, validateBody(taskStepsSchema), asyncHandler(async (req, res) => {
+  const steps = await svc.setTaskSteps(req.params.projectId, req.params.taskId, req.body, req.user!.id);
+  res.json({ steps });
 }));
 
 // Actual-date tracking — editable during execution even under a locked baseline (see service).
