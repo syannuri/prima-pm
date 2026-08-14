@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
@@ -9,6 +9,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { formatDate } from '../lib/format';
+import { tenantStats, type Plan } from '../lib/tenantStats';
 
 // Platform (super-admin) console — provision & manage TENANTS (organizations). Gated by the global
 // User.isPlatformAdmin flag; backed by the /admin/tenants API. Distinct from per-tenant admin.
@@ -17,6 +18,7 @@ export default function AdminTenantsPage() {
   const { lang } = useLang();
   const id = lang === 'id';
   const qc = useQueryClient();
+  const [creating, setCreating] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['platform-tenants'],
@@ -31,47 +33,213 @@ export default function AdminTenantsPage() {
 
   const tenants = data?.tenants ?? [];
   const corporate = tenants.filter((t) => !t.isPersonal);
-  const personalCount = tenants.length - corporate.length;
+  const stats = tenantStats(tenants);
+  const pending = corporate.filter((t) => t.status === 'PENDING');
 
   return (
     <div className="space-y-5">
-      <SectionTitle sub={id ? 'Buat, tangguhkan, dan kelola organisasi di seluruh platform' : 'Provision, suspend and manage organizations across the platform'}>
-        {id ? 'Organisasi (Platform)' : 'Tenants (Platform)'}
-      </SectionTitle>
+      <ConsoleHero id={id} onProvision={() => setCreating(true)} />
 
-      <CreateTenant onChange={invalidate} />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Spinner /></div>
+      ) : (
+        <>
+          {/* Headline metrics — derived client-side from the tenant list. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <Kpi label={id ? 'Organisasi' : 'Tenants'} value={stats.total} tone="indigo" />
+            <Kpi label={id ? 'Aktif' : 'Active'} value={stats.active} tone="emerald" />
+            <Kpi label={id ? 'Menunggu' : 'Pending'} value={stats.pending} tone="amber" pulse={stats.pending > 0} />
+            <Kpi label={id ? 'Ditangguhkan' : 'Suspended'} value={stats.suspended} tone="red" />
+            <Kpi label={id ? 'Anggota' : 'Members'} value={stats.members} tone="slate" hint={stats.personal > 0 ? `+${stats.personal} ${id ? 'sandbox' : 'sandbox'}` : undefined} />
+          </div>
 
-      <Card>
-        {isLoading ? (
-          <div className="flex justify-center py-10"><Spinner /></div>
-        ) : !corporate.length ? (
-          <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada organisasi korporat. Buat yang pertama di atas.' : 'No corporate tenants yet — create the first one above.'}</p>
-        ) : (
-          <>
-            <div className="hidden overflow-x-auto sm:block">
-              <table className="prima-rows w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-                    <th className="py-2">{id ? 'Nama' : 'Name'}</th><th>Slug</th><th>{id ? 'Status' : 'Status'}</th><th>{id ? 'Paket' : 'Plan'}</th><th className="text-right">{id ? 'Anggota' : 'Members'}</th><th>{id ? 'Dibuat' : 'Created'}</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {corporate.map((t) => <TenantRow key={t.id} t={t} onChange={invalidate} />)}
-                </tbody>
-              </table>
-            </div>
-            <div className="space-y-2 sm:hidden">
-              {corporate.map((t) => <TenantCard key={t.id} t={t} onChange={invalidate} />)}
-            </div>
-          </>
-        )}
-        {personalCount > 0 && (
-          <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
-            {id ? `+ ${personalCount} sandbox pribadi tamu (tidak dikelola di sini).` : `+ ${personalCount} personal guest sandbox${personalCount === 1 ? '' : 'es'} (not managed here).`}
-          </p>
-        )}
-      </Card>
+          <PlanBar split={stats.planSplit} total={stats.total} id={id} />
+
+          {pending.length > 0 && <PendingSpotlight pending={pending} onChange={invalidate} id={id} />}
+
+          <TenantTable corporate={corporate} personal={stats.personal} onChange={invalidate} id={id} />
+        </>
+      )}
+
+      {creating && (
+        <Modal onClose={() => setCreating(false)} title={id ? 'Buat organisasi' : 'Provision tenant'} size="lg">
+          <CreateTenant bare onChange={invalidate} onDone={() => setCreating(false)} />
+        </Modal>
+      )}
     </div>
+  );
+}
+
+// ── Platform-console presentational pieces ─────────────────────────────────────────────────────
+
+// Indigo→fuchsia "Control Plane" hero — the visual anchor that sets the platform console apart
+// from every tenant-scoped page.
+function ConsoleHero({ id, onProvision }: { id: boolean; onProvision: () => void }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-violet-300/40 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 p-5 text-white shadow-lg dark:border-violet-500/30">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/70">
+            <span aria-hidden>◆</span> {id ? 'Konsol Platform' : 'Platform Console'}
+          </div>
+          <h1 className="mt-1 text-xl font-bold">{id ? 'Organisasi' : 'Organizations'}</h1>
+          <p className="mt-0.5 text-sm text-white/85">
+            {id ? 'Provisi, tangguhkan, dan kelola setiap organisasi lintas platform.' : 'Provision, suspend and manage every organization across the platform.'}
+          </p>
+        </div>
+        <button
+          onClick={onProvision}
+          className="shrink-0 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-white/90"
+        >
+          + {id ? 'Buat organisasi' : 'Provision tenant'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const KPI_TONE: Record<string, string> = {
+  indigo: 'text-indigo-600 dark:text-indigo-300',
+  emerald: 'text-emerald-600 dark:text-emerald-300',
+  amber: 'text-amber-600 dark:text-amber-300',
+  red: 'text-red-600 dark:text-red-300',
+  slate: 'text-slate-700 dark:text-slate-200',
+};
+
+function Kpi({ label, value, tone, hint, pulse }: { label: string; value: number; tone: keyof typeof KPI_TONE; hint?: string; pulse?: boolean }) {
+  return (
+    <div className="relative rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+      {pulse && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_0_3px_theme(colors.amber.400/0.2)] motion-safe:animate-pulse" />}
+      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
+      <div className={`mt-0.5 text-2xl font-bold tabular-nums ${KPI_TONE[tone]}`}>{value}</div>
+      {hint && <div className="text-[11px] text-slate-400 dark:text-slate-500">{hint}</div>}
+    </div>
+  );
+}
+
+function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: number; id: boolean }) {
+  const seg: { k: Plan; n: number; c: string }[] = [
+    { k: 'FREE', n: split.FREE, c: 'bg-slate-400' },
+    { k: 'PRO', n: split.PRO, c: 'bg-indigo-500' },
+    { k: 'ENTERPRISE', n: split.ENTERPRISE, c: 'bg-violet-600' },
+  ];
+  return (
+    <Card>
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Distribusi paket' : 'Plan distribution'}</div>
+      <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+        {total > 0 && seg.filter((s) => s.n > 0).map((s) => (
+          <div key={s.k} className={s.c} style={{ width: `${(s.n / total) * 100}%` }} title={`${s.k}: ${s.n}`} />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+        {seg.map((s) => (
+          <span key={s.k} className="flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-sm ${s.c}`} />{s.k} <b className="tabular-nums">{s.n}</b>
+          </span>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// Signups awaiting review — hoisted out of the table into a spotlight so the queue can't be missed.
+function PendingSpotlight({ pending, onChange, id }: { pending: PlatformTenant[]; onChange: () => void; id: boolean }) {
+  return (
+    <Card className="border-amber-300/60 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
+        <span aria-hidden>★</span> {id ? `${pending.length} pendaftaran menunggu persetujuan` : `${pending.length} signup${pending.length === 1 ? '' : 's'} awaiting approval`}
+      </div>
+      <div className="space-y-2">
+        {pending.map((t) => <PendingItem key={t.id} t={t} onChange={onChange} id={id} />)}
+      </div>
+    </Card>
+  );
+}
+
+function PendingItem({ t, onChange, id }: { t: PlatformTenant; onChange: () => void; id: boolean }) {
+  const { review, approve, reject } = useTenantActions(t, onChange);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 dark:border-amber-900/40 dark:bg-slate-900">
+      <div className="min-w-0">
+        <span className="font-medium text-slate-700 dark:text-slate-200">{t.name}</span>
+        <span className="ml-2 font-mono text-xs text-slate-500 dark:text-slate-400">{t.slug} · {t.memberCount} {id ? 'anggota' : 'members'}</span>
+      </div>
+      <div className="flex gap-1">
+        <Button variant="ghost" onClick={approve} disabled={review.isPending} className="text-green-600 dark:text-green-400">{id ? 'Setujui' : 'Approve'}</Button>
+        <Button variant="ghost" onClick={reject} disabled={review.isPending} className="text-red-600 dark:text-red-400">{id ? 'Tolak' : 'Reject'}</Button>
+      </div>
+    </div>
+  );
+}
+
+const STATUS_FILTERS = ['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED'] as const;
+type StatusFilter = typeof STATUS_FILTERS[number];
+
+// The tenant registry with a search box + status-filter chips. Table on sm+, cards on phones.
+function TenantTable({ corporate, personal, onChange, id }: { corporate: PlatformTenant[]; personal: number; onChange: () => void; id: boolean }) {
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState<StatusFilter>('ALL');
+  const filterLabel: Record<StatusFilter, string> = {
+    ALL: id ? 'Semua' : 'All', ACTIVE: id ? 'Aktif' : 'Active', PENDING: id ? 'Menunggu' : 'Pending',
+    SUSPENDED: id ? 'Ditangguhkan' : 'Suspended', REJECTED: id ? 'Ditolak' : 'Rejected',
+  };
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return corporate.filter((t) => {
+      if (filter !== 'ALL' && t.status !== filter) return false;
+      if (!needle) return true;
+      return t.name.toLowerCase().includes(needle) || t.slug.toLowerCase().includes(needle) || (t.customDomain ?? '').toLowerCase().includes(needle);
+    });
+  }, [corporate, q, filter]);
+
+  return (
+    <Card>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={id ? 'Cari nama / slug / domain…' : 'Search name / slug / domain…'} />
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${filter === f ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+            >
+              {filterLabel[f]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!corporate.length ? (
+        <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada organisasi korporat. Buat yang pertama lewat tombol di atas.' : 'No corporate tenants yet — create the first one from the button above.'}</p>
+      ) : !rows.length ? (
+        <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Tidak ada yang cocok dengan filter.' : 'Nothing matches the current filter.'}</p>
+      ) : (
+        <>
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="prima-rows w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+                  <th className="py-2">{id ? 'Nama' : 'Name'}</th><th>Slug</th><th>{id ? 'Status' : 'Status'}</th><th>{id ? 'Paket' : 'Plan'}</th><th className="text-right">{id ? 'Anggota' : 'Members'}</th><th>{id ? 'Dibuat' : 'Created'}</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((t) => <TenantRow key={t.id} t={t} onChange={onChange} />)}
+              </tbody>
+            </table>
+          </div>
+          <div className="space-y-2 sm:hidden">
+            {rows.map((t) => <TenantCard key={t.id} t={t} onChange={onChange} />)}
+          </div>
+        </>
+      )}
+      {personal > 0 && (
+        <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+          {id ? `+ ${personal} sandbox pribadi tamu (tidak dikelola di sini).` : `+ ${personal} personal guest sandbox${personal === 1 ? '' : 'es'} (not managed here).`}
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -349,7 +517,7 @@ const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'
 
 // Provision a new CORPORATE tenant + its first admin (attach an existing staff account by email, or
 // create one when it doesn't exist yet).
-function CreateTenant({ onChange }: { onChange: () => void }) {
+function CreateTenant({ onChange, onDone, bare }: { onChange: () => void; onDone?: () => void; bare?: boolean }) {
   const { lang } = useLang();
   const id = lang === 'id';
   const toast = useToast();
@@ -372,17 +540,16 @@ function CreateTenant({ onChange }: { onChange: () => void }) {
       setName(''); setSlug(''); setSlugTouched(false); setAdminEmail(''); setAdminName(''); setAdminPassword('');
       onChange();
       toast.success(id ? `Organisasi “${r.tenant.name}” dibuat` : `Tenant “${r.tenant.name}” created`);
+      onDone?.();
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to create tenant'),
   });
 
   const canSubmit = name.trim().length >= 2 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(effSlug) && /.+@.+\..+/.test(adminEmail.trim());
 
-  return (
-    <Card>
-      <SectionTitle sub={id ? 'Buat organisasi baru dan admin pertamanya. Jika email sudah punya akun staf, akun itu langsung dijadikan admin; jika belum, isi nama & kata sandi untuk membuatnya.' : 'Create a new organization + its first admin. If the email already has a staff account it becomes the admin; otherwise fill name & password to create it.'}>
-        {id ? 'Buat organisasi' : 'Create tenant'}
-      </SectionTitle>
+  const inner = (
+    <>
+      {bare && <p className="text-sm text-slate-500 dark:text-slate-400">{id ? 'Buat organisasi baru dan admin pertamanya. Jika email sudah punya akun staf, akun itu langsung dijadikan admin; jika belum, isi nama & kata sandi untuk membuatnya.' : 'Create a new organization + its first admin. If the email already has a staff account it becomes the admin; otherwise fill name & password to create it.'}</p>}
       <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); if (canSubmit) create.mutate(); }}>
         <Field label={id ? 'Nama organisasi' : 'Tenant name'} required>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={id ? 'Acme Sdn Bhd' : 'Acme Corp'} />
@@ -405,6 +572,16 @@ function CreateTenant({ onChange }: { onChange: () => void }) {
           </Button>
         </div>
       </form>
+    </>
+  );
+
+  if (bare) return inner;
+  return (
+    <Card>
+      <SectionTitle sub={id ? 'Buat organisasi baru dan admin pertamanya. Jika email sudah punya akun staf, akun itu langsung dijadikan admin; jika belum, isi nama & kata sandi untuk membuatnya.' : 'Create a new organization + its first admin. If the email already has a staff account it becomes the admin; otherwise fill name & password to create it.'}>
+        {id ? 'Buat organisasi' : 'Create tenant'}
+      </SectionTitle>
+      {inner}
     </Card>
   );
 }

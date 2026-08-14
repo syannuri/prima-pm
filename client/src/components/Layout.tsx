@@ -14,10 +14,12 @@ import AvatarMenu from './AvatarMenu';
 import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
 import ImpersonationBanner from './ImpersonationBanner';
+import { isPlatformRoute } from '../lib/platformConsole';
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { lang } = useLang();
+  const id = lang === 'id';
   const { start: startTour } = useOnboarding();
   const navigate = useNavigate();
   const location = useLocation();
@@ -25,6 +27,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const path = location.pathname;
   const cards = location.search.includes('view=cards');
   const isGuest = user?.role === 'GUEST';
+  // Platform "Control Plane" skin — active only on the super-admin routes (context, not account).
+  const platform = !!user?.isPlatformAdmin && isPlatformRoute(path);
   // The greeting header (monday.com-style) is the Home dashboard only; the Projects-cards view and
   // every other page instead show their menu-name title in the top bar (e.g. a project detail → "Projects").
   const showGreeting = onHome && !cards;
@@ -39,6 +43,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     : path === '/admin/users' ? 'Users'
     : path === '/admin/members' ? 'Members'
     : path === '/admin/audit' ? 'Audit trail'
+    : path.startsWith('/admin/tenants') ? (id ? 'Konsol Platform' : 'Platform Console')
+    : path.startsWith('/admin/guests') ? (id ? 'Akun Tamu' : 'Guest accounts')
     : path === '/settings' ? 'Settings'
     : path === '/manual' ? 'Manual'
     : '';
@@ -74,7 +80,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className="z-10 flex shrink-0 items-center gap-2 border-b border-black/20 bg-slate-800 px-4"
+          className={`z-10 flex shrink-0 items-center gap-2 border-b px-4 transition-colors duration-200 ${platform ? 'border-violet-400/20 bg-indigo-950' : 'border-black/20 bg-slate-800'}`}
           style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
         >
           {/* Phones: initials avatar (account/settings) sits top-left. */}
@@ -170,8 +176,20 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="ml-1 hidden md:block"><AvatarMenu align="right" /></div>
         </header>
 
+        {/* Cross-tenant caution ribbon — the persistent "you are elevated" signal on platform routes. */}
+        {platform && (
+          <div className="flex items-center gap-2 border-b border-violet-400/20 bg-gradient-to-r from-indigo-950 via-indigo-900 to-violet-900 px-4 py-1.5 text-xs text-indigo-100">
+            <span aria-hidden className="text-sm text-amber-300">⚠</span>
+            <span>
+              <b className="font-semibold text-white">{id ? 'Konsol Platform' : 'Platform Console'}</b>
+              {id
+                ? <> — Anda beroperasi lintas <b>semua organisasi</b>. Tindakan di sini memengaruhi setiap tenant.</>
+                : <> — you are operating across <b>all tenants</b>. Actions here affect every organization.</>}
+            </span>
+          </div>
+        )}
         <ImpersonationBanner />
-        <main className="flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-6">
+        <main className={`flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-6 ${platform ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}>
           <div className="mx-auto max-w-7xl"><PageTransition>{children}</PageTransition></div>
         </main>
       </div>
