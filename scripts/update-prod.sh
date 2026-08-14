@@ -8,7 +8,7 @@
 # Run ON THE VPS as root (the checkout is root-owned; systemctl needs root):
 #   sudo ./scripts/update-prod.sh
 #
-# Overridable via env: PRIMA_SERVICE, PRIMA_HEALTH_URL, PRIMA_BRANCH.
+# Overridable via env: PRIMA_SERVICE, PRIMA_HEALTH_URL, PRIMA_HEALTH_RETRIES, PRIMA_BRANCH.
 #
 # NOTE: rollback reverts CODE only, not DB migrations (migrate deploy is forward-only).
 # A code-only update — the common case — rolls back cleanly. If a failed update added a
@@ -19,14 +19,22 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 SERVICE="${PRIMA_SERVICE:-prima-pm}"
-HEALTH_URL="${PRIMA_HEALTH_URL:-http://127.0.0.1:4000/}"
+# Health-check the lightweight /health endpoint (returns instantly the moment Express binds) rather
+# than "/" (which serves the SPA index). On a small / swapless box the process can cold-start slowly
+# right after a heavy build, and a too-tight window would false-negative and trigger a needless
+# rollback of a perfectly healthy build. See docs — overridable via env.
+HEALTH_URL="${PRIMA_HEALTH_URL:-http://127.0.0.1:4000/health}"
+HEALTH_RETRIES="${PRIMA_HEALTH_RETRIES:-90}"   # ~90s: generous for a cold start under build memory pressure
 BRANCH="${PRIMA_BRANCH:-master}"
 
 [ "$(id -u)" = 0 ] || { echo "Run as root:  sudo ./scripts/update-prod.sh" >&2; exit 1; }
 
-# Poll the service until it answers 200 (up to ~30s; it's briefly unbound mid-restart).
+# Poll the service until it answers 200 (it's briefly unbound mid-restart, and can be slow to warm
+# up on a memory-pressured box just after building). A short settle first, then up to HEALTH_RETRIES
+# one-second polls.
 wait_healthy() {
-  for _ in $(seq 1 30); do
+  sleep 3
+  for _ in $(seq 1 "$HEALTH_RETRIES"); do
     [ "$(curl -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)" = "200" ] && return 0
     sleep 1
   done
