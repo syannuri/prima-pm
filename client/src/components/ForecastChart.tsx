@@ -2,6 +2,7 @@ import type { Forecast } from '../api/types';
 import { formatIdrShort, formatIdr, formatDate } from '../lib/format';
 import ChartZoomFrame, { nearestIndex } from './chart/ChartZoomFrame';
 import { TimeAxisLabels, monthTicks, ChartTip } from './chart/timeAxis';
+import { smoothPath, areaPath, type Pt } from './chart/smoothPath';
 
 const PV = '#94a3b8'; // slate-400 — planned value baseline
 const AC = '#0ea5e9'; // sky-500 — actual cost to date
@@ -62,16 +63,25 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
       {(vp) => {
         const [d0, d1] = vp.domain;
         const x = (t: number) => padL + ((t - d0) / Math.max(1, d1 - d0)) * (W - padL - padR);
-        const line = (sel: (p: Forecast['sCurve'][number]) => number | null) =>
+        const pointsOf = (sel: (p: Forecast['sCurve'][number]) => number | null): Pt[] =>
           pts.map((p) => ({ px: x(+new Date(p.t)), v: sel(p) })).filter((d) => d.v != null)
-            .map((d, i) => `${i === 0 ? 'M' : 'L'}${d.px.toFixed(1)},${y(d.v as number).toFixed(1)}`).join(' ');
+            .map((d) => ({ x: d.px, y: y(d.v as number) }));
+        const pvPts = pointsOf((p) => p.pv), acPts = pointsOf((p) => p.ac), fcPts = pointsOf((p) => p.forecast);
         const nowX = x(+new Date(data.statusDate));
+        const hi = vp.hoverTime != null ? nearestIndex(ptTimes, vp.hoverTime) : -1;
+        const hiP = hi >= 0 ? pts[hi] : null;
         const rawTicks = monthTicks(d0, d1);
         const step = Math.max(1, Math.ceil(rawTicks.length / 9));
         const ticks = rawTicks.filter((_, i) => i % step === 0);
         const tickX = (ms: number) => Math.max(padL, Math.min(W - padR, x(ms)));
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="fcAcGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={AC} stopOpacity="0.20" />
+                <stop offset="100%" stopColor={AC} stopOpacity="0" />
+              </linearGradient>
+            </defs>
             {/* Faint horizontal gridlines + IDR-short labels so intermediate cost values are readable
                 without hovering. vector-effect keeps strokes an even 1px despite the non-uniform
                 stretch (preserveAspectRatio=none fills the width but would otherwise distort them). */}
@@ -84,16 +94,26 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
                 </g>
               );
             })}
+            {acPts.length > 1 && <path d={areaPath(acPts, H - padB)} fill="url(#fcAcGrad)" stroke="none" />}
             <line x1={padL} x2={W - padR} y1={bacY} y2={bacY} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
             <line x1={padL} x2={W - padR} y1={eacY} y2={eacY} stroke={FC} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" vectorEffect="non-scaling-stroke" />
-            <line x1={nowX} x2={nowX} y1={padT} y2={H - padB} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-            <path d={line((p) => p.pv)} fill="none" stroke={PV} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-            <path d={line((p) => p.ac)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-            <path d={line((p) => p.forecast)} fill="none" stroke={FC} strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            {/* "today" marker: a soft vertical guide capped with a dot at the axis. */}
+            <line x1={nowX} x2={nowX} y1={padT} y2={H - padB} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(pvPts)} fill="none" stroke={PV} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(fcPts)} fill="none" stroke={FC} strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeWidth="1" />
             {ticks.map((tk) => (
               <line key={tk.ms} x1={tickX(tk.ms)} x2={tickX(tk.ms)} y1={H - padB} y2={H - padB + 4} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" />
             ))}
+            {/* Active-point rings following the cursor, on whichever series carry a value there. */}
+            {hiP && (
+              <g>
+                <circle cx={x(+new Date(hiP.t))} cy={y(hiP.pv)} r="3.4" fill={PV} stroke="#fff" strokeWidth="1.2" />
+                {hiP.ac != null && <circle cx={x(+new Date(hiP.t))} cy={y(hiP.ac)} r="3.4" fill={AC} stroke="#fff" strokeWidth="1.2" />}
+                {hiP.forecast != null && <circle cx={x(+new Date(hiP.t))} cy={y(hiP.forecast)} r="3.4" fill={FC} stroke="#fff" strokeWidth="1.2" />}
+              </g>
+            )}
             <text x={W - padR} y={bacY - 3} textAnchor="end" className="fill-slate-400 text-[10px]">BAC {formatIdrShort(data.bac)}</text>
             <text x={W - padR} y={Math.abs(eacY - bacY) < 12 ? eacY + 11 : eacY - 3} textAnchor="end" fill={FC} className="text-[10px]" opacity="0.9">EAC {formatIdrShort(data.eac.likely)}</text>
             <text x={Math.min(nowX + 4, W - 40)} y={padT + 10} className="fill-slate-400 text-[10px]">today</text>

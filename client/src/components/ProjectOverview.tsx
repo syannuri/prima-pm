@@ -8,6 +8,7 @@ import { formatNum } from '../lib/format';
 import { computeMargin } from '../lib/margin';
 import HealthGauge from './HealthGauge';
 import HealthArcGauge from './HealthArcGauge';
+import { smoothPath, areaPath, type Pt } from './chart/smoothPath';
 import InfoTip from './InfoTip';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -129,17 +130,26 @@ function MiniSCurve({ planned, actual, actualColor, unitMax, fmt }: {
   const maxV = unitMax ?? Math.max(1, ...pts.map((p) => p.v)) * 1.12;
   const X = (t: number) => padL + (t1 > t0 ? (t - t0) / (t1 - t0) : 0) * (W - padL - padR);
   const Y = (v: number) => padT + (1 - Math.min(v, maxV) / maxV) * (H - padT - padB);
-  const d = (a: { t: number; v: number }[]) => a.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ');
+  const xy = (a: { t: number; v: number }[]): Pt[] => a.map((p) => ({ x: X(p.t), y: Y(p.v) }));
+  const actualPts = xy(actual);
   const fillClass = actualColor.replace('stroke-', 'fill-');
+  const gradId = `mini-${actualColor.replace(/[^a-z0-9]/gi, '')}`;
   const last = actual[actual.length - 1];
   const lx = last ? X(last.t) : 0, ly = last ? Y(last.v) : 0;
   const labelLeft = lx > W * 0.7; // flip the callout inward near the right edge
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="S-curve plan vs actual">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" className={fillClass} stopOpacity="0.20" />
+          <stop offset="100%" className={fillClass} stopOpacity="0" />
+        </linearGradient>
+      </defs>
       {[0, 0.5, 1].map((fr) => <line key={fr} x1={padL} x2={W - padR} y1={Y(maxV * fr)} y2={Y(maxV * fr)} className="stroke-slate-100 dark:stroke-slate-800" strokeWidth="1" />)}
-      {planned.length >= 2 && <path d={d(planned)} fill="none" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" strokeDasharray="4 3" />}
-      {actual.length >= 2 && <path d={d(actual)} fill="none" className={actualColor} strokeWidth="2" />}
-      {actual.map((p, i) => <circle key={i} cx={X(p.t)} cy={Y(p.v)} r="2.4" className={fillClass} />)}
+      {actual.length >= 2 && <path d={areaPath(actualPts, H - padB)} fill={`url(#${gradId})`} stroke="none" />}
+      {planned.length >= 2 && <path d={smoothPath(xy(planned))} fill="none" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" />}
+      {actual.length >= 2 && <path d={smoothPath(actualPts)} fill="none" className={actualColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
+      {actual.map((p, i) => <circle key={i} cx={X(p.t)} cy={Y(p.v)} r="2.4" className={fillClass} stroke="#fff" strokeWidth="0.8" />)}
       {/* Latest-actual value callout — the one number that matters, on the chart. */}
       {last && (
         <>
