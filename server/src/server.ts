@@ -5,11 +5,23 @@ import { pruneExpiredRefreshTokens } from './modules/auth/auth.service.js';
 import { runWeeklyAutoCaptureIfDueAllTenants } from './modules/evm/evm.portfolio.js';
 import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
 import { escalateOverdueApprovals } from './modules/approval/approval.service.js';
+import { logger, release, initSentry } from './lib/observability.js';
+
+// Initialise error tracking before anything else (no-op unless SENTRY_DSN is set).
+initSentry();
 
 // Defense-in-depth: a stray rejection should be logged, not take down the
 // whole server for every user (the root cause is still fixed at the source).
 process.on('unhandledRejection', (reason) => {
-  console.error('[prima-pm] unhandledRejection', reason);
+  logger.error({ err: reason }, 'unhandledRejection');
+});
+
+// An uncaught exception leaves the process in an undefined state — log it (structured, so it lands
+// in the error tracker in Phase 2) then exit so systemd restarts a clean process. This just adds
+// logging around Node's existing crash-on-uncaught behaviour; it does not keep a broken process up.
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'uncaughtException — exiting');
+  process.exit(1);
 });
 
 async function main() {
@@ -18,7 +30,7 @@ async function main() {
   // externally-bridged IPv4 clients on some VM NICs; 0.0.0.0 matches what works.
   const host = process.env.HOST ?? '0.0.0.0';
   const server = app.listen(env.port, host, () => {
-    console.log(`[prima-pm] API listening on http://${host}:${env.port} (${env.nodeEnv})`);
+    logger.info({ host, port: env.port, env: env.nodeEnv, release }, 'API listening');
   });
 
   // Drop expired refresh-token rows so the table can't grow unbounded. Runs once at boot

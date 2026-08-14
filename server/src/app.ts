@@ -10,6 +10,7 @@ import { cookieParser } from './lib/cookies.js';
 import { csrfGuard } from './middleware/csrf.js';
 import { asyncHandler } from './middleware/validate.js';
 import { attachHostTenant } from './middleware/hostTenant.js';
+import { requestContext } from './middleware/requestContext.js';
 import { prisma } from './lib/prisma.js';
 import { runAsSystem } from './lib/tenant/context.js';
 import { normalizeHost } from './lib/tenant/host.js';
@@ -157,9 +158,25 @@ export function createApp() {
   // can read them.
   app.use(cookieParser);
 
+  // Correlation id + structured per-request log line (observability Phase 1). Mounted after the body
+  // parser so req is fully formed; user/tenant are read at response 'finish'. Health probes skipped.
+  app.use(requestContext);
+
+  // Liveness — the process is up and serving.
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'prima-pm', ts: new Date().toISOString() });
   });
+
+  // Readiness — the process AND its database are reachable (a `SELECT 1` round-trip). 503 when the DB
+  // is down so a load balancer / deploy check can tell "up but not ready" from "up and serving".
+  app.get('/health/ready', asyncHandler(async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ status: 'ready', db: 'up', ts: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ status: 'not-ready', db: 'down', ts: new Date().toISOString() });
+    }
+  }));
 
   // Caddy on-demand TLS gate (custom-domain automation). Caddy calls this BEFORE it asks Let's
   // Encrypt for a cert for an incoming hostname — 200 = a tenant owns this custom domain (issue it),
