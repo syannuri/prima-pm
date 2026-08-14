@@ -12,7 +12,7 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   // project-children / grandchildren (tenantId denormalized from Project)
   'ProjectCharter', 'CharterVersion', 'CostItemDirect', 'CostItemIndirect', 'CostBaseline',
   'ActualCostEntry', 'MandayEntry', 'Risk', 'Issue', 'Stakeholder', 'Procurement', 'Assumption',
-  'ProjectDependency', 'Task', 'TaskDependency', 'ChangeRequest', 'Attachment', 'Sprint',
+  'ProjectDependency', 'Task', 'TaskStep', 'TaskDependency', 'ChangeRequest', 'Attachment', 'Sprint',
   'SprintSnapshot', 'EvmSnapshot', 'BacklogItem', 'LessonLearned', 'AcceptanceSignoff',
   'UatTestCase', 'KickoffMeeting', 'KickoffAttendee', 'KickoffActionItem', 'Requirement',
   'RequirementTaskLink', 'ProjectCommentary',

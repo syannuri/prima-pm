@@ -66,11 +66,26 @@ export const taskActualsSchema = z
     { message: 'actualFinish must be on/after actualStart', path: ['actualFinish'] },
   );
 
+// Bulk-replace a task's weighted progress steps. progressPct is then DERIVED from the done steps'
+// weights (see setTaskSteps), so this is both a definition edit and a progress update.
+export const taskStepsSchema = z.object({
+  steps: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        weight: z.coerce.number().min(0).max(1_000_000).default(1),
+        done: z.boolean().default(false),
+      }),
+    )
+    .max(50),
+});
+
 export const applyTemplateSchema = z.object({
   templateId: z.string().min(1),
   startDate: z.coerce.date().optional(),
 });
 
+export type TaskStepsInput = z.infer<typeof taskStepsSchema>;
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
 export type ProgressInput = z.infer<typeof progressSchema>;

@@ -259,6 +259,17 @@ export function reconcileManpower(rows: ManpowerSyncInput[]): ManpowerSyncRow[] 
 // When NO manual weight is set anywhere, each leaf's effective weight reproduces its own
 // proxy EXACTLY — so EVM is unchanged for every existing project (no drift).
 
+/**
+ * Derive a work package's % complete from its weighted progress steps (P6 "weighted steps"):
+ * Σ(done step weights) / Σ(step weights), as an integer 0..100. No steps or zero total weight → 0.
+ */
+export function deriveStepProgress(steps: { weight: number; done: boolean }[]): number {
+  const total = steps.reduce((s, st) => s + Math.max(0, st.weight || 0), 0);
+  if (total <= 0) return 0;
+  const done = steps.reduce((s, st) => s + (st.done ? Math.max(0, st.weight || 0) : 0), 0);
+  return Math.round((done / total) * 100);
+}
+
 export interface WeightNode {
   id: string;
   parentTaskId: string | null;

@@ -7,6 +7,7 @@ import { Badge, Button, Card, Field, Input, Select, Spinner } from '../../compon
 import { useToast } from '../../components/Toast';
 import ImportTasksModal from '../../components/ImportTasksModal';
 import WeightEditorModal from '../../components/WeightEditorModal';
+import StepsModal from '../../components/StepsModal';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -425,6 +426,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const canEdit = useProjectWrite(projectId);
   const [importOpen, setImportOpen] = useState(false);
   const [weightsOpen, setWeightsOpen] = useState(false);
+  const [stepsFor, setStepsFor] = useState<GanttNode | null>(null);
 
   const ganttQ = useQuery({
     queryKey: ['gantt', projectId],
@@ -1034,6 +1036,21 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         }}
       />
     )}
+    {stepsFor && (
+      <StepsModal
+        base={base}
+        taskId={stepsFor.id}
+        taskName={stepsFor.name}
+        canEdit={canEdit}
+        onClose={() => setStepsFor(null)}
+        onSaved={() => {
+          qc.invalidateQueries({ queryKey: ['task-steps', stepsFor.id] });
+          qc.invalidateQueries({ queryKey: ['gantt', projectId] });
+          qc.invalidateQueries({ queryKey: ['evm', base] });
+          qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
+        }}
+      />
+    )}
       {/* iOS (and any platform where orientation-lock isn't available) can't auto-rotate — nudge
           the user to turn the device so the timeline gets the full landscape width. */}
       {fullscreen && isTouch && portrait && (
@@ -1327,7 +1344,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                     className={`group [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 ${alt ? 'bg-slate-50/70 dark:bg-slate-800/30' : ''} hover:bg-slate-100 dark:hover:bg-slate-800/60`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
-                        <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
+                        <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent || node.stepCount > 0} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
                       </div>
                     </td>
                     <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>
@@ -1434,7 +1451,14 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       </>
                     )}
                     <td className="text-right">
-                      {canEdit && !r.isParent ? (
+                      {node.stepCount > 0 && !r.isParent ? (
+                        // Derived from weighted steps → read-only; click to view/edit the steps.
+                        <button type="button" onClick={() => setStepsFor(node)}
+                          title={`Derived from ${node.stepCount} weighted step${node.stepCount === 1 ? '' : 's'} — click to view/edit`}
+                          className="inline-flex items-center gap-0.5 tabular-nums text-xs text-brand-700 hover:underline dark:text-brand-300">
+                          {r.pct}% <span className="text-[9px]" aria-hidden>☑{node.stepCount}</span>
+                        </button>
+                      ) : canEdit && !r.isParent ? (
                         <input
                           type="number" min={0} max={100} defaultValue={node.progressPct} key={node.progressPct}
                           aria-label={`Percent complete for ${node.name}`}
@@ -1644,6 +1668,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             const n = menu.node;
             return [
               { label: 'Add subtask', icon: '＋', disabled: !canPlan, onClick: () => setDraft({ parentId: n.id, name: '', picResourceId: '', planStart: formatDateInput(new Date(n.planStart)), planEnd: formatDateInput(new Date(n.planEnd)) }) },
+              // Progress steps only make sense on a leaf work package (a parent's % rolls up from its children).
+              ...(!n.children?.length ? [{ label: n.stepCount > 0 ? `Progress steps (${n.stepCount})` : 'Progress steps', icon: '☑', onClick: () => setStepsFor(n) }] : []),
               ...(SHOW_WBS_DICTIONARY ? [{ label: expanded.has(n.id) ? 'Close details' : 'Edit details', icon: '✎', onClick: () => toggle(n.id) }] : []),
               { separator: true },
               { label: 'Indent', icon: '⇥', hint: 'make subtask', disabled: !canPlan || !canIndent(n), onClick: () => indentTask(n) },

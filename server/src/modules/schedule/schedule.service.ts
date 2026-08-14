@@ -16,10 +16,11 @@ import {
   isCostLoaded,
   computeCpm,
   computeLeafWeights,
+  deriveStepProgress,
   type DependencyEdge,
   type CpmDepType,
 } from './schedule.helpers.js';
-import type { DependencyInput, TaskActualsInput, UpsertTaskInput } from './schedule.schemas.js';
+import type { DependencyInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
   v == null ? 0 : Number(v);
@@ -90,6 +91,7 @@ export async function getGantt(projectId: string) {
       include: {
         pic: { select: { id: true, name: true } },
         picResource: { select: { id: true, name: true } },
+        _count: { select: { steps: true } },
       },
     }),
     prisma.taskDependency.findMany({ where: { predecessor: { projectId } } }),
@@ -131,6 +133,8 @@ export async function getGantt(projectId: string) {
     linkedPlanMandays: mp.mandays.get(t.id) ?? 0,
     // Share of the project's total weight this task (or its subtree) carries, 0..100.
     effectiveWeightPct: totalWeight > 0 ? Math.round(((subtreeWeight.get(t.id) ?? 0) / totalWeight) * 1000) / 10 : 0,
+    // Count of weighted progress steps — when > 0 the % is derived (read-only) from the steps.
+    stepCount: t._count?.steps ?? 0,
   }));
 
   // baselineLocked freezes task dates + dependencies (assertBaselineUnlocked), so the client
@@ -350,6 +354,39 @@ export async function setTaskProgress(projectId: string, taskId: string, progres
   const task = await prisma.task.update({ where: { id: taskId }, data });
   await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: taskId, action: 'UPDATE', before: { progressPct: existing.progressPct }, after: { progressPct } });
   return task;
+}
+
+// List a task's weighted progress steps (ordered).
+export async function getTaskSteps(projectId: string, taskId: string) {
+  const task = await prisma.task.findFirst({ where: { id: taskId, projectId }, select: { id: true } });
+  if (!task) throw NotFound('Task not found');
+  return prisma.taskStep.findMany({
+    where: { taskId },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    select: { id: true, name: true, weight: true, done: true, sortOrder: true },
+  });
+}
+
+// Replace a task's weighted progress steps, then DERIVE the task's % from the done steps' weights
+// and apply it via setTaskProgress (so actual-date stamping + the whole EV/roll-up follow). Steps
+// are a progress-measurement tool, so — like progressPct — this is NOT gated by the baseline lock.
+// When the steps become empty (cleared), progressPct is left as-is (reverts to manual entry).
+export async function setTaskSteps(projectId: string, taskId: string, input: TaskStepsInput, actorId: string) {
+  const task = await prisma.task.findFirst({ where: { id: taskId, projectId }, select: { id: true } });
+  if (!task) throw NotFound('Task not found');
+
+  const steps = input.steps.map((s, i) => ({ ...s, sortOrder: i }));
+  await prisma.$transaction([
+    prisma.taskStep.deleteMany({ where: { taskId } }),
+    ...(steps.length ? [prisma.taskStep.createMany({ data: steps.map((s) => ({ taskId, name: s.name, weight: s.weight, done: s.done, sortOrder: s.sortOrder })) })] : []),
+  ]);
+  await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: taskId, action: 'UPDATE', after: { steps: steps.length, stepsDone: steps.filter((s) => s.done).length } });
+
+  // Derive & apply progress only while steps exist; clearing all steps keeps the last value.
+  if (steps.length) {
+    await setTaskProgress(projectId, taskId, deriveStepProgress(steps), actorId);
+  }
+  return getTaskSteps(projectId, taskId);
 }
 
 // Edit a task's ACTUAL start/finish to a specific date (or clear it with null). This is execution
