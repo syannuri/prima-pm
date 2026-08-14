@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { asyncHandler } from '../../middleware/validate.js';
 import { requireProjectAccess } from '../../middleware/rbac.js';
 import * as svc from './report.service.js';
+import { generateNarrative } from './narrative.service.js';
+import { aiEnabled } from '../../lib/ai.js';
 import { buildReportPdf } from '../export/build.report.pdf.js';
 
 const router = Router({ mergeParams: true });
@@ -40,6 +42,24 @@ router.put(
     const body = commentaryBodySchema.parse(req.body);
     const author = { id: req.user!.id, email: req.user!.email };
     res.json(await svc.saveCommentary(req.params.projectId, period, asOf ?? new Date(), body, author));
+  }),
+);
+
+// AI Status Narrative — generate a DRAFT narrative from the report data. Never persists: the PM
+// reviews/edits the returned {executiveSummary,highlights,lowlights,nextFocus} then saves via
+// PUT /commentary. Write access = PM/PMO/ADMIN (API keys are read-only ⇒ already 403'd here).
+// Gated globally by ANTHROPIC_API_KEY (503 when unset) + per-tenant opt-in (403 in the service).
+// The per-tenant request rate limiter already applies (requireAuth), so no extra throttle here.
+router.post(
+  '/commentary/ai-draft',
+  requireProjectAccess({ write: true }),
+  asyncHandler(async (req, res) => {
+    if (!aiEnabled()) {
+      res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+      return;
+    }
+    const { period, asOf } = reportQuerySchema.parse(req.query);
+    res.json(await generateNarrative(req.params.projectId, period, asOf ?? new Date()));
   }),
 );
 

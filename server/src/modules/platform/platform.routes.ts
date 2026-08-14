@@ -101,10 +101,12 @@ const patchSchema = z
     name: z.string().min(2).max(120).optional(),
     plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
     customDomain: hostnameRule.optional(),
+    // AI Status Narrative per-tenant opt-in (the self-serve tenant-ADMIN toggle lands in Phase 2).
+    aiNarrativeEnabled: z.boolean().optional(),
   })
   .refine(
-    (b) => b.status !== undefined || b.name !== undefined || b.plan !== undefined || b.customDomain !== undefined,
-    'Provide a status, name, plan and/or custom domain to update',
+    (b) => b.status !== undefined || b.name !== undefined || b.plan !== undefined || b.customDomain !== undefined || b.aiNarrativeEnabled !== undefined,
+    'Provide a status, name, plan, custom domain and/or AI narrative flag to update',
   );
 
 // PATCH /admin/tenants/:id — suspend/reactivate, rename, change the SaaS plan, or set/clear the custom
@@ -139,6 +141,7 @@ router.patch(
         ...(req.body.status ? { status: req.body.status } : {}),
         ...(req.body.name ? { name: req.body.name } : {}),
         ...(req.body.plan ? { plan: req.body.plan } : {}),
+        ...(req.body.aiNarrativeEnabled !== undefined ? { aiNarrativeEnabled: req.body.aiNarrativeEnabled } : {}),
         ...customDomainData,
       },
     });
