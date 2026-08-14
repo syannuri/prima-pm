@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { useAuth } from '../context/AuthContext';
 import { projectAccent } from '../lib/projectColor';
+import { isPlatformRoute } from '../lib/platformConsole';
 import AvatarMenu from './AvatarMenu';
 
 function Icon({ path }: { path: string }) {
@@ -40,6 +41,9 @@ const linkIdle = 'text-slate-300 ring-1 ring-transparent hover:bg-white/10 hover
 // delicate blue ring frame, so "you are here" reads in the accent colour (matches the project tab
 // accent), not just white.
 const linkActive = 'bg-blue-500/15 text-blue-100 ring-1 ring-inset ring-blue-400/30 shadow-[inset_2px_0_0_theme(colors.blue.500)]';
+// Platform-console "Control Plane" skin: violet-tinted active item on the deep-indigo rail, so
+// "you are here" reads in the elevated-privilege accent (not the normal blue).
+const linkActivePlatform = 'bg-violet-500/20 text-violet-100 ring-1 ring-inset ring-violet-400/40 shadow-[inset_2px_0_0_theme(colors.violet.400)]';
 // Small uppercase group heading between nav sections (Workspace / Manage / Projects).
 const sectionLabel = 'px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400';
 
@@ -47,7 +51,10 @@ const sectionLabel = 'px-3 pb-1 pt-4 text-[11px] font-semibold uppercase trackin
 // footer is drawer-only: on the web those live in the header top-bar, so the sidebar hides them.
 export default function Sidebar({ collapsed = false, onNavigate, drawer = false }: { collapsed?: boolean; onNavigate?: () => void; drawer?: boolean }) {
   const { user } = useAuth();
+  const { pathname } = useLocation();
   const isAdminPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
+  // Platform "Control Plane" skin — on the super-admin routes only (context, not account).
+  const platform = !!user?.isPlatformAdmin && isPlatformRoute(pathname);
   const { data, isLoading: projectsLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.get<{ projects: Project[] }>('/projects'),
@@ -87,15 +94,16 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
   const CAP = 8;
   const visibleProjects = collapsed || showAllProjects ? projects : projects.slice(0, CAP);
   const unread = isAdminPmo ? changes?.unread ?? 0 : 0;
-  const cx = (active: boolean) => `${linkBase} ${collapsed ? 'justify-center px-0' : ''} ${active ? linkActive : linkIdle}`;
+  const cx = (active: boolean) => `${linkBase} ${collapsed ? 'justify-center px-0' : ''} ${active ? (platform ? linkActivePlatform : linkActive) : linkIdle}`;
 
   return (
-    <div className={`flex h-full flex-col border-r border-black/20 bg-slate-800 text-slate-300 shadow-[6px_0_24px_-18px_rgba(0,0,0,0.55)] transition-[width] duration-200 ${collapsed ? 'w-16' : 'w-60'}`}>
+    <div className={`flex h-full flex-col border-r shadow-[6px_0_24px_-18px_rgba(0,0,0,0.55)] transition-[width,background-color] duration-200 ${collapsed ? 'w-16' : 'w-60'} ${platform ? 'border-violet-400/20 bg-indigo-950 text-indigo-200' : 'border-black/20 bg-slate-800 text-slate-300'}`}>
       <div className={`flex h-14 items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <span className={`relative inline-block border-[3px] border-white font-brand font-bold tracking-wide text-white ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
-          {collapsed ? 'P' : 'PRISMATIX'}
-          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
+        <span className={`relative inline-block border-[3px] font-brand font-bold tracking-wide text-white ${platform ? 'border-violet-300' : 'border-white'} ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
+          {collapsed ? (platform ? '◆' : 'P') : (platform ? 'PLATFORM' : 'PRISMATIX')}
+          <span className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${platform ? 'bg-violet-400' : 'bg-brand-500'}`} />
         </span>
+        {platform && !collapsed && <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-300/80">console</span>}
       </div>
 
       <nav
@@ -188,6 +196,9 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
           </NavLink>
         )}
         {/* PLATFORM — super-admin (isPlatformAdmin), transcends the active tenant: provision/suspend orgs. */}
+        {user?.isPlatformAdmin && (!collapsed
+          ? <div className={`${sectionLabel} ${platform ? 'text-violet-300/80' : ''}`}>Platform</div>
+          : <div className={`my-2 border-t ${platform ? 'border-violet-400/20' : 'border-white/10'}`} />)}
         {user?.isPlatformAdmin && (
           <NavLink to="/admin/tenants" onClick={onNavigate} aria-label="Tenants (Platform)" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.tenants} /> {!collapsed && 'Tenants'}
