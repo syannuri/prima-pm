@@ -2,9 +2,10 @@ import type { EvmTrend } from '../api/types';
 import { formatIdrShort, formatIdr, formatNum, formatDate } from '../lib/format';
 import ChartZoomFrame, { nearestIndex } from './chart/ChartZoomFrame';
 import { TimeAxisLabels, ChartTip } from './chart/timeAxis';
+import { smoothPath, areaPath, type Pt } from './chart/smoothPath';
 
 const PV = '#94a3b8'; // slate-400 — planned value backdrop
-const EV = '#22c55e'; // green-500 — earned value (physical progress in money)
+const EV = '#10b981'; // emerald-500 — earned value (physical progress in money)
 const AC = '#0ea5e9'; // sky-500 — actual cost
 const CPI = '#0ea5e9'; // sky-500
 const SPI = '#8b5cf6'; // violet-500
@@ -58,30 +59,42 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
       {(vp) => {
         const [d0, d1] = vp.domain;
         const x = (t: number) => padL + ((t - d0) / Math.max(1, d1 - d0)) * (W - padL - padR);
-        const pvPath = curve.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(+new Date(p.t)).toFixed(1)},${y(p.pv).toFixed(1)}`).join(' ');
-        const snapLine = (sel: (s: EvmTrend['snapshots'][number]) => number) =>
-          snaps.map((s, i) => `${i === 0 ? 'M' : 'L'}${x(+new Date(s.statusDate)).toFixed(1)},${y(sel(s)).toFixed(1)}`).join(' ');
-        // Soft area fill under the Earned-Value curve for a modern, layered look.
-        const evArea = snaps.length > 1
-          ? `${snapLine((s) => s.ev)} L${x(+new Date(snaps[snaps.length - 1].statusDate)).toFixed(1)},${(H - padB).toFixed(1)} L${x(+new Date(snaps[0].statusDate)).toFixed(1)},${(H - padB).toFixed(1)} Z`
-          : '';
+        const toPts = (pts: { t: string; v: number }[]): Pt[] => pts.map((p) => ({ x: x(+new Date(p.t)), y: y(p.v) }));
+        const pvPts = toPts(curve.map((p) => ({ t: p.t, v: p.pv })));
+        const snapPts = (sel: (s: EvmTrend['snapshots'][number]) => number): Pt[] =>
+          snaps.map((s) => ({ x: x(+new Date(s.statusDate)), y: y(sel(s)) }));
+        const evPts = snapPts((s) => s.ev), acPts = snapPts((s) => s.ac);
+        // Emphasise the snapshot nearest the cursor with a halo ring (modern hover affordance).
+        const hi = vp.hoverTime != null && snaps.length ? nearestIndex(snapTimes, vp.hoverTime) : -1;
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
             <defs>
               <linearGradient id="evTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={EV} stopOpacity="0.18" />
+                <stop offset="0%" stopColor={EV} stopOpacity="0.22" />
                 <stop offset="100%" stopColor={EV} stopOpacity="0" />
               </linearGradient>
             </defs>
-            {evArea && <path d={evArea} fill="url(#evTrendGrad)" stroke="none" />}
-            <line x1={padL} x2={W - padR} y1={bacY} y2={bacY} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth="1" strokeDasharray="2 3" />
-            {curve.length > 1 && <path d={pvPath} fill="none" stroke={PV} strokeWidth="2" />}
-            {snaps.length > 1 && <path d={snapLine((s) => s.ac)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" />}
-            {snaps.length > 1 && <path d={snapLine((s) => s.ev)} fill="none" stroke={EV} strokeWidth="2.5" strokeLinecap="round" />}
-            {snaps.map((s) => (
+            {/* Faint gridlines + IDR labels so intermediate values read without hovering. */}
+            {[0.25, 0.5, 0.75].map((fr) => {
+              const gy = y(maxY * fr);
+              return (
+                <g key={fr}>
+                  <line x1={padL} x2={W - padR} y1={gy} y2={gy} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                  <text x={padL + 1} y={gy - 2} className="fill-slate-300 text-[9px] dark:fill-slate-600">{formatIdrShort(maxY * fr)}</text>
+                </g>
+              );
+            })}
+            {evPts.length > 1 && <path d={areaPath(evPts, H - padB)} fill="url(#evTrendGrad)" stroke="none" />}
+            <line x1={padL} x2={W - padR} y1={bacY} y2={bacY} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+            {curve.length > 1 && <path d={smoothPath(pvPts)} fill="none" stroke={PV} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {acPts.length > 1 && <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={EV} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {snaps.map((s, i) => (
               <g key={s.id}>
-                <circle cx={x(+new Date(s.statusDate))} cy={y(s.ac)} r="3" fill={AC} />
-                <circle cx={x(+new Date(s.statusDate))} cy={y(s.ev)} r="3" fill={EV} />
+                {i === hi && <circle cx={acPts[i].x} cy={acPts[i].y} r="6" fill={AC} opacity="0.18" />}
+                {i === hi && <circle cx={evPts[i].x} cy={evPts[i].y} r="6" fill={EV} opacity="0.18" />}
+                <circle cx={acPts[i].x} cy={acPts[i].y} r={i === hi ? 3.6 : 2.8} fill={AC} stroke="#fff" strokeWidth="1.1" />
+                <circle cx={evPts[i].x} cy={evPts[i].y} r={i === hi ? 3.6 : 2.8} fill={EV} stroke="#fff" strokeWidth="1.1" />
               </g>
             ))}
             <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeWidth="1" />
@@ -137,17 +150,22 @@ export function CpiSpiTrend({ data }: { data: EvmTrend }) {
       {(vp) => {
         const [d0, d1] = vp.domain;
         const x = (t: number) => padL + ((t - d0) / Math.max(1, d1 - d0)) * (W - padL - padR);
-        const line = (sel: (s: EvmTrend['snapshots'][number]) => number) =>
-          pts.map((s, i) => `${i === 0 ? 'M' : 'L'}${x(+new Date(s.statusDate)).toFixed(1)},${y(sel(s)).toFixed(1)}`).join(' ');
+        const line = (sel: (s: EvmTrend['snapshots'][number]) => number): Pt[] =>
+          pts.map((s) => ({ x: x(+new Date(s.statusDate)), y: y(sel(s)) }));
+        const cpiPts = line((s) => s.cpi), spiPts = line((s) => s.spi);
+        const hi = vp.hoverTime != null ? nearestIndex(ptTimes, vp.hoverTime) : -1;
         return (
           <svg viewBox={`0 0 ${W} ${h}`} className="w-full" preserveAspectRatio="none">
-            <line x1={padL} x2={W - padR} y1={oneY} y2={oneY} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" strokeDasharray="4 3" />
-            <path d={line((s) => s.cpi)} fill="none" stroke={CPI} strokeWidth="2.5" strokeLinecap="round" />
-            <path d={line((s) => s.spi)} fill="none" stroke={SPI} strokeWidth="2.5" strokeLinecap="round" />
-            {pts.map((s) => (
+            {/* Subtle favourable/unfavourable tint split at the 1.00 on-target line. */}
+            <rect x={padL} y={pt} width={W - padL - padR} height={Math.max(0, oneY - pt)} className="fill-emerald-400/5 dark:fill-emerald-400/[0.07]" />
+            <rect x={padL} y={oneY} width={W - padL - padR} height={Math.max(0, h - pb - oneY)} className="fill-red-400/5 dark:fill-red-400/[0.07]" />
+            <line x1={padL} x2={W - padR} y1={oneY} y2={oneY} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(cpiPts)} fill="none" stroke={CPI} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(spiPts)} fill="none" stroke={SPI} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            {pts.map((s, i) => (
               <g key={s.id}>
-                <circle cx={x(+new Date(s.statusDate))} cy={y(s.cpi)} r="3" fill={CPI} />
-                <circle cx={x(+new Date(s.statusDate))} cy={y(s.spi)} r="3" fill={SPI} />
+                <circle cx={cpiPts[i].x} cy={cpiPts[i].y} r={i === hi ? 3.6 : 2.8} fill={CPI} stroke="#fff" strokeWidth="1.1" />
+                <circle cx={spiPts[i].x} cy={spiPts[i].y} r={i === hi ? 3.6 : 2.8} fill={SPI} stroke="#fff" strokeWidth="1.1" />
               </g>
             ))}
             <text x={padL + 2} y={oneY - 3} className="fill-slate-400 text-[10px]">1.00 · on target</text>
