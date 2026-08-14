@@ -180,11 +180,16 @@ export default function Layout({ children }: { children: ReactNode }) {
         {platform && (
           <div className="flex items-center gap-2 border-b border-violet-400/20 bg-gradient-to-r from-indigo-950 via-indigo-900 to-violet-900 px-4 py-1.5 text-xs text-indigo-100">
             <span aria-hidden className="text-sm text-amber-300">⚠</span>
-            <span>
+            <span className="min-w-0 truncate">
               <b className="font-semibold text-white">{id ? 'Konsol Platform' : 'Platform Console'}</b>
               {id
                 ? <> — Anda beroperasi lintas <b>semua organisasi</b>. Tindakan di sini memengaruhi setiap tenant.</>
                 : <> — you are operating across <b>all tenants</b>. Actions here affect every organization.</>}
+            </span>
+            {/* Identity chip — who is wielding this cross-tenant power. */}
+            <span className="ml-auto hidden shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-100 ring-1 ring-white/15 sm:inline-flex">
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-violet-300 motion-safe:animate-pulse" />
+              {id ? 'Super Admin' : 'Super Admin'}{user?.name ? <span className="font-medium normal-case text-white/90"> · {user.name}</span> : null}
             </span>
           </div>
         )}
