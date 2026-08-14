@@ -3,16 +3,19 @@ import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import { AppError } from '../lib/errors.js';
 import { isProd } from '../config/env.js';
+import { logger, captureError } from '../lib/observability.js';
 
 // 404 fallthrough
 export function notFoundHandler(_req: Request, res: Response): void {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
 }
 
-// Central error mapper.
+// Central error mapper. Expected 4xx (AppError/Zod/Multer/known-Prisma) are client faults — mapped
+// quietly. Only truly unexpected errors (the 500 path) are escalated via captureError, so the error
+// tracker (Phase 2) and the logs aren't drowned in routine validation noise.
 export function errorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
@@ -43,7 +46,7 @@ export function errorHandler(
       // Don't leak internal column names (err.meta.target) to the client — log for
       // debugging, return a generic conflict. App code pre-checks uniqueness with a
       // friendly Conflict() message; this is just the race-condition backstop.
-      console.warn('[error] P2002 unique violation', err.meta);
+      logger.warn({ reqId: req.id, meta: err.meta }, 'P2002 unique violation');
       res.status(409).json({
         error: { code: 'CONFLICT', message: 'That value is already in use' },
       });
@@ -55,7 +58,14 @@ export function errorHandler(
     }
   }
 
-  console.error('[error] unhandled', err);
+  captureError(err, {
+    reqId: req.id,
+    method: req.method,
+    path: req.originalUrl?.split('?')[0],
+    status: 500,
+    tenantId: req.user?.tid,
+    userId: req.user?.id,
+  });
   res.status(500).json({
     error: {
       code: 'INTERNAL_ERROR',

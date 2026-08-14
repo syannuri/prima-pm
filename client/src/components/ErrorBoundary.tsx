@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { isChunkLoadError, reloadForStaleChunk } from '../lib/staleChunk';
+import { captureException } from '../lib/observability';
 
 // Global crash guard — turns an unexpected render error from a BLANK white screen into a readable
 // message with a reload, and logs the error (so it's diagnosable instead of silent). A stale-deploy
@@ -20,6 +21,8 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, { 
     }
     // eslint-disable-next-line no-console
     console.error('App crashed:', error, info.componentStack);
+    // Report to error tracking (no-op unless Sentry was initialised at build).
+    captureException(error, { componentStack: info.componentStack });
   }
 
   render() {

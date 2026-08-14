@@ -10,8 +10,13 @@ import { ConfirmProvider } from './components/ConfirmDialog';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { reloadForStaleChunk } from './lib/staleChunk';
+import { initClientSentry } from './lib/observability';
 import '@fontsource/poppins/latin-700.css'; // geometric sans-serif for the brand wordmark
 import './index.css';
+
+// Error tracking (dormant unless VITE_SENTRY_DSN was set at build). Init before render so the global
+// error + unhandledrejection handlers cover the whole app.
+initClientSentry();
 
 // After a deploy an open tab points at old chunk hashes that no longer exist. Vite fires
 // `vite:preloadError` when a lazy chunk fails to load — recover by reloading once (loop-guarded) so
