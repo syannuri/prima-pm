@@ -62,6 +62,7 @@ describe('self-serve organization signup (manual approval)', () => {
     ]));
     expect(tenant.isPersonal).toBe(false);
     expect(tenant.status).toBe('PENDING');
+    expect(tenant.plan).toBe('PRO'); // new corporate orgs start on PRO, not the FREE default
     expect(owner.isGuest).toBe(false);
     const m = await runAsSystem(() => prisma.membership.findUniqueOrThrow({ where: { userId_tenantId: { userId: owner.id, tenantId: tenant.id } } }));
     expect(m.role).toBe('ADMIN');

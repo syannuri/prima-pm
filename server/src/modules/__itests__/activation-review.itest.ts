@@ -45,12 +45,15 @@ describe('PMO activation review', () => {
     expect(r.readiness.canActivate).toBe(true);
   });
 
-  it('APPROVE activates the project and clears any review state', async () => {
+  it('APPROVE activates the project, clears review state, and notifies the owning PM', async () => {
     const id = await charteredProject();
     await decideActivation(id, 'APPROVE', adminId, {});
     const p = await prisma.project.findUnique({ where: { id } });
     expect(p?.status).toBe('IN_PROGRESS');
     expect(p?.activationReviewStatus).toBeNull();
+    // The PM must be told their project was approved & activated (not just on reject/revision).
+    const notif = await prisma.notification.findFirst({ where: { userId: pmId, projectId: id, type: 'ACTIVATION_APPROVED' } });
+    expect(notif).toBeTruthy();
   });
 
   it('NEEDS_REVISION keeps it CHARTERED, records the note, notifies the PM, and drops it from the queue', async () => {
