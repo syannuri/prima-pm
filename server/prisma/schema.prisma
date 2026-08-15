@@ -234,6 +234,9 @@ model User {
   // their first admin via /admin/tenants (Phase 5). Distinct from a per-tenant Membership.role=ADMIN.
   // Granted deliberately (never auto); default false.
   isPlatformAdmin Boolean @default(false)
+  // ISO-3166-1 alpha-2 country from Cloudflare's CF-IPCountry header (geo analytics only, not IP).
+  // Captured on signup + backfilled on login; null off-Cloudflare (LAN/dev) or unknown.
+  country      String?
   isActive     Boolean  @default(true)
   // Bumped to revoke every outstanding token for this user (logout, password change/reset,
   // deactivation). Access/refresh tokens embed the tv they were minted at; requireAuth

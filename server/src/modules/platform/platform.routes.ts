@@ -122,6 +122,36 @@ router.get(
   }),
 );
 
+// GET /admin/tenants/geo — free-vs-subscriber segmentation by country (from User.country, captured
+// from Cloudflare CF-IPCountry). Users: subscriber = member of an ACTIVE paid tenant, else free.
+// Tenants: grouped by the owner's (earliest ADMIN's) country, FREE vs paid. All under runAsSystem.
+const PAID_PLANS = new Set(['PRO', 'ENTERPRISE']);
+router.get(
+  '/geo',
+  asyncHandler(async (_req, res) => {
+    const [memberships, users, corpTenants, adminMemberships] = await runAsSystem(() => Promise.all([
+      prisma.membership.findMany({ select: { userId: true, tenant: { select: { plan: true, status: true, isPersonal: true } } } }),
+      prisma.user.findMany({ where: { country: { not: null } }, select: { id: true, country: true } }),
+      prisma.tenant.findMany({ where: { isPersonal: false }, select: { id: true, plan: true } }),
+      prisma.membership.findMany({ where: { role: 'ADMIN', tenant: { isPersonal: false } }, orderBy: { createdAt: 'asc' }, select: { tenantId: true, user: { select: { country: true } } } }),
+    ]));
+    // Users who belong to at least one ACTIVE paid tenant are "subscribers".
+    const subscriberUsers = new Set<string>();
+    for (const m of memberships) if (!m.tenant.isPersonal && m.tenant.status === 'ACTIVE' && PAID_PLANS.has(m.tenant.plan)) subscriberUsers.add(m.userId);
+    // Each corporate tenant's country = its earliest ADMIN (owner) country.
+    const tenantCountry = new Map<string, string>();
+    for (const m of adminMemberships) if (m.user.country && !tenantCountry.has(m.tenantId)) tenantCountry.set(m.tenantId, m.user.country);
+
+    type Row = { country: string; freeUsers: number; subscriberUsers: number; freeTenants: number; paidTenants: number };
+    const rows = new Map<string, Row>();
+    const row = (c: string): Row => { let r = rows.get(c); if (!r) { r = { country: c, freeUsers: 0, subscriberUsers: 0, freeTenants: 0, paidTenants: 0 }; rows.set(c, r); } return r; };
+    for (const u of users) { if (!u.country) continue; const r = row(u.country); if (subscriberUsers.has(u.id)) r.subscriberUsers++; else r.freeUsers++; }
+    for (const t of corpTenants) { const c = tenantCountry.get(t.id); if (!c) continue; const r = row(c); if (PAID_PLANS.has(t.plan)) r.paidTenants++; else r.freeTenants++; }
+    const byCountry = [...rows.values()].sort((a, b) => (b.freeUsers + b.subscriberUsers) - (a.freeUsers + a.subscriberUsers));
+    res.json({ byCountry });
+  }),
+);
+
 // GET /admin/tenants/:id/detail — a tenant's member roster + recent projects, for the drill-down.
 router.get(
   '/:id/detail',

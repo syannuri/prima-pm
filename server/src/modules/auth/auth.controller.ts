@@ -5,6 +5,7 @@ import { Unauthorized } from '../../lib/errors.js';
 import { env } from '../../config/env.js';
 import { getAppSettings, isGoogleConfigured } from '../settings/settings.service.js';
 import { captchaEnabled } from '../../lib/turnstile.js';
+import { readCountry, captureUserCountry } from '../../lib/geo.js';
 
 // Public auth config so the SPA can render provider buttons without a rebuild. The Google
 // client ID is not a secret (it ships in the browser). Reflects the EFFECTIVE (admin-toggled)
@@ -31,25 +32,28 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
   // Set the httpOnly auth cookies for the browser SPA; the body still carries the tokens
   // for Bearer/automation clients (backward compatible).
   setAuthCookies(res, result);
+  void captureUserCountry(result.user.id, readCountry(req)); // best-effort geo backfill
   res.json(result);
 }
 
 export async function guestRegisterHandler(req: Request, res: Response): Promise<void> {
   const result = await authService.guestRegister(req.body);
   setAuthCookies(res, result); // auto-login on signup
+  void captureUserCountry(result.user.id, readCountry(req));
   res.status(201).json(result);
 }
 
 export async function orgSignupHandler(req: Request, res: Response): Promise<void> {
   // Option C: no auto-login. The tenant is created PENDING and must be approved by a platform admin
   // before the owner can sign in. Return 202 (accepted, not yet actioned) with a pending marker.
-  const result = await authService.registerOrg(req.body);
+  const result = await authService.registerOrg(req.body, readCountry(req));
   res.status(202).json(result);
 }
 
 export async function googleHandler(req: Request, res: Response): Promise<void> {
   const result = await authService.loginWithGoogle(req.body.credential);
   setAuthCookies(res, result); // same cookie session as password login / signup
+  void captureUserCountry(result.user.id, readCountry(req));
   res.json(result);
 }
 
