@@ -366,6 +366,55 @@ function SortTh({ label, k, sort, setSort, align }: { label: string; k: SortKey;
   );
 }
 
+// Bulk-action bar for the selected tenants — loops the existing per-tenant endpoints (suspend /
+// reactivate / set plan / export), with Promise.allSettled so one failure doesn't abort the rest.
+function BulkBar({ tenants, onClear, onChange, id }: { tenants: PlatformTenant[]; onClear: () => void; onChange: () => void; id: boolean }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [busy, setBusy] = useState(false);
+  const n = tenants.length;
+  const apply = async (fn: (t: PlatformTenant) => Promise<unknown>) => {
+    setBusy(true);
+    const results = await Promise.allSettled(tenants.map(fn));
+    setBusy(false);
+    const ok = results.filter((r) => r.status === 'fulfilled').length;
+    const fail = results.length - ok;
+    if (ok) toast.success(id ? `${ok} organisasi diperbarui${fail ? `, ${fail} gagal` : ''}` : `${ok} tenant${ok === 1 ? '' : 's'} updated${fail ? `, ${fail} failed` : ''}`);
+    else toast.error(id ? 'Semua gagal' : 'All failed');
+    onChange();
+    onClear();
+  };
+  const suspend = async () => {
+    if (!(await confirm({ title: id ? 'Tangguhkan terpilih?' : 'Suspend selected?', message: id ? <>Tangguhkan <strong>{n}</strong> organisasi? Semua anggotanya langsung terkunci.</> : <>Suspend <strong>{n}</strong> tenant{n === 1 ? '' : 's'}? All their members are immediately locked out.</>, confirmLabel: id ? 'Tangguhkan' : 'Suspend', danger: true }))) return;
+    apply((t) => api.patch(`/admin/tenants/${t.id}`, { status: 'SUSPENDED' }));
+  };
+  const reactivate = () => apply((t) => api.patch(`/admin/tenants/${t.id}`, { status: 'ACTIVE' }));
+  const setPlan = async (plan: PlatformTenant['plan']) => {
+    if (!(await confirm({ title: id ? `Ubah paket → ${plan}?` : `Set plan → ${plan}?`, message: id ? <>Ubah paket <strong>{n}</strong> organisasi menjadi <strong>{plan}</strong>?</> : <>Change <strong>{n}</strong> tenant{n === 1 ? '' : 's'} to the <strong>{plan}</strong> plan?</>, confirmLabel: id ? 'Ubah' : 'Change' }))) return;
+    apply((t) => api.patch(`/admin/tenants/${t.id}`, { plan }));
+  };
+  const exportAll = async () => {
+    setBusy(true);
+    for (const t of tenants) { try { await api.download(`/admin/tenants/${t.id}/export`, `tenant-${t.slug}-export.json`); } catch { /* skip */ } }
+    setBusy(false);
+  };
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-900/50 dark:bg-indigo-950/30">
+      <span className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">{n} {id ? 'terpilih' : 'selected'}</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button variant="secondary" disabled={busy} onClick={suspend} className="text-red-600 dark:text-red-400">{id ? 'Tangguhkan' : 'Suspend'}</Button>
+        <Button variant="secondary" disabled={busy} onClick={reactivate} className="text-green-600 dark:text-green-400">{id ? 'Aktifkan' : 'Reactivate'}</Button>
+        <select disabled={busy} defaultValue="" onChange={(e) => { if (e.target.value) { setPlan(e.target.value as PlatformTenant['plan']); e.target.value = ''; } }} title={id ? 'Ubah paket' : 'Set plan'} className="rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          <option value="" disabled>{id ? 'Paket…' : 'Plan…'}</option>
+          {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <Button variant="secondary" disabled={busy} onClick={exportAll}>{id ? 'Ekspor' : 'Export'}</Button>
+      </div>
+      <button onClick={onClear} className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">{id ? 'Bersihkan' : 'Clear'}</button>
+    </div>
+  );
+}
+
 // The tenant registry with a search box, status-filter chips, and sortable columns. Table on sm+,
 // cards on phones. Default sort: newest first.
 function TenantTable({ corporate, personal, onChange, id }: { corporate: PlatformTenant[]; personal: number; onChange: () => void; id: boolean }) {
@@ -395,6 +444,16 @@ function TenantTable({ corporate, personal, onChange, id }: { corporate: Platfor
     return [...filtered].sort((a, b) => (sort.dir === 'asc' ? cmp(a, b) : -cmp(a, b)));
   }, [corporate, q, filter, sort]);
 
+  // Bulk selection — checkbox per row + select-all over the visible (filtered) rows.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggle = (tid: string) => setSelected((s) => { const n = new Set(s); if (n.has(tid)) n.delete(tid); else n.add(tid); return n; });
+  const clear = () => setSelected(new Set());
+  const visibleIds = rows.map((r) => r.id);
+  const allSel = visibleIds.length > 0 && visibleIds.every((i) => selected.has(i));
+  const someSel = visibleIds.some((i) => selected.has(i)) && !allSel;
+  const toggleAll = () => setSelected((s) => { const n = new Set(s); if (allSel) visibleIds.forEach((i) => n.delete(i)); else visibleIds.forEach((i) => n.add(i)); return n; });
+  const selectedTenants = corporate.filter((t) => selected.has(t.id));
+
   return (
     <Card>
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -403,6 +462,8 @@ function TenantTable({ corporate, personal, onChange, id }: { corporate: Platfor
         </div>
         <FilterChips options={STATUS_FILTERS} value={filter} onChange={setFilter} labels={filterLabel} />
       </div>
+
+      {selectedTenants.length > 0 && <BulkBar tenants={selectedTenants} onClear={clear} onChange={onChange} id={id} />}
 
       {!corporate.length ? (
         <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada organisasi korporat. Buat yang pertama lewat tombol di atas.' : 'No corporate tenants yet — create the first one from the button above.'}</p>
@@ -414,6 +475,7 @@ function TenantTable({ corporate, personal, onChange, id }: { corporate: Platfor
             <table className="prima-rows w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+                  <th className="w-8"><input type="checkbox" checked={allSel} ref={(el) => { if (el) el.indeterminate = someSel; }} onChange={toggleAll} aria-label={id ? 'Pilih semua' : 'Select all'} className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /></th>
                   <SortTh label={id ? 'Nama' : 'Name'} k="name" sort={sort} setSort={setSort} />
                   <th>Slug</th>
                   <th>{id ? 'Status' : 'Status'}</th>
@@ -425,12 +487,12 @@ function TenantTable({ corporate, personal, onChange, id }: { corporate: Platfor
                 </tr>
               </thead>
               <tbody>
-                {rows.map((t) => <TenantRow key={t.id} t={t} onChange={onChange} />)}
+                {rows.map((t) => <TenantRow key={t.id} t={t} onChange={onChange} selected={selected.has(t.id)} onToggle={() => toggle(t.id)} />)}
               </tbody>
             </table>
           </div>
           <div className="space-y-2 sm:hidden">
-            {rows.map((t) => <TenantCard key={t.id} t={t} onChange={onChange} />)}
+            {rows.map((t) => <TenantCard key={t.id} t={t} onChange={onChange} selected={selected.has(t.id)} onToggle={() => toggle(t.id)} />)}
           </div>
         </>
       )}
@@ -531,7 +593,7 @@ function StatusBadge({ status }: { status: PlatformTenant['status'] }) {
   return <Badge color="red">{id ? 'Ditangguhkan' : 'Suspended'}</Badge>;
 }
 
-function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void }) {
+function TenantRow({ t, onChange, selected, onToggle }: { t: PlatformTenant; onChange: () => void; selected: boolean; onToggle: () => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
@@ -544,7 +606,8 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
   const memberOver = memberCap != null && t.memberCount >= memberCap;
   const memberNear = memberCap != null && !memberOver && t.memberCount / memberCap >= 0.8;
   return (
-    <tr className={`border-b last:border-0 dark:border-slate-800 ${pending ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}>
+    <tr className={`border-b last:border-0 dark:border-slate-800 ${selected ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : pending ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}>
+      <td><input type="checkbox" checked={selected} onChange={onToggle} aria-label={id ? `Pilih ${t.name}` : `Select ${t.name}`} className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /></td>
       <td className="py-2 font-medium">
         <button onClick={() => setDetail(true)} className="text-left text-slate-700 hover:text-indigo-600 hover:underline dark:text-slate-200 dark:hover:text-indigo-300" title={id ? 'Lihat detail & kuota' : 'View details & quota'}>{t.name}</button>
       </td>
@@ -659,7 +722,7 @@ function TenantDetailModal({ t, onClose }: { t: PlatformTenant; onClose: () => v
   );
 }
 
-function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }) {
+function TenantCard({ t, onChange, selected, onToggle }: { t: PlatformTenant; onChange: () => void; selected: boolean; onToggle: () => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
   const [renaming, setRenaming] = useState(false);
@@ -668,12 +731,15 @@ function TenantCard({ t, onChange }: { t: PlatformTenant; onChange: () => void }
   const { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
   const pending = t.status === 'PENDING';
   return (
-    <div className={`rounded-xl border p-3 dark:border-slate-800 ${pending ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20' : 'border-slate-200'}`}>
+    <div className={`rounded-xl border p-3 dark:border-slate-800 ${selected ? 'border-indigo-300 bg-indigo-50/60 dark:border-indigo-800 dark:bg-indigo-950/30' : pending ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20' : 'border-slate-200'}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-start gap-2">
+          <input type="checkbox" checked={selected} onChange={onToggle} aria-label={id ? `Pilih ${t.name}` : `Select ${t.name}`} className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+          <div className="min-w-0">
           <p className="font-medium text-slate-700 dark:text-slate-200">{t.name}</p>
           <p className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">{t.slug} · {t.memberCount} {id ? 'anggota' : 'members'}</p>
           {t.customDomain && <p className="truncate font-mono text-[11px] text-indigo-500 dark:text-indigo-400">🔗 {t.customDomain}</p>}
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           <StatusBadge status={t.status} />
