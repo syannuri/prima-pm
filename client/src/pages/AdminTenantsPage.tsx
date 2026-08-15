@@ -8,9 +8,11 @@ import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
-import { formatDate, formatIdrShort } from '../lib/format';
+import { formatDate, formatIdrShort, formatBytes } from '../lib/format';
 import { tenantStats, type Plan } from '../lib/tenantStats';
-import { Kpi, ConsoleHero, FilterChips } from '../components/platform/ConsoleUI';
+import { PLAN_LIMITS, atCapacity } from '../lib/planLimits';
+import { toCsv, downloadCsv } from '../lib/csv';
+import { Kpi, ConsoleHero, FilterChips, QuotaBar } from '../components/platform/ConsoleUI';
 
 // Platform (super-admin) console — provision & manage TENANTS (organizations). Gated by the global
 // User.isPlatformAdmin flag; backed by the /admin/tenants API. Distinct from per-tenant admin.
@@ -36,6 +38,16 @@ export default function AdminTenantsPage() {
   const corporate = tenants.filter((t) => !t.isPersonal);
   const stats = tenantStats(tenants);
   const pending = corporate.filter((t) => t.status === 'PENDING');
+  const atCap = corporate.filter(atCapacity).length;
+
+  const exportCsv = () => {
+    const rows = corporate.map((t) => [
+      t.name, t.slug, t.status, t.plan, t.memberCount, t.projectCount, formatBytes(t.storageBytes), t.customDomain ?? '', formatDate(t.createdAt), formatDate(t.updatedAt),
+    ]);
+    downloadCsv(`tenants-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(
+      ['Name', 'Slug', 'Status', 'Plan', 'Members', 'Projects', 'Storage', 'Custom domain', 'Created', 'Updated'], rows,
+    ));
+  };
 
   return (
     <div className="space-y-5">
@@ -44,9 +56,14 @@ export default function AdminTenantsPage() {
         title={id ? 'Organisasi' : 'Organizations'}
         subtitle={id ? 'Provisi, tangguhkan, dan kelola setiap organisasi lintas platform.' : 'Provision, suspend and manage every organization across the platform.'}
         action={(
-          <button onClick={() => setCreating(true)} className="shrink-0 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-white/90">
-            + {id ? 'Buat organisasi' : 'Provision tenant'}
-          </button>
+          <div className="flex shrink-0 gap-2">
+            <button onClick={exportCsv} disabled={!corporate.length} className="rounded-lg border border-white/40 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-50">
+              ⬇ CSV
+            </button>
+            <button onClick={() => setCreating(true)} className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-white/90">
+              + {id ? 'Buat organisasi' : 'Provision tenant'}
+            </button>
+          </div>
         )}
       />
 
@@ -55,13 +72,14 @@ export default function AdminTenantsPage() {
       ) : (
         <>
           {/* Headline metrics — derived client-side from the tenant list. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             <Kpi label={id ? 'Organisasi' : 'Tenants'} value={stats.total} tone="indigo" />
             <Kpi label={id ? 'Aktif' : 'Active'} value={stats.active} tone="emerald" />
             <Kpi label={id ? 'Menunggu' : 'Pending'} value={stats.pending} tone="amber" pulse={stats.pending > 0} />
             <Kpi label={id ? 'Ditangguhkan' : 'Suspended'} value={stats.suspended} tone="red" />
             <Kpi label={id ? 'Anggota' : 'Members'} value={stats.members} tone="slate" hint={stats.personal > 0 ? `+${stats.personal} sandbox` : undefined} />
             <Kpi label={id ? 'MRR (est.)' : 'MRR (est.)'} value={formatIdrShort(stats.mrr)} tone="violet" hint={stats.paying > 0 ? `${stats.paying} ${id ? 'berbayar' : 'paying'} · ARPA ${formatIdrShort(stats.arpa)}` : (id ? 'belum ada berbayar' : 'no paying tenants')} />
+            <Kpi label={id ? 'Kuota penuh' : 'At capacity'} value={atCap} tone={atCap > 0 ? 'red' : 'slate'} pulse={atCap > 0} hint={id ? 'di/atas batas paket' : 'at/over a plan cap'} />
           </div>
 
           <PlanBar split={stats.planSplit} total={stats.total} id={id} />
@@ -327,18 +345,26 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [domainOpen, setDomainOpen] = useState(false);
+  const [detail, setDetail] = useState(false);
   const { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
   const pending = t.status === 'PENDING';
+  const memberCap = PLAN_LIMITS[t.plan].maxMembers;
+  const memberOver = memberCap != null && t.memberCount >= memberCap;
+  const memberNear = memberCap != null && !memberOver && t.memberCount / memberCap >= 0.8;
   return (
     <tr className={`border-b last:border-0 dark:border-slate-800 ${pending ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}>
-      <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{t.name}</td>
+      <td className="py-2 font-medium">
+        <button onClick={() => setDetail(true)} className="text-left text-slate-700 hover:text-indigo-600 hover:underline dark:text-slate-200 dark:hover:text-indigo-300" title={id ? 'Lihat detail & kuota' : 'View details & quota'}>{t.name}</button>
+      </td>
       <td className="font-mono text-xs text-slate-500 dark:text-slate-400">
         {t.slug}
         {t.customDomain && <span className="block text-[11px] text-indigo-500 dark:text-indigo-400">🔗 {t.customDomain}</span>}
       </td>
       <td><StatusBadge status={t.status} /></td>
       <td><PlanSelect t={t} onPlan={setPlan} disabled={patch.isPending} /></td>
-      <td className="text-right text-slate-500 dark:text-slate-400">{t.memberCount}</td>
+      <td className={`text-right tabular-nums ${memberOver ? 'text-red-600 dark:text-red-400' : memberNear ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
+        {t.memberCount}{memberCap != null && <span className="text-slate-400 dark:text-slate-500"> / {memberCap}</span>}
+      </td>
       <td className="text-slate-500 dark:text-slate-400">{formatDate(t.createdAt)}</td>
       <td className="text-slate-500 dark:text-slate-400">{formatDate(t.updatedAt)}</td>
       <td className="text-right whitespace-nowrap">
@@ -362,7 +388,35 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
       {renaming && <RenameModal t={t} onClose={() => setRenaming(false)} onChange={onChange} />}
       {domainOpen && <DomainModal t={t} onClose={() => setDomainOpen(false)} onChange={onChange} />}
       {deleting && <DeleteModal t={t} onClose={() => setDeleting(false)} onChange={onChange} />}
+      {detail && <TenantDetailModal t={t} onClose={() => setDetail(false)} />}
     </tr>
+  );
+}
+
+// Drill-down: per-tenant details + quota usage (members / projects / storage) against the plan caps.
+function TenantDetailModal({ t, onClose }: { t: PlatformTenant; onClose: () => void }) {
+  const { lang } = useLang();
+  const id = lang === 'id';
+  const lim = PLAN_LIMITS[t.plan];
+  return (
+    <Modal onClose={onClose} title={t.name} size="md">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+          <span className="font-mono text-xs">{t.slug}</span>
+          <StatusBadge status={t.status} />
+          <span>{id ? 'Paket' : 'Plan'} <b>{t.plan}</b></span>
+          <span>{id ? 'Dibuat' : 'Created'} {formatDate(t.createdAt)}</span>
+          <span>{id ? 'Diubah' : 'Updated'} {formatDate(t.updatedAt)}</span>
+          {t.customDomain && <span className="text-indigo-500 dark:text-indigo-400">🔗 {t.customDomain}</span>}
+        </div>
+        <div className="space-y-2.5 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Penggunaan kuota' : 'Quota usage'}</div>
+          <QuotaBar label={id ? 'Anggota' : 'Members'} used={t.memberCount} cap={lim.maxMembers} format={(n) => String(n)} />
+          <QuotaBar label={id ? 'Proyek' : 'Projects'} used={t.projectCount} cap={lim.maxProjects} format={(n) => String(n)} />
+          <QuotaBar label={id ? 'Penyimpanan' : 'Storage'} used={t.storageBytes} cap={lim.storageMb == null ? null : lim.storageMb * 1024 * 1024} format={formatBytes} />
+        </div>
+      </div>
+    </Modal>
   );
 }
 

@@ -45,6 +45,16 @@ export function formatNum(value: number | string | null | undefined, digits = 2)
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: digits }).format(n);
 }
 
+// Human-readable byte size: 0 → "0 B", 1536 → "1.5 KB", up to TB. Compact (≤1 decimal).
+export function formatBytes(bytes: number | null | undefined): string {
+  const n = bytes == null ? 0 : Number(bytes);
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let v = n / 1024, i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+}
+
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return '—';
   const d = typeof value === 'string' ? new Date(value) : value;

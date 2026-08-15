@@ -29,6 +29,8 @@ export interface PlatformTenant {
   createdAt: string;
   updatedAt: string; // last change to the tenant record (rename / plan / status) — the "Updated" column
   memberCount: number;
+  projectCount: number; // active (non-deleted) projects — for quota bars
+  storageBytes: number; // total attachment bytes — for quota bars
 }
 
 export interface AdminUser extends User {
