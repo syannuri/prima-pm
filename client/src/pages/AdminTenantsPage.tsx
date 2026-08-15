@@ -12,6 +12,8 @@ import { formatDate, formatIdrShort, formatBytes, timeAgo } from '../lib/format'
 import { tenantStats, type Plan } from '../lib/tenantStats';
 import { PLAN_LIMITS, atCapacity } from '../lib/planLimits';
 import { describeActivity } from '../lib/activityDescribe';
+import { growthSeries, type GrowthPoint } from '../lib/growthSeries';
+import { smoothPath, areaPath, type Pt } from '../components/chart/smoothPath';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { Kpi, ConsoleHero, FilterChips, QuotaBar } from '../components/platform/ConsoleUI';
 
@@ -83,6 +85,8 @@ export default function AdminTenantsPage() {
             <Kpi label={id ? 'Kuota penuh' : 'At capacity'} value={atCap} tone={atCap > 0 ? 'red' : 'slate'} pulse={atCap > 0} hint={id ? 'di/atas batas paket' : 'at/over a plan cap'} />
           </div>
 
+          <GrowthTrends corporate={corporate} id={id} />
+
           <div className="grid gap-3 lg:grid-cols-3">
             <PlanBar split={stats.planSplit} total={stats.total} id={id} />
             <Leaderboard corporate={corporate} id={id} />
@@ -126,6 +130,68 @@ function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: num
             <span className={`h-2.5 w-2.5 rounded-sm ${s.c}`} />{s.k} <b className="tabular-nums">{s.n}</b>
           </span>
         ))}
+      </div>
+    </Card>
+  );
+}
+
+// Growth trends — cumulative tenants + est. MRR over the last 6 months, reusing the S-curve
+// smoothing engine for a modern area sparkline. Client-only (from createdAt + current plan).
+function TrendSpark({ values, color }: { values: number[]; color: string }) {
+  const W = 300, H = 72, padT = 10, padB = 10, padL = 4, padR = 6;
+  const max = Math.max(1, ...values), min = Math.min(0, ...values);
+  const n = values.length;
+  const X = (i: number) => padL + (n <= 1 ? 0 : i / (n - 1)) * (W - padL - padR);
+  const Y = (v: number) => padT + (1 - (v - min) / ((max - min) || 1)) * (H - padT - padB);
+  const pts: Pt[] = values.map((v, i) => ({ x: X(i), y: Y(v) }));
+  const last = pts[pts.length - 1];
+  const gradId = `grow-${color.replace(/[^a-z0-9]/gi, '')}`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 w-full" preserveAspectRatio="none" role="img" aria-label="growth trend">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {pts.length > 1 && <path d={areaPath(pts, H - padB)} fill={`url(#${gradId})`} stroke="none" />}
+      {pts.length > 1 && <path d={smoothPath(pts)} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+      {last && <circle cx={last.x} cy={last.y} r="2.6" fill={color} stroke="#fff" strokeWidth="1" />}
+    </svg>
+  );
+}
+
+function TrendPanel({ title, series, pick, fmt, color }: { title: string; series: GrowthPoint[]; pick: (p: GrowthPoint) => number; fmt: (n: number) => string; color: string }) {
+  const values = series.map(pick);
+  const latest = values[values.length - 1] ?? 0;
+  const delta = latest - (values[values.length - 2] ?? 0);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{title}</span>
+        {delta !== 0 && (
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${delta > 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+            {delta > 0 ? '+' : '−'}{fmt(Math.abs(delta))}
+          </span>
+        )}
+      </div>
+      <div className="mt-0.5 text-xl font-bold tabular-nums text-slate-800 dark:text-slate-100">{fmt(latest)}</div>
+      <TrendSpark values={values} color={color} />
+      <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500">
+        <span>{series[0]?.label}</span><span>{series[series.length - 1]?.label}</span>
+      </div>
+    </div>
+  );
+}
+
+function GrowthTrends({ corporate, id }: { corporate: PlatformTenant[]; id: boolean }) {
+  const series = useMemo(() => growthSeries(corporate, 6), [corporate]);
+  return (
+    <Card>
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Pertumbuhan (6 bln terakhir)' : 'Growth (last 6 months)'}</div>
+      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+        <TrendPanel title={id ? 'Total organisasi' : 'Total tenants'} series={series} pick={(p) => p.tenants} fmt={(n) => String(n)} color="#6366f1" />
+        <TrendPanel title="MRR (est.)" series={series} pick={(p) => p.mrr} fmt={formatIdrShort} color="#8b5cf6" />
       </div>
     </Card>
   );
