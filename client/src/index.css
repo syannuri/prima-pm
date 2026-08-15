@@ -63,6 +63,27 @@
 .pmx-scene-in { animation: pmx-scene-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @media (prefers-reduced-motion: reduce) { .pmx-scene-in { animation: none; } }
 
+/* Product-tour "live build" — when a scene becomes active the wrapper gets `.pmx-play`
+   and its data animates in like a real screencast: bars grow, curves wipe left-to-right,
+   rings/arcs sweep, cards rise. The base SVG always renders the FINAL state, so the same
+   mocks used statically in the showcase (no `.pmx-play`) are unaffected. Per-element
+   `--d` sets a stagger delay; `--pmx-len` is the dash length for sweeping strokes. */
+@keyframes pmx-growx { from { transform: scaleX(0); } }
+@keyframes pmx-growy { from { transform: scaleY(0); } }
+@keyframes pmx-pop   { from { transform: scale(0); opacity: 0; } 60% { transform: scale(1.12); } }
+@keyframes pmx-rise  { from { opacity: 0; transform: translateY(10px); } }
+@keyframes pmx-sweep { from { stroke-dashoffset: var(--pmx-len, 300); } }
+.pmx-play .pmx-grow  { transform-box: fill-box; transform-origin: left center; animation: pmx-growx 820ms cubic-bezier(0.22, 1, 0.36, 1) both var(--d, 0ms); }
+.pmx-play .pmx-wipe  { transform-box: fill-box; transform-origin: left center; animation: pmx-growx 1150ms cubic-bezier(0.4, 0, 0.2, 1) both var(--d, 0ms); }
+.pmx-play .pmx-drop  { transform-box: fill-box; transform-origin: top center;  animation: pmx-growy 600ms cubic-bezier(0.22, 1, 0.36, 1) both var(--d, 0ms); }
+.pmx-play .pmx-pop   { transform-box: fill-box; transform-origin: center;      animation: pmx-pop 640ms cubic-bezier(0.34, 1.56, 0.64, 1) both var(--d, 0ms); }
+.pmx-play .pmx-rise  { animation: pmx-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) both var(--d, 0ms); }
+.pmx-play .pmx-sweep { animation: pmx-sweep 1050ms cubic-bezier(0.4, 0, 0.2, 1) both var(--d, 0ms); }
+@media (prefers-reduced-motion: reduce) {
+  .pmx-play .pmx-grow, .pmx-play .pmx-wipe, .pmx-play .pmx-drop,
+  .pmx-play .pmx-pop, .pmx-play .pmx-rise, .pmx-play .pmx-sweep { animation: none; }
+}
+
 /* Sidebar (always-dark charcoal rail): a slim scrollbar that BLENDS into the surface — a
    transparent track + a faint translucent-white thumb — instead of the OS-default light
    scrollbar showing through on the dark background in light theme. */

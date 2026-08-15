@@ -2,7 +2,7 @@
 // Donut segments use stroke-dasharray rings (crisp in-browser); colours from the RAG language.
 const R = 50, SW = 17, C = 2 * Math.PI * R;
 
-function Donut({ cx, cy, title, segs }: { cx: number; cy: number; title: string; segs: [number, string][] }) {
+function Donut({ cx, cy, title, segs, base = 0 }: { cx: number; cy: number; title: string; segs: [number, string][]; base?: number }) {
   const total = segs.reduce((s, [n]) => s + n, 0);
   let acc = 0;
   return (
@@ -10,12 +10,15 @@ function Donut({ cx, cy, title, segs }: { cx: number; cy: number; title: string;
       <circle cx={cx} cy={cy} r={R} fill="none" stroke="#eef2f7" strokeWidth={SW} />
       {segs.map(([n, color], i) => {
         const seg = (n / total) * C;
-        const start = (acc / total) * C;
+        const startDeg = (acc / total) * 360;          // rotation places the segment; sweep draws it
         acc += n;
         return (
-          <circle key={i} cx={cx} cy={cy} r={R} fill="none" stroke={color} strokeWidth={SW}
-            strokeDasharray={`${seg.toFixed(1)} ${(C - seg).toFixed(1)}`} strokeDashoffset={(-start).toFixed(1)}
-            transform={`rotate(-90 ${cx} ${cy})`} />
+          // base dashoffset 0 = full arc (static). Under `.pmx-play` pmx-sweep animates it from
+          // `seg` (hidden) → 0, so each slice draws around from its start, staggered.
+          <circle key={i} className="pmx-sweep" style={{ '--pmx-len': seg, '--d': `${base + i * 200}ms` } as React.CSSProperties}
+            cx={cx} cy={cy} r={R} fill="none" stroke={color} strokeWidth={SW}
+            strokeDasharray={`${seg.toFixed(1)} ${(C - seg).toFixed(1)}`}
+            transform={`rotate(${(-90 + startDeg).toFixed(1)} ${cx} ${cy})`} />
         );
       })}
       <text x={cx} y={cy + 2} textAnchor="middle" fill="#0f172a" fontSize="24" fontWeight="800">{total}</text>
@@ -31,7 +34,7 @@ export default function MockCharts({ className }: { className?: string }) {
       <rect width="500" height="320" fill="#ffffff" />
       <text x="24" y="34" fill="#0f172a" fontSize="13" fontWeight="700">Portfolio status</text>
       <Donut cx={140} cy={150} title="Cost (CPI)" segs={[[4, '#22c55e'], [1, '#f59e0b']]} />
-      <Donut cx={360} cy={150} title="Schedule (SPI)" segs={[[3, '#22c55e'], [1, '#f59e0b'], [1, '#ef4444']]} />
+      <Donut cx={360} cy={150} title="Schedule (SPI)" segs={[[3, '#22c55e'], [1, '#f59e0b'], [1, '#ef4444']]} base={420} />
       {/* legend */}
       {[['#22c55e', 'On track'], ['#f59e0b', 'At risk'], ['#ef4444', 'Behind']].map(([c, l], i) => (
         <g key={l}>

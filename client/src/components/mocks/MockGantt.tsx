@@ -28,9 +28,11 @@ export default function MockGantt({ className }: { className?: string }) {
         </g>
       ))}
       {/* Today marker */}
-      <line x1={todayX} y1="46" x2={todayX} y2="360" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
-      <rect x={todayX - 17} y="49" width="34" height="13" rx="3" fill="#f59e0b" />
-      <text x={todayX} y="59" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="700">TODAY</text>
+      <g className="pmx-drop">
+        <line x1={todayX} y1="46" x2={todayX} y2="360" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
+        <rect x={todayX - 17} y="49" width="34" height="13" rx="3" fill="#f59e0b" />
+        <text x={todayX} y="59" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="700">TODAY</text>
+      </g>
       {rows.map((r, i) => {
         const y = top + i * rowH;
         return (
@@ -39,11 +41,11 @@ export default function MockGantt({ className }: { className?: string }) {
             <rect x="16" y={y - 5} width="11" height="11" rx="2.5" fill={r[4] >= 1 ? '#22c55e' : '#ffffff'} stroke={r[4] >= 1 ? '#22c55e' : '#cbd5e1'} strokeWidth="1.5" />
             <text x={34 + r[1] * 16} y={y + 4} fill="#334155" fontSize="11.5" fontWeight={r[1] === 0 ? 700 : 500}>{r[0]}</text>
             {r[5] ? (
-              <path d={`M${bx(r[2])} ${y - 6} l8 7 l-8 7 l-8 -7 z`} fill="#2563eb" />
+              <path className="pmx-pop" style={{ '--d': `${200 + i * 110}ms` } as React.CSSProperties} d={`M${bx(r[2])} ${y - 6} l8 7 l-8 7 l-8 -7 z`} fill="#2563eb" />
             ) : (
               <>
-                <rect x={bx(r[2])} y={y - 6} width={r[3] * TW} height="14" rx="4" fill="#bfdbfe" />
-                <rect x={bx(r[2])} y={y - 6} width={r[3] * TW * r[4]} height="14" rx="4" fill="#2563eb" />
+                <rect className="pmx-grow" style={{ '--d': `${200 + i * 110}ms` } as React.CSSProperties} x={bx(r[2])} y={y - 6} width={r[3] * TW} height="14" rx="4" fill="#bfdbfe" />
+                <rect className="pmx-grow" style={{ '--d': `${340 + i * 110}ms` } as React.CSSProperties} x={bx(r[2])} y={y - 6} width={r[3] * TW * r[4]} height="14" rx="4" fill="#2563eb" />
               </>
             )}
           </g>
