@@ -121,6 +121,35 @@ router.get(
   }),
 );
 
+// GET /admin/tenants/:id/detail — a tenant's member roster + recent projects, for the drill-down.
+router.get(
+  '/:id/detail',
+  asyncHandler(async (req, res) => {
+    const tenantId = req.params.id;
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+    if (!tenant) throw NotFound('Tenant not found');
+    // Membership is a GLOBAL model (not auto-scoped) → filter by tenantId directly.
+    const members = await prisma.membership.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'asc' },
+      select: { role: true, user: { select: { id: true, name: true, email: true } } },
+    });
+    // Project is tenant-scoped by the extension → read this tenant's rows under runAsSystem.
+    const projects = await runAsSystem(() =>
+      prisma.project.findMany({
+        where: { tenantId, deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        take: 8,
+        select: { id: true, name: true, status: true, updatedAt: true },
+      }),
+    );
+    res.json({
+      members: members.map((m) => ({ userId: m.user.id, name: m.user.name, email: m.user.email, role: m.role })),
+      projects,
+    });
+  }),
+);
+
 // POST /admin/tenants — create a CORPORATE tenant + its first ADMIN. Attaches an existing STAFF user
 // by email; if none exists, creates one (adminName + adminPassword required in that case).
 router.post(

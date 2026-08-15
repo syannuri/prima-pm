@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import type { PlatformTenant, PlatformActivity } from '../api/types';
+import type { PlatformTenant, PlatformActivity, PlatformTenantDetail } from '../api/types';
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -548,10 +548,22 @@ function TenantRow({ t, onChange }: { t: PlatformTenant; onChange: () => void })
 }
 
 // Drill-down: per-tenant details + quota usage (members / projects / storage) against the plan caps.
+const PROJECT_STATUS_COLOR: Record<string, string> = {
+  DRAFT: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  CHARTERED: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  IN_PROGRESS: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  ON_HOLD: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  CLOSED: 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
+};
+
 function TenantDetailModal({ t, onClose }: { t: PlatformTenant; onClose: () => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
   const lim = PLAN_LIMITS[t.plan];
+  const { data, isLoading } = useQuery({
+    queryKey: ['tenant-detail', t.id],
+    queryFn: () => api.get<PlatformTenantDetail>(`/admin/tenants/${t.id}/detail`),
+  });
   return (
     <Modal onClose={onClose} title={t.name} size="md">
       <div className="space-y-4">
@@ -569,6 +581,41 @@ function TenantDetailModal({ t, onClose }: { t: PlatformTenant; onClose: () => v
           <QuotaBar label={id ? 'Proyek' : 'Projects'} used={t.projectCount} cap={lim.maxProjects} format={(n) => String(n)} />
           <QuotaBar label={id ? 'Penyimpanan' : 'Storage'} used={t.storageBytes} cap={lim.storageMb == null ? null : lim.storageMb * 1024 * 1024} format={formatBytes} />
         </div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-4"><Spinner /></div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Member roster */}
+            <div>
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Anggota' : 'Members'} ({data?.members.length ?? 0})</div>
+              {data && data.members.length > 0 ? (
+                <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+                  {data.members.map((m) => (
+                    <li key={m.userId} className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-slate-700 dark:text-slate-200" title={m.email}>{m.name || m.email}</span>
+                      <span className="shrink-0 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">{m.role}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="text-sm text-slate-400 dark:text-slate-500">{id ? 'Tidak ada anggota.' : 'No members.'}</p>}
+            </div>
+            {/* Recent projects */}
+            <div>
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Proyek terbaru' : 'Recent projects'}</div>
+              {data && data.projects.length > 0 ? (
+                <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+                  {data.projects.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-slate-700 dark:text-slate-200">{p.name}</span>
+                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${PROJECT_STATUS_COLOR[p.status] ?? PROJECT_STATUS_COLOR.DRAFT}`}>{p.status.replace('_', ' ')}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="text-sm text-slate-400 dark:text-slate-500">{id ? 'Belum ada proyek.' : 'No projects yet.'}</p>}
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
