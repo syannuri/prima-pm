@@ -55,6 +55,21 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
 }
 
+// Compact relative time: "just now", "5m ago", "3h ago", "2d ago"; falls back to a date past ~7d.
+export function timeAgo(value: string | Date | null | undefined): string {
+  if (!value) return '—';
+  const d = typeof value === 'string' ? new Date(value) : value;
+  const secs = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (secs < 45) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days <= 7) return `${days}d ago`;
+  return formatDate(d);
+}
+
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return '—';
   const d = typeof value === 'string' ? new Date(value) : value;

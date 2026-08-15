@@ -33,6 +33,19 @@ export interface PlatformTenant {
   storageBytes: number; // total attachment bytes — for quota bars
 }
 
+// A recent platform (super-admin) event for the console activity feed. `before`/`after` carry the
+// audit deltas; the client's describeActivity() turns them into a human sentence.
+export interface PlatformActivity {
+  id: string;
+  createdAt: string;
+  action: string;   // CREATE | UPDATE | DELETE | IMPERSONATE | EXPORT
+  entity: string;   // Tenant | User | BlockedIdentity
+  actorName: string | null;
+  targetName: string | null;
+  before: unknown;
+  after: unknown;
+}
+
 export interface AdminUser extends User {
   isActive: boolean;
   createdAt: string;

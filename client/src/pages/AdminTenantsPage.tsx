@@ -2,15 +2,16 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import type { PlatformTenant } from '../api/types';
+import type { PlatformTenant, PlatformActivity } from '../api/types';
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
-import { formatDate, formatIdrShort, formatBytes } from '../lib/format';
+import { formatDate, formatIdrShort, formatBytes, timeAgo } from '../lib/format';
 import { tenantStats, type Plan } from '../lib/tenantStats';
 import { PLAN_LIMITS, atCapacity } from '../lib/planLimits';
+import { describeActivity } from '../lib/activityDescribe';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { Kpi, ConsoleHero, FilterChips, QuotaBar } from '../components/platform/ConsoleUI';
 
@@ -82,7 +83,10 @@ export default function AdminTenantsPage() {
             <Kpi label={id ? 'Kuota penuh' : 'At capacity'} value={atCap} tone={atCap > 0 ? 'red' : 'slate'} pulse={atCap > 0} hint={id ? 'di/atas batas paket' : 'at/over a plan cap'} />
           </div>
 
-          <PlanBar split={stats.planSplit} total={stats.total} id={id} />
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div className="lg:col-span-2"><PlanBar split={stats.planSplit} total={stats.total} id={id} /></div>
+            <ActivityFeed id={id} />
+          </div>
 
           {pending.length > 0 && <PendingSpotlight pending={pending} onChange={invalidate} id={id} />}
 
@@ -122,6 +126,42 @@ function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: num
           </span>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// Cross-tenant platform activity — the super-admin's oversight feed (who did what, when).
+const TONE_DOT: Record<string, string> = { good: 'bg-emerald-500', bad: 'bg-red-500', neutral: 'bg-indigo-400' };
+function ActivityFeed({ id }: { id: boolean }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['platform-activity'],
+    queryFn: () => api.get<{ activity: PlatformActivity[] }>('/admin/tenants/activity'),
+    refetchInterval: 60_000,
+  });
+  const events = data?.activity ?? [];
+  return (
+    <Card className="flex h-full flex-col">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Aktivitas terbaru' : 'Recent activity'}</div>
+      {isLoading ? (
+        <div className="flex flex-1 items-center justify-center py-4"><Spinner /></div>
+      ) : events.length === 0 ? (
+        <p className="py-3 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada aktivitas platform.' : 'No platform activity yet.'}</p>
+      ) : (
+        <ul className="-my-1 max-h-56 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800">
+          {events.map((e) => {
+            const d = describeActivity(e, id);
+            return (
+              <li key={e.id} className="flex items-center gap-2.5 py-2 text-sm">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[d.tone]}`} />
+                <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
+                  {e.actorName && <b className="font-medium">{e.actorName}</b>} {d.text}
+                </span>
+                <span className="shrink-0 tabular-nums text-xs text-slate-400 dark:text-slate-500" title={formatDate(e.createdAt)}>{timeAgo(e.createdAt)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Card>
   );
 }
