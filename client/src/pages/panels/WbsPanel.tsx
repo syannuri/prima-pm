@@ -251,7 +251,7 @@ function InlineDate({ value, editable, onSave, title }: {
     <button
       type="button" disabled={!editable} title={editable ? (title ?? 'Click to edit') : title}
       onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-      className={`w-full rounded px-1 py-0.5 text-right text-xs tabular-nums ${editable ? 'cursor-text text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-brand-900/20' : 'cursor-default text-slate-500 dark:text-slate-400'}`}
+      className={`w-full rounded px-1 py-0.5 text-right text-xs tabular-nums ${editable ? 'cursor-text text-slate-700 hover:bg-brand-50 dark:text-slate-200 dark:hover:bg-brand-900/20' : 'cursor-default text-slate-600 dark:text-slate-300'}`}
     >
       {value ? formatDate(new Date(value)) : <span className="text-slate-300 dark:text-slate-600">—</span>}
     </button>
@@ -293,7 +293,7 @@ function InlineName({ value, editable, done, depthZero, onSave }: {
   value: string; editable: boolean; done: boolean; depthZero: boolean; onSave: (name: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const nameCls = `${depthZero ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${done ? 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500' : ''}`;
+  const nameCls = `${depthZero ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'} ${done ? 'text-slate-400 dark:text-slate-500' : ''}`;
   if (editing) {
     return (
       <input
@@ -1236,7 +1236,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {/* Row 1 — ✓/WBS/Task are frozen (sticky-left). Plan & Actual groups + Dur/Budget
                   appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
                   then (rowSpan=hrs), 1 otherwise. */}
-              <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
+              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
@@ -1269,7 +1269,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each group (spreadsheet view only). */}
               {showDates && (
-                <tr className="text-left text-[11px] uppercase text-slate-500 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-600 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
                   <th>Start</th>
                   <th>Finish</th>
                   <th>Start</th>
@@ -1284,8 +1284,11 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 // Zebra striping — the opaque frozen cells carry the same bg so the stripe + hover
                 // read continuously across the frozen/scroll boundary.
                 const alt = rowIdx % 2 === 1;
-                const rowBg = alt ? 'bg-slate-50/70 dark:bg-slate-800/30' : 'bg-white dark:bg-slate-900';
-                const rowHover = 'group-hover:bg-slate-100 dark:group-hover:bg-slate-800/60';
+                // Zebra bg MUST be opaque: these classes land on the sticky/frozen cells, and a
+                // translucent fill let the horizontally-scrolled columns bleed THROUGH the frozen
+                // Task/WBS panel. Opaque slate-50 keeps the zebra subtle while sealing the bleed.
+                const rowBg = alt ? 'bg-slate-50 dark:bg-slate-800' : 'bg-white dark:bg-slate-900';
+                const rowHover = 'group-hover:bg-slate-100 dark:group-hover:bg-slate-800';
                 const hasKids = !!node.children?.length;
                 const isCollapsed = collapsed.has(node.id);
                 const isCritical = criticalIds.has(node.id);
@@ -1341,13 +1344,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       e.preventDefault();
                       openRowMenu(node, e.clientX, e.clientY);
                     }}
-                    className={`group [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3 ${alt ? 'bg-slate-50/70 dark:bg-slate-800/30' : ''} hover:bg-slate-100 dark:hover:bg-slate-800/60`}>
+                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 [&>td]:py-3 [&>td]:pr-3 ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent || node.stepCount > 0} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
                       </div>
                     </td>
-                    <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-500 dark:text-slate-400 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>
+                    <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-600 dark:text-slate-300 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>
                     <td style={frozenLeft(88)} className={`${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         {hasKids && (
@@ -1401,13 +1404,13 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             can't actually be applied. */}
                         <td className="whitespace-nowrap text-right">
                           {r.isParent
-                            ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
+                            ? <span className="text-xs text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
                             : <InlineDate value={node.planStart} editable={canPlan} onSave={(v) => v && editPlanStart(node, v)} title={canPlan ? 'Plan start — click to edit (keeps duration, shifts finish)' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                         {/* Plan Finish */}
                         <td className="whitespace-nowrap text-right">
                           {r.isParent
-                            ? <span className="text-xs text-slate-500 dark:text-slate-400" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
+                            ? <span className="text-xs text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
                             : <InlineDate value={node.planEnd} editable={canPlan} onSave={(v) => v && editPlanEnd(node, v)} title={canPlan ? 'Plan finish — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                         {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
@@ -1422,7 +1425,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                             ? <span className="text-slate-300 dark:text-slate-600">—</span>
                             : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualFinish: v } })} title="Actual finish — click to set (blank to clear)" />}
                         </td>
-                        <td className="text-right tabular-nums text-xs text-slate-500 dark:text-slate-400">{r.dur}d</td>
+                        <td className="text-right tabular-nums text-xs text-slate-600 dark:text-slate-300">{r.dur}d</td>
                         <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
                           {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
                         </td>
@@ -1439,7 +1442,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                                 if (v !== (node.weight ?? null)) patchTask.mutate({ node, patch: { weight: v } });
                               }}
                               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                              className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums placeholder:text-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600"
+                              className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-right text-xs tabular-nums text-slate-700 transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600"
                             />
                           ) : node.weight != null ? (
                             <span className="tabular-nums text-xs text-slate-600 dark:text-slate-300">{node.weight}</span>
@@ -1464,7 +1467,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                           aria-label={`Percent complete for ${node.name}`}
                           onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-right text-xs tabular-nums text-slate-700 transition hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:hover:border-slate-600"
                         />
                       ) : (
                         <span className={`tabular-nums text-xs ${r.isParent ? 'text-slate-500 dark:text-slate-400' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
