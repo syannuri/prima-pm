@@ -41,6 +41,28 @@ export function ConsoleHero({ eyebrow, title, subtitle, action }: { eyebrow: str
   );
 }
 
+// Usage-vs-cap bar (indigo → amber ≥80% → red at/over the cap). `cap === null` renders "unlimited".
+export function QuotaBar({ label, used, cap, format }: { label: string; used: number; cap: number | null; format: (n: number) => string }) {
+  const ratio = cap == null || cap === 0 ? 0 : Math.min(1, used / cap);
+  const over = cap != null && used >= cap;
+  const near = cap != null && cap > 0 && used / cap >= 0.8 && !over;
+  const color = over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-indigo-500';
+  return (
+    <div>
+      <div className="mb-0.5 flex items-baseline justify-between text-xs">
+        <span className="text-slate-500 dark:text-slate-400">{label}</span>
+        <span className="tabular-nums font-medium text-slate-700 dark:text-slate-200">
+          {format(used)}{cap == null ? <span className="text-slate-400"> / ∞</span> : ` / ${format(cap)}`}
+          {over && <span className="ml-1 font-semibold text-red-500">over</span>}
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+        <div className={`h-full rounded-full ${color} transition-[width] duration-500`} style={{ width: `${cap == null ? 4 : Math.max(2, ratio * 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 // Pill-style status filter chips (active = indigo). Generic over the filter key union.
 export function FilterChips<T extends string>({ options, value, onChange, labels }: { options: readonly T[]; value: T; onChange: (v: T) => void; labels: Record<T, string> }) {
   return (

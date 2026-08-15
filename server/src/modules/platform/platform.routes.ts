@@ -50,10 +50,21 @@ router.get(
         _count: { select: { memberships: true } },
       },
     });
+    // Per-tenant active-project count and attachment storage, for the console's quota bars. Project
+    // and Attachment are tenant-scoped by the Prisma extension, so aggregate under runAsSystem to see
+    // across all tenants; then index by tenantId.
+    const [projGroups, storageGroups] = await runAsSystem(() => Promise.all([
+      prisma.project.groupBy({ by: ['tenantId'], where: { deletedAt: null }, _count: { _all: true } }),
+      prisma.attachment.groupBy({ by: ['tenantId'], _sum: { sizeBytes: true } }),
+    ]));
+    const projByTenant = new Map(projGroups.map((g) => [g.tenantId, g._count._all]));
+    const bytesByTenant = new Map(storageGroups.map((g) => [g.tenantId, g._sum.sizeBytes ?? 0]));
     res.json({
       tenants: tenants.map((t) => ({
         id: t.id, name: t.name, slug: t.slug, status: t.status, plan: t.plan, customDomain: t.customDomain, isPersonal: t.isPersonal,
         createdAt: t.createdAt, updatedAt: t.updatedAt, memberCount: t._count.memberships,
+        projectCount: projByTenant.get(t.id) ?? 0,
+        storageBytes: bytesByTenant.get(t.id) ?? 0,
       })),
     });
   }),
