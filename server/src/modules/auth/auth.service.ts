@@ -220,7 +220,7 @@ async function notifyPlatformAdminsOfSignup(orgName: string): Promise<void> {
 // A platform admin approves (→ ACTIVE) or rejects (→ REJECTED) from the console; the owner can only
 // sign in once approved. Gated by the deployment-level orgSignupEnabled toggle. Distinct from guest
 // signup (a sandboxed personal tenant that auto-logs in).
-export async function registerOrg(input: OrgSignupInput): Promise<{ pending: true; orgName: string; slug: string }> {
+export async function registerOrg(input: OrgSignupInput, country: string | null = null): Promise<{ pending: true; orgName: string; slug: string }> {
   if (!(await isOrgSignupEnabled())) throw Forbidden('Organization signup is not enabled');
   if (await isIdentityBlocked({ email: input.email })) throw Forbidden('This email is blocked from signing up.');
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
@@ -233,6 +233,7 @@ export async function registerOrg(input: OrgSignupInput): Promise<{ pending: tru
       passwordHash: await hashPassword(input.password),
       role: 'ADMIN', // dual-written until User.role is dropped (4c-drop)
       isGuest: false,
+      ...(country ? { country } : {}),
     },
   });
   const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'PENDING' } });

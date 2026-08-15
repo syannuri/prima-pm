@@ -46,6 +46,15 @@ export interface PlatformActivity {
   after: unknown;
 }
 
+// Free-vs-subscriber segmentation by country (GET /admin/tenants/geo).
+export interface PlatformGeoRow {
+  country: string; // ISO-3166-1 alpha-2
+  freeUsers: number;
+  subscriberUsers: number;
+  freeTenants: number;
+  paidTenants: number;
+}
+
 // Per-tenant drill-down detail (GET /admin/tenants/:id/detail) — member roster + recent projects.
 export interface PlatformTenantDetail {
   members: { userId: string; name: string; email: string; role: Role }[];

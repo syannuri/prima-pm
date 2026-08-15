@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import type { PlatformTenant, PlatformActivity, PlatformTenantDetail } from '../api/types';
+import type { PlatformTenant, PlatformActivity, PlatformTenantDetail, PlatformGeoRow } from '../api/types';
 import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -16,6 +16,7 @@ import { triage, type TriageItem } from '../lib/triage';
 import { growthSeries, type GrowthPoint } from '../lib/growthSeries';
 import { smoothPath, areaPath, type Pt } from '../components/chart/smoothPath';
 import { toCsv, downloadCsv } from '../lib/csv';
+import { countryFlag, countryName } from '../lib/country';
 import { appBaseDomain } from '../lib/workspaceHost';
 import { Kpi, ConsoleHero, FilterChips, QuotaBar } from '../components/platform/ConsoleUI';
 
@@ -97,6 +98,8 @@ export default function AdminTenantsPage() {
             <ActivityFeed id={id} />
           </div>
 
+          <GeoPanel id={id} />
+
           {pending.length > 0 && <PendingSpotlight pending={pending} onChange={invalidate} id={id} />}
 
           <TenantTable corporate={corporate} personal={stats.personal} onChange={invalidate} id={id} />
@@ -135,6 +138,55 @@ function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: num
           </span>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// Free-vs-subscriber segmentation by country (from Cloudflare geo capture). Users get a stacked bar
+// (subscriber vs free); org counts shown alongside. Hidden until there's any geo data.
+function GeoPanel({ id }: { id: boolean }) {
+  const lang = id ? 'id' : 'en';
+  const { data, isLoading } = useQuery({
+    queryKey: ['platform-geo'],
+    queryFn: () => api.get<{ byCountry: PlatformGeoRow[] }>('/admin/tenants/geo'),
+    refetchInterval: 300_000,
+  });
+  const rows = data?.byCountry ?? [];
+  if (!isLoading && rows.length === 0) return null;
+  return (
+    <Card>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Menurut negara · Gratis vs Pelanggan' : 'By country · Free vs Subscriber'}</span>
+        <span className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-indigo-500" />{id ? 'Pelanggan' : 'Subscriber'}</span>
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-300 dark:bg-slate-600" />{id ? 'Gratis' : 'Free'}</span>
+        </span>
+      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-4"><Spinner /></div>
+      ) : (
+        <ul className="space-y-2">
+          {rows.slice(0, 10).map((r) => {
+            const users = r.freeUsers + r.subscriberUsers;
+            const subPct = users ? (r.subscriberUsers / users) * 100 : 0;
+            const orgs = r.freeTenants + r.paidTenants;
+            return (
+              <li key={r.country} className="flex items-center gap-2.5 text-sm">
+                <span className="text-lg leading-none" title={r.country}>{countryFlag(r.country)}</span>
+                <span className="w-28 shrink-0 truncate text-slate-700 dark:text-slate-200">{countryName(r.country, lang)}</span>
+                <div className="flex h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" title={`${r.subscriberUsers} subscriber · ${r.freeUsers} free`}>
+                  <div className="bg-indigo-500" style={{ width: `${subPct}%` }} />
+                  <div className="bg-slate-300 dark:bg-slate-600" style={{ width: `${100 - subPct}%` }} />
+                </div>
+                <span className="shrink-0 tabular-nums text-xs text-slate-500 dark:text-slate-400">
+                  <b className="text-indigo-600 dark:text-indigo-300">{r.subscriberUsers}</b> / {users}
+                  {orgs > 0 && <span className="ml-2 text-slate-400 dark:text-slate-500">· {orgs} {id ? 'org' : 'orgs'}{r.paidTenants > 0 ? ` (${r.paidTenants} ${id ? 'bayar' : 'paid'})` : ''}</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Card>
   );
 }
