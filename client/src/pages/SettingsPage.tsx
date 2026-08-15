@@ -13,15 +13,12 @@ import ApprovalWorkflowsCard from '../components/ApprovalWorkflowsCard';
 import AiNarrativeCard from '../components/AiNarrativeCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
-import PlatformSettings from '../components/PlatformSettings';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
-  // Deployment-wide sign-up/access lives on the single global AppSetting row → super-admin only.
-  // Moved here from the Tenants console so ALL settings sit on one full-screen page.
-  const isPlatformAdmin = !!user?.isPlatformAdmin;
+  // Platform (deployment-wide) settings now live in the super-admin console → /admin/settings.
   return (
     <div className="space-y-7 pb-12">
       {/* Page header */}
@@ -74,13 +71,6 @@ export default function SettingsPage() {
             {/* Personal iCal calendar feed — available to every signed-in user. */}
             <CalendarFeedCard />
           </SettingsSection>
-
-          {/* Deployment-wide sign-up & access — super-admin only. */}
-          {isPlatformAdmin && (
-            <SettingsSection title="Platform (super-admin)" sub="Deployment-wide — sign-up & access across ALL tenants.">
-              <PlatformSettings />
-            </SettingsSection>
-          )}
         </div>
       </div>
     </div>

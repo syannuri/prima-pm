@@ -45,6 +45,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     : path === '/admin/audit' ? 'Audit trail'
     : path.startsWith('/admin/tenants') ? (id ? 'Konsol Platform' : 'Platform Console')
     : path.startsWith('/admin/guests') ? (id ? 'Akun Tamu' : 'Guest accounts')
+    : path.startsWith('/admin/settings') ? (id ? 'Pengaturan Platform' : 'Platform settings')
     : path === '/settings' ? 'Settings'
     : path === '/manual' ? 'Manual'
     : '';
