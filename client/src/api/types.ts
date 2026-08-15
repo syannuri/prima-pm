@@ -46,6 +46,12 @@ export interface PlatformActivity {
   after: unknown;
 }
 
+// Per-tenant drill-down detail (GET /admin/tenants/:id/detail) — member roster + recent projects.
+export interface PlatformTenantDetail {
+  members: { userId: string; name: string; email: string; role: Role }[];
+  projects: { id: string; name: string; status: string; updatedAt: string }[];
+}
+
 export interface AdminUser extends User {
   isActive: boolean;
   createdAt: string;
