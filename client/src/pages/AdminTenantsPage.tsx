@@ -12,6 +12,7 @@ import { formatDate, formatIdrShort, formatBytes, timeAgo } from '../lib/format'
 import { tenantStats, type Plan } from '../lib/tenantStats';
 import { PLAN_LIMITS, atCapacity } from '../lib/planLimits';
 import { describeActivity } from '../lib/activityDescribe';
+import { triage, type TriageItem } from '../lib/triage';
 import { growthSeries, type GrowthPoint } from '../lib/growthSeries';
 import { smoothPath, areaPath, type Pt } from '../components/chart/smoothPath';
 import { toCsv, downloadCsv } from '../lib/csv';
@@ -85,6 +86,8 @@ export default function AdminTenantsPage() {
             <Kpi label={id ? 'Kuota penuh' : 'At capacity'} value={atCap} tone={atCap > 0 ? 'red' : 'slate'} pulse={atCap > 0} hint={id ? 'di/atas batas paket' : 'at/over a plan cap'} />
           </div>
 
+          <NeedsAttention corporate={corporate} id={id} />
+
           <GrowthTrends corporate={corporate} id={id} />
 
           <div className="grid gap-3 lg:grid-cols-3">
@@ -131,6 +134,41 @@ function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: num
           </span>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// "Needs attention" — the super-admin triage panel: tenants over a cap, suspended-with-data, pending,
+// or empty. Hidden when nothing needs action. Client-only (from the tenant payload).
+const TRIAGE_ICON: Record<string, string> = { 'over-cap': '⚠', 'suspended-data': '⏸', pending: '★', empty: '○' };
+const TRIAGE_COLOR: Record<string, string> = { high: 'text-red-500', medium: 'text-amber-500', low: 'text-slate-400 dark:text-slate-500' };
+function NeedsAttention({ corporate, id }: { corporate: PlatformTenant[]; id: boolean }) {
+  const items = useMemo(() => triage(corporate), [corporate]);
+  if (items.length === 0) return null;
+  const reason = (it: TriageItem): string => {
+    if (it.kind === 'over-cap') {
+      const dimLabel = it.dim === 'members' ? (id ? 'anggota' : 'member') : it.dim === 'projects' ? (id ? 'proyek' : 'project') : (id ? 'penyimpanan' : 'storage');
+      const fmt = it.dim === 'storage' ? formatBytes : (n: number) => String(n);
+      return id ? `melebihi batas ${dimLabel} (${fmt(it.used ?? 0)}/${fmt(it.cap ?? 0)})` : `over ${dimLabel} cap (${fmt(it.used ?? 0)}/${fmt(it.cap ?? 0)})`;
+    }
+    if (it.kind === 'suspended-data') return id ? `ditangguhkan · ${it.tenant.projectCount} proyek` : `suspended · ${it.tenant.projectCount} project${it.tenant.projectCount === 1 ? '' : 's'}`;
+    if (it.kind === 'pending') { const days = Math.floor((Date.now() - +new Date(it.tenant.createdAt)) / 86_400_000); return id ? `pendaftaran menunggu ${days}h` : `signup pending ${days}d`; }
+    return id ? '0 proyek (stagnan)' : '0 projects (stale)';
+  };
+  return (
+    <Card className="border-amber-300/60 bg-amber-50/50 dark:border-amber-900/50 dark:bg-amber-950/20">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
+        <span aria-hidden>⚠</span> {id ? 'Perlu perhatian' : 'Needs attention'} ({items.length})
+      </div>
+      <ul className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+        {items.slice(0, 8).map((it) => (
+          <li key={it.tenant.id} className="flex items-center gap-2 text-sm">
+            <span className={`shrink-0 ${TRIAGE_COLOR[it.severity]}`} aria-hidden>{TRIAGE_ICON[it.kind]}</span>
+            <span className="min-w-0 truncate"><b className="font-medium text-slate-700 dark:text-slate-200">{it.tenant.name}</b> <span className="text-slate-500 dark:text-slate-400">— {reason(it)}</span></span>
+          </li>
+        ))}
+      </ul>
+      {items.length > 8 && <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">+{items.length - 8} {id ? 'lainnya' : 'more'}</p>}
     </Card>
   );
 }
