@@ -6,7 +6,7 @@ import { runAsSystem } from './context.js';
 //   2. subdomain      — Host is <slug>.<APP_BASE_DOMAIN> (e.g. acme.prismatix.tech)
 // Resolution is OFF unless APP_BASE_DOMAIN is set (so LAN-by-IP and the bare base domain are
 // unaffected). The bare base domain, www/app/api/admin/mail, IPs and localhost resolve to NO tenant.
-const RESERVED_SUBDOMAINS = new Set(['www', 'app', 'api', 'admin', 'mail', 'static', 'assets']);
+export const RESERVED_SUBDOMAINS = new Set(['www', 'app', 'api', 'admin', 'mail', 'static', 'assets']);
 
 export function appBaseDomain(): string | null {
   const d = (process.env.APP_BASE_DOMAIN || '').trim().toLowerCase();

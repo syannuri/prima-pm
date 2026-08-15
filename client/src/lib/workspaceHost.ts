@@ -8,6 +8,23 @@
 // workspace. That covers custom domains without the client needing to know each one.
 const RESERVED_SUBDOMAINS = new Set(['www', 'app', 'api', 'admin', 'mail', 'static', 'assets']);
 
+// The configured base domain (e.g. "prismatix.tech"), or null when subdomain routing is off (LAN/dev).
+export function appBaseDomain(): string | null {
+  const base = (import.meta.env.VITE_APP_BASE_DOMAIN as string | undefined)?.trim().toLowerCase();
+  return base || null;
+}
+
+// A workspace's address from its slug: "<slug>.<base>" (host) and the https URL. Null when routing is
+// off — callers then hide the subdomain UI.
+export function workspaceHostname(slug: string): string | null {
+  const base = appBaseDomain();
+  return base ? `${slug}.${base}` : null;
+}
+export function workspaceUrl(slug: string): string | null {
+  const host = workspaceHostname(slug);
+  return host ? `https://${host}` : null;
+}
+
 export function isWorkspaceHost(): boolean {
   const base = (import.meta.env.VITE_APP_BASE_DOMAIN as string | undefined)?.trim().toLowerCase();
   if (!base) return false; // routing off (LAN/dev) → everything is the generic front door

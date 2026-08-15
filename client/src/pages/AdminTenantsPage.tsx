@@ -16,6 +16,7 @@ import { triage, type TriageItem } from '../lib/triage';
 import { growthSeries, type GrowthPoint } from '../lib/growthSeries';
 import { smoothPath, areaPath, type Pt } from '../components/chart/smoothPath';
 import { toCsv, downloadCsv } from '../lib/csv';
+import { appBaseDomain } from '../lib/workspaceHost';
 import { Kpi, ConsoleHero, FilterChips, QuotaBar } from '../components/platform/ConsoleUI';
 
 // Platform (super-admin) console — provision & manage TENANTS (organizations). Gated by the global
@@ -630,7 +631,7 @@ function TenantRow({ t, onChange, selected, onToggle }: { t: PlatformTenant; onC
           </>
         )}
         <Button variant="ghost" onClick={enter} disabled={entering} title={id ? 'Masuk sebagai admin organisasi ini' : 'Act as an admin inside this tenant'}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
-        <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
+        <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah' : 'Edit'}</Button>
         <Button variant="ghost" onClick={() => setDomainOpen(true)} title={id ? 'Domain kustom' : 'Custom domain'}>{id ? 'Domain' : 'Domain'}</Button>
         <Button variant="ghost" onClick={exportData} disabled={exporting} title={id ? 'Unduh semua data organisasi (JSON)' : 'Download all tenant data (JSON)'}>{exporting ? '…' : (id ? 'Ekspor' : 'Export')}</Button>
         {!pending && (
@@ -754,7 +755,7 @@ function TenantCard({ t, onChange, selected, onToggle }: { t: PlatformTenant; on
           </>
         )}
         <Button variant="ghost" onClick={enter} disabled={entering}>{entering ? '…' : (id ? 'Masuk' : 'Enter')}</Button>
-        <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah nama' : 'Rename'}</Button>
+        <Button variant="ghost" onClick={() => setRenaming(true)} disabled={patch.isPending}>{id ? 'Ubah' : 'Edit'}</Button>
         <Button variant="ghost" onClick={() => setDomainOpen(true)}>Domain</Button>
         <Button variant="ghost" onClick={exportData} disabled={exporting}>{exporting ? '…' : (id ? 'Ekspor' : 'Export')}</Button>
         {!pending && (
@@ -771,26 +772,46 @@ function TenantCard({ t, onChange, selected, onToggle }: { t: PlatformTenant; on
   );
 }
 
+const SLUG_SHAPE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 function RenameModal({ t, onClose, onChange }: { t: PlatformTenant; onClose: () => void; onChange: () => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
   const toast = useToast();
   const [name, setName] = useState(t.name);
-  const rename = useMutation({
-    mutationFn: () => api.patch(`/admin/tenants/${t.id}`, { name: name.trim() }),
-    onSuccess: () => { onChange(); toast.success(id ? 'Nama diperbarui' : 'Name updated'); onClose(); },
+  const [slug, setSlug] = useState(t.slug);
+  const base = appBaseDomain();
+  const save = useMutation({
+    mutationFn: () => {
+      const body: { name?: string; slug?: string } = {};
+      if (name.trim() !== t.name) body.name = name.trim();
+      if (slug.trim().toLowerCase() !== t.slug) body.slug = slug.trim().toLowerCase();
+      return api.patch(`/admin/tenants/${t.id}`, body);
+    },
+    onSuccess: () => { onChange(); toast.success(id ? 'Organisasi diperbarui' : 'Tenant updated'); onClose(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
   });
-  const canSubmit = name.trim().length >= 2 && name.trim() !== t.name;
+  const normSlug = slug.trim().toLowerCase();
+  const slugOk = normSlug.length >= 2 && normSlug.length <= 40 && SLUG_SHAPE.test(normSlug);
+  const nameChanged = name.trim().length >= 2 && name.trim() !== t.name;
+  const slugChanged = normSlug !== t.slug;
+  const canSubmit = (nameChanged || slugChanged) && !(slugChanged && !slugOk);
   return (
-    <Modal onClose={onClose} title={id ? 'Ubah nama organisasi' : 'Rename tenant'} size="sm">
-      <form onSubmit={(e) => { e.preventDefault(); if (canSubmit) rename.mutate(); }} className="space-y-3">
+    <Modal onClose={onClose} title={id ? 'Ubah organisasi' : 'Edit tenant'} size="sm">
+      <form onSubmit={(e) => { e.preventDefault(); if (canSubmit && !save.isPending) save.mutate(); }} className="space-y-3">
         <Field label={id ? 'Nama' : 'Name'}>
           <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </Field>
+        <Field label={id ? 'Subdomain' : 'Subdomain'}>
+          <div className="flex items-center gap-1.5">
+            <Input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} className="font-mono" />
+            {base && <span className="shrink-0 font-mono text-sm text-slate-400 dark:text-slate-500">.{base}</span>}
+          </div>
+        </Field>
+        {slugChanged && !slugOk && <p className="text-xs font-medium text-red-500">{id ? '2–40 karakter: huruf kecil, angka, tanda hubung.' : '2–40 chars: lowercase letters, digits, single hyphens.'}</p>}
+        {slugChanged && slugOk && <p className="text-xs text-amber-600 dark:text-amber-400">{id ? '⚠ Mengubah subdomain menonaktifkan URL lama.' : '⚠ Changing the subdomain breaks the old URL.'}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>{id ? 'Batal' : 'Cancel'}</Button>
-          <Button type="submit" disabled={!canSubmit || rename.isPending}>{rename.isPending ? (id ? 'Menyimpan…' : 'Saving…') : (id ? 'Simpan' : 'Save')}</Button>
+          <Button type="submit" disabled={!canSubmit || save.isPending}>{save.isPending ? (id ? 'Menyimpan…' : 'Saving…') : (id ? 'Simpan' : 'Save')}</Button>
         </div>
       </form>
     </Modal>
