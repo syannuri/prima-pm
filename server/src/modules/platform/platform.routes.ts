@@ -70,6 +70,57 @@ router.get(
   }),
 );
 
+// GET /admin/tenants/activity — recent cross-tenant platform events (tenant lifecycle, guest mgmt,
+// denylist) from the audit log, for the console's activity feed. Read under runAsSystem so events
+// stamped with any admin's tenant are all visible; the client formats the human sentence.
+router.get(
+  '/activity',
+  asyncHandler(async (_req, res) => {
+    // Entity 'User' is shared with auth (LOGIN/LOGOUT) — restrict to guest-management writes only, so
+    // the feed shows platform actions, not sign-ins. Over-fetch, then post-filter guest events by their
+    // audit flag (after.guestMgmt / before.guest) and cap at 30.
+    const rows = await runAsSystem(() =>
+      prisma.auditLog.findMany({
+        where: {
+          OR: [
+            { entity: 'Tenant' },
+            { entity: 'BlockedIdentity' },
+            { entity: 'User', action: { in: ['UPDATE', 'DELETE'] } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 60,
+        select: { id: true, createdAt: true, action: true, entity: true, entityId: true, before: true, after: true, user: { select: { name: true, email: true } } },
+      }),
+    );
+    const isGuestEvent = (o: unknown, k: string): boolean => !!(o && typeof o === 'object' && (o as Record<string, unknown>)[k]);
+    const events = rows
+      .filter((e) => e.entity !== 'User' || isGuestEvent(e.after, 'guestMgmt') || isGuestEvent(e.before, 'guest'))
+      .slice(0, 30);
+    // Resolve live tenant names for Tenant-entity events (deleted tenants fall back to before/after).
+    const tenantIds = [...new Set(events.filter((e) => e.entity === 'Tenant').map((e) => e.entityId))];
+    const names = tenantIds.length
+      ? await runAsSystem(() => prisma.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, name: true } }))
+      : [];
+    const nameById = new Map(names.map((t) => [t.id, t.name]));
+    const pick = (o: unknown, k: string): string | undefined => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] as string : undefined);
+    res.json({
+      activity: events.map((e) => ({
+        id: e.id,
+        createdAt: e.createdAt,
+        action: e.action,
+        entity: e.entity,
+        actorName: e.user?.name ?? e.user?.email ?? null,
+        targetName:
+          e.entity === 'Tenant' ? (nameById.get(e.entityId) ?? pick(e.before, 'name') ?? pick(e.after, 'name') ?? pick(e.after, 'slug') ?? null)
+          : pick(e.after, 'email') ?? pick(e.before, 'email') ?? null,
+        before: e.before,
+        after: e.after,
+      })),
+    });
+  }),
+);
+
 // POST /admin/tenants — create a CORPORATE tenant + its first ADMIN. Attaches an existing STAFF user
 // by email; if none exists, creates one (adminName + adminPassword required in that case).
 router.post(
