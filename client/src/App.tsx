@@ -24,6 +24,7 @@ const AdminProjectDatabasePage = lazy(() => import('./pages/AdminProjectDatabase
 const AdminResourcesPage = lazy(() => import('./pages/AdminResourcesPage'));
 const AdminAuditPage = lazy(() => import('./pages/AdminAuditPage'));
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage'));
+const AdminSettingsPage = lazy(() => import('./pages/AdminSettingsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ApprovalsPage = lazy(() => import('./pages/ApprovalsPage'));
 const ManualPage = lazy(() => import('./pages/ManualPage'));
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/admin/members" element={<AdminMembersPage />} />
           <Route path="/admin/tenants" element={<AdminTenantsPage />} />
           <Route path="/admin/guests" element={<AdminGuestsPage />} />
+          <Route path="/admin/settings" element={<AdminSettingsPage />} />
           <Route path="/admin/projects" element={<AdminProjectDatabasePage />} />
           <Route path="/admin/resources" element={<AdminResourcesPage />} />
           <Route path="/admin/audit" element={<AdminAuditPage />} />
