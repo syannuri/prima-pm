@@ -220,7 +220,7 @@ async function notifyPlatformAdminsOfSignup(orgName: string): Promise<void> {
 // A platform admin approves (→ ACTIVE) or rejects (→ REJECTED) from the console; the owner can only
 // sign in once approved. Gated by the deployment-level orgSignupEnabled toggle. Distinct from guest
 // signup (a sandboxed personal tenant that auto-logs in).
-export async function registerOrg(input: OrgSignupInput): Promise<{ pending: true; orgName: string }> {
+export async function registerOrg(input: OrgSignupInput): Promise<{ pending: true; orgName: string; slug: string }> {
   if (!(await isOrgSignupEnabled())) throw Forbidden('Organization signup is not enabled');
   if (await isIdentityBlocked({ email: input.email })) throw Forbidden('This email is blocked from signing up.');
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
@@ -241,7 +241,8 @@ export async function registerOrg(input: OrgSignupInput): Promise<{ pending: tru
   // Alert platform admins there's a signup to review (best-effort; won't block the response).
   await notifyPlatformAdminsOfSignup(input.orgName);
   // No token pair: the owner must wait for approval (a PENDING tenant is locked out of login).
-  return { pending: true, orgName: input.orgName };
+  // `slug` lets the client show the workspace address (<slug>.<base>) the org just got.
+  return { pending: true, orgName: input.orgName, slug };
 }
 
 // "Sign in with Google" — the open, sandboxed jalur: any Google account may sign in, and a

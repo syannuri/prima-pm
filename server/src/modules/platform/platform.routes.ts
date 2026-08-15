@@ -11,6 +11,7 @@ import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
 import { writeAudit } from '../../lib/audit.js';
 import { runAsSystem } from '../../lib/tenant/context.js';
+import { assertValidSlug } from '../../lib/tenant/slug.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
 import { Unauthorized, Forbidden, Conflict, BadRequest, NotFound } from '../../lib/errors.js';
 import { strongPassword } from '../auth/auth.schemas.js';
@@ -190,14 +191,15 @@ const patchSchema = z
   .object({
     status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
     name: z.string().min(2).max(120).optional(),
+    slug: z.string().min(2).max(40).optional(),
     plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
     customDomain: hostnameRule.optional(),
     // AI Status Narrative per-tenant opt-in (the self-serve tenant-ADMIN toggle lands in Phase 2).
     aiNarrativeEnabled: z.boolean().optional(),
   })
   .refine(
-    (b) => b.status !== undefined || b.name !== undefined || b.plan !== undefined || b.customDomain !== undefined || b.aiNarrativeEnabled !== undefined,
-    'Provide a status, name, plan, custom domain and/or AI narrative flag to update',
+    (b) => b.status !== undefined || b.name !== undefined || b.slug !== undefined || b.plan !== undefined || b.customDomain !== undefined || b.aiNarrativeEnabled !== undefined,
+    'Provide a status, name, slug, plan, custom domain and/or AI narrative flag to update',
   );
 
 // PATCH /admin/tenants/:id — suspend/reactivate, rename, change the SaaS plan, or set/clear the custom
@@ -226,6 +228,13 @@ router.patch(
       }
       customDomainData = { customDomain: cd };
     }
+    // Change the subdomain (slug) — validated (format / reserved / unique). The default tenant's
+    // slug is locked so the primary host can't be moved out from under everyone.
+    let slugData: { slug?: string } = {};
+    if (req.body.slug !== undefined && req.body.slug !== tenant.slug) {
+      if (tenant.slug === DEFAULT_TENANT_SLUG) throw BadRequest('The default tenant subdomain cannot be changed.');
+      slugData = { slug: await assertValidSlug(req.body.slug, tenant.id) };
+    }
     const updated = await prisma.tenant.update({
       where: { id: tenant.id },
       data: {
@@ -234,12 +243,13 @@ router.patch(
         ...(req.body.plan ? { plan: req.body.plan } : {}),
         ...(req.body.aiNarrativeEnabled !== undefined ? { aiNarrativeEnabled: req.body.aiNarrativeEnabled } : {}),
         ...customDomainData,
+        ...slugData,
       },
     });
     await writeAudit({
       userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE',
-      before: { status: tenant.status, name: tenant.name, plan: tenant.plan, customDomain: tenant.customDomain },
-      after: { status: updated.status, name: updated.name, plan: updated.plan, customDomain: updated.customDomain },
+      before: { status: tenant.status, name: tenant.name, slug: tenant.slug, plan: tenant.plan, customDomain: tenant.customDomain },
+      after: { status: updated.status, name: updated.name, slug: updated.slug, plan: updated.plan, customDomain: updated.customDomain },
     });
     res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status, plan: updated.plan, customDomain: updated.customDomain } });
   }),

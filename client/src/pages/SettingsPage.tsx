@@ -11,6 +11,7 @@ import WebhooksCard from '../components/WebhooksCard';
 import AutomationsCard from '../components/AutomationsCard';
 import ApprovalWorkflowsCard from '../components/ApprovalWorkflowsCard';
 import AiNarrativeCard from '../components/AiNarrativeCard';
+import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
 import PlatformSettings from '../components/PlatformSettings';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
@@ -41,6 +42,13 @@ export default function SettingsPage() {
           <SettingsSection title="Preferences" sub="How Prismatix looks and speaks on this device.">
             <AppearanceCard />
           </SettingsSection>
+
+          {/* Workspace identity — tenant-ADMIN can change the org's subdomain. */}
+          {isAdmin && (
+            <SettingsSection title="Workspace" sub="Your organization's address on the platform.">
+              <WorkspaceAddressCard />
+            </SettingsSection>
+          )}
 
           {/* Workspace-level developer tools — tenant-ADMIN only (management APIs are ADMIN-gated). */}
           {isAdmin && (

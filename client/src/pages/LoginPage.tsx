@@ -4,6 +4,7 @@ import { useLang, type Lang } from '../context/LanguageContext';
 import { Button, Field, Input } from '../components/ui';
 import { api, ApiError } from '../api/client';
 import { isEmailValid } from '../lib/formValidation';
+import { workspaceHostname } from '../lib/workspaceHost';
 
 // Bilingual copy (EN/ID) — the sign-in screen follows the same language toggle as the landing.
 const TXT: Record<Lang, {
@@ -14,7 +15,7 @@ const TXT: Record<Lang, {
   submitSignin: string; submitGuest: string; submitOrg: string; signingIn: string; settingUp: string;
   or: string; sandbox: string; haveAccount: string; newHere: string; createOrgLink: string;
   forgot: string; secure: string;
-  notFound: string; notFoundSub: (h: string) => string; goMain: string; awaiting: string; awaitingSub: (o: string) => string; back: string;
+  notFound: string; notFoundSub: (h: string) => string; goMain: string; awaiting: string; awaitingSub: (o: string) => string; back: string; yourAddress: string;
 }> = {
   en: {
     tagAccent: 'Clarity', tagRest: 'in every project.',
@@ -30,7 +31,7 @@ const TXT: Record<Lang, {
     or: 'or', sandbox: 'Explore Prismatix in your own sandbox.', haveAccount: 'Have an account? Sign in', newHere: 'New here? Try Prismatix free', createOrgLink: 'Create an organization',
     forgot: 'Forgot your password? Ask your workspace admin to reset it.', secure: 'Encrypted in transit · your data stays in your workspace',
     notFound: 'Workspace not found', notFoundSub: (h) => `There’s no workspace at ${h}. Check the address, or head to the main site to sign in.`, goMain: 'Go to Prismatix',
-    awaiting: 'Awaiting approval', awaitingSub: (o) => `Your request for the ${o} workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.`, back: 'Back to sign in',
+    awaiting: 'Awaiting approval', awaitingSub: (o) => `Your request for the ${o} workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.`, back: 'Back to sign in', yourAddress: 'Your workspace address:',
   },
   id: {
     tagAccent: 'Kejelasan', tagRest: 'di setiap proyek.',
@@ -46,7 +47,7 @@ const TXT: Record<Lang, {
     or: 'atau', sandbox: 'Jelajahi Prismatix di sandbox Anda sendiri.', haveAccount: 'Sudah punya akun? Masuk', newHere: 'Baru di sini? Coba gratis', createOrgLink: 'Buat organisasi',
     forgot: 'Lupa kata sandi? Minta admin workspace Anda untuk meresetnya.', secure: 'Terenkripsi saat transit · data Anda tetap di workspace Anda',
     notFound: 'Workspace tidak ditemukan', notFoundSub: (h) => `Tidak ada workspace di ${h}. Periksa alamatnya, atau buka situs utama untuk masuk.`, goMain: 'Ke Prismatix',
-    awaiting: 'Menunggu persetujuan', awaitingSub: (o) => `Permintaan untuk workspace ${o} telah diterima. Administrator akan meninjau dan mengaktifkannya — Anda dapat masuk setelah disetujui.`, back: 'Kembali ke masuk',
+    awaiting: 'Menunggu persetujuan', awaitingSub: (o) => `Permintaan untuk workspace ${o} telah diterima. Administrator akan meninjau dan mengaktifkannya — Anda dapat masuk setelah disetujui.`, back: 'Kembali ke masuk', yourAddress: 'Alamat workspace Anda:',
   },
 };
 
@@ -112,6 +113,7 @@ export default function LoginPage() {
   // Set after a successful org signup (option C): the request is queued for admin approval, so we show
   // a confirmation panel instead of routing into a session (there is none yet).
   const [pendingOrg, setPendingOrg] = useState<string | null>(null);
+  const [pendingSlug, setPendingSlug] = useState<string | null>(null);
   const [googleClientId, setGoogleClientId] = useState('');
   const [guestEnabled, setGuestEnabled] = useState(false);
   const [orgEnabled, setOrgEnabled] = useState(false);
@@ -225,6 +227,7 @@ export default function LoginPage() {
       if (isOrg) {
         const res = await signupOrg(orgName.trim(), name.trim(), email, password, captchaToken);
         setPendingOrg(res.orgName || orgName.trim()); // queued for approval — no session yet
+        setPendingSlug(res.slug);
       }
       else if (isGuest) await guestRegister(name.trim(), email, password, captchaToken);
       else await login(email, password, captchaToken);
@@ -295,7 +298,12 @@ export default function LoginPage() {
                   </div>
                   <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{tx.awaiting}</h1>
                   <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{tx.awaitingSub(pendingOrg)}</p>
-                  <button type="button" onClick={() => { setPendingOrg(null); setMode('signin'); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">{tx.back}</button>
+                  {pendingSlug && workspaceHostname(pendingSlug) && (
+                    <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                      {tx.yourAddress} <span className="font-mono font-semibold text-brand-600 dark:text-brand-400">{workspaceHostname(pendingSlug)}</span>
+                    </p>
+                  )}
+                  <button type="button" onClick={() => { setPendingOrg(null); setPendingSlug(null); setMode('signin'); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">{tx.back}</button>
                 </div>
               ) : (
               <>

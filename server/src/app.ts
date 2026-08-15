@@ -29,6 +29,7 @@ import adminSettingsRoutes from './modules/settings/settings.routes.js';
 import aiSettingsRoutes from './modules/settings/aiSettings.routes.js';
 import messagesRoutes from './modules/messages/messages.routes.js';
 import membersRoutes from './modules/members/members.routes.js';
+import workspaceRoutes from './modules/workspace/workspace.routes.js';
 import apiKeyRoutes from './modules/apikey/apikey.routes.js';
 import webhookRoutes from './modules/webhook/webhook.routes.js';
 import openapiRoutes from './modules/openapi/openapi.routes.js';
@@ -218,6 +219,7 @@ export function createApp() {
   api.use('/ai-settings', aiSettingsRoutes);
   api.use('/messages', messagesRoutes);
   api.use('/members', membersRoutes);
+  api.use('/workspace', workspaceRoutes);
   api.use('/api-keys', apiKeyRoutes);
   api.use('/webhooks', webhookRoutes);
   api.use('/calendar', calendarRoutes);
