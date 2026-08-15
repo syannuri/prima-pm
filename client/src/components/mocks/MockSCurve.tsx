@@ -1,6 +1,8 @@
 // On-brand SVG "capture" of the EVM S-curve (PV · EV · AC) with SPI/CPI chips, for the landing
 // showcase. Light theme; curves are a smooth logistic S so it reads as cumulative value.
+import { useId } from 'react';
 export default function MockSCurve({ className }: { className?: string }) {
+  const wipeId = useId();               // unique clip id (mock renders twice: hero tour + showcase)
   const X0 = 46, Y0 = 250, W = 410, H = 196;
   const px = (t: number) => X0 + t * W;
   const py = (v: number) => Y0 - v * H;
@@ -20,6 +22,8 @@ export default function MockSCurve({ className }: { className?: string }) {
           <stop offset="0%" stopColor="#2563eb" stopOpacity="0.18" />
           <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
         </linearGradient>
+        {/* playhead wipe: the whole plot area is revealed left-to-right when the scene plays */}
+        <clipPath id={wipeId}><rect className="pmx-wipe" x={X0 - 2} y="48" width={W + 12} height={Y0 - 44} /></clipPath>
       </defs>
       <rect width="500" height="320" fill="#ffffff" />
       <text x="24" y="34" fill="#0f172a" fontSize="13" fontWeight="700">EVM S-Curve</text>
@@ -35,17 +39,19 @@ export default function MockSCurve({ className }: { className?: string }) {
       <line x1={X0} y1={Y0} x2={X0 + W} y2={Y0} stroke="#cbd5e1" />
       {/* today divider */}
       <line x1={px(0.62)} y1="54" x2={px(0.62)} y2={Y0} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 3" />
-      {/* soft area under the earned-value curve */}
-      <polygon points={area(0.82, 0.62)} fill="url(#mockEvGrad)" stroke="none" />
-      {/* PV (planned, slate) full span */}
-      <polyline points={pts(1, 1)} fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" />
-      {/* AC (actual cost, rose) to today */}
-      <polyline points={pts(0.9, 0.62)} fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {/* EV (earned value, blue) to today */}
-      <polyline points={pts(0.82, 0.62)} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      {/* current-value dots at "today" */}
-      <circle cx={acEnd.cx} cy={acEnd.cy} r="3.6" fill="#f43f5e" stroke="#fff" strokeWidth="1.4" />
-      <circle cx={evEnd.cx} cy={evEnd.cy} r="4" fill="#2563eb" stroke="#fff" strokeWidth="1.4" />
+      <g clipPath={`url(#${wipeId})`}>
+        {/* soft area under the earned-value curve */}
+        <polygon points={area(0.82, 0.62)} fill="url(#mockEvGrad)" stroke="none" />
+        {/* PV (planned, slate) full span */}
+        <polyline points={pts(1, 1)} fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" />
+        {/* AC (actual cost, rose) to today */}
+        <polyline points={pts(0.9, 0.62)} fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* EV (earned value, blue) to today */}
+        <polyline points={pts(0.82, 0.62)} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {/* current-value dots at "today" */}
+        <circle cx={acEnd.cx} cy={acEnd.cy} r="3.6" fill="#f43f5e" stroke="#fff" strokeWidth="1.4" />
+        <circle cx={evEnd.cx} cy={evEnd.cy} r="4" fill="#2563eb" stroke="#fff" strokeWidth="1.4" />
+      </g>
       {/* legend */}
       {[['#2563eb', 'EV', 24], ['#f43f5e', 'AC', 92], ['#94a3b8', 'PV', 160]].map(([c, l, x]) => (
         <g key={l as string}>

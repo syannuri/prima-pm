@@ -51,7 +51,7 @@ export default function HeroMockup({ className }: { className?: string }) {
       <rect x="176" y="122" width="196" height="150" rx="12" fill="#ffffff" stroke="#e2e8f0" />
       {/* progress-ring gauge (~78% → on-track green) on a faint track */}
       <circle cx="274" cy="204" r="46" fill="none" stroke="#e6eaf1" strokeWidth="11" />
-      <circle cx="274" cy="204" r="46" fill="none" stroke="#22c55e" strokeWidth="11" strokeLinecap="round" strokeDasharray="225 289" transform="rotate(-90 274 204)" />
+      <circle className="pmx-sweep" style={{ '--pmx-len': 225 } as React.CSSProperties} cx="274" cy="204" r="46" fill="none" stroke="#22c55e" strokeWidth="11" strokeLinecap="round" strokeDasharray="225 289" transform="rotate(-90 274 204)" />
       <text x="274" y="198" textAnchor="middle" fill="#16a34a" fontSize="9.5" fontWeight="700">ON TRACK</text>
       <text x="274" y="222" textAnchor="middle" fill="#0f172a" fontSize="22" fontWeight="800">1.04</text>
       <text x="274" y="258" textAnchor="middle" fill="#94a3b8" fontSize="8.5" fontWeight="600">SPI · CPI 1.27</text>
@@ -60,7 +60,7 @@ export default function HeroMockup({ className }: { className?: string }) {
       {KPI.map((k, i) => {
         const x = 388 + (i % 2) * 216, y = 122 + Math.floor(i / 2) * 74;
         return (
-          <g key={i}>
+          <g key={i} className="pmx-rise" style={{ '--d': `${140 + i * 90}ms` } as React.CSSProperties}>
             <rect x={x} y={y} width="200" height="64" rx="12" fill="#ffffff" stroke="#e2e8f0" />
             <text x={x + 16} y={y + 26} fill="#94a3b8" fontSize="9" fontWeight="600">{k[0]}</text>
             <text x={x + 16} y={y + 48} fill="#0f172a" fontSize="16" fontWeight="700">{k[1]}</text>
@@ -78,7 +78,7 @@ export default function HeroMockup({ className }: { className?: string }) {
             {glyph(r[1], r[2], 204, y + 6)}
             <text x="220" y={y + 10} fill="#334155" fontSize="12" fontWeight="500">{r[0]}</text>
             <rect x="480" y={y + 1} width="230" height="9" rx="4.5" fill="#eef2f7" />
-            <rect x="480" y={y + 1} width={230 * (r[3] / 100)} height="9" rx="4.5" fill="#2563eb" />
+            <rect className="pmx-grow" style={{ '--d': `${360 + i * 130}ms` } as React.CSSProperties} x="480" y={y + 1} width={230 * (r[3] / 100)} height="9" rx="4.5" fill="#2563eb" />
             <text x="726" y={y + 10} fill="#475569" fontSize="11" fontWeight="700">{r[3]}%</text>
           </g>
         );
