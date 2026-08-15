@@ -84,7 +84,8 @@ export default function AdminTenantsPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-3">
-            <div className="lg:col-span-2"><PlanBar split={stats.planSplit} total={stats.total} id={id} /></div>
+            <PlanBar split={stats.planSplit} total={stats.total} id={id} />
+            <Leaderboard corporate={corporate} id={id} />
             <ActivityFeed id={id} />
           </div>
 
@@ -126,6 +127,53 @@ function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: num
           </span>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// Top tenants by a selectable usage metric (members / projects / storage) — a quick "biggest
+// accounts" panel. Client-only: the metrics already ride in the tenant payload.
+type LeaderMetric = 'members' | 'projects' | 'storage';
+function Leaderboard({ corporate, id }: { corporate: PlatformTenant[]; id: boolean }) {
+  const [metric, setMetric] = useState<LeaderMetric>('members');
+  const val = (t: PlatformTenant) => (metric === 'members' ? t.memberCount : metric === 'projects' ? t.projectCount : t.storageBytes);
+  const fmt = metric === 'storage' ? formatBytes : (n: number) => String(n);
+  const ranked = [...corporate].sort((a, b) => val(b) - val(a)).slice(0, 5);
+  const max = Math.max(1, ...ranked.map(val));
+  const labels: Record<LeaderMetric, string> = { members: id ? 'Anggota' : 'Members', projects: id ? 'Proyek' : 'Projects', storage: id ? 'Penyimpanan' : 'Storage' };
+  return (
+    <Card className="flex h-full flex-col">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Organisasi teratas' : 'Top tenants'}</span>
+        <div className="flex gap-1">
+          {(['members', 'projects', 'storage'] as LeaderMetric[]).map((m) => (
+            <button key={m} onClick={() => setMetric(m)} className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${metric === m ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>{labels[m]}</button>
+          ))}
+        </div>
+      </div>
+      {ranked.length === 0 ? (
+        <p className="flex flex-1 items-center justify-center py-3 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada organisasi.' : 'No tenants yet.'}</p>
+      ) : (
+        <ol className="space-y-2">
+          {ranked.map((t, i) => {
+            const v = val(t);
+            return (
+              <li key={t.id} className="flex items-center gap-2 text-sm">
+                <span className="w-4 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-400 dark:text-slate-500">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate font-medium text-slate-700 dark:text-slate-200">{t.name}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-slate-500 dark:text-slate-400">{fmt(v)}</span>
+                  </div>
+                  <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div className="h-full rounded-full bg-indigo-500 transition-[width] duration-500" style={{ width: `${Math.max(3, (v / max) * 100)}%` }} />
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
     </Card>
   );
 }
