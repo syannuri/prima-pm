@@ -236,7 +236,11 @@ export async function registerOrg(input: OrgSignupInput, country: string | null 
       ...(country ? { country } : {}),
     },
   });
-  const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'PENDING' } });
+  // New corporate orgs start on PRO, not the FREE default: FREE's tight quotas (3 projects /
+  // 5 members) throttle a real team on day one, and self-serve billing isn't live yet to lift
+  // them. PRO's limits (50/50) fit a starting team; an ENTERPRISE upgrade stays a manual/billing
+  // action. Personal (guest) tenants keep the FREE default.
+  const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'PENDING', plan: 'PRO' } });
   await prisma.membership.create({ data: { userId: owner.id, tenantId: tenant.id, role: 'ADMIN' } });
   await auditInUserTenant(owner.id, { userId: owner.id, entity: 'Tenant', entityId: tenant.id, action: 'CREATE', after: { name: input.orgName, slug, self: true, status: 'PENDING' } });
   // Alert platform admins there's a signup to review (best-effort; won't block the response).

@@ -320,6 +320,22 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   if (input.status && input.status !== before.status) {
     await emitDomainEvent('project.status_changed', { id: project.id, code: project.code, name: project.name, from: before.status, to: project.status });
   }
+  // Notify the owning PM their project was approved & activated (CHARTERED → IN_PROGRESS). Mirrors
+  // the reject/revision notification so activation isn't silent. Covers both the PMO activation-review
+  // approval (decideActivation → here) and a direct ADMIN activation. Best-effort; skips self-activation.
+  if (isActivating && project.pmUserId && project.pmUserId !== actorId) {
+    try {
+      await createNotification({
+        userId: project.pmUserId,
+        type: 'ACTIVATION_APPROVED',
+        title: 'Project activated',
+        body: `${project.name} (${project.code}) was approved and is now active — execution can begin.`,
+        projectId: project.id,
+      });
+    } catch {
+      /* best-effort — never fail the activation on a notification error */
+    }
+  }
   return project;
 }
 
