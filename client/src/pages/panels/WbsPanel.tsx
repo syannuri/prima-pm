@@ -8,6 +8,7 @@ import { useToast } from '../../components/Toast';
 import ImportTasksModal from '../../components/ImportTasksModal';
 import WeightEditorModal from '../../components/WeightEditorModal';
 import StepsModal from '../../components/StepsModal';
+import InfoTip from '../../components/InfoTip';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -1855,7 +1856,9 @@ function OwnerPicker({ node, resources, onSave }: {
   const makeLead = (id: string) => { const next = new Set(selected); next.add(id); emit([...next], id); };
   return (
     <div className="block sm:col-span-2">
-      <span className={label}>Owners (PIC) <span className="font-normal normal-case text-slate-400 dark:text-slate-500">— tick everyone assigned; ★ marks the lead</span></span>
+      <span className={label}>Owners (PIC) <span className="font-normal normal-case text-slate-400 dark:text-slate-500">— tick everyone assigned; ★ marks the lead</span>
+        <InfoTip text="Tick to assign an owner, untick to remove. Click ★ to set the lead; unticking the lead promotes the next owner. Add people in Resources first." />
+      </span>
       <div className="mt-1 max-h-44 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
         {resources.length === 0 && <p className="px-2.5 py-2 text-xs text-slate-400 dark:text-slate-500">No resources in the master yet — add people under Resources first.</p>}
         {resources.map((r) => {
