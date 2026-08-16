@@ -283,34 +283,87 @@ function InlineDate({ value, editable, onSave, title }: {
   );
 }
 
-// Click-to-edit Owner cell — shows the owner avatar stack; clicking swaps to a resource picker that
-// commits the LEAD owner on change (the backend folds the new lead into the owner set, keeping any
-// co-owners). Manage the full owner set from the row's Details editor.
-function InlineOwner({ owners, resourceId, editable, resources, onSave }: {
-  owners: { id: string; name: string }[]; resourceId: string | null; editable: boolean;
-  resources: ResourceItem[]; onSave: (id: string | null) => void;
+// Click-to-edit Owner cell — shows the owner avatar stack; clicking opens a checklist popover to
+// manage the FULL owner set (tick = owner, ★ = lead). Commits the whole set + lead in one PUT; the
+// server replaces the owner links and always keeps the lead inside the set. Portaled (like RowMenu/
+// OptionsMenu) so it escapes the table's frozen-column overflow; container = the fullscreen element
+// when the Gantt is full-screen, else <body>.
+function OwnerPopover({ owners, node, editable, resources, container, onSave }: {
+  owners: { id: string; name: string }[]; node: GanttNode; editable: boolean;
+  resources: ResourceItem[]; container?: Element | null; onSave: (patch: Record<string, unknown>) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  if (editing) {
-    return (
-      <select
-        autoFocus defaultValue={resourceId ?? ''}
-        onClick={(e) => e.stopPropagation()}
-        onBlur={() => setEditing(false)}
-        onChange={(e) => { const id = e.target.value || null; setEditing(false); if (id !== (resourceId ?? null)) onSave(id); }}
-        className="max-w-[10rem] rounded border border-brand-300 bg-white px-1 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100"
-      >
-        <option value="">— unassigned —</option>
-        {resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
-      </select>
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const place = () => {
+    const b = btnRef.current?.getBoundingClientRect();
+    if (!b) return;
+    const w = panelRef.current?.getBoundingClientRect().width ?? 256;
+    const h = panelRef.current?.getBoundingClientRect().height ?? 0;
+    setPos({ left: Math.max(8, Math.min(b.left, window.innerWidth - w - 8)), top: Math.max(8, Math.min(b.bottom + 4, window.innerHeight - h - 8)) });
+  };
+  useLayoutEffect(() => { if (open) place(); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onResize = () => setOpen(false);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
+  }, [open]);
+
   if (!editable) return <OwnerCell owners={owners} />;
+
+  const selected = new Set((node.owners ?? []).map((o) => o.id));
+  const lead = node.picResourceId ?? null;
+  const emit = (ids: string[], newLead: string | null) => onSave({ ownerResourceIds: ids, picResourceId: newLead });
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    const ids = [...next];
+    emit(ids, lead && next.has(lead) ? lead : (ids[0] ?? null)); // keep lead if still selected, else first / none
+  };
+  const makeLead = (id: string) => { const next = new Set(selected); next.add(id); emit([...next], id); };
+
   return (
-    <button type="button" onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to change the lead owner (manage co-owners in Details)"
-      className="rounded px-1 py-0.5 hover:bg-brand-50 dark:hover:bg-brand-900/20">
-      <OwnerCell owners={owners} />
-    </button>
+    <>
+      <button ref={btnRef} type="button" aria-expanded={open} title="Click to manage owners (lead + co-owners)"
+        onClick={(e) => { e.stopPropagation(); if (!open) place(); setOpen((o) => !o); }}
+        className="rounded px-1 py-0.5 hover:bg-brand-50 dark:hover:bg-brand-900/20">
+        <OwnerCell owners={owners} />
+      </button>
+      {open && createPortal(
+        <>
+          <div className="fixed inset-0 z-[59]" onMouseDown={() => setOpen(false)} />
+          <div ref={panelRef} role="dialog" aria-label="Task owners" style={{ left: pos.left, top: pos.top }}
+            onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
+            className="fixed z-[60] w-64 rounded-lg border border-slate-200 bg-white p-2 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            <div className="mb-1 flex items-center px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Owners (PIC)
+              <InfoTip text="Tick to assign an owner, untick to remove. Click ★ to set the lead; unticking the lead promotes the next owner. Add people in Resources first." />
+            </div>
+            <div className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
+              {resources.length === 0 && <p className="px-2 py-2 text-xs text-slate-400 dark:text-slate-500">No resources yet — add people under Resources first.</p>}
+              {resources.map((r) => {
+                const on = selected.has(r.id);
+                const isLead = lead === r.id;
+                return (
+                  <div key={r.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                    <input type="checkbox" checked={on} onChange={() => toggle(r.id)} className="accent-brand-600" aria-label={`Assign ${r.name}`} />
+                    <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{r.name}{r.roleTitle ? <span className="text-slate-400 dark:text-slate-500"> · {r.roleTitle}</span> : ''}</span>
+                    <button type="button" onClick={() => makeLead(r.id)} disabled={isLead}
+                      title={isLead ? 'Lead owner' : 'Make lead owner'} aria-label={isLead ? `${r.name} is the lead owner` : `Make ${r.name} the lead owner`}
+                      className={`text-sm leading-none ${isLead ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400 dark:text-slate-600 dark:hover:text-amber-400'}`}>{isLead ? '★' : '☆'}</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>,
+        container ?? document.body,
+      )}
+    </>
   );
 }
 
@@ -1420,7 +1473,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     <td>{canEdit
-                      ? <InlineOwner owners={orderedOwners(node)} resourceId={node.picResourceId ?? null} editable resources={resources} onSave={(id) => patchTask.mutate({ node, patch: { picResourceId: id } })} />
+                      ? <OwnerPopover owners={orderedOwners(node)} node={node} editable resources={resources} container={modalContainer} onSave={(patch) => patchTask.mutate({ node, patch })} />
                       : <OwnerCell owners={orderedOwners(node)} />}</td>
                     {showDates && (
                       <>
