@@ -866,6 +866,7 @@ model Resource {
 
   costLines CostItemDirect[] @relation("LineResource")
   picTasks  Task[]           @relation("TaskPicResource")
+  ownerOf   TaskOwner[]
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -1325,8 +1326,11 @@ model Task {
   pic          User?     @relation("TaskPIC", fields: [picUserId], references: [id])
 
   // Owner / person-in-charge picked from the resource master (preferred over picUserId).
+  // picResourceId = the LEAD owner; it MUST also appear in `owners`. `owners` (TaskOwner join)
+  // is the full set of assigned resources (lead + co-owners). Single-owner consumers use the lead.
   picResourceId String?
-  picResource   Resource? @relation("TaskPicResource", fields: [picResourceId], references: [id])
+  picResource   Resource?   @relation("TaskPicResource", fields: [picResourceId], references: [id])
+  owners        TaskOwner[]
 
   progressPct  Int       @default(0) // 0..100
   // Manual relative work-package weight (Model B). null = derive from cost/duration proxy.
@@ -1358,6 +1362,19 @@ model Task {
 
   @@index([projectId, parentTaskId])
   @@index([tenantId])
+}
+
+// Join: a task's assigned owners (person-in-charge). Supports MULTIPLE owners per task; the
+// LEAD owner is still `Task.picResourceId` (which also has a row here). Deleting either side
+// cascades. Backfilled from the pre-existing single `picResourceId` at migration time.
+model TaskOwner {
+  taskId     String
+  resourceId String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, resourceId])
+  @@index([resourceId])
 }
 
 // A weighted progress step ("milestone"/deliverable) inside a work package. A task's % complete

@@ -750,6 +750,8 @@ export interface GanttNode extends Task {
   linkedPlanMandays: number;
   pic?: { id: string; name: string } | null;
   picResource?: { id: string; name: string } | null;
+  /** Full owner set (lead + co-owners); the lead is `picResourceId`/`picResource`. */
+  owners?: { id: string; name: string }[];
   children: GanttNode[];
 }
 

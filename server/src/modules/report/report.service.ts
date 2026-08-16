@@ -178,11 +178,19 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
     getProjectForecast(projectId, asOf),
     prisma.task.findMany({
       where: { projectId },
-      select: { id: true, name: true, wbsCode: true, parentTaskId: true, planStart: true, planEnd: true, actualStart: true, actualFinish: true, progressPct: true, isMilestone: true, picResource: { select: { name: true } } },
+      select: { id: true, name: true, wbsCode: true, parentTaskId: true, planStart: true, planEnd: true, actualStart: true, actualFinish: true, progressPct: true, isMilestone: true, picResourceId: true, picResource: { select: { name: true } }, owners: { select: { resource: { select: { id: true, name: true } } } } },
     }),
     prisma.actualCostEntry.findMany({ where: { projectId }, orderBy: { date: 'asc' }, select: { date: true, amount: true } }),
     getCommentary(projectId, period, asOf),
   ]);
+
+  // Owner label: all assigned owners, lead first (deduped by resource id).
+  const ownerLabel = (t: { picResourceId: string | null; picResource: { name: string } | null; owners: { resource: { id: string; name: string } }[] }) => {
+    const lead = t.picResourceId;
+    const ordered = [...t.owners].sort((a, b) => (a.resource.id === lead ? -1 : b.resource.id === lead ? 1 : 0));
+    const names = ordered.map((o) => o.resource.name);
+    return names.length ? names.join(', ') : (t.picResource?.name ?? null);
+  };
 
   // Task completion from LEAF tasks (the schedule work packages).
   const parentIds = new Set(tasks.filter((t) => t.parentTaskId).map((t) => t.parentTaskId));
@@ -202,7 +210,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
       planEnd: new Date(t.planEnd).toISOString(),
       overdue: dayFloor(+t.planEnd) < dayFloor(now), // due today is not overdue until tomorrow (matches the Gantt)
       isMilestone: t.isMilestone,
-      owner: t.picResource?.name ?? null,
+      owner: ownerLabel(t),
     }));
 
   // Full schedule detail (all leaf work packages, chronological) with plan vs actual dates —
@@ -215,7 +223,7 @@ export async function getProjectReport(projectId: string, period: ReportPeriod, 
       name: t.name,
       isMilestone: t.isMilestone,
       pct: t.progressPct,
-      owner: t.picResource?.name ?? null,
+      owner: ownerLabel(t),
       planStart: new Date(t.planStart).toISOString(),
       planEnd: new Date(t.planEnd).toISOString(),
       actualStart: t.actualStart ? new Date(t.actualStart).toISOString() : null,

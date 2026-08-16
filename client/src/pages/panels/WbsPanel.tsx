@@ -215,13 +215,37 @@ const CollapseIcon = () => (
 const initialsOf = (name: string) =>
   name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 
-// The Owner (PIC) responsible for a task/subtask — an initials avatar + name.
-function OwnerCell({ name }: { name: string | null | undefined }) {
-  if (!name) return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;
+// A task's owners ordered lead-first (the lead is `picResourceId`). Falls back to the legacy
+// single picResource/pic name when the owner set is empty (e.g. pre-migration data mid-fetch).
+function orderedOwners(node: GanttNode): { id: string; name: string }[] {
+  const list = node.owners ?? [];
+  if (list.length) {
+    const lead = node.picResourceId;
+    return [...list].sort((a, b) => (a.id === lead ? -1 : b.id === lead ? 1 : 0));
+  }
+  const fallback = node.picResource ?? node.pic;
+  return fallback ? [{ id: fallback.id, name: fallback.name }] : [];
+}
+
+// The Owner(s) (PIC) responsible for a task/subtask — an overlapping initials avatar stack with the
+// LEAD first, then the lead name and a "+N" badge for co-owners. Pass either the ordered owner set
+// (preferred) or a single fallback name.
+function OwnerCell({ owners, name }: { owners?: { id: string; name: string }[]; name?: string | null }) {
+  const list = owners && owners.length ? owners : name ? [{ id: '_solo', name }] : [];
+  if (!list.length) return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;
+  const shown = list.slice(0, 3);
+  const co = list.length - 1; // co-owners beyond the lead
   return (
-    <span className="inline-flex items-center gap-1.5" title={`Owner (PIC): ${name}`}>
-      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">{initialsOf(name)}</span>
-      <span className="whitespace-nowrap text-xs text-slate-600 dark:text-slate-300">{name}</span>
+    <span className="inline-flex items-center gap-1.5" title={`Owner (PIC): ${list.map((o) => o.name).join(', ')}`}>
+      <span className="flex -space-x-1.5">
+        {shown.map((o, i) => (
+          <span key={o.id} style={{ zIndex: shown.length - i }}
+            className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-700 ring-1 ring-white dark:bg-brand-500/20 dark:text-brand-300 dark:ring-slate-900">{initialsOf(o.name)}</span>
+        ))}
+      </span>
+      <span className="whitespace-nowrap text-xs text-slate-600 dark:text-slate-300">
+        {list[0].name}{co > 0 && <span className="text-slate-400 dark:text-slate-500"> +{co}</span>}
+      </span>
     </span>
   );
 }
@@ -258,9 +282,11 @@ function InlineDate({ value, editable, onSave, title }: {
   );
 }
 
-// Click-to-edit Owner cell — swaps to a resource picker that commits on change.
-function InlineOwner({ name, resourceId, editable, resources, onSave }: {
-  name: string | null | undefined; resourceId: string | null; editable: boolean;
+// Click-to-edit Owner cell — shows the owner avatar stack; clicking swaps to a resource picker that
+// commits the LEAD owner on change (the backend folds the new lead into the owner set, keeping any
+// co-owners). Manage the full owner set from the row's Details editor.
+function InlineOwner({ owners, resourceId, editable, resources, onSave }: {
+  owners: { id: string; name: string }[]; resourceId: string | null; editable: boolean;
   resources: ResourceItem[]; onSave: (id: string | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -278,11 +304,11 @@ function InlineOwner({ name, resourceId, editable, resources, onSave }: {
       </select>
     );
   }
-  if (!editable) return <OwnerCell name={name} />;
+  if (!editable) return <OwnerCell owners={owners} />;
   return (
-    <button type="button" onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to change owner"
+    <button type="button" onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to change the lead owner (manage co-owners in Details)"
       className="rounded px-1 py-0.5 hover:bg-brand-50 dark:hover:bg-brand-900/20">
-      <OwnerCell name={name} />
+      <OwnerCell owners={owners} />
     </button>
   );
 }
@@ -1393,8 +1419,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       )}
                     </td>
                     <td>{canEdit
-                      ? <InlineOwner name={node.picResource?.name ?? node.pic?.name} resourceId={node.picResourceId ?? null} editable resources={resources} onSave={(id) => patchTask.mutate({ node, patch: { picResourceId: id } })} />
-                      : <OwnerCell name={node.picResource?.name ?? node.pic?.name} />}</td>
+                      ? <InlineOwner owners={orderedOwners(node)} resourceId={node.picResourceId ?? null} editable resources={resources} onSave={(id) => patchTask.mutate({ node, patch: { picResourceId: id } })} />
+                      : <OwnerCell owners={orderedOwners(node)} />}</td>
                     {showDates && (
                       <>
                         {/* Plan Start — rolls up (read-only) on summary rows; leaf is click-to-edit
@@ -1742,7 +1768,7 @@ function DictionaryView({ node }: { node: GanttNode }) {
   );
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <Item label="Owner (PIC)" value={node.picResource?.name ?? node.pic?.name} />
+      <Item label="Owner (PIC)" value={orderedOwners(node).map((o) => o.name).join(', ') || undefined} />
       <Item label="Deliverable" value={node.deliverable} />
       <div className="sm:col-span-2"><Item label="Description / Scope" value={node.description} /></div>
       <div className="sm:col-span-2"><Item label="Acceptance criteria" value={node.acceptanceCriteria} /></div>
@@ -1810,6 +1836,46 @@ function DraftRow({ draft, depth, colCount, showDates, resources, saving, topLev
 // Editable WBS dictionary — shown when an editor expands a row (the ⓘ / "Details" toggle). Owner &
 // Milestone commit immediately (selects/checkbox); the free-text fields (Deliverable / Description /
 // Acceptance) commit on blur when changed. No popup — every field is filled straight under the row.
+// Multi-owner picker for a work package: tick everyone assigned; ★ marks the LEAD (picResourceId).
+// Each change commits the FULL set (ownerResourceIds) plus the lead in one PUT — the server replaces
+// the owner links and always keeps the lead inside the set.
+function OwnerPicker({ node, resources, onSave }: {
+  node: GanttNode; resources: ResourceItem[]; onSave: (patch: Record<string, unknown>) => void;
+}) {
+  const selected = new Set((node.owners ?? []).map((o) => o.id));
+  const lead = node.picResourceId ?? null;
+  const label = 'text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+  const emit = (ids: string[], newLead: string | null) => onSave({ ownerResourceIds: ids, picResourceId: newLead });
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    const ids = [...next];
+    emit(ids, lead && next.has(lead) ? lead : (ids[0] ?? null)); // keep lead if still selected, else first / none
+  };
+  const makeLead = (id: string) => { const next = new Set(selected); next.add(id); emit([...next], id); };
+  return (
+    <div className="block sm:col-span-2">
+      <span className={label}>Owners (PIC) <span className="font-normal normal-case text-slate-400 dark:text-slate-500">— tick everyone assigned; ★ marks the lead</span></span>
+      <div className="mt-1 max-h-44 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
+        {resources.length === 0 && <p className="px-2.5 py-2 text-xs text-slate-400 dark:text-slate-500">No resources in the master yet — add people under Resources first.</p>}
+        {resources.map((r) => {
+          const on = selected.has(r.id);
+          const isLead = lead === r.id;
+          return (
+            <div key={r.id} className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+              <input type="checkbox" checked={on} onChange={() => toggle(r.id)} className="accent-brand-600" aria-label={`Assign ${r.name}`} />
+              <span className="flex-1 truncate text-sm text-slate-700 dark:text-slate-200">{r.name}{r.roleTitle ? <span className="text-slate-400 dark:text-slate-500"> · {r.roleTitle}</span> : ''}</span>
+              <button type="button" onClick={() => makeLead(r.id)} disabled={isLead}
+                title={isLead ? 'Lead owner' : 'Make lead owner'} aria-label={isLead ? `${r.name} is the lead owner` : `Make ${r.name} the lead owner`}
+                className={`text-sm leading-none ${isLead ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400 dark:text-slate-600 dark:hover:text-amber-400'}`}>{isLead ? '★' : '☆'}</button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DictionaryEditor({ node, resources, onSave }: {
   node: GanttNode; resources: ResourceItem[]; onSave: (patch: Record<string, unknown>) => void;
 }) {
@@ -1825,14 +1891,8 @@ function DictionaryEditor({ node, resources, onSave }: {
   };
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <label className="block">
-        <span className={label}>Owner (PIC)</span>
-        <select value={node.picResourceId ?? ''} onChange={(e) => onSave({ picResourceId: e.target.value || null })} className={inp} aria-label="Owner (PIC)">
-          <option value="">— unassigned —</option>
-          {resources.map((r) => <option key={r.id} value={r.id}>{r.name}{r.roleTitle ? ` · ${r.roleTitle}` : ''}</option>)}
-        </select>
-      </label>
-      <label className="flex items-end gap-2 pb-1.5 text-sm text-slate-600 dark:text-slate-300 sm:self-end">
+      <OwnerPicker node={node} resources={resources} onSave={onSave} />
+      <label className="flex items-end gap-2 pb-1.5 text-sm text-slate-600 dark:text-slate-300 sm:col-span-2">
         <input type="checkbox" checked={node.isMilestone} onChange={(e) => onSave({ isMilestone: e.target.checked })} className="mb-0.5 accent-brand-600" />
         <span>Milestone <span className="text-slate-400 dark:text-slate-500">(zero-duration marker ◆)</span></span>
       </label>

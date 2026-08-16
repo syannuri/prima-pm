@@ -134,7 +134,14 @@ async function prefillTaskOwner(tx: Db, taskId: string | null | undefined, resou
   if (!taskId || !resourceId) return null;
   const task = await tx.task.findFirst({ where: { id: taskId }, select: { id: true, picResourceId: true, picUserId: true } });
   if (!task || task.picResourceId || task.picUserId) return null; // don't overwrite an existing owner
-  await tx.task.update({ where: { id: taskId }, data: { picResourceId: resourceId } });
+  // Set the lead owner AND add the matching owner link (idempotent) so the owner set stays in sync.
+  await tx.task.update({
+    where: { id: taskId },
+    data: {
+      picResourceId: resourceId,
+      owners: { connectOrCreate: { where: { taskId_resourceId: { taskId, resourceId } }, create: { resourceId } } },
+    },
+  });
   return taskId;
 }
 
