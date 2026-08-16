@@ -9,7 +9,7 @@
 Prismatix gives PMs, PMO and finance one clear, role-aware view of project **health, cost, schedule and risk** —
 turning scattered updates into Earned Value insight (CPI/SPI), resource utilization and an auditable trail.
 
-![Prismatix — portfolio dashboard (dark mode)](docs/screenshots/dashboard.png)
+![Prismatix — portfolio dashboard (light theme)](docs/screenshots/dashboard.png)
 
 <p align="center"><em>Portfolio dashboard — a compact KPI stat strip, EVM health & status distribution, activity and resource load.</em></p>
 
@@ -21,7 +21,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 ## ✨ Features
 
 - **PMBOK process-group workspace** — inside a project, modules are grouped under five phase tabs: **Initiating** (Charter · Kick-Off · Stakeholders), **Planning** (Schedule · Agile · Cost · Procurement · Risk), **Executing** (Timesheet · RAID · Issues · UAT · Change Request), **Monitoring & Controlling** (Forecast · EVM Trend) and **Closing** (Closeout), with a cross-cutting **Audit** tab.
-- **Role-aware dashboard** — Admin/PMO get **Portfolio EVM** (a compact KPI **stat strip**, CPI/SPI, status & health charts, activity-by-project, resource load); **Project Managers** get a *"My Projects"* view with elegant **CPI/SPI donut charts** and a **baseline-vs-actual progress** chart — plus a Resource **Utilization** heatmap and project cards. Personalised, time-based greeting (auto **ID/EN**).
+- **Role-aware dashboard** — Admin/PMO get **Portfolio EVM** (a compact KPI **stat strip**, CPI/SPI, status & health charts, activity-by-project, resource load); **Project Managers** get a *"My Projects"* view with a **portfolio-health gauge**, an **SPI trend** sparkline and CPI/SPI/BAC KPI tiles — plus a Resource **Utilization** heatmap and project cards. Personalised, time-based greeting (auto **ID/EN**).
 - **⌘K Command Palette** — jump to any project, page or quick action from anywhere (**Ctrl/⌘ K**), keyboard-first.
 - **Project Charter** — goals, scope, sponsor, high-level cost, and the **delivery approach** (Predictive / Agile / Hybrid) chosen at initiation; committing locks a baseline and unlocks the other modules.
 - **Agile & Hybrid delivery** — product **backlog**, **sprints**, and a **Kanban board with smooth drag-and-drop**; **velocity** & **burndown** reports; **Agile-EVM** (story-point based) and **Hybrid-EVM** blended into the same portfolio.
@@ -48,7 +48,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **Subscription billing** — self-serve plan management (Free / Pro / Enterprise) with a signed billing webhook that keeps each workspace's plan in sync.
 - **Observability** — structured request logging with request IDs and a readiness/health check, plus optional error tracking — all dormant until configured.
 - **Public landing page** — a bilingual (EN/ID), **aurora-dark** homepage greets guests at `/` and introduces Prismatix before sign-in — offered as a contribution to the global project-management community. Every call-to-action leads to the login.
-- **UX** — **dark mode by default** (light optional), **IDR thousand-separator inputs**, **live inline form validation** (green/red field state with strong-password checklists on auth/admin forms), native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
+- **UX** — **light theme by default** (dark optional), **IDR thousand-separator inputs**, **live inline form validation** (green/red field state with strong-password checklists on auth/admin forms), native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
 
 ## 📸 Screenshots
 
@@ -56,9 +56,9 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ![Prismatix public landing page — aurora-dark hero introducing the app](docs/screenshots/homepage.png)
 
-| Project Manager dashboard — CPI/SPI donuts & progress | Agile board — drag & drop Kanban |
+| Project Manager dashboard — health gauge, SPI trend & KPIs | Agile board — drag & drop Kanban |
 |:---:|:---:|
-| ![PM dashboard with CPI/SPI donut charts and baseline-vs-actual progress](docs/screenshots/pm-charts.png) | ![Agile Kanban board with drag and drop](docs/screenshots/agile-board.png) |
+| ![PM dashboard with a portfolio-health gauge, SPI trend sparkline and CPI/SPI/BAC KPI tiles](docs/screenshots/pm-charts.png) | ![Agile Kanban board with drag and drop](docs/screenshots/agile-board.png) |
 | **Risk — 5×5 heatmap & EMV contingency reserve** | **⌘K command palette** |
 | ![Risk heatmap and EMV reserve](docs/screenshots/risk.png) | ![Command palette quick jump](docs/screenshots/command-palette.png) |
 | **Inline form validation — live green/red feedback** | **Strong-password checklist on change password** |
