@@ -291,8 +291,15 @@ function ReportBody({ r, projectId, period, canEdit }: { r: ProjectReportData; p
               <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Remaining / uncompleted ({r.tasks.remaining.length})</div>
               <ul className="max-h-56 space-y-1 overflow-y-auto text-sm">
                 {r.tasks.remaining.map((t, i) => (
-                  <li key={i} className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-slate-700 dark:text-slate-200">{t.isMilestone && <span className="text-brand-600">◆ </span>}{t.name}</span>
+                  <li key={i} className="flex items-start justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="block truncate text-slate-700 dark:text-slate-200">{t.isMilestone && <span className="text-brand-600">◆ </span>}{t.name}</span>
+                      {t.owner && (
+                        <span className="mt-0.5 block truncate text-xs text-slate-400 dark:text-slate-500" title={`Owner (PIC): ${t.owner}`}>
+                          <span className="font-medium">PIC:</span> {t.owner}
+                        </span>
+                      )}
+                    </span>
                     <span className="flex shrink-0 items-center gap-2">
                       {t.overdue && <Badge color="red">Overdue</Badge>}
                       <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{t.pct}% · {formatDate(t.planEnd)}</span>
