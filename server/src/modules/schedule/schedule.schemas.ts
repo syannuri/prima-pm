@@ -16,7 +16,11 @@ export const upsertTaskSchema = z
     actualStart: z.coerce.date().nullable().optional(),
     actualFinish: z.coerce.date().nullable().optional(),
     picUserId: z.string().uuid().nullable().optional(),
+    // picResourceId = the LEAD owner. ownerResourceIds = the FULL owner set (lead + co-owners).
+    // When ownerResourceIds is provided the task's owner links are replaced with it; when omitted
+    // the existing owners are left untouched (so unrelated edits don't drop assignments).
     picResourceId: z.string().uuid().nullable().optional(),
+    ownerResourceIds: z.array(z.string().uuid()).max(20).optional(),
     progressPct: z.coerce.number().int().min(0).max(100).default(0),
     // Manual relative work-package weight (Model B). null/omitted = derive from cost/duration.
     weight: z.coerce.number().min(0).max(1_000_000).nullable().optional(),

@@ -129,7 +129,7 @@ export async function deleteResource(id: string, actorId: string) {
   if (!existing) throw NotFound('Resource not found');
   const [lineCount, taskCount] = await Promise.all([
     prisma.costItemDirect.count({ where: { resourceId: id } }),
-    prisma.task.count({ where: { picResourceId: id } }),
+    prisma.task.count({ where: { owners: { some: { resourceId: id } } } }),
   ]);
   if (lineCount + taskCount > 0) {
     throw Conflict('This resource is used by cost lines or task owners — deactivate it instead of deleting.');

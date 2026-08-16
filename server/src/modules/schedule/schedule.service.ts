@@ -91,6 +91,7 @@ export async function getGantt(projectId: string) {
       include: {
         pic: { select: { id: true, name: true } },
         picResource: { select: { id: true, name: true } },
+        owners: { select: { resource: { select: { id: true, name: true } } } },
         _count: { select: { steps: true } },
       },
     }),
@@ -128,6 +129,8 @@ export async function getGantt(projectId: string) {
 
   const enriched = tasks.map((t) => ({
     ...t,
+    // Flatten the owner join to the shape the client expects; lead is still `picResource`.
+    owners: t.owners.map((o) => o.resource),
     durationDays: durationDays(t.planStart, t.planEnd),
     budgetCost: dc.get(t.id) ?? 0,
     linkedPlanMandays: mp.mandays.get(t.id) ?? 0,
@@ -222,10 +225,36 @@ async function assertPicResource(picResourceId: string | null | undefined): Prom
   if (!resource) throw NotFound('Resource not found');
 }
 
+// Validate every owner resource id exists (in one query).
+async function assertOwnerResources(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const found = await prisma.resource.count({ where: { id: { in: ids } } });
+  if (found !== new Set(ids).size) throw NotFound('Resource not found');
+}
+
+// Resolve the LEAD owner + the full owner set from an upsert input.
+// - `ownerIds === undefined` means the caller didn't send `ownerResourceIds`, so owner links must
+//   be left untouched on update (unrelated edits keep the assignments).
+// - When a set IS given, the lead is folded in (always an owner); with no explicit lead the first
+//   owner leads.
+function resolveOwners(input: UpsertTaskInput): { leadId: string | null; ownerIds: string[] | undefined } {
+  let leadId = input.picResourceId ?? null;
+  let ownerIds = input.ownerResourceIds ? [...new Set(input.ownerResourceIds)] : undefined;
+  if (ownerIds) {
+    if (leadId && !ownerIds.includes(leadId)) ownerIds = [leadId, ...ownerIds];
+    if (!leadId) leadId = ownerIds[0] ?? null;
+  }
+  return { leadId, ownerIds };
+}
+
 export async function createTask(projectId: string, input: UpsertTaskInput, actorId: string) {
   await ensureChartered(projectId);
   await assertBaselineUnlocked(projectId);
   await assertPicResource(input.picResourceId);
+  const { leadId, ownerIds } = resolveOwners(input);
+  // On create, default the owner set to the lead when no explicit set was sent.
+  const createOwnerIds = ownerIds ?? (leadId ? [leadId] : []);
+  await assertOwnerResources(createOwnerIds);
   // In a guest's personal tenant a task never links a corporate login account (would leak a corporate
   // identity into the sandbox).
   const picUserId = activeTenantIsPersonal() ? null : (input.picUserId ?? null);
@@ -255,7 +284,8 @@ export async function createTask(projectId: string, input: UpsertTaskInput, acto
         actualStart: input.actualStart ?? null,
         actualFinish: input.actualFinish ?? null,
         picUserId,
-        picResourceId: input.picResourceId ?? null,
+        picResourceId: leadId,
+        owners: { create: createOwnerIds.map((resourceId) => ({ resourceId })) },
         progressPct: input.progressPct,
         weight: input.weight ?? null,
         isMilestone: input.isMilestone,
@@ -278,6 +308,8 @@ export async function updateTask(
   if (!existing) throw NotFound('Task not found');
   await assertBaselineUnlocked(projectId);
   await assertPicResource(input.picResourceId);
+  const { leadId, ownerIds } = resolveOwners(input);
+  if (ownerIds) await assertOwnerResources(ownerIds);
   const picUserId = activeTenantIsPersonal() ? null : (input.picUserId ?? null); // guest tenant never links a login account
 
   if (input.parentTaskId) {
@@ -313,7 +345,16 @@ export async function updateTask(
       actualStart: input.actualStart ?? null,
       actualFinish: input.actualFinish ?? null,
       picUserId,
-      picResourceId: input.picResourceId ?? null,
+      picResourceId: leadId,
+      // Owner links: replace the whole set when the caller sent one. Otherwise leave co-owners
+      // untouched, but still fold the (possibly newly-set) lead into the set so an inline lead
+      // change can never leave the lead outside `owners` — the invariant the report/export labels
+      // rely on. A no-op connectOrCreate when the lead is already an owner.
+      ...(ownerIds
+        ? { owners: { deleteMany: {}, create: ownerIds.map((resourceId) => ({ resourceId })) } }
+        : leadId
+          ? { owners: { connectOrCreate: { where: { taskId_resourceId: { taskId, resourceId: leadId } }, create: { resourceId: leadId } } } }
+          : {}),
       progressPct: input.progressPct,
       weight: input.weight ?? null,
       isMilestone: input.isMilestone,

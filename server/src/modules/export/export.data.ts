@@ -81,6 +81,15 @@ export interface FlatTaskRow {
   linkedPlanMandays: number;
 }
 
+// All assigned owners for a node, lead (picResourceId) first; falls back to the legacy pic/User.
+function ownerNames(n: ProjectExport['gantt']['tree'][number]): string {
+  const lead = n.picResourceId;
+  const ordered = [...(n.owners ?? [])].sort((a, b) => (a.id === lead ? -1 : b.id === lead ? 1 : 0));
+  const names = ordered.map((o) => o.name);
+  if (names.length) return names.join(', ');
+  return n.picResource?.name ?? n.pic?.name ?? '—';
+}
+
 export function flattenGantt(nodes: ProjectExport['gantt']['tree'], depth = 0, acc: FlatTaskRow[] = []): FlatTaskRow[] {
   for (const n of nodes) {
     acc.push({
@@ -91,7 +100,7 @@ export function flattenGantt(nodes: ProjectExport['gantt']['tree'], depth = 0, a
       planEnd: n.planEnd,
       actualStart: n.actualStart,
       actualFinish: n.actualFinish,
-      pic: n.pic?.name ?? '—',
+      pic: ownerNames(n),
       progressPct: n.progressPct,
       budgetCost: n.budgetCost,
       linkedPlanMandays: n.linkedPlanMandays,
