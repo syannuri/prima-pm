@@ -26,6 +26,7 @@ export interface PlatformTenant {
   plan: 'TRIAL' | 'PRO' | 'ENTERPRISE';
   customDomain: string | null;
   isPersonal: boolean;
+  trialEndsAt: string | null; // trial deadline (TRIAL plan only) — drives the console trial badge
   createdAt: string;
   updatedAt: string; // last change to the tenant record (rename / plan / status) — the "Updated" column
   memberCount: number;

@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
 import { runAsSystem } from '../../lib/tenant/context.js';
+import { runTrialReminderSweep } from '../billing/trialReminders.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
 
@@ -94,5 +95,33 @@ describe('trial upgrade wall', () => {
     expect((await request(app).get(api('/projects')).set(bearer(token))).status).toBe(200);
     const me = await request(app).get(api('/auth/me')).set(bearer(token));
     expect(me.body.workspace.trialExpired).toBe(false); // personal → never walled
+  });
+});
+
+describe('trial admin ops', () => {
+  it('a platform admin extends a trial (never shortening); a non-TRIAL plan is refused', async () => {
+    const { tenantId } = await makeTenant('extendco', { plan: 'TRIAL', trialEndsAt: new Date(Date.now() + 2 * DAY) });
+    const res = await request(app).post(api(`/admin/tenants/${tenantId}/extend-trial`)).set(bearer(platformToken)).send({ days: 30 });
+    expect(res.status).toBe(200);
+    expect(new Date(res.body.tenant.trialEndsAt).getTime()).toBeGreaterThan(Date.now() + 28 * DAY);
+
+    const { tenantId: proId } = await makeTenant('proextendco', { plan: 'PRO' });
+    expect((await request(app).post(api(`/admin/tenants/${proId}/extend-trial`)).set(bearer(platformToken)).send({ days: 30 })).status).toBe(400);
+  });
+
+  it('the trial-reminder sweep notifies admins once per bucket (idempotent)', async () => {
+    const t = await runAsSystem(() => prisma.tenant.create({ data: { slug: 'remindco', name: 'Remind Co', plan: 'TRIAL', trialEndsAt: new Date(Date.now() + 10 * DAY) } }));
+    const admin = await prisma.user.create({ data: { name: 'ra', email: 'ra@remind.test', role: 'ADMIN', passwordHash: await hashPassword('x'), isActive: true } });
+    await runAsSystem(() => prisma.membership.create({ data: { userId: admin.id, tenantId: t.id, role: 'ADMIN' } }));
+
+    const first = await runTrialReminderSweep();
+    expect(first.created).toBeGreaterThanOrEqual(1);
+    const notes = await runAsSystem(() => prisma.notification.findMany({ where: { userId: admin.id, type: 'trial-reminder:14' } }));
+    expect(notes).toHaveLength(1); // 10 days out ⇒ the 14-day bucket
+
+    // A second sweep creates no duplicate for this admin/bucket.
+    await runTrialReminderSweep();
+    const after = await runAsSystem(() => prisma.notification.findMany({ where: { userId: admin.id, type: 'trial-reminder:14' } }));
+    expect(after).toHaveLength(1);
   });
 });

@@ -5,7 +5,7 @@ import type { PlatformTenant } from '../api/types';
 const t = (over: Partial<PlatformTenant>): PlatformTenant => ({
   id: Math.random().toString(36).slice(2),
   name: 'X', slug: 'x', status: 'ACTIVE', plan: 'TRIAL',
-  customDomain: null, isPersonal: false, createdAt: '2026-01-01', updatedAt: '2026-01-01',
+  customDomain: null, isPersonal: false, trialEndsAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01',
   memberCount: 1, projectCount: 1, storageBytes: 0, ...over,
 });
 

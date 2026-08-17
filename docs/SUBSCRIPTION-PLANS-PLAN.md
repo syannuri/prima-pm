@@ -137,9 +137,18 @@ Original Phase 4 scope:
   exists. Ships **dormant** (webhook 503 until `LEMONSQUEEZY_*` env set — existing blocker, see
   docs/BILLING-GOLIVE.md).
 
-### Phase 5 (optional) — polish
-- Trial reminder notifications (in-app / email at T-14 / T-3 / T-0).
-- Platform console: trial column + "extend trial" admin action; conversion analytics.
+### Phase 5 (optional) — polish ✅ DONE (2026-08-17, branch `feat/subscription-trial-plans`)
+- **Trial reminders** — `modules/billing/trialReminders.ts` `runTrialReminderSweep()`: notifies each
+  ACTIVE corporate TRIAL workspace's ADMINs as the deadline nears (~14 / 3 / 0 days), **in-app only**
+  (no email infra on this deployment), deduped per admin per bucket via the notification `type` →
+  idempotent. Wired into `server.ts` (boot + every 12h, like the other sweeps).
+- **Extend trial** — `POST /admin/tenants/:id/extend-trial { days }` (platform-admin, TRIAL-only,
+  never shortens: extends from max(now, current deadline)). Client: `TrialCell` in the console (days-left /
+  "ended" badge + a **+14d** button) on both the row and the mobile card; platform GET now returns
+  `trialEndsAt`.
+- Verified: subscription itest 6/6 (adds extend-trial + reminder-sweep-dedup), platform 15/15, rbac
+  125/125; server tsc + client tsc/build + client unit tests clean.
+- Not built: email reminders (no sender) + conversion analytics (deferred).
 
 ## Verification
 - Server: `npm run test:integration` (pins enforce=false; tenancy suites toggle it) — new
