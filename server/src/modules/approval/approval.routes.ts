@@ -26,7 +26,7 @@ const stepSchema = z.object({
 
 const workflowSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  appliesTo: z.enum(['CHANGE_REQUEST', 'COST_BASELINE', 'PROJECT_CLOSURE']).default('CHANGE_REQUEST'),
+  appliesTo: z.enum(['CHANGE_REQUEST', 'COST_BASELINE', 'BASELINE_UNLOCK', 'PROJECT_CLOSURE']).default('CHANGE_REQUEST'),
   enabled: z.boolean().default(true),
   condMagnitude: magnitudeEnum.optional().nullable(),
   condChargeable: z.boolean().optional().nullable(),

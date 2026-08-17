@@ -1463,6 +1463,7 @@ model ChangeRequest {
 enum ApprovalAppliesTo {
   CHANGE_REQUEST
   COST_BASELINE   // committing/locking the cost baseline (the PMB/BAC)
+  BASELINE_UNLOCK // re-opening a locked baseline (the riskier, gated change-control action)
   PROJECT_CLOSURE // moving a project to CLOSED (wired in Phase 2b)
 }
 

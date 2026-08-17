@@ -24,6 +24,7 @@ interface FormState {
 const APPLIES_TO: { value: ApprovalAppliesTo; label: string; hint: string }[] = [
   { value: 'CHANGE_REQUEST', label: 'Change request', hint: 'A submitted CR is routed for sign-off before it can be decided.' },
   { value: 'COST_BASELINE', label: 'Cost baseline lock', hint: 'Locking the baseline (PMB/BAC) is routed for sign-off before it takes effect.' },
+  { value: 'BASELINE_UNLOCK', label: 'Cost baseline unlock', hint: 'Re-opening a locked baseline is routed for sign-off before it unlocks — the baseline stays frozen until approved.' },
   { value: 'PROJECT_CLOSURE', label: 'Project closure', hint: 'Closing a project is routed for sign-off before it actually closes.' },
 ];
 const appliesLabel = (v: ApprovalAppliesTo) => APPLIES_TO.find((a) => a.value === v)?.label ?? v;
