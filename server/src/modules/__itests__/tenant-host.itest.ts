@@ -31,8 +31,9 @@ beforeAll(async () => {
   await prisma.membership.create({ data: { userId: platform.id, tenantId: defaultTid, role: 'ADMIN' } });
   platformToken = signAccessToken({ sub: platform.id, role: 'ADMIN', email: platform.email, tv: 0, tid: defaultTid });
 
-  const at = await prisma.tenant.create({ data: { slug: 'acme', name: 'Acme' } });
-  const bt = await prisma.tenant.create({ data: { slug: 'beta', name: 'Beta' } });
+  // ENTERPRISE: custom domains are an Enterprise-only feature (gated in the platform PATCH).
+  const at = await prisma.tenant.create({ data: { slug: 'acme', name: 'Acme', plan: 'ENTERPRISE' } });
+  const bt = await prisma.tenant.create({ data: { slug: 'beta', name: 'Beta', plan: 'ENTERPRISE' } });
   acme = at.id; beta = bt.id;
   const alice = await prisma.user.create({ data: { name: 'Alice', email: 'alice@host.test', role: 'ADMIN', passwordHash: await hashPassword(PW), isActive: true } });
   const bob = await prisma.user.create({ data: { name: 'Bob', email: 'bob@host.test', role: 'ADMIN', passwordHash: await hashPassword(PW), isActive: true } });
@@ -107,6 +108,14 @@ describe('custom domain mapping', () => {
     // Clearing it (empty string) removes the mapping.
     expect((await request(app).patch(api(`/admin/tenants/${acme}`)).set(bearer(platformToken)).send({ customDomain: '' })).status).toBe(200);
     expect((await request(app).get(api('/auth/providers')).set('Host', 'pm.acme.example')).body.workspace).toBeNull();
+  });
+
+  it('custom domains are ENTERPRISE-only: refused on a lower plan, allowed when the same PATCH upgrades', async () => {
+    const trialco = await prisma.tenant.create({ data: { slug: 'trialco', name: 'Trial Co' } }); // defaults TRIAL
+    // TRIAL/PRO can't set a custom domain.
+    expect((await request(app).patch(api(`/admin/tenants/${trialco.id}`)).set(bearer(platformToken)).send({ customDomain: 'pm.trialco.example' })).status).toBe(403);
+    // Upgrading to ENTERPRISE in the SAME PATCH lets it through (effective plan is the new one).
+    expect((await request(app).patch(api(`/admin/tenants/${trialco.id}`)).set(bearer(platformToken)).send({ plan: 'ENTERPRISE', customDomain: 'pm.trialco.example' })).status).toBe(200);
   });
 });
 

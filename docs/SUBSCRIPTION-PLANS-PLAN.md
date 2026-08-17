@@ -99,7 +99,19 @@ Original Phase 2 scope:
 - itests (`subscription.itest.ts`): new org → 60-day trial; expired trial → mutation 402 / read 200 /
   billing reachable; personal tenant unaffected; PRO tenant never walled.
 
-### Phase 3 — Enforce feature gates + client gating
+### Phase 3 — Enforce feature gates + client gating ✅ DONE (2026-08-17, branch `feat/subscription-trial-plans`)
+Server: custom domains gated to ENTERPRISE — the platform PATCH refuses `customDomain` unless the
+tenant's EFFECTIVE plan (new plan if the same PATCH upgrades, else current) `planAllows('customDomain')`.
+Client: `AuthContext` now carries `workspace` (from /auth/me) + a `hasFeature(f)` helper; `TrialBanner`
+(slim countdown strip, urgent in the final week → Upgrade CTA); `UpgradeWall` (full-screen block when
+`trialExpired`, billing route + logout stay reachable); the api client dispatches a `trial-expired`
+event on any 402 so the wall renders mid-session. Both mounted in `Layout`. **Verified:** tenant-host
+14/14 (incl. ENTERPRISE-only gate: 403 on TRIAL, 200 when same PATCH upgrades), subscription 4/4, rbac
+125/125, platform 15/15, org-signup 11/11, tenant-plan 3/3; server + client tsc/build clean.
+Note: `assertFeature` (server) + `hasFeature` (client) are available for the other ENTERPRISE-only
+features (sso, auditRetention) once those get per-tenant surface — deferred, no enforcement point yet.
+
+Original Phase 3 scope:
 - Wire `assertFeature(...)` at the entry of the gated modules — ENTERPRISE-only: SSO login availability
   (Microsoft OIDC per-workspace), custom-domain PATCH, audit retention window. (TRIAL/PRO share the rest,
   so most modules stay open; the gate mainly bites at ENTERPRISE features + the expiry wall.)

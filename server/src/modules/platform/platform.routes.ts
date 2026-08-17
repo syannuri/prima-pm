@@ -12,6 +12,7 @@ import { signAccessToken } from '../../lib/jwt.js';
 import { writeAudit } from '../../lib/audit.js';
 import { runAsSystem } from '../../lib/tenant/context.js';
 import { assertValidSlug } from '../../lib/tenant/slug.js';
+import { planAllows } from '../../lib/tenant/plans.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
 import { Unauthorized, Forbidden, Conflict, BadRequest, NotFound } from '../../lib/errors.js';
 import { strongPassword } from '../auth/auth.schemas.js';
@@ -253,6 +254,10 @@ router.patch(
     if (req.body.customDomain !== undefined) {
       const cd = req.body.customDomain === '' ? null : req.body.customDomain;
       if (cd) {
+        // Custom domains are an ENTERPRISE feature — gate on the tenant's EFFECTIVE plan (the new plan
+        // if this same PATCH upgrades it, else the current one). Clearing (cd=null) is always allowed.
+        const effectivePlan = req.body.plan ?? tenant.plan;
+        if (!planAllows(effectivePlan, 'customDomain')) throw Forbidden('Custom domains are an Enterprise feature. Upgrade the tenant to Enterprise first.');
         const clash = await prisma.tenant.findFirst({ where: { customDomain: cd, id: { not: tenant.id } }, select: { id: true } });
         if (clash) throw Conflict(`The domain "${cd}" is already mapped to another tenant.`);
       }
