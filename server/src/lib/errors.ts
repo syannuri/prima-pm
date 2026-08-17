@@ -25,3 +25,5 @@ export const PayloadTooLarge = (msg = 'Payload too large') =>
   new AppError(413, msg, 'PAYLOAD_TOO_LARGE');
 export const TooManyRequests = (msg = 'Too many requests') =>
   new AppError(429, msg, 'TOO_MANY_REQUESTS');
+export const PaymentRequired = (msg = 'Payment required') =>
+  new AppError(402, msg, 'PAYMENT_REQUIRED');

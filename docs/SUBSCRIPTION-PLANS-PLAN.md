@@ -79,7 +79,18 @@ Original Phase 1 scope:
 - Update the 3 `PLAN_LIMITS.FREE` fallbacks → `TRIAL`; billing "downgrade to FREE" → TRIAL(expired).
 - Unit tests for the matrix (`plans.test.ts`).
 
-### Phase 2 — Trial lifecycle (provisioning + expiry wall)
+### Phase 2 — Trial lifecycle (provisioning + expiry wall) ✅ DONE (2026-08-17, branch `feat/subscription-trial-plans`)
+`lib/tenant/trial.ts` (trialDays/newTrialExpiry/isTrialExpired/trialDaysLeft; **null deadline = NOT
+walled** so bare/admin tenants aren't locked — the lapsed-sub case stamps a past deadline in Phase 4).
+`registerOrg` now starts orgs on **TRIAL + trialEndsAt=+60d**. `PaymentRequired` (402) error helper.
+Wall wired into `requireAuth` (enforcement + non-personal + expired + path not in `/api/v1/auth|billing`
+→ 402). `/auth/me` gains a `workspace { plan, trialEndsAt, trialDaysLeft, trialExpired, capabilities }`
+via `authService.activeWorkspace`. **Verified:** trial unit 4/4, subscription 4/4, tenancy-http 16/16,
+rbac 125/125, platform 15/15, org-signup 11/11, tenant-plan 3/3, billing 4/4; server tsc clean.
+NB: prod is safe pre-Phase-3 — the migration backfilled every existing corporate trial +60d, so nothing
+is walled for 60 days even before the client wall UI ships.
+
+Original Phase 2 scope:
 - `auth.service.registerOrg`: set `plan=TRIAL, trialEndsAt = now + TRIAL_DAYS` on the new tenant.
 - `assertTrialActive()` (new, enforcement-gated, `isPersonal`-exempt): on an expired trial, reject
   with **402** UNLESS the request path is on a minimal allowlist (`/auth/*`, billing/upgrade, tenant

@@ -1,10 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { Role } from '@prisma/client';
 import { verifyAccessToken } from '../lib/jwt.js';
-import { Unauthorized, Forbidden } from '../lib/errors.js';
+import { Unauthorized, Forbidden, PaymentRequired } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { AT_COOKIE } from '../lib/cookies.js';
 import { bindTenantContext, multitenancyEnforced, runAsSystem } from '../lib/tenant/context.js';
+import { isTrialExpired } from '../lib/tenant/trial.js';
 import { enforceTenantRate, enforceApiKeyRate } from './rateLimit.js';
 import { hashApiKey, looksLikeApiKey } from '../lib/apiKey.js';
 import { writeAudit } from '../lib/audit.js';
@@ -41,6 +42,13 @@ declare global {
 // (write scopes + a service-principal actor come in a later ticket). Session/impersonation auth is
 // unaffected.
 const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+// Routes a TRIAL-EXPIRED workspace may still reach (full lockout otherwise): auth (read session state /
+// log out / switch tenant) and billing (so the admin can actually upgrade). Everything else 402-walls.
+function trialWallAllows(req: Request): boolean {
+  const url = req.originalUrl.split('?')[0];
+  return url.startsWith('/api/v1/auth/') || url.startsWith('/api/v1/billing');
+}
 
 // Authenticate a `Bearer pk_...` request: resolve the key by its hash (context-less, so via
 // runAsSystem — the key is what SELECTS the tenant), then act as a synthetic principal with the
@@ -148,7 +156,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     } else if (multitenancyEnforced() && payload.tid) {
       const membership = await prisma.membership.findUnique({
         where: { userId_tenantId: { userId: user.id, tenantId: payload.tid } },
-        select: { role: true, tenant: { select: { isPersonal: true, status: true } } },
+        select: { role: true, tenant: { select: { isPersonal: true, status: true, plan: true, trialEndsAt: true } } },
       });
       if (!membership) throw Unauthorized('No membership in the active tenant');
       // Only an ACTIVE tenant admits its members. SUSPENDED = platform super-admin lockout; PENDING /
@@ -160,6 +168,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       }
       role = membership.role;
       tenantIsPersonal = membership.tenant.isPersonal;
+
+      // Trial upgrade wall (full lockout): a corporate workspace whose 60-day trial has ended is
+      // 402-locked out of everything except auth + billing, so the admin can still read session state,
+      // log out, and upgrade. Personal (guest) tenants are exempt. No-op until a trial deadline is past.
+      if (!tenantIsPersonal && isTrialExpired(membership.tenant.plan, membership.tenant.trialEndsAt) && !trialWallAllows(req)) {
+        throw PaymentRequired('Your trial has ended. Upgrade to a paid plan to continue.');
+      }
     }
 
     req.user = { id: user.id, role, email: user.email, tid: payload.tid, tenantIsPersonal, impersonating };
