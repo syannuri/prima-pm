@@ -2,6 +2,7 @@ import { prisma, type TxClient } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { emitDomainEvent } from '../events/dispatch.js';
+import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
 
 // TxClient (derived from the extended client) accepts both the full client and an interactive tx.
 type Db = TxClient;
@@ -21,8 +22,10 @@ export async function assertBaselineUnlocked(projectId: string, db: Db = prisma)
 // change — the deliberate control the change-request process should drive). Audited.
 //
 // If a COST_BASELINE approval workflow matches, a real LOCK is not applied immediately: it is
-// submitted for approval and applied on final sign-off (`applyBaselineLock`). Unlocking and a
-// re-lock no-op are never gated. Returns `{ project, approvalPending }`.
+// submitted for approval and applied on final sign-off (`applyBaselineLock`). A real UNLOCK is
+// likewise gated through a BASELINE_UNLOCK workflow (the riskier change-control action) — except in
+// a guest's personal tenant, which self-governs and always applies immediately. A re-lock no-op is
+// never gated. Returns `{ project, approvalPending }`.
 export async function setBaselineLock(projectId: string, locked: boolean, reason: string | undefined, actorId: string) {
   const before = await prisma.project.findFirst({
     where: { id: projectId, deletedAt: null },
@@ -50,6 +53,25 @@ export async function setBaselineLock(projectId: string, locked: boolean, reason
     const { startApproval } = await import('../approval/approval.service.js');
     const routed = await startApproval(
       { entityType: 'COST_BASELINE', entityId: projectId, projectId, payload: { reason: reason?.trim() || null, requestedById: actorId } },
+      actorId,
+    );
+    if (routed) {
+      const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+      return { project, approvalPending: true as const };
+    }
+  }
+
+  // Gate a real unlock the same way — re-opening a locked baseline is the riskier change-control
+  // action, so under integrated change control it should require sign-off too. GUEST-SAFE: guests
+  // self-govern in a personal tenant (no approval matrix), so skip routing entirely there and apply
+  // immediately. The startApproval null-on-no-workflow / null-on-no-approvers backstop means a
+  // corporate tenant without a resolvable BASELINE_UNLOCK workflow also unlocks immediately. When
+  // routed, the baseline STAYS LOCKED (no cost/WBS/schedule edits) until the unlock is approved.
+  const isUnlockTransition = !locked && wasLocked;
+  if (isUnlockTransition && !activeTenantIsPersonal()) {
+    const { startApproval } = await import('../approval/approval.service.js');
+    const routed = await startApproval(
+      { entityType: 'BASELINE_UNLOCK', entityId: projectId, projectId, payload: { reason: reason?.trim() || null, requestedById: actorId } },
       actorId,
     );
     if (routed) {

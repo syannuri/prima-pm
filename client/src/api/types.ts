@@ -1046,9 +1046,9 @@ export interface ChatThread extends ChatConversationBase {
 
 // ---- Approval workflows (admin-configured, multi-step approval) ----
 export type ApprovalApproverKind = 'ROLE' | 'USER' | 'PROJECT_PM';
-// What kind of action a workflow gates. CHANGE_REQUEST + COST_BASELINE are wired; PROJECT_CLOSURE
-// is reserved (Phase 2b).
-export type ApprovalAppliesTo = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'PROJECT_CLOSURE';
+// What kind of action a workflow gates. CHANGE_REQUEST, COST_BASELINE (lock), BASELINE_UNLOCK
+// (re-opening a locked baseline) and PROJECT_CLOSURE are all wired.
+export type ApprovalAppliesTo = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE';
 export interface ApprovalApprover {
   id?: string;
   kind: ApprovalApproverKind;

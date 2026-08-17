@@ -45,10 +45,14 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
       // the ['gantt', projectId] query, so it must refetch here — otherwise unlocking flips the
       // badge but the Gantt keeps its stale locked state and plan dates stay un-editable.
       qc.invalidateQueries({ queryKey: ['gantt', projectId] });
-      // A matching approval workflow routes the lock for sign-off instead of applying it now.
+      // A matching approval workflow routes the lock/unlock for sign-off instead of applying it now.
       if (res.approvalPending) {
         qc.invalidateQueries({ queryKey: ['my-approvals-count'] });
-        toast.success('Baseline lock submitted for approval — it will lock once approved.');
+        toast.success(
+          body.locked
+            ? 'Baseline lock submitted for approval — it will lock once approved.'
+            : 'Unlock submitted for approval — the baseline stays locked until approved.',
+        );
       } else {
         // On lock, confirm the baseline is now complete (both baselines for a WBS project).
         toast.success(

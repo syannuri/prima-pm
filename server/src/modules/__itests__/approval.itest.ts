@@ -8,6 +8,7 @@ import { createChangeRequest } from '../charter/charter.service.js';
 import { setBaselineLock } from '../projects/baseline.service.js';
 import { updateProject } from '../projects/projects.service.js';
 import { createWorkflow, decideApproval, listMyApprovals, resolveWorkflowForCr, escalateOverdueApprovals, setDelegation } from '../approval/approval.service.js';
+import { bindTenantContext } from '../../lib/tenant/context.js';
 
 const app = createApp();
 const api = (p: string) => `/api/v1${p}`;
@@ -265,5 +266,80 @@ describe('Approval Phase 2b — closure gating, SLA escalation, delegation', () 
     // The delegate can see it and clear the step.
     expect(await listMyApprovals(otherPmId)).toHaveLength(1);
     expect((await decideApproval(req!.id, otherPmId, 'APPROVED')).status).toBe('APPROVED');
+  });
+});
+
+// Gate the baseline UNLOCK — the riskier change-control action — through its own BASELINE_UNLOCK
+// workflow, mirroring the lock but on the reverse transition. A guest's personal tenant self-governs
+// and is never gated.
+describe('Approval — cost baseline UNLOCK gating (BASELINE_UNLOCK)', () => {
+  // Directly stamp the baseline as locked so the unlock transition can be exercised without routing
+  // a lock first.
+  const lockDirectly = () =>
+    prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: new Date(), baselineLockedById: adminId } });
+  const isLocked = async () => (await prisma.project.findUnique({ where: { id: projectId } }))?.baselineLockedAt != null;
+
+  it('routes an unlock for approval and keeps the baseline LOCKED until final sign-off', async () => {
+    await lockDirectly();
+    await createWorkflow({ name: 'Unlock gate', appliesTo: 'BASELINE_UNLOCK', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+
+    const res = await setBaselineLock(projectId, false, 'reopen the PMB', pmId);
+    expect(res.approvalPending).toBe(true);
+    // Still locked — the unlock is pending approval.
+    expect(await isLocked()).toBe(true);
+    const req = await prisma.approvalRequest.findFirst({ where: { entityType: 'BASELINE_UNLOCK', projectId } });
+    expect(req?.status).toBe('PENDING');
+    // Finance approves → the unlock is applied.
+    expect((await decideApproval(req!.id, financeId, 'APPROVED')).status).toBe('APPROVED');
+    expect(await isLocked()).toBe(false);
+  });
+
+  it('a rejected unlock request leaves the baseline LOCKED', async () => {
+    await lockDirectly();
+    await createWorkflow({ name: 'Unlock gate', appliesTo: 'BASELINE_UNLOCK', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    await setBaselineLock(projectId, false, 'reopen the PMB', pmId);
+    const req = await prisma.approvalRequest.findFirst({ where: { entityType: 'BASELINE_UNLOCK', projectId } });
+    await decideApproval(req!.id, financeId, 'REJECTED', 'keep it frozen');
+    expect(await isLocked()).toBe(true);
+  });
+
+  it('unlocks immediately when no BASELINE_UNLOCK workflow matches', async () => {
+    await lockDirectly();
+    const res = await setBaselineLock(projectId, false, 'reopen', adminId);
+    expect(res.approvalPending).toBe(false);
+    expect(await isLocked()).toBe(false);
+  });
+
+  it('is entity-isolated: a COST_BASELINE workflow does NOT gate an unlock, and a BASELINE_UNLOCK workflow does NOT gate a lock', async () => {
+    // COST_BASELINE workflow present, but the UNLOCK is not caught by it.
+    await createWorkflow({ name: 'Lock gate', appliesTo: 'COST_BASELINE', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    await lockDirectly();
+    expect((await setBaselineLock(projectId, false, 'reopen', adminId)).approvalPending).toBe(false);
+    expect(await isLocked()).toBe(false);
+
+    // Conversely, a BASELINE_UNLOCK workflow does not gate a fresh LOCK.
+    await prisma.approvalWorkflow.deleteMany({});
+    await createWorkflow({ name: 'Unlock gate', appliesTo: 'BASELINE_UNLOCK', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    expect((await setBaselineLock(projectId, true, undefined, adminId)).approvalPending).toBe(false);
+    expect(await isLocked()).toBe(true);
+  });
+
+  it('GUEST-SAFE: a personal-tenant unlock is never gated even when a BASELINE_UNLOCK workflow exists', async () => {
+    await lockDirectly();
+    await createWorkflow({ name: 'Unlock gate', appliesTo: 'BASELINE_UNLOCK', steps: [{ name: 'Finance', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'FINANCE' }] }] }, adminId);
+    // Run inside a personal (guest sandbox) tenant context → the unlock skips routing entirely.
+    const res = await bindTenantContext('personal-tenant', true, () => setBaselineLock(projectId, false, 'reopen', pmId));
+    expect(res.approvalPending).toBe(false);
+    expect(await isLocked()).toBe(false);
+    expect(await prisma.approvalRequest.count({ where: { entityType: 'BASELINE_UNLOCK', projectId } })).toBe(0);
+  });
+
+  it('unlocks immediately when a matching workflow has no resolvable approvers', async () => {
+    await lockDirectly();
+    // RISK_OFFICER is held by no test user → the only step resolves to zero approvers → not routed.
+    await createWorkflow({ name: 'Unlock gate', appliesTo: 'BASELINE_UNLOCK', steps: [{ name: 'Risk', mode: 'ANY', approvers: [{ kind: 'ROLE', role: 'RISK_OFFICER' }] }] }, adminId);
+    const res = await setBaselineLock(projectId, false, 'reopen', adminId);
+    expect(res.approvalPending).toBe(false);
+    expect(await isLocked()).toBe(false);
   });
 });

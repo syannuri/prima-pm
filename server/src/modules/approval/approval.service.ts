@@ -22,7 +22,7 @@ export interface ApproverInput { kind: ApproverKind; role?: Role | null; userId?
 export interface StepInput { name: string; mode: 'ANY' | 'ALL'; approvers: ApproverInput[]; slaHours?: number | null }
 export interface WorkflowInput {
   name: string;
-  appliesTo?: 'CHANGE_REQUEST' | 'COST_BASELINE' | 'PROJECT_CLOSURE';
+  appliesTo?: 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE';
   enabled?: boolean;
   condMagnitude?: ChangeMagnitude | null;
   condChargeable?: boolean | null;
@@ -113,7 +113,7 @@ export async function deleteWorkflow(id: string, actorId: string) {
 // Engine
 // ---------------------------------------------------------------------------
 
-type EntityType = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'PROJECT_CLOSURE';
+type EntityType = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE';
 interface CrLike { id: string; projectId: string; magnitude: ChangeMagnitude; chargeable: boolean; amountIdr: unknown }
 type WorkflowWithSteps = Awaited<ReturnType<typeof listWorkflows>>[number];
 type StepWithApprovers = WorkflowWithSteps['steps'][number];
@@ -148,6 +148,7 @@ async function entityLabel(ref: Pick<EntityRef, 'entityType' | 'entityId'>): Pro
     return `change request "${cr?.title ?? ''}"`;
   }
   if (ref.entityType === 'COST_BASELINE') return 'a cost baseline lock';
+  if (ref.entityType === 'BASELINE_UNLOCK') return 'a cost baseline unlock';
   return 'a project closure';
 }
 
@@ -250,6 +251,17 @@ async function finalize(ref: EntityRef, outcome: 'APPROVED' | 'REJECTED', actorI
       await applyBaselineLock(ref.projectId, payload.reason, actorId);
     }
     await notifyRequester(payload.requestedById, actorId, ref.projectId, outcome, 'Cost baseline lock');
+    return;
+  }
+
+  if (ref.entityType === 'BASELINE_UNLOCK') {
+    const payload = (row.payload ?? {}) as { reason?: string; requestedById?: string };
+    if (outcome === 'APPROVED') {
+      // Approved unlock re-opens the PMB/BAC. Same dynamic import (cycle-break); locked=false unlocks.
+      const { applyBaselineLock } = await import('../projects/baseline.service.js');
+      await applyBaselineLock(ref.projectId, payload.reason, actorId, false);
+    }
+    await notifyRequester(payload.requestedById, actorId, ref.projectId, outcome, 'Cost baseline unlock');
     return;
   }
 
