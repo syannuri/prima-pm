@@ -18,7 +18,7 @@ interface BillingStatus {
 
 // The self-serve plans and what each unlocks. Numbers mirror server PLAN_LIMITS (plans.ts) — keep
 // them in sync when tuning quotas. ENTERPRISE is "unlimited" (null limits on the server).
-const PLANS: { plan: Exclude<TenantPlan, 'FREE'>; priceHint: string; perks: { en: string; id: string }[] }[] = [
+const PLANS: { plan: Exclude<TenantPlan, 'TRIAL'>; priceHint: string; perks: { en: string; id: string }[] }[] = [
   {
     plan: 'PRO',
     priceHint: '',
@@ -40,7 +40,7 @@ const PLANS: { plan: Exclude<TenantPlan, 'FREE'>; priceHint: string; perks: { en
 ];
 
 // Plan hierarchy — used to label a plan switch as an upgrade vs a downgrade (never assume "upgrade").
-const PLAN_RANK: Record<string, number> = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
+const PLAN_RANK: Record<string, number> = { TRIAL: 0, PRO: 1, ENTERPRISE: 2 };
 
 // Billing & plan management for the active tenant (ADMIN-only). Shows the current plan and lets an
 // admin start a Lemon Squeezy checkout to upgrade, or open the customer portal to manage/cancel.
@@ -72,7 +72,7 @@ export default function AdminBillingPage() {
     return <Card><p className="py-6 text-center text-slate-500 dark:text-slate-400">{id ? 'Butuh peran Admin untuk mengelola langganan.' : 'You need the Admin role to manage billing.'}</p></Card>;
   }
 
-  const currentPlan = status?.plan ?? activeTenant?.plan ?? 'FREE';
+  const currentPlan = status?.plan ?? activeTenant?.plan ?? 'TRIAL';
   const planColor = currentPlan === 'ENTERPRISE' ? 'violet' : currentPlan === 'PRO' ? 'green' : 'slate';
 
   return (
@@ -94,7 +94,7 @@ export default function AdminBillingPage() {
                   <Badge color={planColor} solid>{currentPlan}</Badge>
                   {status?.subscriptionStatus && <span className="text-sm text-slate-500 dark:text-slate-400">{status.subscriptionStatus}</span>}
                 </div>
-                {status?.renewsAt && currentPlan !== 'FREE' && !status.endsAt && (
+                {status?.renewsAt && currentPlan !== 'TRIAL' && !status.endsAt && (
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{id ? 'Diperpanjang' : 'Renews'} {formatDate(status.renewsAt)}</p>
                 )}
                 {status?.endsAt && (

@@ -81,13 +81,14 @@ export async function lemonsqueezyWebhook(req: Request, res: Response): Promise<
   const paidPlan = variantToPlan(attrs['variant_id'] as string | number | undefined);
 
   // Decide the resulting plan:
-  //  - expired  ⇒ downgrade to FREE (paid period is over)
+  //  - expired  ⇒ downgrade to TRIAL (paid period is over → the upgrade wall; Phase 4 also stamps
+  //    trialEndsAt=now so it reads as an EXPIRED trial, not a fresh one)
   //  - otherwise ⇒ the paid plan for the purchased variant (cancelled keeps access until ends_at,
-  //    at which point an `expired` event flips it to FREE)
+  //    at which point an `expired` event flips it to TRIAL)
   const expired = eventName === 'subscription_expired' || status === 'expired';
   let plan: TenantPlan;
   if (expired) {
-    plan = 'FREE';
+    plan = 'TRIAL';
   } else if (paidPlan) {
     plan = paidPlan;
   } else {

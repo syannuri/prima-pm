@@ -46,7 +46,7 @@ enum TenantStatus {
 // SaaS subscription tier (Phase 6). Gates per-tenant quotas (projects/members/storage). FREE is the
 // default for new + backfilled tenants; ENTERPRISE is unlimited. See lib/tenant/plans.ts for limits.
 enum TenantPlan {
-  FREE
+  TRIAL
   PRO
   ENTERPRISE
 }
@@ -289,8 +289,13 @@ model Tenant {
   name      String
   slug      String       @unique
   status    TenantStatus @default(ACTIVE)
-  // SaaS plan (Phase 6) — gates per-tenant quotas (max projects/members/storage). Default FREE.
-  plan      TenantPlan   @default(FREE)
+  // SaaS plan (Phase 6) — gates per-tenant quotas (projects/members/storage) + feature capabilities.
+  // Default TRIAL: a new corporate workspace gets the full PRO experience for `trialEndsAt` days.
+  plan      TenantPlan   @default(TRIAL)
+  // Trial expiry (null = not on a trial / a paid tenant). An expired trial (now >= trialEndsAt) — or a
+  // lapsed subscription (plan=TRIAL, trialEndsAt null/past) — hits the upgrade wall. See
+  // docs/SUBSCRIPTION-PLANS-PLAN.md. Personal (guest) tenants are exempt from plan gating.
+  trialEndsAt DateTime?
   // Optional vanity/custom domain (Phase 6) — e.g. "pm.acmecorp.com" maps this host to the tenant.
   // The tenant `slug` already gives a subdomain (acme.<APP_BASE_DOMAIN>); this is for a fully custom
   // host. Unique across tenants; null = no custom domain. Stored lowercased.

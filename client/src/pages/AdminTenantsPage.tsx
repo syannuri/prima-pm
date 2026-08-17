@@ -119,7 +119,7 @@ export default function AdminTenantsPage() {
 
 function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: number; id: boolean }) {
   const seg: { k: Plan; n: number; c: string }[] = [
-    { k: 'FREE', n: split.FREE, c: 'bg-slate-400' },
+    { k: 'TRIAL', n: split.TRIAL, c: 'bg-slate-400' },
     { k: 'PRO', n: split.PRO, c: 'bg-indigo-500' },
     { k: 'ENTERPRISE', n: split.ENTERPRISE, c: 'bg-violet-600' },
   ];
@@ -403,7 +403,7 @@ function PendingItem({ t, onChange, id }: { t: PlatformTenant; onChange: () => v
 
 const STATUS_FILTERS = ['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
-const PLAN_RANK: Record<Plan, number> = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
+const PLAN_RANK: Record<Plan, number> = { TRIAL: 0, PRO: 1, ENTERPRISE: 2 };
 type SortKey = 'name' | 'memberCount' | 'plan' | 'createdAt' | 'updatedAt';
 
 // A clickable, sortable column header — toggles asc/desc, shows the active arrow.
@@ -620,7 +620,7 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
   return { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan };
 }
 
-const PLANS: PlatformTenant['plan'][] = ['FREE', 'PRO', 'ENTERPRISE'];
+const PLANS: PlatformTenant['plan'][] = ['TRIAL', 'PRO', 'ENTERPRISE'];
 
 // Compact inline plan selector (platform admin sets a tenant's SaaS tier → quota limits).
 function PlanSelect({ t, onPlan, disabled }: { t: PlatformTenant; onPlan: (p: PlatformTenant['plan']) => void; disabled?: boolean }) {

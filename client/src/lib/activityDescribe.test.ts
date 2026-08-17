@@ -20,7 +20,7 @@ describe('describeActivity', () => {
   it('status + plan changes', () => {
     expect(describeActivity(ev({ before: { status: 'ACTIVE' }, after: { status: 'SUSPENDED' } }))).toEqual({ text: 'suspended “Acme”', tone: 'bad' });
     expect(describeActivity(ev({ before: { status: 'SUSPENDED' }, after: { status: 'ACTIVE' } })).tone).toBe('good');
-    expect(describeActivity(ev({ before: { plan: 'FREE' }, after: { plan: 'PRO' } })).text).toContain('FREE→PRO');
+    expect(describeActivity(ev({ before: { plan: 'TRIAL' }, after: { plan: 'PRO' } })).text).toContain('TRIAL→PRO');
   });
   it('guest + denylist', () => {
     expect(describeActivity(ev({ entity: 'User', targetName: 'g@x.com', after: { isActive: false } })).tone).toBe('bad');

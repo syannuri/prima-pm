@@ -6,7 +6,7 @@ import type { PlatformTenant } from '../api/types';
 // vs cap without an extra round-trip. If the server limits change, update both.
 export interface PlanLimits { maxProjects: number | null; maxMembers: number | null; storageMb: number | null }
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
-  FREE: { maxProjects: 3, maxMembers: 5, storageMb: 1024 },
+  TRIAL: { maxProjects: 50, maxMembers: 50, storageMb: 20480 },
   PRO: { maxProjects: 50, maxMembers: 50, storageMb: 20480 },
   ENTERPRISE: { maxProjects: null, maxMembers: null, storageMb: null },
 };

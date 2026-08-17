@@ -222,7 +222,7 @@ const patchSchema = z
     status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
     name: z.string().min(2).max(120).optional(),
     slug: z.string().min(2).max(40).optional(),
-    plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
+    plan: z.enum(['TRIAL', 'PRO', 'ENTERPRISE']).optional(),
     customDomain: hostnameRule.optional(),
     // AI Status Narrative per-tenant opt-in (the self-serve tenant-ADMIN toggle lands in Phase 2).
     aiNarrativeEnabled: z.boolean().optional(),

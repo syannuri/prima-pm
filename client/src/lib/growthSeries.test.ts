@@ -4,7 +4,7 @@ import type { PlatformTenant } from '../api/types';
 
 const t = (over: Partial<PlatformTenant>): PlatformTenant => ({
   id: Math.random().toString(36).slice(2),
-  name: 'X', slug: 'x', status: 'ACTIVE', plan: 'FREE',
+  name: 'X', slug: 'x', status: 'ACTIVE', plan: 'TRIAL',
   customDomain: null, isPersonal: false, createdAt: '2026-01-01', updatedAt: '2026-01-01',
   memberCount: 0, projectCount: 0, storageBytes: 0, ...over,
 });
@@ -29,7 +29,7 @@ describe('growthSeries', () => {
       t({ createdAt: '2026-07-01', status: 'ACTIVE', plan: 'PRO' }),        // 490k
       t({ createdAt: '2026-07-01', status: 'ACTIVE', plan: 'ENTERPRISE' }), // 1.99m
       t({ createdAt: '2026-07-01', status: 'SUSPENDED', plan: 'PRO' }),      // excluded
-      t({ createdAt: '2026-08-01', status: 'ACTIVE', plan: 'FREE' }),        // 0
+      t({ createdAt: '2026-08-01', status: 'ACTIVE', plan: 'TRIAL' }),        // 0
     ], 3, now);
     const last = s[s.length - 1];
     expect(last.mrr).toBe(490_000 + 1_990_000);

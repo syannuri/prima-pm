@@ -9,8 +9,8 @@ import { AppError } from '../../lib/errors.js';
 // (store-scoped) API key. We use native fetch (Node 18+) — no HTTP client dependency.
 const LS_API = 'https://api.lemonsqueezy.com/v1';
 
-// The two paid plans we sell self-serve. FREE is the default (no purchase); ENTERPRISE can also
-// be granted manually by a platform admin via PATCH /admin/tenants/:id (sales path).
+// The two paid plans we sell self-serve. TRIAL is the default (60-day trial, no purchase); ENTERPRISE
+// can also be granted manually by a platform admin via PATCH /admin/tenants/:id (sales path).
 export type PaidPlan = 'PRO' | 'ENTERPRISE';
 
 // Map an internal plan to its configured LS variant id, and back. Unknown/blank ⇒ null so a

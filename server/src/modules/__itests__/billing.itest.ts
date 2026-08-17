@@ -9,8 +9,8 @@ import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
 
 // Phase 6 — Lemon Squeezy self-serve billing. Exercises the webhook that flips Tenant.plan:
-// signature verification, an upgrade (FREE→PRO), and expiry (→FREE). No network calls (the LS
-// API is only hit by checkout/portal, not by the webhook path).
+// signature verification, an upgrade (TRIAL→PRO), and expiry (→TRIAL, the upgrade wall). No network
+// calls (the LS API is only hit by checkout/portal, not by the webhook path).
 const WEBHOOK_SECRET = 'whsec_test_billing';
 const PRO_VARIANT = '900001';
 
@@ -45,7 +45,7 @@ beforeAll(async () => {
 
   await wipeDb();
   await backfillDefaultTenant(prisma);
-  const t = await prisma.tenant.create({ data: { slug: 'billco', name: 'Bill Co' } }); // FREE
+  const t = await prisma.tenant.create({ data: { slug: 'billco', name: 'Bill Co' } }); // TRIAL (default)
   tenantId = t.id;
 });
 
@@ -69,10 +69,10 @@ describe('lemonsqueezy webhook', () => {
       .send(body);
     expect(res.status).toBe(401);
     // Plan unchanged.
-    expect((await prisma.tenant.findUnique({ where: { id: tenantId } }))!.plan).toBe('FREE');
+    expect((await prisma.tenant.findUnique({ where: { id: tenantId } }))!.plan).toBe('TRIAL');
   });
 
-  it('flips FREE → PRO on a signed subscription_created and records a BillingEvent', async () => {
+  it('flips TRIAL → PRO on a signed subscription_created and records a BillingEvent', async () => {
     const body = subEvent('subscription_created', tenantId, {
       status: 'active',
       variant_id: PRO_VARIANT,
@@ -95,7 +95,7 @@ describe('lemonsqueezy webhook', () => {
     expect(events[0].planAfter).toBe('PRO');
   });
 
-  it('downgrades to FREE on subscription_expired', async () => {
+  it('downgrades to TRIAL (upgrade wall) on subscription_expired', async () => {
     const body = subEvent('subscription_expired', tenantId, { status: 'expired', variant_id: PRO_VARIANT });
     const res = await request(app)
       .post('/webhooks/lemonsqueezy')
@@ -103,7 +103,7 @@ describe('lemonsqueezy webhook', () => {
       .set('X-Signature', sign(body))
       .send(body);
     expect(res.status).toBe(200);
-    expect((await prisma.tenant.findUnique({ where: { id: tenantId } }))!.plan).toBe('FREE');
+    expect((await prisma.tenant.findUnique({ where: { id: tenantId } }))!.plan).toBe('TRIAL');
   });
 
   it('ignores an unhandled event name with 200', async () => {

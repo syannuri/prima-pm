@@ -23,7 +23,7 @@ export interface PlatformTenant {
   name: string;
   slug: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'PENDING' | 'REJECTED';
-  plan: 'FREE' | 'PRO' | 'ENTERPRISE';
+  plan: 'TRIAL' | 'PRO' | 'ENTERPRISE';
   customDomain: string | null;
   isPersonal: boolean;
   createdAt: string;
@@ -68,7 +68,7 @@ export interface AdminUser extends User {
 
 // Pooled multitenancy — a tenant the current user belongs to (GET /auth/tenants) with their
 // per-tenant role. `active` in the response marks which one the session is scoped to.
-export type TenantPlan = 'FREE' | 'PRO' | 'ENTERPRISE';
+export type TenantPlan = 'TRIAL' | 'PRO' | 'ENTERPRISE';
 
 export interface TenantSummary {
   id: string;
