@@ -119,7 +119,7 @@ export default function AdminTenantsPage() {
 
 function PlanBar({ split, total, id }: { split: Record<Plan, number>; total: number; id: boolean }) {
   const seg: { k: Plan; n: number; c: string }[] = [
-    { k: 'FREE', n: split.FREE, c: 'bg-slate-400' },
+    { k: 'TRIAL', n: split.TRIAL, c: 'bg-slate-400' },
     { k: 'PRO', n: split.PRO, c: 'bg-indigo-500' },
     { k: 'ENTERPRISE', n: split.ENTERPRISE, c: 'bg-violet-600' },
   ];
@@ -403,7 +403,7 @@ function PendingItem({ t, onChange, id }: { t: PlatformTenant; onChange: () => v
 
 const STATUS_FILTERS = ['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
-const PLAN_RANK: Record<Plan, number> = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
+const PLAN_RANK: Record<Plan, number> = { TRIAL: 0, PRO: 1, ENTERPRISE: 2 };
 type SortKey = 'name' | 'memberCount' | 'plan' | 'createdAt' | 'updatedAt';
 
 // A clickable, sortable column header — toggles asc/desc, shows the active arrow.
@@ -597,6 +597,11 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
     if (plan === t.plan) return;
     patch.mutate({ plan }, { onSuccess: () => { onChange(); toast.success(id ? `Paket ${t.name} → ${plan}` : `${t.name} plan → ${plan}`); } });
   };
+  const extendTrial = useMutation({
+    mutationFn: (days: number) => api.post(`/admin/tenants/${t.id}/extend-trial`, { days }),
+    onSuccess: () => { onChange(); toast.success(id ? `Uji coba ${t.name} diperpanjang` : `${t.name} trial extended`); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
+  });
   const [exporting, setExporting] = useState(false);
   const exportData = async () => {
     setExporting(true);
@@ -617,10 +622,36 @@ function useTenantActions(t: PlatformTenant, onChange: () => void) {
       patch.mutate({ status: 'ACTIVE' }, { onSuccess: () => { onChange(); toast.success(id ? `${t.name} diaktifkan` : `${t.name} reactivated`); } });
     }
   };
-  return { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan };
+  return { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan, extendTrial };
 }
 
-const PLANS: PlatformTenant['plan'][] = ['FREE', 'PRO', 'ENTERPRISE'];
+// Compact trial indicator + "extend" control for a TRIAL corporate tenant (platform console). Shows
+// days left (or "ended") and a +14-day extend button. Nothing for paid/personal tenants.
+function TrialCell({ t, onExtend, busy }: { t: PlatformTenant; onExtend: (days: number) => void; busy: boolean }) {
+  const { lang } = useLang();
+  const id = lang === 'id';
+  if (t.plan !== 'TRIAL' || t.isPersonal) return null;
+  const ends = t.trialEndsAt ? new Date(t.trialEndsAt).getTime() : null;
+  const expired = ends != null && ends <= Date.now();
+  const daysLeft = ends != null ? Math.max(0, Math.ceil((ends - Date.now()) / 86_400_000)) : null;
+  return (
+    <span className="mt-1 inline-flex items-center gap-1.5">
+      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${expired ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
+        {expired ? (id ? 'Uji coba berakhir' : 'Trial ended') : ends == null ? (id ? 'Uji coba' : 'Trial') : (id ? `Uji coba ${daysLeft}h` : `Trial ${daysLeft}d`)}
+      </span>
+      <button
+        disabled={busy}
+        onClick={() => onExtend(14)}
+        title={id ? 'Perpanjang uji coba 14 hari' : 'Extend trial by 14 days'}
+        className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+      >
+        {busy ? '…' : '+14d'}
+      </button>
+    </span>
+  );
+}
+
+const PLANS: PlatformTenant['plan'][] = ['TRIAL', 'PRO', 'ENTERPRISE'];
 
 // Compact inline plan selector (platform admin sets a tenant's SaaS tier → quota limits).
 function PlanSelect({ t, onPlan, disabled }: { t: PlatformTenant; onPlan: (p: PlatformTenant['plan']) => void; disabled?: boolean }) {
@@ -653,7 +684,7 @@ function TenantRow({ t, onChange, selected, onToggle }: { t: PlatformTenant; onC
   const [deleting, setDeleting] = useState(false);
   const [domainOpen, setDomainOpen] = useState(false);
   const [detail, setDetail] = useState(false);
-  const { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
+  const { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan, extendTrial } = useTenantActions(t, onChange);
   const pending = t.status === 'PENDING';
   const memberCap = PLAN_LIMITS[t.plan].maxMembers;
   const memberOver = memberCap != null && t.memberCount >= memberCap;
@@ -669,7 +700,7 @@ function TenantRow({ t, onChange, selected, onToggle }: { t: PlatformTenant; onC
         {t.customDomain && <span className="block text-[11px] text-indigo-500 dark:text-indigo-400">🔗 {t.customDomain}</span>}
       </td>
       <td><StatusBadge status={t.status} /></td>
-      <td><PlanSelect t={t} onPlan={setPlan} disabled={patch.isPending} /></td>
+      <td><div className="flex flex-col items-start"><PlanSelect t={t} onPlan={setPlan} disabled={patch.isPending} /><TrialCell t={t} onExtend={(d) => extendTrial.mutate(d)} busy={extendTrial.isPending} /></div></td>
       <td className={`text-right tabular-nums ${memberOver ? 'text-red-600 dark:text-red-400' : memberNear ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
         {t.memberCount}{memberCap != null && <span className="text-slate-400 dark:text-slate-500"> / {memberCap}</span>}
       </td>
@@ -781,7 +812,7 @@ function TenantCard({ t, onChange, selected, onToggle }: { t: PlatformTenant; on
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [domainOpen, setDomainOpen] = useState(false);
-  const { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan } = useTenantActions(t, onChange);
+  const { patch, review, approve, reject, toggleSuspend, enter, entering, exportData, exporting, setPlan, extendTrial } = useTenantActions(t, onChange);
   const pending = t.status === 'PENDING';
   return (
     <div className={`rounded-xl border p-3 dark:border-slate-800 ${selected ? 'border-indigo-300 bg-indigo-50/60 dark:border-indigo-800 dark:bg-indigo-950/30' : pending ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20' : 'border-slate-200'}`}>
@@ -797,6 +828,7 @@ function TenantCard({ t, onChange, selected, onToggle }: { t: PlatformTenant; on
         <div className="flex flex-col items-end gap-1">
           <StatusBadge status={t.status} />
           <PlanSelect t={t} onPlan={setPlan} disabled={patch.isPending} />
+          <TrialCell t={t} onExtend={(d) => extendTrial.mutate(d)} busy={extendTrial.isPending} />
         </div>
       </div>
       <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">

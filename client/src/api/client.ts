@@ -167,6 +167,9 @@ async function request<T>(method: string, path: string, body?: unknown, retried 
   if (!res.ok) {
     const err = data?.error ?? {};
     if (res.status === 401) tokenStore.clear();
+    // A trial that expired mid-session → the server 402-walls the request. Notify the app so the
+    // upgrade wall renders immediately (AuthContext listens for this) rather than on the next /auth/me.
+    if (res.status === 402) window.dispatchEvent(new Event('trial-expired'));
     throw new ApiError(res.status, err.message ?? res.statusText, err.code, err.details);
   }
   return data as T;

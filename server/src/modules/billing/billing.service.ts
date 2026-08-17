@@ -9,8 +9,8 @@ import { AppError } from '../../lib/errors.js';
 // (store-scoped) API key. We use native fetch (Node 18+) — no HTTP client dependency.
 const LS_API = 'https://api.lemonsqueezy.com/v1';
 
-// The two paid plans we sell self-serve. FREE is the default (no purchase); ENTERPRISE can also
-// be granted manually by a platform admin via PATCH /admin/tenants/:id (sales path).
+// The two paid plans we sell self-serve. TRIAL is the default (60-day trial, no purchase); ENTERPRISE
+// can also be granted manually by a platform admin via PATCH /admin/tenants/:id (sales path).
 export type PaidPlan = 'PRO' | 'ENTERPRISE';
 
 // Map an internal plan to its configured LS variant id, and back. Unknown/blank ⇒ null so a
@@ -93,6 +93,9 @@ export interface SubscriptionChange {
   lsVariantId?: string | null;
   renewsAt?: Date | null;
   endsAt?: Date | null;
+  // Trial deadline after this event: a paid plan CLEARS it (null); an expiry stamps a PAST instant so
+  // the tenant reads as an EXPIRED trial (the upgrade wall), NOT a fresh one. See trial.ts.
+  trialEndsAt?: Date | null;
 }
 
 // Apply a webhook-derived subscription change to a tenant: flip the plan + LS fields and record a
@@ -117,6 +120,7 @@ export async function applySubscriptionChange(
         lsVariantId: change.lsVariantId ?? undefined,
         renewsAt: change.renewsAt ?? null,
         endsAt: change.endsAt ?? null,
+        trialEndsAt: change.trialEndsAt ?? null,
       },
     });
     await prisma.billingEvent.create({

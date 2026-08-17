@@ -1,7 +1,7 @@
 import type { TenantPlan } from '@prisma/client';
 import { prisma } from '../prisma.js';
 import { getTenantStore, multitenancyEnforced } from './context.js';
-import { planLimits } from './plans.js';
+import { planLimits, planAllows, type PlanFeature } from './plans.js';
 import { Forbidden } from '../errors.js';
 
 // Plan/quota gating (Phase 6 SaaS). Enforced at the creation points below; a no-op when enforcement
@@ -55,4 +55,15 @@ export async function tenantStorageLimitBytes(): Promise<number> {
   }
   const cap = envHardCapBytes();
   return cap != null ? Math.min(cap, base) : base;
+}
+
+// Reject access to a plan-gated feature (Phase 6 feature-tiering). Enforcement-gated + personal-tenant
+// exempt, mirroring the quota asserts. Dormant until wired into the gated module routes (Phase 3).
+export async function assertFeature(feature: PlanFeature): Promise<void> {
+  if (!multitenancyEnforced()) return;
+  const t = await activePlanTenant();
+  if (!t || t.isPersonal) return;
+  if (!planAllows(t.plan, feature)) {
+    throw Forbidden(`Your ${t.plan} plan does not include this feature. Upgrade to unlock it.`);
+  }
 }

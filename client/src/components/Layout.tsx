@@ -14,6 +14,8 @@ import AvatarMenu from './AvatarMenu';
 import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
 import ImpersonationBanner from './ImpersonationBanner';
+import TrialBanner from './TrialBanner';
+import UpgradeWall from './UpgradeWall';
 import { isPlatformRoute } from '../lib/platformConsole';
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -195,6 +197,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         )}
         <ImpersonationBanner />
+        <TrialBanner />
+        <UpgradeWall />
         <main className={`flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-6 ${platform ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}>
           <div className="mx-auto max-w-7xl"><PageTransition>{children}</PageTransition></div>
         </main>

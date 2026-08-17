@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Role, User } from '@prisma/client';
+import type { Role, User, TenantPlan } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js';
@@ -8,6 +8,8 @@ import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled, isOrgSignupEnabled } from '../settings/settings.service.js';
 import { multitenancyEnforced, runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
+import { newTrialExpiry, isTrialExpired, trialDaysLeft } from '../../lib/tenant/trial.js';
+import { planCapabilities, type PlanFeature } from '../../lib/tenant/plans.js';
 import { seedGuestSampleProjects } from '../guest/guest-seed.service.js';
 import { isIdentityBlocked } from './denylist.service.js';
 import type { ChangePasswordInput, GuestRegisterInput, LoginInput, OrgSignupInput } from './auth.schemas.js';
@@ -110,6 +112,29 @@ async function issueTokenPair(user: User, opts: { replacesJti?: string; preferre
     user: { id: user.id, name: user.name, email: user.email, role: effectiveRole, isPlatformAdmin: user.isPlatformAdmin },
     accessToken: signAccessToken({ sub: user.id, role: effectiveRole, email: user.email, tv: user.tokenVersion, tid: active?.tenantId }),
     refreshToken,
+  };
+}
+
+// The active workspace's plan + trial state + feature capabilities — surfaced on /auth/me so the client
+// can gate features, show the trial countdown, and render the upgrade wall. Null when there's no active
+// tenant (enforcement off / single-tenant). Tenant is a GLOBAL model, so this read needs no context.
+export interface ActiveWorkspace {
+  plan: TenantPlan;
+  trialEndsAt: Date | null;
+  trialDaysLeft: number | null;
+  trialExpired: boolean;
+  capabilities: PlanFeature[];
+}
+export async function activeWorkspace(tid?: string): Promise<ActiveWorkspace | null> {
+  if (!tid) return null;
+  const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { plan: true, trialEndsAt: true, isPersonal: true } });
+  if (!t) return null;
+  return {
+    plan: t.plan,
+    trialEndsAt: t.trialEndsAt,
+    trialDaysLeft: trialDaysLeft(t.trialEndsAt),
+    trialExpired: !t.isPersonal && isTrialExpired(t.plan, t.trialEndsAt),
+    capabilities: planCapabilities(t.plan),
   };
 }
 
@@ -236,11 +261,10 @@ export async function registerOrg(input: OrgSignupInput, country: string | null 
       ...(country ? { country } : {}),
     },
   });
-  // New corporate orgs start on PRO, not the FREE default: FREE's tight quotas (3 projects /
-  // 5 members) throttle a real team on day one, and self-serve billing isn't live yet to lift
-  // them. PRO's limits (50/50) fit a starting team; an ENTERPRISE upgrade stays a manual/billing
-  // action. Personal (guest) tenants keep the FREE default.
-  const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'PENDING', plan: 'PRO' } });
+  // New corporate orgs start a 60-day TRIAL with the full PRO experience (plan=TRIAL grants the PRO
+  // feature set + quotas; trialEndsAt gates it). Once the trial ends they hit the upgrade wall until
+  // they buy PRO/ENTERPRISE. Personal (guest) tenants are exempt from plan/trial gating.
+  const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'PENDING', plan: 'TRIAL', trialEndsAt: newTrialExpiry() } });
   await prisma.membership.create({ data: { userId: owner.id, tenantId: tenant.id, role: 'ADMIN' } });
   await auditInUserTenant(owner.id, { userId: owner.id, entity: 'Tenant', entityId: tenant.id, action: 'CREATE', after: { name: input.orgName, slug, self: true, status: 'PENDING' } });
   // Alert platform admins there's a signup to review (best-effort; won't block the response).

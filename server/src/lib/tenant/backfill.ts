@@ -9,7 +9,7 @@ import { DEFAULT_TENANT_SLUG, DEFAULT_TENANT_NAME } from './constants.js';
 // stamp tenantId onto the denormalized rows.
 export async function backfillDefaultTenant(prisma: Db): Promise<{ tenantId: string; memberships: number }> {
   // The default tenant owns ALL pre-existing (single-tenant) data, so it is never quota-capped —
-  // it's ENTERPRISE (unlimited). New corporate tenants default to FREE.
+  // it's ENTERPRISE (unlimited). New corporate tenants default to TRIAL (60-day trial).
   const tenant = await prisma.tenant.upsert({
     where: { slug: DEFAULT_TENANT_SLUG },
     update: {},

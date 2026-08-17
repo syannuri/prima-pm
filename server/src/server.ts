@@ -5,6 +5,7 @@ import { pruneExpiredRefreshTokens } from './modules/auth/auth.service.js';
 import { runWeeklyAutoCaptureIfDueAllTenants } from './modules/evm/evm.portfolio.js';
 import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
 import { escalateOverdueApprovals } from './modules/approval/approval.service.js';
+import { runTrialReminderSweep } from './modules/billing/trialReminders.js';
 import { logger, release, initSentry } from './lib/observability.js';
 
 // Initialise error tracking before anything else (no-op unless SENTRY_DSN is set).
@@ -95,12 +96,29 @@ async function main() {
   const approvalSlaTimer = setInterval(() => void sweepApprovals(), APPROVAL_SLA_SWEEP_MS);
   approvalSlaTimer.unref();
 
+  // Trial-reminder sweep (Phase 6 subscription plans): notify a corporate TRIAL workspace's admins as
+  // the 60-day trial nears its end (~14 / 3 / 0 days). In-app only, deduped per bucket → idempotent.
+  // Check on boot then every 12h; a no-op (one cheap query) when there are no trials due.
+  const TRIAL_REMINDER_SWEEP_MS = 12 * 60 * 60 * 1000;
+  const sweepTrialReminders = async () => {
+    try {
+      const r = await runTrialReminderSweep();
+      if (r.created > 0) console.log(`[prima-pm] sent ${r.created} trial reminder(s)`);
+    } catch (err) {
+      console.error('[prima-pm] trial reminder sweep failed', err);
+    }
+  };
+  void sweepTrialReminders();
+  const trialReminderTimer = setInterval(() => void sweepTrialReminders(), TRIAL_REMINDER_SWEEP_MS);
+  trialReminderTimer.unref();
+
   const shutdown = async (signal: string) => {
     console.log(`[prima-pm] ${signal} received, shutting down...`);
     clearInterval(pruneTimer);
     clearInterval(autoCaptureTimer);
     clearInterval(webhookTimer);
     clearInterval(approvalSlaTimer);
+    clearInterval(trialReminderTimer);
     server.close();
     await prisma.$disconnect();
     process.exit(0);

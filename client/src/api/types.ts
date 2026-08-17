@@ -23,9 +23,10 @@ export interface PlatformTenant {
   name: string;
   slug: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'PENDING' | 'REJECTED';
-  plan: 'FREE' | 'PRO' | 'ENTERPRISE';
+  plan: 'TRIAL' | 'PRO' | 'ENTERPRISE';
   customDomain: string | null;
   isPersonal: boolean;
+  trialEndsAt: string | null; // trial deadline (TRIAL plan only) — drives the console trial badge
   createdAt: string;
   updatedAt: string; // last change to the tenant record (rename / plan / status) — the "Updated" column
   memberCount: number;
@@ -68,7 +69,23 @@ export interface AdminUser extends User {
 
 // Pooled multitenancy — a tenant the current user belongs to (GET /auth/tenants) with their
 // per-tenant role. `active` in the response marks which one the session is scoped to.
-export type TenantPlan = 'FREE' | 'PRO' | 'ENTERPRISE';
+export type TenantPlan = 'TRIAL' | 'PRO' | 'ENTERPRISE';
+
+// Plan feature capabilities (mirror server/src/lib/tenant/plans.ts). Surfaced on /auth/me so the
+// client can lock/upgrade-prompt gated features.
+export type PlanFeature =
+  | 'portfolio' | 'forecasting' | 'reportingHub' | 'resourceMgmt' | 'agile' | 'approvals'
+  | 'messaging' | 'integrations' | 'ai' | 'sso' | 'customDomain' | 'auditRetention';
+
+// The active workspace's plan + trial state + capabilities (GET /auth/me `workspace`). Null when the
+// deployment is single-tenant (enforcement off).
+export interface Workspace {
+  plan: TenantPlan;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  trialExpired: boolean;
+  capabilities: PlanFeature[];
+}
 
 export interface TenantSummary {
   id: string;

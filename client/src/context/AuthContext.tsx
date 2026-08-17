@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, tokenStore, migrateLegacyTokens, setImpersonation } from '../api/client';
-import type { User, TenantSummary } from '../api/types';
+import type { User, TenantSummary, Workspace, PlanFeature } from '../api/types';
 
 interface AuthState {
   user: User | null;
@@ -22,6 +22,10 @@ interface AuthState {
   impersonating: { tenantId: string; name: string } | null;
   impersonate: (tenantId: string, name: string) => Promise<void>;
   stopImpersonating: () => Promise<void>;
+  // Active workspace plan + trial state + capabilities (from /auth/me). Null on single-tenant deploys.
+  // Drives the trial-countdown banner, the upgrade wall, and per-feature UI locks.
+  workspace: Workspace | null;
+  hasFeature: (feature: PlanFeature) => boolean;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -33,6 +37,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
   const [impersonating, setImpersonating] = useState<{ tenantId: string; name: string } | null>(null);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+
+  // Pull the active workspace's plan/trial/capabilities (best-effort; leaves it null on failure or on
+  // single-tenant deploys, which hides the banner/wall).
+  const loadWorkspace = async () => {
+    try {
+      const r = await api.get<{ workspace: Workspace | null }>('/auth/me');
+      setWorkspace(r.workspace ?? null);
+    } catch {
+      setWorkspace(null);
+    }
+  };
 
   // The tenants the signed-in user belongs to (for the switcher). Best-effort: on any failure we
   // just leave the list empty, which hides the switcher.
@@ -54,8 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       await migrateLegacyTokens();
       try {
-        const r = await api.get<{ user: User }>('/auth/me');
+        const r = await api.get<{ user: User; workspace: Workspace | null }>('/auth/me');
         setUser(r.user);
+        setWorkspace(r.workspace ?? null);
         await loadTenants();
       } catch {
         tokenStore.clear();
@@ -63,6 +80,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     })();
+  }, []);
+
+  // A mid-session trial expiry surfaces as a 402 from the api client (see api/client.ts), which
+  // dispatches this event. Flip the workspace to expired so the upgrade wall renders at once, without
+  // waiting for the next /auth/me.
+  useEffect(() => {
+    const onExpired = () => setWorkspace((w) => (w && !w.trialExpired ? { ...w, trialExpired: true } : w));
+    window.addEventListener('trial-expired', onExpired);
+    return () => window.removeEventListener('trial-expired', onExpired);
   }, []);
 
   // Switch the active tenant: the server re-mints the session cookies pinned to the new tenant,
@@ -77,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Refresh identity + tenant list + all cached data under whatever session is now active (the
   // impersonation bearer, or the cookie session once it's cleared).
   const reloadIdentity = async () => {
-    try { const r = await api.get<{ user: User }>('/auth/me'); setUser(r.user); } catch { /* keep prior */ }
+    try { const r = await api.get<{ user: User; workspace: Workspace | null }>('/auth/me'); setUser(r.user); setWorkspace(r.workspace ?? null); } catch { /* keep prior */ }
     await loadTenants();
     qc.invalidateQueries();
   };
@@ -106,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenStore.clear();
     setUser(res.user);
     await loadTenants();
+    await loadWorkspace();
   };
 
   // Self-service guest signup — same cookie flow as login (server auto-logs-in on success).
@@ -114,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenStore.clear();
     setUser(res.user);
     await loadTenants();
+    await loadWorkspace();
   };
 
   // Self-serve organization signup (option C — manual approval): creates a PENDING corporate tenant +
@@ -130,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenStore.clear();
     setUser(res.user);
     await loadTenants();
+    await loadWorkspace();
   };
 
   const logout = () => {
@@ -142,10 +171,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setTenants([]);
     setActiveTenantId(null);
+    setWorkspace(null);
   };
 
+  // A feature is available when the deployment is single-tenant (workspace null ⇒ no plan gating) or
+  // the active plan's capability set includes it.
+  const hasFeature = (feature: PlanFeature) => !workspace || workspace.capabilities.includes(feature);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, guestRegister, signupOrg, loginWithGoogle, logout, tenants, activeTenantId, switchTenant, impersonating, impersonate, stopImpersonating }}>
+    <AuthContext.Provider value={{ user, loading, login, guestRegister, signupOrg, loginWithGoogle, logout, tenants, activeTenantId, switchTenant, impersonating, impersonate, stopImpersonating, workspace, hasFeature }}>
       {children}
     </AuthContext.Provider>
   );

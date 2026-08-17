@@ -12,6 +12,7 @@ import { signAccessToken } from '../../lib/jwt.js';
 import { writeAudit } from '../../lib/audit.js';
 import { runAsSystem } from '../../lib/tenant/context.js';
 import { assertValidSlug } from '../../lib/tenant/slug.js';
+import { planAllows } from '../../lib/tenant/plans.js';
 import { UPLOAD_DIR } from '../attachment/attachment.service.js';
 import { Unauthorized, Forbidden, Conflict, BadRequest, NotFound } from '../../lib/errors.js';
 import { strongPassword } from '../auth/auth.schemas.js';
@@ -47,7 +48,7 @@ router.get(
     const tenants = await prisma.tenant.findMany({
       orderBy: [{ isPersonal: 'asc' }, { createdAt: 'asc' }],
       select: {
-        id: true, name: true, slug: true, status: true, plan: true, customDomain: true, isPersonal: true, createdAt: true, updatedAt: true,
+        id: true, name: true, slug: true, status: true, plan: true, customDomain: true, isPersonal: true, trialEndsAt: true, createdAt: true, updatedAt: true,
         _count: { select: { memberships: true } },
       },
     });
@@ -63,6 +64,7 @@ router.get(
     res.json({
       tenants: tenants.map((t) => ({
         id: t.id, name: t.name, slug: t.slug, status: t.status, plan: t.plan, customDomain: t.customDomain, isPersonal: t.isPersonal,
+        trialEndsAt: t.trialEndsAt,
         createdAt: t.createdAt, updatedAt: t.updatedAt, memberCount: t._count.memberships,
         projectCount: projByTenant.get(t.id) ?? 0,
         storageBytes: bytesByTenant.get(t.id) ?? 0,
@@ -222,7 +224,7 @@ const patchSchema = z
     status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
     name: z.string().min(2).max(120).optional(),
     slug: z.string().min(2).max(40).optional(),
-    plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
+    plan: z.enum(['TRIAL', 'PRO', 'ENTERPRISE']).optional(),
     customDomain: hostnameRule.optional(),
     // AI Status Narrative per-tenant opt-in (the self-serve tenant-ADMIN toggle lands in Phase 2).
     aiNarrativeEnabled: z.boolean().optional(),
@@ -253,6 +255,10 @@ router.patch(
     if (req.body.customDomain !== undefined) {
       const cd = req.body.customDomain === '' ? null : req.body.customDomain;
       if (cd) {
+        // Custom domains are an ENTERPRISE feature — gate on the tenant's EFFECTIVE plan (the new plan
+        // if this same PATCH upgrades it, else the current one). Clearing (cd=null) is always allowed.
+        const effectivePlan = req.body.plan ?? tenant.plan;
+        if (!planAllows(effectivePlan, 'customDomain')) throw Forbidden('Custom domains are an Enterprise feature. Upgrade the tenant to Enterprise first.');
         const clash = await prisma.tenant.findFirst({ where: { customDomain: cd, id: { not: tenant.id } }, select: { id: true } });
         if (clash) throw Conflict(`The domain "${cd}" is already mapped to another tenant.`);
       }
@@ -313,6 +319,25 @@ router.post(
     const updated = await prisma.tenant.update({ where: { id: tenant.id }, data: { status: 'REJECTED' } });
     await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE', before: { status: tenant.status }, after: { status: updated.status, rejected: true } });
     res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status } });
+  }),
+);
+
+// POST /admin/tenants/:id/extend-trial — grant a corporate TRIAL workspace more time (sales/support).
+// Extends from the LATER of now and the current deadline, so it never shortens an active trial. Audited.
+const extendTrialSchema = z.object({ days: z.number().int().min(1).max(365) });
+router.post(
+  '/:id/extend-trial',
+  validateBody(extendTrialSchema),
+  asyncHandler(async (req, res) => {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, slug: true, plan: true, isPersonal: true, trialEndsAt: true } });
+    if (!tenant) throw NotFound('Tenant not found');
+    if (tenant.isPersonal) throw BadRequest('Personal (guest) tenants are not managed here.');
+    if (tenant.plan !== 'TRIAL') throw BadRequest(`Only a TRIAL workspace can have its trial extended (this one is ${tenant.plan}).`);
+    const base = Math.max(Date.now(), tenant.trialEndsAt?.getTime() ?? 0);
+    const trialEndsAt = new Date(base + req.body.days * 24 * 60 * 60 * 1000);
+    const updated = await prisma.tenant.update({ where: { id: tenant.id }, data: { trialEndsAt } });
+    await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE', before: { trialEndsAt: tenant.trialEndsAt }, after: { trialEndsAt: updated.trialEndsAt, extendedDays: req.body.days } });
+    res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, plan: updated.plan, trialEndsAt: updated.trialEndsAt } });
   }),
 );
 

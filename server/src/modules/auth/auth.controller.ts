@@ -70,8 +70,10 @@ export async function refreshHandler(req: Request, res: Response): Promise<void>
 export async function meHandler(req: Request, res: Response): Promise<void> {
   const user = await authService.me(req.user!.id);
   // Report the EFFECTIVE role (the active tenant's membership role under enforcement), which
-  // requireAuth already resolved — not the raw global User.role.
-  res.json({ user: { ...user, role: req.user!.role } });
+  // requireAuth already resolved — not the raw global User.role. `workspace` carries the active
+  // tenant's plan + trial state + feature capabilities so the client can gate UI / show the wall.
+  const workspace = await authService.activeWorkspace(req.user!.tid);
+  res.json({ user: { ...user, role: req.user!.role }, workspace });
 }
 
 export async function myTenantsHandler(req: Request, res: Response): Promise<void> {
