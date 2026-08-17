@@ -86,6 +86,9 @@ export async function lemonsqueezyWebhook(req: Request, res: Response): Promise<
   //  - otherwise ⇒ the paid plan for the purchased variant (cancelled keeps access until ends_at,
   //    at which point an `expired` event flips it to TRIAL)
   const expired = eventName === 'subscription_expired' || status === 'expired';
+  // A paid plan CLEARS the trial (null); an expiry stamps NOW so the tenant reads as an EXPIRED trial
+  // (the upgrade wall) rather than a fresh one — a null deadline is deliberately NOT walled (trial.ts).
+  const trialEndsAt: Date | null = expired ? new Date() : null;
   let plan: TenantPlan;
   if (expired) {
     plan = 'TRIAL';
@@ -108,6 +111,7 @@ export async function lemonsqueezyWebhook(req: Request, res: Response): Promise<
         lsVariantId: attrs['variant_id'] != null ? String(attrs['variant_id']) : null,
         renewsAt: toDate(attrs['renews_at']),
         endsAt: toDate(attrs['ends_at']),
+        trialEndsAt,
       },
       eventName,
       payload,

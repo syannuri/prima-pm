@@ -45,7 +45,8 @@ beforeAll(async () => {
 
   await wipeDb();
   await backfillDefaultTenant(prisma);
-  const t = await prisma.tenant.create({ data: { slug: 'billco', name: 'Bill Co' } }); // TRIAL (default)
+  // Start mid-trial (deadline in the future) so we can prove a paid subscription CLEARS it.
+  const t = await prisma.tenant.create({ data: { slug: 'billco', name: 'Bill Co', trialEndsAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000) } }); // TRIAL (default)
   tenantId = t.id;
 });
 
@@ -88,6 +89,7 @@ describe('lemonsqueezy webhook', () => {
 
     const t = await prisma.tenant.findUnique({ where: { id: tenantId } });
     expect(t!.plan).toBe('PRO');
+    expect(t!.trialEndsAt).toBeNull(); // a paid plan clears the trial deadline
     expect(t!.subscriptionStatus).toBe('active');
     expect(t!.lsSubscriptionId).toBe('sub_777');
     const events = await prisma.billingEvent.findMany({ where: { tenantId } });
@@ -103,7 +105,11 @@ describe('lemonsqueezy webhook', () => {
       .set('X-Signature', sign(body))
       .send(body);
     expect(res.status).toBe(200);
-    expect((await prisma.tenant.findUnique({ where: { id: tenantId } }))!.plan).toBe('TRIAL');
+    const t = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    expect(t!.plan).toBe('TRIAL');
+    // Expiry stamps a PAST deadline → reads as an EXPIRED trial (the upgrade wall), not a fresh one.
+    expect(t!.trialEndsAt).toBeTruthy();
+    expect(t!.trialEndsAt!.getTime()).toBeLessThanOrEqual(Date.now());
   });
 
   it('ignores an unhandled event name with 200', async () => {

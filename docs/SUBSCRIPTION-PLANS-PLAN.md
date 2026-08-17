@@ -120,7 +120,16 @@ Original Phase 3 scope:
   screen shown when writes 402. Add to `AuthContext`.
 - itests per gated feature (ENTERPRISE key 200, non-ENTERPRISE 403) + rbac 125/125.
 
-### Phase 4 — Billing wiring (dormant until Lemon Squeezy store is live)
+### Phase 4 — Billing wiring (dormant until Lemon Squeezy store is live) ✅ DONE (2026-08-17, branch `feat/subscription-trial-plans`)
+`SubscriptionChange` gains `trialEndsAt`; `applySubscriptionChange` writes it. The webhook computes it:
+a **paid** plan (PRO/ENTERPRISE) → `trialEndsAt=null` (clears the trial); an **expiry** → `trialEndsAt=now`
+(a PAST instant → reads as an EXPIRED trial → the wall, not a fresh trial). Variant→plan mapping already
+existed (`variantToPlan` reads `LEMONSQUEEZY_VARIANT_ID_PRO/_ENTERPRISE`). **Verified:** billing 4/4 (now
+asserts PRO clears trialEndsAt + expiry stamps a past deadline), subscription 4/4. Still **dormant** —
+webhook 503 until the `LEMONSQUEEZY_*` env is set + LS store activated (docs/BILLING-GOLIVE.md). Go-live
+also needs the ENTERPRISE variant env, not just PRO.
+
+Original Phase 4 scope:
 - Define LS variants for **PRO** + **ENTERPRISE** (monthly/annual); map `lsVariantId → plan` in billing.
 - Webhook: `subscription_created/updated/active` → set `plan` + clear `trialEndsAt`;
   `expired`/`cancelled` (past `endsAt`) → `plan=TRIAL, trialEndsAt=now` (locked wall).

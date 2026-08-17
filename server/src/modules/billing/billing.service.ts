@@ -93,6 +93,9 @@ export interface SubscriptionChange {
   lsVariantId?: string | null;
   renewsAt?: Date | null;
   endsAt?: Date | null;
+  // Trial deadline after this event: a paid plan CLEARS it (null); an expiry stamps a PAST instant so
+  // the tenant reads as an EXPIRED trial (the upgrade wall), NOT a fresh one. See trial.ts.
+  trialEndsAt?: Date | null;
 }
 
 // Apply a webhook-derived subscription change to a tenant: flip the plan + LS fields and record a
@@ -117,6 +120,7 @@ export async function applySubscriptionChange(
         lsVariantId: change.lsVariantId ?? undefined,
         renewsAt: change.renewsAt ?? null,
         endsAt: change.endsAt ?? null,
+        trialEndsAt: change.trialEndsAt ?? null,
       },
     });
     await prisma.billingEvent.create({
