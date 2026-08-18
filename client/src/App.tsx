@@ -8,6 +8,7 @@ import { OnboardingProvider } from './context/OnboardingContext';
 import OnboardingTour from './components/OnboardingTour';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import { isWorkspaceHost } from './lib/workspaceHost';
 
 // The authenticated pages are code-split: each lands in its own chunk that's fetched only when its
@@ -47,6 +48,8 @@ export default function App() {
             domain / LAN-by-IP. */}
         <Route path="/" element={isWorkspaceHost() ? <Navigate to="/login" replace /> : <HomePage />} />
         <Route path="/login" element={<LoginPage />} />
+        {/* Public activation landing for the emailed link — must resolve while signed out. */}
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );

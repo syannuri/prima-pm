@@ -3,7 +3,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authRateLimit } from '../../middleware/rateLimit.js';
 import { verifyCaptcha } from '../../middleware/captcha.js';
-import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, orgSignupSchema, refreshSchema, switchTenantSchema } from './auth.schemas.js';
+import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, orgSignupSchema, refreshSchema, switchTenantSchema, verifyEmailSchema, resendActivationSchema } from './auth.schemas.js';
 import * as ctrl from './auth.controller.js';
 
 const router = Router();
@@ -39,6 +39,17 @@ const guestLimiter = authRateLimit({
   },
 });
 
+// Throttle activation resends per IP + email so the endpoint can't be used to spam an inbox.
+const resendLimiter = authRateLimit({
+  windowMs: FIFTEEN_MIN,
+  max: 5,
+  name: 'resend-activation',
+  keyBy: (req) => {
+    const email = (req.body as { email?: unknown })?.email;
+    return [typeof email === 'string' ? `email:${email.trim().toLowerCase()}` : undefined];
+  },
+});
+
 // Throttle org signups per IP + email (same as guest/login) to blunt bulk tenant creation.
 const orgSignupLimiter = authRateLimit({
   windowMs: FIFTEEN_MIN,
@@ -62,6 +73,9 @@ router.post('/signup', orgSignupLimiter, verifyCaptcha, validateBody(orgSignupSc
 router.post('/login', loginLimiter, verifyCaptcha, validateBody(loginSchema), asyncHandler(ctrl.loginHandler));
 // Sign in with Google → matches/creates a sandboxed GUEST (gated by GOOGLE_CLIENT_ID).
 router.post('/google', googleLimiter, validateBody(googleLoginSchema), asyncHandler(ctrl.googleHandler));
+// Email activation (public): redeem a token, or resend a fresh link. Both open (no auth) but throttled.
+router.post('/verify-email', validateBody(verifyEmailSchema), asyncHandler(ctrl.verifyEmailHandler));
+router.post('/resend-activation', resendLimiter, validateBody(resendActivationSchema), asyncHandler(ctrl.resendActivationHandler));
 router.post('/refresh', refreshLimiter, validateBody(refreshSchema), asyncHandler(ctrl.refreshHandler));
 router.get('/me', requireAuth, asyncHandler(ctrl.meHandler));
 // Tenants the caller belongs to + the active one (for a tenant switcher).

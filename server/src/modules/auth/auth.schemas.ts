@@ -74,6 +74,14 @@ export const changePasswordSchema = z
       ctx.addIssue({ code: 'custom', path: ['newPassword'], message: 'New password must differ from the current one' });
   });
 
+// Email activation: redeem a token, and resend an activation link to an unverified account.
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1),
+});
+export const resendActivationSchema = z.object({
+  email: z.string().email().toLowerCase(),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type GuestRegisterInput = z.infer<typeof guestRegisterSchema>;
 export type OrgSignupInput = z.infer<typeof orgSignupSchema>;

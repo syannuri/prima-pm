@@ -18,6 +18,9 @@ import { Unauthorized, Forbidden, Conflict, BadRequest, NotFound } from '../../l
 import { strongPassword } from '../auth/auth.schemas.js';
 import { DEFAULT_TENANT_SLUG } from '../../lib/tenant/constants.js';
 import { blockIdentity, listBlocked, unblock } from '../auth/denylist.service.js';
+import { emailEnabled, sendMail, appBaseUrl } from '../../lib/mailer.js';
+import { orgApprovedMail } from '../../lib/mail/templates.js';
+import { initialEmailVerifiedAt, issueActivationEmail } from '../auth/verification.service.js';
 
 // Platform (super-admin) console — tenant provisioning & lifecycle (Phase 5). Operates ACROSS tenants
 // on the GLOBAL models (Tenant / User / Membership), so nothing here is tenant-scoped; the security
@@ -199,9 +202,11 @@ router.post(
     if (!admin) {
       if (!adminName || !adminPassword) throw BadRequest('adminName and adminPassword are required to create a new admin user.');
       admin = await prisma.user.create({
-        data: { name: adminName, email: adminEmail, role: 'ADMIN', isGuest: false, passwordHash: await hashPassword(adminPassword) },
+        data: { name: adminName, email: adminEmail, role: 'ADMIN', isGuest: false, passwordHash: await hashPassword(adminPassword), emailVerifiedAt: initialEmailVerifiedAt() },
         select: { id: true, isGuest: true },
       });
+      // Email armed ⇒ the freshly-provisioned admin must activate their address before first login.
+      if (emailEnabled()) await issueActivationEmail({ id: admin.id, name: adminName, email: adminEmail });
     }
 
     const tenant = await prisma.tenant.create({ data: { name, slug, isPersonal: false, status: 'ACTIVE' } });
@@ -303,6 +308,18 @@ router.post(
     if (tenant.status !== 'PENDING') throw BadRequest(`Only a PENDING signup can be approved (this one is ${tenant.status}).`);
     const updated = await prisma.tenant.update({ where: { id: tenant.id }, data: { status: 'ACTIVE' } });
     await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE', before: { status: tenant.status }, after: { status: updated.status, approved: true } });
+    // Tell the owner their workspace is live (best-effort; no-op unless SMTP is configured). The owner
+    // is the earliest ADMIN member of the tenant.
+    if (emailEnabled()) {
+      const owner = await prisma.membership.findFirst({
+        where: { tenantId: tenant.id, role: 'ADMIN' },
+        orderBy: { createdAt: 'asc' },
+        select: { user: { select: { name: true, email: true } } },
+      });
+      if (owner) {
+        await sendMail({ to: owner.user.email, ...orgApprovedMail({ name: owner.user.name, orgName: updated.name, loginUrl: `${appBaseUrl()}/login` }) });
+      }
+    }
     res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status } });
   }),
 );
