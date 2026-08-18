@@ -7,7 +7,9 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string, captchaToken?: string) => Promise<void>;
-  guestRegister: (name: string, email: string, password: string, captchaToken?: string) => Promise<void>;
+  // Resolves to a verify marker when the deployment has the email-activation wall armed (no session
+  // yet — the user must confirm their email), else void (auto-logged-in, session set).
+  guestRegister: (name: string, email: string, password: string, captchaToken?: string) => Promise<{ verify: true; email: string } | void>;
   signupOrg: (orgName: string, ownerName: string, email: string, password: string, captchaToken?: string) => Promise<{ pending: true; orgName: string; slug: string }>;
   loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
@@ -135,11 +137,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadWorkspace();
   };
 
-  // Self-service guest signup — same cookie flow as login (server auto-logs-in on success).
+  // Self-service guest signup. Normally the server auto-logs-in (cookie flow, like login). But when the
+  // email-activation wall is armed it returns { verify:true } with NO session — the account must be
+  // activated from the emailed link first — so we surface that marker instead of setting a user.
   const guestRegister = async (name: string, email: string, password: string, captchaToken?: string) => {
-    const res = await api.post<{ user: User }>('/auth/guest/register', { name, email, password, captchaToken });
+    const res = await api.post<{ user?: User; verify?: true; email?: string }>('/auth/guest/register', { name, email, password, captchaToken });
+    if (res.verify) return { verify: true as const, email: res.email ?? email };
     tokenStore.clear();
-    setUser(res.user);
+    setUser(res.user!);
     await loadTenants();
     await loadWorkspace();
   };

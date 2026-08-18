@@ -16,6 +16,7 @@ const TXT: Record<Lang, {
   or: string; sandbox: string; haveAccount: string; newHere: string; createOrgLink: string;
   forgot: string; secure: string;
   notFound: string; notFoundSub: (h: string) => string; goMain: string; awaiting: string; awaitingSub: (o: string) => string; back: string; yourAddress: string;
+  checkEmail: string; checkEmailSub: (e: string) => string; resend: string; resendSent: string; notVerified: string;
 }> = {
   en: {
     tagAccent: 'Clarity', tagRest: 'in every project.',
@@ -32,6 +33,7 @@ const TXT: Record<Lang, {
     forgot: 'Forgot your password? Ask your workspace admin to reset it.', secure: 'Encrypted in transit · your data stays in your workspace',
     notFound: 'Workspace not found', notFoundSub: (h) => `There’s no workspace at ${h}. Check the address, or head to the main site to sign in.`, goMain: 'Go to Prismatix',
     awaiting: 'Awaiting approval', awaitingSub: (o) => `Your request for the ${o} workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.`, back: 'Back to sign in', yourAddress: 'Your workspace address:',
+    checkEmail: 'Check your email', checkEmailSub: (e) => `We've sent an activation link to ${e}. Click it to activate your account, then sign in.`, resend: 'Resend activation email', resendSent: 'Activation email sent — check your inbox.', notVerified: 'Your email isn’t activated yet. Open the link we emailed you, or resend it below.',
   },
   id: {
     tagAccent: 'Kejelasan', tagRest: 'di setiap proyek.',
@@ -48,6 +50,7 @@ const TXT: Record<Lang, {
     forgot: 'Lupa kata sandi? Minta admin workspace Anda untuk meresetnya.', secure: 'Terenkripsi saat transit · data Anda tetap di workspace Anda',
     notFound: 'Workspace tidak ditemukan', notFoundSub: (h) => `Tidak ada workspace di ${h}. Periksa alamatnya, atau buka situs utama untuk masuk.`, goMain: 'Ke Prismatix',
     awaiting: 'Menunggu persetujuan', awaitingSub: (o) => `Permintaan untuk workspace ${o} telah diterima. Administrator akan meninjau dan mengaktifkannya — Anda dapat masuk setelah disetujui.`, back: 'Kembali ke masuk', yourAddress: 'Alamat workspace Anda:',
+    checkEmail: 'Cek email Anda', checkEmailSub: (e) => `Kami mengirim tautan aktivasi ke ${e}. Klik untuk mengaktifkan akun, lalu masuk.`, resend: 'Kirim ulang email aktivasi', resendSent: 'Email aktivasi terkirim — periksa kotak masuk Anda.', notVerified: 'Email Anda belum diaktifkan. Buka tautan yang kami kirim, atau kirim ulang di bawah.',
   },
 };
 
@@ -114,6 +117,11 @@ export default function LoginPage() {
   // a confirmation panel instead of routing into a session (there is none yet).
   const [pendingOrg, setPendingOrg] = useState<string | null>(null);
   const [pendingSlug, setPendingSlug] = useState<string | null>(null);
+  // Email-activation wall: set to the target email after a guest signup that needs activation (shows a
+  // "check your email" panel), or after a login blocked by EMAIL_NOT_VERIFIED (shows a resend button).
+  const [pendingVerify, setPendingVerify] = useState<string | null>(null);
+  const [notVerifiedEmail, setNotVerifiedEmail] = useState<string | null>(null);
+  const [resendMsg, setResendMsg] = useState('');
   const [googleClientId, setGoogleClientId] = useState('');
   const [guestEnabled, setGuestEnabled] = useState(false);
   const [orgEnabled, setOrgEnabled] = useState(false);
@@ -229,15 +237,39 @@ export default function LoginPage() {
         setPendingOrg(res.orgName || orgName.trim()); // queued for approval — no session yet
         setPendingSlug(res.slug);
       }
-      else if (isGuest) await guestRegister(name.trim(), email, password, captchaToken);
+      else if (isGuest) {
+        const res = await guestRegister(name.trim(), email, password, captchaToken);
+        // Wall armed: no session — show the "check your email to activate" panel instead of routing in.
+        if (res && 'verify' in res) setPendingVerify(res.email);
+      }
       else await login(email, password, captchaToken);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : isSignup ? "Couldn't set up your workspace" : 'Login failed');
+      // Login blocked because the email isn't activated → offer a resend action rather than a dead-end.
+      if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
+        setNotVerifiedEmail(email);
+        setError(tx.notVerified);
+      } else setError(err instanceof ApiError ? err.message : isSignup ? "Couldn't set up your workspace" : 'Login failed');
       // Turnstile tokens are single-use — reset the widget so a retry gets a fresh one.
       if (turnstileWidgetId.current && window.turnstile) {
         window.turnstile.reset(turnstileWidgetId.current);
         setCaptchaToken('');
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Resend the activation email for the address that just failed login. Always resolves (the server
+  // returns a generic 200 to avoid enumeration), so we just confirm it was sent.
+  const resendActivation = async () => {
+    if (!notVerifiedEmail) return;
+    setBusy(true);
+    setResendMsg('');
+    try {
+      await api.post('/auth/resend-activation', { email: notVerifiedEmail });
+      setResendMsg(tx.resendSent);
+    } catch {
+      setResendMsg(tx.resendSent); // generic-success UX even if the call hiccups
     } finally {
       setBusy(false);
     }
@@ -291,6 +323,15 @@ export default function LoginPage() {
                   <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{tx.notFoundSub(attemptedHost)}</p>
                   <a href={mainSiteUrl} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">{tx.goMain}</a>
                 </div>
+              ) : pendingVerify ? (
+                <div className="py-4 text-center">
+                  <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-brand-200 dark:bg-brand-900/30 dark:ring-brand-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-7 w-7"><rect x="3" y="5" width="18" height="14" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="m3.5 7 8.5 6 8.5-6" /></svg>
+                  </div>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{tx.checkEmail}</h1>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{tx.checkEmailSub(pendingVerify)}</p>
+                  <button type="button" onClick={() => { setPendingVerify(null); setMode('signin'); setPassword(''); }} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 py-2.5 font-medium text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700">{tx.back}</button>
+                </div>
               ) : pendingOrg ? (
                 <div className="py-4 text-center">
                   <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-200">
@@ -334,7 +375,7 @@ export default function LoginPage() {
                   </Field>
                 )}
                 <Field label={tx.email}>
-                  <Input type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required state={!email ? undefined : emailOk ? 'valid' : 'invalid'} />
+                  <Input type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => { setEmail(e.target.value); if (notVerifiedEmail) { setNotVerifiedEmail(null); setResendMsg(''); setError(''); } }} required state={!email ? undefined : emailOk ? 'valid' : 'invalid'} />
                   {!!email && !emailOk && <span className="mt-1 block text-xs text-red-500">{tx.emailBad}</span>}
                 </Field>
                 <Field label={tx.password}>
@@ -348,6 +389,11 @@ export default function LoginPage() {
                   {!isSignup && !workspace && <p className="mt-1.5 text-right text-xs text-slate-400">{tx.forgot}</p>}
                 </Field>
                 {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
+                {notVerifiedEmail && (
+                  resendMsg
+                    ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{resendMsg}</p>
+                    : <button type="button" onClick={resendActivation} disabled={busy} className="text-sm font-medium text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-400">{tx.resend}</button>
+                )}
                 {/* Cloudflare Turnstile — only rendered when the deployment enables it. */}
                 {turnstileSiteKey && <div ref={turnstileRef} className="flex min-h-[65px] justify-center" />}
                 <Button
