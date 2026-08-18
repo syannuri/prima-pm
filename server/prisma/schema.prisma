@@ -238,6 +238,11 @@ model User {
   // Captured on signup + backfilled on login; null off-Cloudflare (LAN/dev) or unknown.
   country      String?
   isActive     Boolean  @default(true)
+  // When the user confirmed ownership of their email (clicked the activation link). NULL = not yet
+  // verified. The HARD verification wall (login blocks unverified accounts) is armed only when SMTP
+  // email is configured (emailEnabled()); with no mail server accounts are born verified so nobody
+  // is ever locked out. Provider sign-ins (Google/Microsoft) are pre-verified. See lib/mailer.ts.
+  emailVerifiedAt DateTime?
   // Bumped to revoke every outstanding token for this user (logout, password change/reset,
   // deactivation). Access/refresh tokens embed the tv they were minted at; requireAuth
   // rejects any token whose tv is stale.
@@ -264,6 +269,7 @@ model User {
   notifications     Notification[]  @relation("UserNotifications")
   alertDismissals   AlertDismissal[] @relation("UserAlertDismissals")
   refreshTokens     RefreshToken[]  @relation("UserRefreshTokens")
+  emailTokens       EmailToken[]    @relation("UserEmailTokens")
   sentMessages      Message[]       @relation("MessageSender")
   conversationsA    Conversation[]  @relation("ConvUserA")
   conversationsB    Conversation[]  @relation("ConvUserB")
@@ -423,6 +429,27 @@ model RefreshToken {
   revokedAt    DateTime? // set when rotated away or explicitly revoked (logout/pw-change)
   replacedById String?   // the jti this token was rotated into (audit chain)
   createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// What a one-time email token authorizes. Kept an enum so future flows (e.g. password reset) slot in.
+enum EmailTokenPurpose {
+  VERIFY_EMAIL // confirm email ownership → activate the account (sets User.emailVerifiedAt)
+}
+
+// Single-use, expiring token backing email flows (activation). Only the SHA-256 HASH of the random
+// token is stored — the raw token lives solely in the emailed link — so a DB leak can't be replayed.
+// Consumed (consumedAt set) or expired rows are inert; a fresh request just creates a new row.
+model EmailToken {
+  id         String            @id @default(uuid())
+  userId     String
+  user       User              @relation("UserEmailTokens", fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String            @unique // sha256(raw token), hex
+  purpose    EmailTokenPurpose @default(VERIFY_EMAIL)
+  expiresAt  DateTime
+  consumedAt DateTime? // set the moment the token is redeemed (single-use)
+  createdAt  DateTime          @default(now())
 
   @@index([userId])
 }

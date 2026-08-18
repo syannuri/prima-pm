@@ -3,7 +3,10 @@ import type { Role, User, TenantPlan } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js';
-import { Unauthorized, Forbidden, Conflict } from '../../lib/errors.js';
+import { Unauthorized, Forbidden, Conflict, EmailNotVerified } from '../../lib/errors.js';
+import { emailEnabled, sendMail } from '../../lib/mailer.js';
+import { orgSignupAdminAlertMail } from '../../lib/mail/templates.js';
+import { initialEmailVerifiedAt, issueActivationEmail } from './verification.service.js';
 import { writeAudit } from '../../lib/audit.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled, isOrgSignupEnabled } from '../settings/settings.service.js';
@@ -165,6 +168,11 @@ export async function login(input: LoginInput, opts: { hostTenantId?: string } =
   const ok = await verifyPassword(input.password, user.passwordHash);
   if (!ok) throw Unauthorized('Invalid credentials');
 
+  // HARD email-verification wall — only armed when SMTP is configured (else every account is born
+  // verified, so this never fires). Checked AFTER the password so it can't be used to enumerate
+  // accounts. The distinct code lets the SPA offer "resend activation email".
+  if (emailEnabled() && !user.emailVerifiedAt) throw EmailNotVerified();
+
   await assertNotFullySuspended(user.id);
   // On a tenant's own domain (subdomain / custom domain), pin the session to THAT workspace — and
   // refuse a user who isn't a member of it (they'd otherwise land in a workspace this domain isn't).
@@ -183,7 +191,7 @@ export async function login(input: LoginInput, opts: { hostTenantId?: string } =
 // Self-service guest signup. The ONLY open-registration path — hard-codes role GUEST (a guest
 // is sandboxed to their own personal projects) and is gated behind GUEST_SIGNUP_ENABLED so a
 // deployment must opt in. Auto-logs in on success (returns a token pair like login).
-export async function guestRegister(input: GuestRegisterInput): Promise<AuthResult> {
+export async function guestRegister(input: GuestRegisterInput): Promise<AuthResult | { verify: true; email: string }> {
   if (!(await isGuestSignupEnabled())) throw Forbidden('Guest signup is not enabled');
   if (await isIdentityBlocked({ email: input.email })) throw Forbidden('This email is blocked from signing up.');
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
@@ -195,11 +203,17 @@ export async function guestRegister(input: GuestRegisterInput): Promise<AuthResu
       passwordHash: await hashPassword(input.password),
       role: 'GUEST', // dual-written until User.role is dropped (4c-drop)
       isGuest: true,
+      emailVerifiedAt: initialEmailVerifiedAt(),
     },
   });
   const personalTid = await provisionPersonalTenant(user);
   await auditInUserTenant(user.id, { userId: user.id, entity: 'User', entityId: user.id, action: 'CREATE', after: { email: user.email, role: 'GUEST', self: true } });
   await seedGuestSampleProjects(user, personalTid); // best-effort demo projects so the sandbox isn't empty
+  // Email armed ⇒ HARD wall: don't auto-login, email an activation link and tell the client to wait.
+  if (emailEnabled()) {
+    await issueActivationEmail(user);
+    return { verify: true, email: user.email };
+  }
   return issueTokenPair(user);
 }
 
@@ -226,13 +240,15 @@ async function uniqueTenantSlug(name: string): Promise<string> {
 async function notifyPlatformAdminsOfSignup(orgName: string): Promise<void> {
   try {
     await runAsSystem(async () => {
-      const admins = await prisma.user.findMany({ where: { isPlatformAdmin: true, isActive: true }, select: { id: true } });
+      const admins = await prisma.user.findMany({ where: { isPlatformAdmin: true, isActive: true }, select: { id: true, email: true } });
       for (const admin of admins) {
         const home = await prisma.membership.findFirst({ where: { userId: admin.id }, orderBy: { createdAt: 'asc' }, select: { tenantId: true } });
         if (!home) continue; // an admin with no membership has no scoped inbox to write to
         await prisma.notification.create({
           data: { userId: admin.id, tenantId: home.tenantId, type: 'ORG_SIGNUP_PENDING', title: 'New workspace request', body: `“${orgName}” is awaiting your approval.` },
         });
+        // Best-effort email nudge on top of the in-app notification (no-op unless SMTP is configured).
+        await sendMail({ to: admin.email, ...orgSignupAdminAlertMail({ orgName }) });
       }
     });
   } catch (err) {
@@ -258,6 +274,7 @@ export async function registerOrg(input: OrgSignupInput, country: string | null 
       passwordHash: await hashPassword(input.password),
       role: 'ADMIN', // dual-written until User.role is dropped (4c-drop)
       isGuest: false,
+      emailVerifiedAt: initialEmailVerifiedAt(),
       ...(country ? { country } : {}),
     },
   });
@@ -267,6 +284,9 @@ export async function registerOrg(input: OrgSignupInput, country: string | null 
   const tenant = await prisma.tenant.create({ data: { name: input.orgName, slug, isPersonal: false, status: 'PENDING', plan: 'TRIAL', trialEndsAt: newTrialExpiry() } });
   await prisma.membership.create({ data: { userId: owner.id, tenantId: tenant.id, role: 'ADMIN' } });
   await auditInUserTenant(owner.id, { userId: owner.id, entity: 'Tenant', entityId: tenant.id, action: 'CREATE', after: { name: input.orgName, slug, self: true, status: 'PENDING' } });
+  // Email armed ⇒ have the owner confirm their address (login later needs BOTH a verified email and an
+  // ACTIVE — approved — workspace). Best-effort; a mail failure won't block the pending response.
+  if (emailEnabled()) await issueActivationEmail(owner);
   // Alert platform admins there's a signup to review (best-effort; won't block the response).
   await notifyPlatformAdminsOfSignup(input.orgName);
   // No token pair: the owner must wait for approval (a PENDING tenant is locked out of login).
@@ -316,7 +336,7 @@ export async function loginWithGoogle(credential: string): Promise<AuthResult> {
 
   // 3) First-time Google user → provision a sandboxed GUEST (no local password).
   const created = await prisma.user.create({
-    data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST', isGuest: true },
+    data: { name: identity.name, email: identity.email, googleSub: identity.sub, passwordHash: null, role: 'GUEST', isGuest: true, emailVerifiedAt: new Date() },
   });
   const personalTid = await provisionPersonalTenant(created);
   await auditInUserTenant(created.id, { userId: created.id, entity: 'User', entityId: created.id, action: 'CREATE', after: { email: created.email, role: 'GUEST', via: 'google', self: true } });

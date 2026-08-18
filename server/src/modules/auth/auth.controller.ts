@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import * as authService from './auth.service.js';
+import * as verificationService from './verification.service.js';
 import { setAuthCookies, clearAuthCookies, RT_COOKIE } from '../../lib/cookies.js';
 import { Unauthorized } from '../../lib/errors.js';
 import { env } from '../../config/env.js';
@@ -38,7 +39,13 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
 
 export async function guestRegisterHandler(req: Request, res: Response): Promise<void> {
   const result = await authService.guestRegister(req.body);
-  setAuthCookies(res, result); // auto-login on signup
+  // HARD email-verification wall armed (SMTP configured): no auto-login — the account must be
+  // activated from the emailed link first. 202 (accepted, not yet actioned) with a verify marker.
+  if ('verify' in result) {
+    res.status(202).json(result);
+    return;
+  }
+  setAuthCookies(res, result); // auto-login on signup (email wall disarmed)
   void captureUserCountry(result.user.id, readCountry(req));
   res.status(201).json(result);
 }
@@ -48,6 +55,22 @@ export async function orgSignupHandler(req: Request, res: Response): Promise<voi
   // before the owner can sign in. Return 202 (accepted, not yet actioned) with a pending marker.
   const result = await authService.registerOrg(req.body, readCountry(req));
   res.status(202).json(result);
+}
+
+export async function verifyEmailHandler(req: Request, res: Response): Promise<void> {
+  // Redeem the activation token (from the emailed link). Success flips the account to verified; the
+  // client then routes to /login. We deliberately DON'T auto-login: an org owner may still be pending
+  // approval, and keeping it a plain confirm keeps the edge cases out.
+  const raw = (req.body?.token ?? req.query?.token ?? '') as string;
+  const result = await verificationService.consumeActivationToken(raw);
+  res.json({ ok: true, ...result });
+}
+
+export async function resendActivationHandler(req: Request, res: Response): Promise<void> {
+  // Always 200 with the same shape regardless of whether the email exists / is already verified —
+  // no user enumeration. The route throttles by IP + email.
+  await verificationService.resendActivation(String(req.body?.email ?? ''));
+  res.json({ ok: true });
 }
 
 export async function googleHandler(req: Request, res: Response): Promise<void> {
