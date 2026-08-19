@@ -39,6 +39,7 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
       title="Cost projection (S-curve)"
       ariaLabel="Cost S-curve forecast"
       bare={bare}
+      showPeriod
       legend={
         <>
           <span className="flex items-center gap-1"><span className="h-0.5 w-4" style={{ background: PV }} />Planned (PV)</span>
@@ -48,7 +49,7 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
       }
       footer={(vp) => (
         <>
-          <TimeAxisLabels t0={vp.domain[0]} t1={vp.domain[1]} />
+          <TimeAxisLabels t0={vp.domain[0]} t1={vp.domain[1]} granularity={vp.granularity} />
           {finish && <div className="mt-0.5 text-right text-[10px] text-slate-400 dark:text-slate-500" title={formatIdr(data.bac)}>forecast finish · {formatDate(finish)}</div>}
         </>
       )}
@@ -70,7 +71,7 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
         const nowX = x(+new Date(data.statusDate));
         const hi = vp.hoverTime != null ? nearestIndex(ptTimes, vp.hoverTime) : -1;
         const hiP = hi >= 0 ? pts[hi] : null;
-        const ticks = visibleTicks(d0, d1);
+        const ticks = visibleTicks(d0, d1, 9, vp.granularity);
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
             <defs>
@@ -78,7 +79,13 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
                 <stop offset="0%" stopColor={AC} stopOpacity="0.20" />
                 <stop offset="100%" stopColor={AC} stopOpacity="0" />
               </linearGradient>
+              <linearGradient id="fcPlotBg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#108AB1" stopOpacity="0.07" />
+                <stop offset="100%" stopColor="#108AB1" stopOpacity="0.01" />
+              </linearGradient>
             </defs>
+            {/* Soft tinted canvas behind the plot so the curves sit on a defined background. */}
+            <rect x={padL} y={padT} width={W - padL - padR} height={H - padT - padB} fill="url(#fcPlotBg)" />
             {/* Vertical date/week guides aligned to the axis labels below (drawn behind the curves). */}
             {ticks.map((tk) => {
               const gx = tickX(tk.ms, d0, d1);
