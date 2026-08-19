@@ -507,6 +507,16 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   const [importOpen, setImportOpen] = useState(false);
   const [weightsOpen, setWeightsOpen] = useState(false);
   const [stepsFor, setStepsFor] = useState<GanttNode | null>(null);
+  // Visual Gantt export (server-rendered PDF / Excel — the full timeline, horizontal view).
+  const [ganttExporting, setGanttExporting] = useState<'pdf' | 'excel' | null>(null);
+  const exportGantt = async (kind: 'pdf' | 'excel') => {
+    setGanttExporting(kind);
+    try {
+      const ext = kind === 'excel' ? 'xlsx' : 'pdf';
+      await api.download(`/projects/${projectId}/export/gantt/${kind === 'excel' ? 'excel' : 'pdf'}`, `gantt.${ext}`);
+    } catch { /* api.download surfaces its own error toast */ }
+    finally { setGanttExporting(null); }
+  };
 
   const ganttQ = useQuery({
     queryKey: ['gantt', projectId],
@@ -1172,6 +1182,17 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
             <button onClick={() => setWeightsOpen(true)} title="Set phase weights to steer the project %" className={CTRL_BTN}>
               ⚖ Weights
             </button>
+          )}
+          {/* Visual Gantt exports — the whole timeline charted horizontally as a PDF / Excel grid. */}
+          {rows.length > 0 && (
+            <>
+              <button onClick={() => exportGantt('pdf')} disabled={ganttExporting !== null} title="Export the Gantt as a PDF (visual, horizontal timeline)" className={CTRL_BTN}>
+                ⬇ {ganttExporting === 'pdf' ? 'PDF…' : 'Gantt PDF'}
+              </button>
+              <button onClick={() => exportGantt('excel')} disabled={ganttExporting !== null} title="Export the Gantt as an Excel grid (visual, horizontal timeline)" className={CTRL_BTN}>
+                ⬇ {ganttExporting === 'excel' ? 'Excel…' : 'Gantt Excel'}
+              </button>
+            </>
           )}
           {rows.length > 0 && (
             <OptionsMenu container={modalContainer}>
