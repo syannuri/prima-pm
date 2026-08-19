@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Modal } from '../ui';
+import type { Granularity } from './timeAxis';
 
 // The custom S-curve SVGs use a fixed viewBox (720×H) stretched to the container width
 // (preserveAspectRatio="none"), with left/right plot padding of 8/12 viewBox units. The plot
@@ -12,6 +13,7 @@ export type ChartViewport = {
   hoverTime: number | null;      // time under the pointer (for the tooltip); null when not hovering
   hoverPx: number | null;        // pointer x within the plot, in px
   zoomed: boolean;
+  granularity: Granularity;      // axis period: 'auto' | 'week' | 'month' (user-selectable)
   timeToPx: (t: number) => number;
   width: number;
 };
@@ -22,6 +24,7 @@ type Props = {
   legend?: ReactNode;
   ariaLabel?: string;
   bare?: boolean; // drop the outer card (border/bg/padding) when embedded in an existing Card
+  showPeriod?: boolean; // show the Auto/Week/Month period selector in the header
   footer?: (vp: ChartViewport) => ReactNode;
   tooltip?: (vp: ChartViewport & { hoverTime: number }) => ReactNode;
   children: (vp: ChartViewport) => ReactNode;
@@ -44,10 +47,11 @@ export default function ChartZoomFrame(props: Props) {
   );
 }
 
-function ChartBody({ fullDomain, title, legend, ariaLabel, bare, footer, tooltip, children, onEnlarge, enlarged }: Props & { onEnlarge?: () => void; enlarged?: boolean }) {
+function ChartBody({ fullDomain, title, legend, ariaLabel, bare, showPeriod, footer, tooltip, children, onEnlarge, enlarged }: Props & { onEnlarge?: () => void; enlarged?: boolean }) {
   const [f0, f1] = fullDomain;
   const [domain, setDomain] = useState<[number, number]>([f0, f1]);
   useEffect(() => { setDomain([f0, f1]); }, [f0, f1]);
+  const [granularity, setGranularity] = useState<Granularity>('auto');
 
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1);
@@ -71,7 +75,36 @@ function ChartBody({ fullDomain, title, legend, ariaLabel, bare, footer, tooltip
   const pxToTime = (px: number) => d0 + Math.min(1, Math.max(0, (px - left) / plot)) * (d1 - d0);
   const zoomed = d0 !== f0 || d1 !== f1;
   const hoverTime = hoverPx != null ? pxToTime(hoverPx) : null;
-  const vp: ChartViewport = { domain, hoverTime, hoverPx, zoomed, timeToPx, width };
+  const vp: ChartViewport = { domain, hoverTime, hoverPx, zoomed, granularity, timeToPx, width };
+
+  // Mouse-wheel zoom, anchored at the cursor (scroll up = zoom in, down = out). A native
+  // non-passive listener is required so we can preventDefault the page scroll.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.deltaY) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const px = Math.min(width, Math.max(0, e.clientX - r.left));
+      const frac = Math.min(1, Math.max(0, (px - left) / plot));
+      const fullSpan = f1 - f0;
+      setDomain(([a, b]) => {
+        const span = b - a;
+        const anchor = a + frac * span;
+        const scale = Math.exp(e.deltaY * 0.0015); // >1 zoom out, <1 zoom in
+        let next = Math.min(fullSpan, Math.max(fullSpan / 500, span * scale));
+        let na = anchor - frac * next;
+        let nb = na + next;
+        if (na < f0) { na = f0; nb = f0 + next; }
+        if (nb > f1) { nb = f1; na = f1 - next; }
+        if (na < f0) na = f0;
+        return [na, nb];
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [width, left, plot, f0, f1]);
 
   const relX = (e: React.PointerEvent) => {
     const r = ref.current?.getBoundingClientRect();
@@ -111,6 +144,20 @@ function ChartBody({ fullDomain, title, legend, ariaLabel, bare, footer, tooltip
           {title && <div className="rounded-md border-l-4 border-[#108AB1] bg-[#108AB1]/10 px-2 py-1 text-sm font-bold text-slate-800 dark:bg-[#108AB1]/20 dark:text-white">{title}</div>}
           {zoomed && (
             <button onClick={reset} className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Reset zoom</button>
+          )}
+          {showPeriod && (
+            <div className="inline-flex overflow-hidden rounded-md border border-slate-200 dark:border-slate-700" role="group" aria-label="Axis period">
+              {(['auto', 'week', 'month'] as Granularity[]).map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setGranularity(g)}
+                  aria-pressed={granularity === g}
+                  className={`px-2 py-0.5 text-[11px] font-medium capitalize transition ${granularity === g ? 'bg-[#108AB1] text-white' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800'}`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
           )}
         </div>
         <div className="flex items-center gap-3">
@@ -153,7 +200,7 @@ function ChartBody({ fullDomain, title, legend, ariaLabel, bare, footer, tooltip
       </div>
 
       {footer && footer(vp)}
-      {!enlarged && <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">Drag to zoom · double-click to reset · hover to read values · ⤢ to enlarge</p>}
+      {!enlarged && <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">Drag or scroll to zoom · double-click to reset · hover to read values · ⤢ to enlarge</p>}
     </div>
   );
 }

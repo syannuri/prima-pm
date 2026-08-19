@@ -8,6 +8,8 @@ const W = 720, PADL = 8, PADR = 12;
 const DAY = 86_400_000;
 
 export type Tick = { ms: number; label: string; major: boolean };
+// Axis granularity: 'auto' picks week/month by span; 'week'/'month' force it (user-selectable).
+export type Granularity = 'auto' | 'week' | 'month';
 
 // Legacy month-start ticks (kept for callers that still want month-only granularity).
 export function monthTicks(t0: number, t1: number): { ms: number; label: string }[] {
@@ -25,12 +27,14 @@ export function monthTicks(t0: number, t1: number): { ms: number; label: string 
   return out;
 }
 
-// Adaptive ticks — weekly (Monday-aligned) for short spans, monthly otherwise.
-export function timeTicks(t0: number, t1: number): Tick[] {
+// Adaptive ticks — weekly (Monday-aligned) for short spans, monthly otherwise. Pass a granularity
+// to force weekly/monthly regardless of span (the chart's period selector).
+export function timeTicks(t0: number, t1: number, g: Granularity = 'auto'): Tick[] {
   const out: Tick[] = [];
   const spanDays = (t1 - t0) / DAY;
+  const weekly = g === 'week' || (g === 'auto' && spanDays <= 84);
 
-  if (spanDays <= 84) {
+  if (weekly) {
     // Weekly, snapped back to the Monday of t0's week (UTC).
     const s = new Date(t0);
     const dow = (s.getUTCDay() + 6) % 7; // Monday = 0
@@ -66,8 +70,8 @@ export function timeTicks(t0: number, t1: number): Tick[] {
 }
 
 // Thin the adaptive ticks to at most `max` labels (keeps them from crowding on a narrow chart).
-export function visibleTicks(t0: number, t1: number, max = 9): Tick[] {
-  const raw = timeTicks(t0, t1);
+export function visibleTicks(t0: number, t1: number, max = 9, g: Granularity = 'auto'): Tick[] {
+  const raw = timeTicks(t0, t1, g);
   const step = Math.max(1, Math.ceil(raw.length / max));
   return raw.filter((_, i) => i % step === 0);
 }
@@ -79,8 +83,8 @@ export function tickX(ms: number, t0: number, t1: number): number {
   return Math.max(PADL, Math.min(W - PADR, xv));
 }
 
-export function TimeAxisLabels({ t0, t1 }: { t0: number; t1: number }) {
-  const ticks = visibleTicks(t0, t1);
+export function TimeAxisLabels({ t0, t1, granularity = 'auto' }: { t0: number; t1: number; granularity?: Granularity }) {
+  const ticks = visibleTicks(t0, t1, 9, granularity);
   const pct = (ms: number) => (tickX(ms, t0, t1) / W) * 100;
   return (
     <div className="relative mt-1 h-3 text-[10px]">

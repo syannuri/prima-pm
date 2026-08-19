@@ -45,8 +45,9 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
       fullDomain={[t0, t1]}
       title="Earned-value trend (S-curve)"
       ariaLabel="Earned-value trend S-curve"
+      showPeriod
       legend={<Legend items={[{ color: PV, label: 'Planned (PV)' }, { color: EV, label: 'Earned (EV)' }, { color: AC, label: 'Actual (AC)' }]} />}
-      footer={(vp) => <TimeAxisLabels t0={vp.domain[0]} t1={vp.domain[1]} />}
+      footer={(vp) => <TimeAxisLabels t0={vp.domain[0]} t1={vp.domain[1]} granularity={vp.granularity} />}
       tooltip={snaps.length ? ({ hoverTime }) => {
         const s = snaps[nearestIndex(snapTimes, hoverTime)];
         return <ChartTip heading={formatDate(s.statusDate)} rows={[
@@ -67,7 +68,7 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
         // Emphasise the snapshot nearest the cursor with a halo ring (modern hover affordance).
         const hi = vp.hoverTime != null && snaps.length ? nearestIndex(snapTimes, vp.hoverTime) : -1;
         // Adaptive date/week guides — vertical gridlines that align with the axis labels below.
-        const ticks = visibleTicks(d0, d1);
+        const ticks = visibleTicks(d0, d1, 9, vp.granularity);
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
             <defs>
@@ -75,7 +76,13 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
                 <stop offset="0%" stopColor={EV} stopOpacity="0.22" />
                 <stop offset="100%" stopColor={EV} stopOpacity="0" />
               </linearGradient>
+              <linearGradient id="evPlotBg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#108AB1" stopOpacity="0.07" />
+                <stop offset="100%" stopColor="#108AB1" stopOpacity="0.01" />
+              </linearGradient>
             </defs>
+            {/* Soft tinted canvas behind the plot so the curves sit on a defined background. */}
+            <rect x={padL} y={padT} width={W - padL - padR} height={H - padT - padB} fill="url(#evPlotBg)" />
             {/* Vertical date/week guides (drawn first, behind everything). Month-boundary /
                 year ticks read a touch stronger than in-between weeks. */}
             {ticks.map((tk) => {
