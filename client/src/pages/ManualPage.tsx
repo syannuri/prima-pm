@@ -199,7 +199,7 @@ const DOC: Record<Lang, Doc> = {
           'Sign in with your account. The default theme is dark mode (changeable in Settings).',
           'From the Dashboard, review the portfolio or open a project from the left sidebar.',
           'New projects are created by Admin/PMO via the “+ New Project” button.',
-          'Inside a project, the top tabs are grouped by management domain: Initiating · Schedule & WBS · Cost · Risk · Quality · Monitoring · Closing · Governance & Audit. The project’s stage sequence runs via the project status & the “Next steps” guide, not the tab order.',
+          'Inside a project, the top tabs are grouped by management domain: Initiating · Schedule · Cost · Risk · Quality · Monitoring · Closing · Governance & Audit. The project’s stage sequence runs via the project status & the “Next steps” guide, not the tab order.',
         ] },
       ] },
       { id: 'konsep', nav: 'Key concepts (EVM)', heading: '📐 Key concepts (EVM)', blocks: [
@@ -227,11 +227,11 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'alur', nav: 'Project workflow', heading: '🔄 Project workflow (end-to-end)', blocks: [
-        { type: 'p', text: 'The top tabs are grouped by MANAGEMENT DOMAIN (Initiating · Schedule & WBS · Cost · Risk · Quality · Monitoring · Closing · Governance & Audit), not by phase. Why: a tab like Schedule or Cost holds BOTH its baseline AND its actuals/tracking, so it can’t be boxed into one “phase”. The stage sequence instead runs via the project status (Draft → Chartered → In-progress → Closed), guided by Next-steps. End-to-end flow:' },
+        { type: 'p', text: 'The top tabs are grouped by MANAGEMENT DOMAIN (Initiating · Schedule · Cost · Risk · Quality · Monitoring · Closing · Governance & Audit), not by phase. Why: a tab like Schedule or Cost holds BOTH its baseline AND its actuals/tracking, so it can’t be boxed into one “phase”. The stage sequence instead runs via the project status (Draft → Chartered → In-progress → Closed), guided by Next-steps. End-to-end flow:' },
         { type: 'steps', items: [
           'Initiating — on the Initiating tab: fill in the Charter, then Commit to lock the baseline & unlock the other modules (Draft → Chartered), and register Stakeholders & Requirements.',
-          'Set the baseline — on the Schedule & WBS tab build the Schedule/WBS then Capture the Schedule Baseline; on the Cost tab enter Cost + planned manpower & Procurement, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost). Register Risk under the Risk tab. PMO/Admin then Activate the project (Chartered → In-progress) once the baseline is complete.',
-          'Deliver & control — update progress (Schedule & WBS tab) & Actual Cost (Cost tab, optionally auto-posted from timesheets), log effort in Timesheet (Monitoring tab), manage Issues & RAID under Risk, run UAT under Quality, and raise a Change Request under Monitoring for any change after commit.',
+          'Set the baseline — on the Schedule tab build the Schedule/WBS then Capture the Schedule Baseline; on the Cost tab enter Cost + planned manpower & Procurement, then Lock the Cost Baseline (correct order: capture the schedule baseline first, then lock cost). Register Risk under the Risk tab. PMO/Admin then Activate the project (Chartered → In-progress) once the baseline is complete.',
+          'Deliver & control — update progress (Schedule tab) & Actual Cost (Cost tab, optionally auto-posted from timesheets), log effort in Timesheet (Monitoring tab), manage Issues & RAID under Risk, run UAT under Quality, and raise a Change Request under Monitoring for any change after commit.',
           'Track performance — on the Monitoring tab: Forecast & EVM Trend, complemented by the Dashboard & the Reports menu (PDF/Excel).',
           'Close — on the Closing tab: record the Acceptance Sign-off & Lessons Learned, then Close the project.',
           'The "🧭 Next steps" guide on each project points to the next action for its lifecycle stage.',
@@ -299,7 +299,7 @@ const DOC: Record<Lang, Doc> = {
           'Acceptance Sign-off — formal deliverable acceptance from the sponsor/customer (party, decision Accepted / Accepted-with-conditions / Rejected, signer name, date).',
           'Lessons Learned — Went-well / Went-wrong / Recommendation notes for future projects.',
           'Closure gate (by methodology): Predictive — WBS schedule 100%. Agile/Hybrid — EVERY backlog item DONE or Deferred (judged per item, NOT by story points) AND at least one Acceptance Sign-off. Everything else (Change Requests/risks/issues/cost/lessons) is an advisory warning that does not block. ADMIN/PMO can still force-close with a reason.',
-          'Defer (out of scope) — for backlog you consciously won\'t build: mark it via ⏸ on the Kanban board or the “defer” link in the backlog list (Schedule & WBS → Agile). Deferred items move to the “Deferred · out of scope” section, don\'t block closeout, and are excluded from EVM/velocity; click Restore to bring one back into scope.',
+          'Defer (out of scope) — for backlog you consciously won\'t build: mark it via ⏸ on the Kanban board or the “defer” link in the backlog list (Schedule → Agile). Deferred items move to the “Deferred · out of scope” section, don\'t block closeout, and are excluded from EVM/velocity; click Restore to bring one back into scope.',
         ] },
       ] },
       { id: 'reports', nav: 'Reports', heading: '📈 Reports', blocks: [

@@ -291,7 +291,7 @@ export default function ProjectPage() {
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: 'Overview', tabs: ['Overview'] },
   { label: 'Initiating', tabs: ['Charter', 'Stakeholders', 'Requirements'] },
-  { label: 'Schedule & WBS', tabs: ['Schedule', 'Agile'] },
+  { label: 'Schedule', tabs: ['Schedule', 'Agile'] },
   { label: 'Cost', tabs: ['Cost', 'Procurement'] },
   { label: 'Risk', tabs: ['Risk', 'RAID', 'Issues'] },
   { label: 'Quality', tabs: ['UAT'] },
@@ -318,7 +318,7 @@ const TAB_ICONS: Record<Tab, string> = {
 const GROUP_LABEL_ID: Record<string, string> = {
   Overview: 'Ringkasan',
   Initiating: 'Inisiasi',
-  'Schedule & WBS': 'Jadwal & WBS',
+  Schedule: 'Jadwal',
   Cost: 'Biaya',
   Risk: 'Risiko',
   Quality: 'Kualitas',
@@ -397,7 +397,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
               // Every group shows its domain label (e.g. "Schedule"); the stable
               // aria-label lets tests/AT target the group by that label. role="tab" +
               // aria-selected expose the active section to assistive tech (not colour alone).
-              <button key={g.label} ref={active ? activeBtnRef : undefined} role="tab" aria-selected={active} aria-label={g.label} data-tour={g.label === 'Schedule & WBS' ? 'tab-schedule' : g.label === 'Monitoring' ? 'tab-monitoring' : g.label === 'Risk' ? 'tab-risk' : undefined} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
+              <button key={g.label} ref={active ? activeBtnRef : undefined} role="tab" aria-selected={active} aria-label={g.label} data-tour={g.label === 'Schedule' ? 'tab-schedule' : g.label === 'Monitoring' ? 'tab-monitoring' : g.label === 'Risk' ? 'tab-risk' : undefined} onClick={() => onSelect(active ? activeTab : g.tabs[0])} className={groupBtn(active)}>
                 {g.label}{single && g.tabs[0] === 'Audit' && <AuditBadge />}
               </button>
             );

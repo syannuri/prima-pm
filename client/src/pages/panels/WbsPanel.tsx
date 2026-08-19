@@ -1145,7 +1145,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
         {/* In full view the title block is dropped so the header chrome stays short — on a
             landscape PHONE (~390px tall) it otherwise eats the whole height and collapses the
             timeline to nothing. */}
-        {/* The "Work Breakdown Structure" title was dropped (redundant with the Schedule & WBS tab).
+        {/* The "Work Breakdown Structure" title was dropped (redundant with the Schedule tab).
             Full screen + Today stay visible as one-tap controls; every other control (view toggles,
             timeline scale/zoom, baseline) tucks into a single "Options" popover so the header stays
             one line instead of wrapping into 2–3 rows. */}
