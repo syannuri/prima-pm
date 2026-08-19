@@ -19,7 +19,7 @@ import ProductTour from '../components/ProductTour';
 type Group = { icon: string; name: string; items: [string, string][] };
 type Content = {
   signin: string;
-  hero: { badge: string; titlePre: string; titleAccent: string; sub: string; enter: string; explore: string };
+  hero: { badge: string; titlePre: string; titleAccent: string; sub: string; enter: string; tryFree: string; explore: string };
   why: { eyebrow: string; body: string };
   what: { title: string; body: string };
   features: { title: string; sub: string; groups: Group[] };
@@ -50,6 +50,7 @@ const COPY: Record<Lang, Content> = {
       titleAccent: 'project',
       sub: 'Prismatix brings cost, schedule, risk, and forecast into one clear view — so you always know where a project really stands. Built by practitioners, shared with the community.',
       enter: 'Enter Prismatix',
+      tryFree: 'Try for free',
       explore: 'See how it works',
     },
     why: {
@@ -129,8 +130,8 @@ const COPY: Record<Lang, Content> = {
     },
     cta: {
       title: 'See exactly where your projects stand.',
-      enter: 'Enter Prismatix',
-      note: 'Accounts are provisioned by your administrator.',
+      enter: 'Try for free',
+      note: 'Start a private sandbox instantly — no invite, no credit card.',
     },
     footer: {
       tagline: 'A contribution to the global project-management community.',
@@ -145,6 +146,7 @@ const COPY: Record<Lang, Content> = {
       titleAccent: 'proyek',
       sub: 'Prismatix menyatukan biaya, jadwal, risiko, dan proyeksi dalam satu tampilan yang jernih — jadi Anda selalu tahu posisi proyek yang sebenarnya. Dibuat oleh praktisi, dibagikan untuk komunitas.',
       enter: 'Masuk Prismatix',
+      tryFree: 'Coba gratis',
       explore: 'Lihat cara kerjanya',
     },
     why: {
@@ -224,8 +226,8 @@ const COPY: Record<Lang, Content> = {
     },
     cta: {
       title: 'Lihat dengan pasti posisi proyek Anda.',
-      enter: 'Masuk Prismatix',
-      note: 'Akun disediakan oleh administrator Anda.',
+      enter: 'Coba gratis',
+      note: 'Mulai sandbox pribadi seketika — tanpa undangan, tanpa kartu kredit.',
     },
     footer: {
       tagline: 'Kontribusi untuk komunitas manajemen proyek dunia.',
@@ -481,10 +483,10 @@ export default function HomePage() {
               <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-600 lg:mx-0">{t.hero.sub}</p>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
                 <Link
-                  to="/login"
+                  to="/login?mode=guest"
                   className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-7 py-3 text-base font-semibold text-white shadow-xl shadow-brand-500/30 transition hover:-translate-y-0.5 hover:from-brand-600 hover:to-brand-700"
                 >
-                  {t.hero.enter}
+                  {t.hero.tryFree}
                 </Link>
                 <button
                   onClick={explore}
@@ -650,7 +652,7 @@ export default function HomePage() {
               <h2 className="mx-auto max-w-2xl text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{t.cta.title}</h2>
               <div className="mt-8">
                 <Link
-                  to="/login"
+                  to="/login?mode=guest"
                   className="inline-block rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-8 py-3.5 text-base font-semibold text-white shadow-xl shadow-brand-500/30 transition hover:-translate-y-0.5 hover:from-brand-600 hover:to-brand-700"
                 >
                   {t.cta.enter}
