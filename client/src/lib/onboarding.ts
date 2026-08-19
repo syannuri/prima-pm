@@ -85,8 +85,8 @@ export const TOUR_STEPS: TourStep[] = [
     emoji: '🗂️',
     title: { id: 'Susun WBS & jadwal', en: 'Build the WBS & schedule' },
     body: {
-      id: 'Di “Schedule & WBS”, pecah pekerjaan menjadi tugas bertanggal. Gantt bertingkat menampilkan baseline, rencana, dan aktual sekaligus — lengkap dengan jalur kritis.',
-      en: 'Under “Schedule & WBS”, break the work into dated tasks. The layered Gantt shows baseline, plan, and actual at once — complete with the critical path.',
+      id: 'Di “Schedule”, pecah pekerjaan menjadi tugas bertanggal. Gantt bertingkat menampilkan baseline, rencana, dan aktual sekaligus — lengkap dengan jalur kritis.',
+      en: 'Under “Schedule”, break the work into dated tasks. The layered Gantt shows baseline, plan, and actual at once — complete with the critical path.',
     },
   },
   {
