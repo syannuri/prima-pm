@@ -106,7 +106,13 @@ export default function LoginPage() {
   const { login, guestRegister, signupOrg, loginWithGoogle } = useAuth();
   const { lang, setLang } = useLang();
   const tx = TXT[lang];
-  const [mode, setMode] = useState<'signin' | 'guest' | 'org'>('signin');
+  // Deep-link support: the landing page's "Try for free" CTA links to /login?mode=guest so the page
+  // opens straight in guest-signup mode (the provider effect below falls back to signin if guest
+  // signup is disabled, e.g. on a tenant workspace domain).
+  const [mode, setMode] = useState<'signin' | 'guest' | 'org'>(() => {
+    const m = new URLSearchParams(window.location.search).get('mode');
+    return m === 'guest' || m === 'org' ? m : 'signin';
+  });
   const [name, setName] = useState('');
   const [orgName, setOrgName] = useState('');
   const [email, setEmail] = useState('');
