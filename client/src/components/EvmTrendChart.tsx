@@ -1,7 +1,7 @@
 import type { EvmTrend } from '../api/types';
 import { formatIdrShort, formatIdr, formatNum, formatDate } from '../lib/format';
 import ChartZoomFrame, { nearestIndex } from './chart/ChartZoomFrame';
-import { TimeAxisLabels, ChartTip } from './chart/timeAxis';
+import { TimeAxisLabels, ChartTip, visibleTicks, tickX } from './chart/timeAxis';
 import { smoothPath, areaPath, type Pt } from './chart/smoothPath';
 
 const PV = '#94a3b8'; // slate-400 — planned value backdrop
@@ -66,6 +66,8 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
         const evPts = snapPts((s) => s.ev), acPts = snapPts((s) => s.ac);
         // Emphasise the snapshot nearest the cursor with a halo ring (modern hover affordance).
         const hi = vp.hoverTime != null && snaps.length ? nearestIndex(snapTimes, vp.hoverTime) : -1;
+        // Adaptive date/week guides — vertical gridlines that align with the axis labels below.
+        const ticks = visibleTicks(d0, d1);
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
             <defs>
@@ -74,7 +76,13 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
                 <stop offset="100%" stopColor={EV} stopOpacity="0" />
               </linearGradient>
             </defs>
-            {/* Faint gridlines + IDR labels so intermediate values read without hovering. */}
+            {/* Vertical date/week guides (drawn first, behind everything). Month-boundary /
+                year ticks read a touch stronger than in-between weeks. */}
+            {ticks.map((tk) => {
+              const gx = tickX(tk.ms, d0, d1);
+              return <line key={tk.ms} x1={gx} x2={gx} y1={padT} y2={H - padB} stroke="currentColor" className={tk.major ? 'text-slate-200 dark:text-slate-700/70' : 'text-slate-100 dark:text-slate-800'} strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+            })}
+            {/* Faint horizontal gridlines + IDR labels so intermediate values read without hovering. */}
             {[0.25, 0.5, 0.75].map((fr) => {
               const gy = y(maxY * fr);
               return (
@@ -86,9 +94,11 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
             })}
             {evPts.length > 1 && <path d={areaPath(evPts, H - padB)} fill="url(#evTrendGrad)" stroke="none" />}
             <line x1={padL} x2={W - padR} y1={bacY} y2={bacY} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
-            {curve.length > 1 && <path d={smoothPath(pvPts)} fill="none" stroke={PV} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-            {acPts.length > 1 && <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-            {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={EV} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {curve.length > 1 && <path d={smoothPath(pvPts)} fill="none" stroke={PV} strokeWidth="2.25" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {acPts.length > 1 && <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {/* Earned value is the hero series — a soft wide halo under a crisp line reads strong yet elegant. */}
+            {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={EV} strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.14" vectorEffect="non-scaling-stroke" />}
+            {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={EV} strokeWidth="3.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
             {snaps.map((s, i) => (
               <g key={s.id}>
                 {i === hi && <circle cx={acPts[i].x} cy={acPts[i].y} r="6" fill={AC} opacity="0.18" />}
@@ -97,7 +107,11 @@ export default function EvmTrendChart({ data }: { data: EvmTrend }) {
                 <circle cx={evPts[i].x} cy={evPts[i].y} r={i === hi ? 3.6 : 2.8} fill={EV} stroke="#fff" strokeWidth="1.1" />
               </g>
             ))}
-            <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeWidth="1" />
+            <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1.25" vectorEffect="non-scaling-stroke" />
+            {ticks.map((tk) => {
+              const gx = tickX(tk.ms, d0, d1);
+              return <line key={tk.ms} x1={gx} x2={gx} y1={H - padB} y2={H - padB + (tk.major ? 5 : 3)} stroke="currentColor" className={tk.major ? 'text-slate-400 dark:text-slate-500' : 'text-slate-300 dark:text-slate-600'} strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+            })}
             <text x={W - padR} y={bacY - 3} textAnchor="end" className="fill-slate-400 text-[10px]">BAC {formatIdrShort(data.bac)}</text>
           </svg>
         );

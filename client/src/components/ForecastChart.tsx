@@ -1,7 +1,7 @@
 import type { Forecast } from '../api/types';
 import { formatIdrShort, formatIdr, formatDate } from '../lib/format';
 import ChartZoomFrame, { nearestIndex } from './chart/ChartZoomFrame';
-import { TimeAxisLabels, monthTicks, ChartTip } from './chart/timeAxis';
+import { TimeAxisLabels, ChartTip, visibleTicks, tickX } from './chart/timeAxis';
 import { smoothPath, areaPath, type Pt } from './chart/smoothPath';
 
 const PV = '#94a3b8'; // slate-400 — planned value baseline
@@ -70,10 +70,7 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
         const nowX = x(+new Date(data.statusDate));
         const hi = vp.hoverTime != null ? nearestIndex(ptTimes, vp.hoverTime) : -1;
         const hiP = hi >= 0 ? pts[hi] : null;
-        const rawTicks = monthTicks(d0, d1);
-        const step = Math.max(1, Math.ceil(rawTicks.length / 9));
-        const ticks = rawTicks.filter((_, i) => i % step === 0);
-        const tickX = (ms: number) => Math.max(padL, Math.min(W - padR, x(ms)));
+        const ticks = visibleTicks(d0, d1);
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
             <defs>
@@ -82,6 +79,11 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
                 <stop offset="100%" stopColor={AC} stopOpacity="0" />
               </linearGradient>
             </defs>
+            {/* Vertical date/week guides aligned to the axis labels below (drawn behind the curves). */}
+            {ticks.map((tk) => {
+              const gx = tickX(tk.ms, d0, d1);
+              return <line key={tk.ms} x1={gx} x2={gx} y1={padT} y2={H - padB} stroke="currentColor" className={tk.major ? 'text-slate-200 dark:text-slate-700/70' : 'text-slate-100 dark:text-slate-800'} strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+            })}
             {/* Faint horizontal gridlines + IDR-short labels so intermediate cost values are readable
                 without hovering. vector-effect keeps strokes an even 1px despite the non-uniform
                 stretch (preserveAspectRatio=none fills the width but would otherwise distort them). */}
@@ -99,12 +101,14 @@ export default function ForecastChart({ data, bare }: { data: Forecast; bare?: b
             <line x1={padL} x2={W - padR} y1={eacY} y2={eacY} stroke={FC} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" vectorEffect="non-scaling-stroke" />
             {/* "today" marker: a soft vertical guide capped with a dot at the axis. */}
             <line x1={nowX} x2={nowX} y1={padT} y2={H - padB} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
-            <path d={smoothPath(pvPts)} fill="none" stroke={PV} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-            <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-            <path d={smoothPath(fcPts)} fill="none" stroke={FC} strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-            <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeWidth="1" />
+            <path d={smoothPath(pvPts)} fill="none" stroke={PV} strokeWidth="2.25" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            {/* Actual cost is the hero line here — soft halo under a crisp stroke: strong but elegant. */}
+            <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.12" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(fcPts)} fill="none" stroke={FC} strokeWidth="2.75" strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1.25" vectorEffect="non-scaling-stroke" />
             {ticks.map((tk) => (
-              <line key={tk.ms} x1={tickX(tk.ms)} x2={tickX(tk.ms)} y1={H - padB} y2={H - padB + 4} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1" />
+              <line key={tk.ms} x1={tickX(tk.ms, d0, d1)} x2={tickX(tk.ms, d0, d1)} y1={H - padB} y2={H - padB + (tk.major ? 5 : 3)} stroke="currentColor" className={tk.major ? 'text-slate-400 dark:text-slate-500' : 'text-slate-300 dark:text-slate-600'} strokeWidth="1" vectorEffect="non-scaling-stroke" />
             ))}
             {/* Active-point rings following the cursor, on whichever series carry a value there. */}
             {hiP && (
