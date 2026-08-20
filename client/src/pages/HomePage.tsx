@@ -19,6 +19,7 @@ import ProductTour from '../components/ProductTour';
 type Group = { icon: string; name: string; items: [string, string][] };
 type Content = {
   signin: string;
+  nav: { features: string; security: string; faq: string };
   hero: { badge: string; titlePre: string; titleAccent: string; sub: string; enter: string; tryFree: string; explore: string };
   why: { eyebrow: string; body: string };
   what: { title: string; body: string };
@@ -29,9 +30,20 @@ type Content = {
   community: { eyebrow: string; title: string; body: string };
   audience: { title: string; chips: string[] };
   quote: { text: string; who: string };
+  security: { eyebrow: string; title: string; sub: string; items: [string, string][]; note: string };
   faq: { title: string; items: { q: string; a: string }[] };
   cta: { title: string; enter: string; note: string };
-  footer: { tagline: string; rights: string };
+  footer: { tagline: string; rights: string; cols: { product: string; approach: string; contact: string }; contactLabel: string; email: string };
+};
+
+// Trust icons for the Security section (stroke-only, 24×24).
+const SEC = {
+  lock: 'M6 10V8a6 6 0 1 1 12 0v2m-13 0h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Zm7 5v2',
+  shield: 'M12 2 4 5v6c0 5 3.4 8.6 8 11 4.6-2.4 8-6 8-11V5l-8-3Zm-3 9 2 2 4-4',
+  key: 'M15 7a4 4 0 1 0-3.9 5L7 16l-3 .5.5-3L11 8.9A4 4 0 0 0 15 7Zm2 0h.01',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  refresh: 'M3 12a9 9 0 0 1 15-6.7L21 8m0-5v5h-5M21 12a9 9 0 0 1-15 6.7L3 16m0 5v-5h5',
+  doc: 'M8 3h6l4 4v14a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm6 0v4h4M9 12h6m-6 4h6m-6-8h2',
 };
 
 const ICON = {
@@ -44,6 +56,7 @@ const ICON = {
 const COPY: Record<Lang, Content> = {
   en: {
     signin: 'Sign in',
+    nav: { features: 'Features', security: 'Security', faq: 'FAQ' },
     hero: {
       badge: 'Contribute to the Project Management Community',
       titlePre: 'Clarity in every ',
@@ -119,6 +132,20 @@ const COPY: Record<Lang, Content> = {
       text: 'Finally, one honest view of cost, schedule and risk — the drift shows up while it’s still small enough to fix.',
       who: 'Built with, and for, the project-management community',
     },
+    security: {
+      eyebrow: 'Security & trust',
+      title: 'Enterprise-grade by default',
+      sub: 'Your plans, costs and forecasts are sensitive. Prismatix is built to keep them private, isolated and accountable — with no extra setup.',
+      items: [
+        ['Encrypted in transit', 'Every request runs over HTTPS with HSTS enforced — nothing travels in the clear.'],
+        ['Isolated per workspace', 'Strict multi-tenant separation, fail-closed by design, so one workspace can never see another.'],
+        ['Role-aware access', 'PMO, PM, Finance, Risk and team each see exactly their view — enforced on the server, not just the UI.'],
+        ['Rotating sessions', 'Refresh-token rotation with reuse detection and CSRF protection shut down stolen-session attacks.'],
+        ['Full audit trail', 'Sensitive actions are logged with an immutable trail — you can always answer “who changed what, when”.'],
+        ['Secured supply chain', 'Dependencies are continuously audited in CI, so known-vulnerable packages never reach production.'],
+      ],
+      note: 'Encryption in transit · per-workspace isolation · role-aware access · audit trail',
+    },
     faq: {
       title: 'Frequently asked',
       items: [
@@ -134,12 +161,16 @@ const COPY: Record<Lang, Content> = {
       note: 'Start a private sandbox instantly — no invite, no credit card.',
     },
     footer: {
-      tagline: 'A contribution to the global project-management community.',
+      tagline: 'One honest view of cost, schedule and risk — from charter to closeout.',
       rights: '© 2026 PRISMATIX. All rights reserved.',
+      cols: { product: 'Product', approach: 'Approach', contact: 'Contact' },
+      contactLabel: 'Questions? Talk to us',
+      email: 'support@prismatix.tech',
     },
   },
   id: {
     signin: 'Masuk',
+    nav: { features: 'Fitur', security: 'Keamanan', faq: 'FAQ' },
     hero: {
       badge: 'Kontribusi untuk komunitas manajemen proyek',
       titlePre: 'Kejelasan di setiap ',
@@ -215,6 +246,20 @@ const COPY: Record<Lang, Content> = {
       text: 'Akhirnya, satu tampilan jujur untuk biaya, jadwal, dan risiko — penyimpangan terlihat selagi masih kecil dan mudah diperbaiki.',
       who: 'Dibangun bersama, dan untuk, komunitas manajemen proyek',
     },
+    security: {
+      eyebrow: 'Keamanan & kepercayaan',
+      title: 'Standar enterprise sejak awal',
+      sub: 'Rencana, biaya, dan proyeksi Anda bersifat sensitif. Prismatix dirancang menjaganya tetap privat, terisolasi, dan dapat dipertanggungjawabkan — tanpa setelan tambahan.',
+      items: [
+        ['Terenkripsi saat transit', 'Setiap permintaan berjalan lewat HTTPS dengan HSTS aktif — tidak ada data yang terkirim polos.'],
+        ['Terisolasi per workspace', 'Pemisahan multi-tenant yang ketat dan fail-closed, sehingga satu workspace tak pernah bisa melihat yang lain.'],
+        ['Akses sesuai peran', 'PMO, PM, Finance, Risk, dan tim melihat tepat sesuai porsinya — ditegakkan di server, bukan sekadar di UI.'],
+        ['Sesi yang berotasi', 'Rotasi refresh-token dengan deteksi penggunaan-ulang dan proteksi CSRF mematikan serangan sesi curian.'],
+        ['Jejak audit lengkap', 'Aksi sensitif tercatat dengan jejak yang tak dapat diubah — Anda selalu tahu “siapa mengubah apa, kapan”.'],
+        ['Rantai pasok aman', 'Dependensi diaudit terus-menerus di CI, sehingga paket yang diketahui rentan tak pernah sampai ke produksi.'],
+      ],
+      note: 'Enkripsi saat transit · isolasi per workspace · akses sesuai peran · jejak audit',
+    },
     faq: {
       title: 'Pertanyaan umum',
       items: [
@@ -230,8 +275,11 @@ const COPY: Record<Lang, Content> = {
       note: 'Mulai sandbox pribadi seketika — tanpa undangan, tanpa kartu kredit.',
     },
     footer: {
-      tagline: 'Kontribusi untuk komunitas manajemen proyek dunia.',
+      tagline: 'Satu tampilan jujur untuk biaya, jadwal, dan risiko — dari charter hingga penutupan.',
       rights: '© 2026 PRISMATIX. Seluruh hak cipta dilindungi.',
+      cols: { product: 'Produk', approach: 'Pendekatan', contact: 'Kontak' },
+      contactLabel: 'Ada pertanyaan? Hubungi kami',
+      email: 'support@prismatix.tech',
     },
   },
 };
@@ -316,7 +364,7 @@ function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; 
 
 const SectionTitle = ({ eyebrow, children }: { eyebrow?: string; children: ReactNode }) => (
   <>
-    {eyebrow && <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{eyebrow}</div>}
+    {eyebrow && <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</div>}
     <h2 className="text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{children}</h2>
   </>
 );
@@ -442,6 +490,12 @@ export default function HomePage() {
         <div className={`pointer-events-none absolute inset-0 -z-10 bg-white/70 transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0'}`} />
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5 sm:px-8">
           <Wordmark bare />
+          {/* center nav — anchored to on-page sections (desktop only) */}
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 md:flex">
+            {([['#features', t.nav.features], ['#security', t.nav.security], ['#faq', t.nav.faq]] as const).map(([href, label]) => (
+              <a key={href} href={href} className="text-sm font-medium text-slate-600 transition hover:text-slate-900">{label}</a>
+            ))}
+          </nav>
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="inline-flex rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
               {(['en', 'id'] as Lang[]).map((l) => (
@@ -455,11 +509,14 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
+            <Link to="/login" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition hover:text-slate-900 sm:inline-block">
+              {t.signin}
+            </Link>
             <Link
-              to="/login"
+              to="/login?mode=guest"
               className="rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-500/30 transition hover:from-brand-600 hover:to-brand-700"
             >
-              {t.signin}
+              {t.hero.tryFree}
             </Link>
           </div>
         </div>
@@ -528,7 +585,7 @@ export default function HomePage() {
         {/* ---------- why ---------- */}
         <section className="mx-auto max-w-3xl px-5 py-12 text-center sm:px-8">
           <Reveal>
-            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{t.why.eyebrow}</div>
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{t.why.eyebrow}</div>
             <p className="text-2xl font-medium leading-relaxed text-slate-700 sm:text-[1.7rem]">{t.why.body}</p>
           </Reveal>
         </section>
@@ -544,8 +601,8 @@ export default function HomePage() {
               <Reveal key={g.name} className="reveal-zoom" delay={gi * 90}>
                 <div className="group h-full rounded-2xl border border-slate-200 bg-white p-7 backdrop-blur-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:bg-slate-50">
                   <div className="mb-5 flex items-center gap-3">
-                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-500/25 to-indigo-500/25 ring-1 ring-slate-200">
-                      <svg viewBox="0 0 24 24" className="h-5 w-5 text-brand-300" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={g.icon} /></svg>
+                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-indigo-500 shadow-sm shadow-brand-500/30 ring-1 ring-brand-600/20">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5 text-white" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={g.icon} /></svg>
                     </span>
                     <h3 className="text-lg font-semibold text-slate-900">{g.name}</h3>
                   </div>
@@ -603,7 +660,7 @@ export default function HomePage() {
         {/* ---------- community (heart) ---------- */}
         <section className="mx-auto max-w-3xl px-5 py-12 text-center sm:px-8">
           <Reveal>
-            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-400/90">{t.community.eyebrow}</div>
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{t.community.eyebrow}</div>
             <h2 className="text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{t.community.title}</h2>
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">{t.community.body}</p>
             <div className="mt-10">
@@ -626,8 +683,40 @@ export default function HomePage() {
           </Reveal>
         </section>
 
+        {/* ---------- security & trust ---------- */}
+        <section id="security" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-12 sm:px-8">
+          <Reveal className="mb-10 text-center">
+            <SectionTitle eyebrow={t.security.eyebrow}>{t.security.title}</SectionTitle>
+            <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.security.sub}</p>
+          </Reveal>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {t.security.items.map(([title, body], i) => {
+              const icon = [SEC.lock, SEC.shield, SEC.key, SEC.refresh, SEC.doc, SEC.eye][i];
+              return (
+                <Reveal key={title} className="reveal-zoom" delay={(i % 3) * 80}>
+                  <div className="flex h-full items-start gap-4 rounded-2xl border border-slate-200 bg-white p-6 transition duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-lg hover:shadow-brand-500/5">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={icon} /></svg>
+                    </span>
+                    <div>
+                      <h3 className="font-semibold text-slate-900">{title}</h3>
+                      <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{body}</p>
+                    </div>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
+          <Reveal className="mt-8 text-center">
+            <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/70 px-5 py-2 text-xs font-medium text-slate-600 backdrop-blur">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 text-brand-600" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={SEC.shield} /></svg>
+              {t.security.note}
+            </div>
+          </Reveal>
+        </section>
+
         {/* ---------- FAQ ---------- */}
-        <section className="mx-auto max-w-3xl px-5 py-12 sm:px-8">
+        <section id="faq" className="mx-auto max-w-3xl scroll-mt-24 px-5 py-12 sm:px-8">
           <Reveal className="mb-8 text-center"><SectionTitle>{t.faq.title}</SectionTitle></Reveal>
           <div className="space-y-3">
             {t.faq.items.map((f) => (
@@ -664,13 +753,46 @@ export default function HomePage() {
         </section>
 
         {/* ---------- footer ---------- */}
-        <footer className="border-t border-slate-200">
-          <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5 py-10 text-center sm:flex-row sm:justify-between sm:px-8 sm:text-left">
-            <div className="flex items-center gap-3">
-              <Wordmark small />
+        <footer className="border-t border-slate-200 bg-white/60">
+          <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
+            <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+              {/* brand + tagline */}
+              <div className="lg:col-span-1">
+                <Wordmark small />
+                <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-500">{t.footer.tagline}</p>
+              </div>
+              {/* product links */}
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{t.footer.cols.product}</div>
+                <ul className="mt-4 space-y-2.5 text-sm">
+                  <li><a href="#features" className="text-slate-600 transition hover:text-slate-900">{t.nav.features}</a></li>
+                  <li><a href="#security" className="text-slate-600 transition hover:text-slate-900">{t.nav.security}</a></li>
+                  <li><a href="#faq" className="text-slate-600 transition hover:text-slate-900">{t.nav.faq}</a></li>
+                  <li><Link to="/login" className="text-slate-600 transition hover:text-slate-900">{t.signin}</Link></li>
+                </ul>
+              </div>
+              {/* approach */}
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{t.footer.cols.approach}</div>
+                <ul className="mt-4 space-y-2.5 text-sm text-slate-600">
+                  {t.principles.chips.slice(0, 3).map((c) => <li key={c}>{c}</li>)}
+                  {t.audience.chips.slice(0, 1).map((c) => <li key={c}>{c}</li>)}
+                </ul>
+              </div>
+              {/* contact */}
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{t.footer.cols.contact}</div>
+                <p className="mt-4 text-sm text-slate-600">{t.footer.contactLabel}</p>
+                <a href={`mailto:${t.footer.email}`} className="mt-1.5 inline-flex items-center gap-2 text-sm font-medium text-brand-600 transition hover:text-brand-700">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Zm0 1 8 6 8-6" /></svg>
+                  {t.footer.email}
+                </a>
+              </div>
             </div>
-            <p className="text-sm text-slate-500">{t.footer.tagline}</p>
-            <p className="text-xs text-slate-500">{t.footer.rights}</p>
+            <div className="mt-12 flex flex-col items-center gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:justify-between">
+              <p className="text-xs text-slate-500">{t.footer.rights}</p>
+              <p className="text-xs text-slate-400">{t.security.note}</p>
+            </div>
           </div>
         </footer>
       </main>
