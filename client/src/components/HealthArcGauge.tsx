@@ -38,7 +38,13 @@ export default function HealthArcGauge({ spi, cpi, pct, status, statusLabel, cla
   const noData = status === 'NO_DATA';
   const f = noData ? 0.5 : spiToF(spi);
   const fAmber = spiToF(0.85), fGreen = spiToF(0.95);
-  const [c0, c1] = GRAD[status];
+  // Clarity: colour the value-arc + marker by the SPI ZONE the needle lands in (red < 0.85,
+  // amber 0.85–0.95, green ≥ 0.95) — NOT the overall `status`, which is the worst of SPI & CPI
+  // (evm.healthFrom). Otherwise a schedule-on-track project whose COST drags health to RED would
+  // paint the arc red even though the SPI marker sits in the green band. So "green arc = on
+  // schedule" is now literally true. The status label above still shows the overall RAG verdict.
+  const zone: PortfolioHealth = noData ? 'NO_DATA' : spi >= 0.95 ? 'GREEN' : spi >= 0.85 ? 'AMBER' : 'RED';
+  const [c0, c1] = GRAD[zone];
   const textColor = TEXT_COLOR[status];
   const marker = point(f);
 
