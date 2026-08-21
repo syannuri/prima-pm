@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLang, type Lang } from '../context/LanguageContext';
 import { Button, Field, Input } from '../components/ui';
@@ -311,12 +312,14 @@ export default function LoginPage() {
       </div>
 
       <div className="relative z-10 w-full max-w-sm">
-        {/* logo — centered above the card */}
+        {/* logo — centered above the card; links back to the public home page */}
         <div className="mb-4 flex justify-center">
-          <span className="relative inline-block border-[3px] border-slate-900 px-3.5 py-1.5 font-brand text-xl font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
-            PRISMATIX
-            <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
-          </span>
+          <Link to="/" aria-label="Prismatix — home" className="inline-block rounded-md outline-none transition hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand-400">
+            <span className="relative inline-block border-[3px] border-slate-900 px-3.5 py-1.5 font-brand text-xl font-bold tracking-wide text-slate-800 dark:border-white dark:text-slate-100">
+              PRISMATIX
+              <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
+            </span>
+          </Link>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-xl shadow-slate-300/40 backdrop-blur-sm sm:p-6 dark:border-slate-700 dark:bg-slate-900">
