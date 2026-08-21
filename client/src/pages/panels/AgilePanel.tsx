@@ -223,9 +223,9 @@ function BoardView({ sprints, items, activeSprintId, setBoardSprint, canEdit, us
                       )}
                       {canEdit && (
                         <span className="flex gap-1">
-                          <button onClick={() => move(it, -1)} disabled={it.status === 'TODO'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to previous column">◀</button>
-                          <button onClick={() => move(it, 1)} disabled={it.status === 'DONE'} className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to next column">▶</button>
-                          <button onClick={() => onMove(it.id, 'DEFERRED')} className="rounded px-1 text-xs text-slate-400 hover:text-amber-600 dark:hover:text-amber-400" title="Defer — mark out of scope (won't block closeout)">⏸</button>
+                          <button onClick={() => move(it, -1)} disabled={it.status === 'TODO'} aria-label="Move to previous column" className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to previous column">◀</button>
+                          <button onClick={() => move(it, 1)} disabled={it.status === 'DONE'} aria-label="Move to next column" className="rounded px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30 dark:hover:text-slate-200" title="Move to next column">▶</button>
+                          <button onClick={() => onMove(it.id, 'DEFERRED')} aria-label="Defer — mark out of scope" className="rounded px-1 text-xs text-slate-400 hover:text-amber-600 dark:hover:text-amber-400" title="Defer — mark out of scope (won't block closeout)">⏸</button>
                         </span>
                       )}
                     </div>
