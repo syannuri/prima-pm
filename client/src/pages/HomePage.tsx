@@ -58,7 +58,7 @@ const COPY: Record<Lang, Content> = {
     signin: 'Sign in',
     nav: { features: 'Features', security: 'Security', faq: 'FAQ' },
     hero: {
-      badge: 'Contribute to the Project Management Community',
+      badge: 'Built by practitioners, for the community',
       titlePre: 'Clarity in every ',
       titleAccent: 'project',
       sub: 'Prismatix brings cost, schedule, risk, and forecast into one clear view — so you always know where a project really stands. Built by practitioners, shared with the community.',
@@ -75,7 +75,7 @@ const COPY: Record<Lang, Content> = {
       body: 'A complete, PMBOK-aligned delivery platform with Earned Value at its core. Plan the work, watch it earn value in real time, steer with forecasts and change control, and close with confidence — across predictive, agile, and hybrid projects.',
     },
     features: {
-      title: 'Everything a delivery team needs, in one place',
+      title: 'One tool for the whole delivery loop',
       sub: 'Four steps, one rhythm: plan it, track it, steer it, see it.',
       groups: [
         { icon: ICON.plan, name: 'Plan', items: [
@@ -134,7 +134,7 @@ const COPY: Record<Lang, Content> = {
     },
     security: {
       eyebrow: 'Security & trust',
-      title: 'Enterprise-grade by default',
+      title: 'Your data stays private — by design',
       sub: 'Your plans, costs and forecasts are sensitive. Prismatix is built to keep them private, isolated and accountable — with no extra setup.',
       items: [
         ['Encrypted in transit', 'Every request runs over HTTPS with HSTS enforced — nothing travels in the clear.'],
@@ -156,7 +156,7 @@ const COPY: Record<Lang, Content> = {
       ],
     },
     cta: {
-      title: 'See exactly where your projects stand.',
+      title: 'Stop guessing. Start seeing.',
       enter: 'Try for free',
       note: 'Start a private sandbox instantly — no invite, no credit card.',
     },
@@ -172,7 +172,7 @@ const COPY: Record<Lang, Content> = {
     signin: 'Masuk',
     nav: { features: 'Fitur', security: 'Keamanan', faq: 'FAQ' },
     hero: {
-      badge: 'Kontribusi untuk komunitas manajemen proyek',
+      badge: 'Dari praktisi, untuk komunitas',
       titlePre: 'Kejelasan di setiap ',
       titleAccent: 'proyek',
       sub: 'Prismatix menyatukan biaya, jadwal, risiko, dan proyeksi dalam satu tampilan yang jernih — jadi Anda selalu tahu posisi proyek yang sebenarnya. Dibuat oleh praktisi, dibagikan untuk komunitas.',
@@ -189,7 +189,7 @@ const COPY: Record<Lang, Content> = {
       body: 'Platform pelaksanaan proyek yang selaras dengan PMBOK, dengan Earned Value sebagai intinya. Susun rencana, pantau nilai yang dihasilkan secara real-time, kendalikan lewat proyeksi dan kontrol perubahan, lalu tutup dengan percaya diri — untuk proyek predictive, agile, maupun hybrid.',
     },
     features: {
-      title: 'Semua yang dibutuhkan tim proyek, dalam satu tempat',
+      title: 'Satu alat untuk seluruh siklus pelaksanaan',
       sub: 'Empat langkah, satu irama: rencanakan, pantau, kendalikan, amati.',
       groups: [
         { icon: ICON.plan, name: 'Rencanakan', items: [
@@ -248,7 +248,7 @@ const COPY: Record<Lang, Content> = {
     },
     security: {
       eyebrow: 'Keamanan & kepercayaan',
-      title: 'Standar enterprise sejak awal',
+      title: 'Data Anda tetap privat — sejak dirancang',
       sub: 'Rencana, biaya, dan proyeksi Anda bersifat sensitif. Prismatix dirancang menjaganya tetap privat, terisolasi, dan dapat dipertanggungjawabkan — tanpa setelan tambahan.',
       items: [
         ['Terenkripsi saat transit', 'Setiap permintaan berjalan lewat HTTPS dengan HSTS aktif — tidak ada data yang terkirim polos.'],
@@ -270,7 +270,7 @@ const COPY: Record<Lang, Content> = {
       ],
     },
     cta: {
-      title: 'Lihat dengan pasti posisi proyek Anda.',
+      title: 'Berhenti menebak. Mulai melihat.',
       enter: 'Coba gratis',
       note: 'Mulai sandbox pribadi seketika — tanpa undangan, tanpa kartu kredit.',
     },
@@ -423,9 +423,9 @@ export default function HomePage() {
     document.getElementById('features')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 
   return (
-    <div className="relative isolate min-h-screen overflow-x-clip bg-slate-100 text-slate-700 antialiased">
+    <div className="relative isolate min-h-screen overflow-x-clip bg-white text-slate-700 antialiased">
       {/* scroll-progress bar pinned to the very top */}
-      <div aria-hidden className="fixed inset-x-0 top-0 z-40 h-0.5 origin-left bg-gradient-to-r from-sky-500 to-blue-600" style={{ transform: `scaleX(${progress})` }} />
+      <div aria-hidden className="fixed inset-x-0 top-0 z-40 h-0.5 origin-left bg-gradient-to-r from-brand-500 to-indigo-600" style={{ transform: `scaleX(${progress})` }} />
       <style>{`
         @keyframes pmx-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
 
@@ -535,7 +535,7 @@ export default function HomePage() {
               </div>
               <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl">
                 {t.hero.titlePre}
-                <span className="pmx-accent bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-500 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
+                <span className="pmx-accent bg-gradient-to-r from-brand-500 to-indigo-500 bg-clip-text text-transparent">{t.hero.titleAccent}</span>.
               </h1>
               <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-600 lg:mx-0">{t.hero.sub}</p>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
@@ -574,7 +574,7 @@ export default function HomePage() {
           <dl className="mt-14 grid grid-cols-2 gap-x-6 gap-y-6 border-t border-slate-200 pt-8 sm:grid-cols-4">
             {[['5', 'EVM metrics', 'CPI · SPI · EAC · EMV · TCPI'], ['3', 'delivery modes', 'Predictive · Agile · Hybrid'], ['Real-time', 'value tracking', 'Earned value, not gut feel'], ['PMBOK', 'aligned', 'Charter → closeout']].map(([v, l, s]) => (
               <div key={l} className="text-center sm:text-left">
-                <dt className="bg-gradient-to-r from-sky-600 to-blue-700 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent"><CountUp value={v} /></dt>
+                <dt className="bg-gradient-to-r from-brand-600 to-indigo-600 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent"><CountUp value={v} /></dt>
                 <dd className="mt-1 text-sm font-semibold text-slate-700">{l}</dd>
                 <dd className="text-xs text-slate-500">{s}</dd>
               </div>
@@ -591,7 +591,8 @@ export default function HomePage() {
         </section>
 
         {/* ---------- feature constellation ---------- */}
-        <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-12 sm:px-8">
+        <section id="features" className="scroll-mt-24 bg-slate-50">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
           <Reveal className="mb-10 text-center">
             <SectionTitle>{t.features.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.features.sub}</p>
@@ -599,7 +600,7 @@ export default function HomePage() {
           <div className="grid gap-6 md:grid-cols-2">
             {t.features.groups.map((g, gi) => (
               <Reveal key={g.name} className="reveal-zoom" delay={gi * 90}>
-                <div className="group h-full rounded-2xl border border-slate-200 bg-white p-7 backdrop-blur-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:bg-slate-50">
+                <div className="group h-full rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-lg hover:shadow-brand-500/5">
                   <div className="mb-5 flex items-center gap-3">
                     <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-indigo-500 shadow-sm shadow-brand-500/30 ring-1 ring-brand-600/20">
                       <svg viewBox="0 0 24 24" className="h-5 w-5 text-white" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={g.icon} /></svg>
@@ -621,6 +622,7 @@ export default function HomePage() {
               </Reveal>
             ))}
           </div>
+          </div>
         </section>
 
         {/* ---------- showcase: on-brand product mockups (Gantt · S-curve · charts) ---------- */}
@@ -639,7 +641,8 @@ export default function HomePage() {
         </section>
 
         {/* ---------- the language of EVM (abstract, glowing chips) ---------- */}
-        <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <section className="bg-slate-50">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
           <Reveal className="mb-8 text-center">
             <SectionTitle>{t.evm.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.evm.sub}</p>
@@ -654,6 +657,7 @@ export default function HomePage() {
                 </div>
               </Reveal>
             ))}
+          </div>
           </div>
         </section>
 
@@ -684,7 +688,8 @@ export default function HomePage() {
         </section>
 
         {/* ---------- security & trust ---------- */}
-        <section id="security" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-12 sm:px-8">
+        <section id="security" className="scroll-mt-24 bg-brand-50">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
           <Reveal className="mb-10 text-center">
             <SectionTitle eyebrow={t.security.eyebrow}>{t.security.title}</SectionTitle>
             <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.security.sub}</p>
@@ -713,6 +718,7 @@ export default function HomePage() {
               {t.security.note}
             </div>
           </Reveal>
+          </div>
         </section>
 
         {/* ---------- FAQ ---------- */}
@@ -736,18 +742,20 @@ export default function HomePage() {
         {/* ---------- final CTA (bookend) ---------- */}
         <section className="mx-auto max-w-4xl px-5 py-12 text-center sm:px-8">
           <Reveal className="reveal-zoom">
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white px-6 py-12 backdrop-blur-sm">
-              <div className="pointer-events-none absolute -inset-10 -z-10 bg-gradient-to-tr from-brand-600/25 via-violet-600/20 to-indigo-600/25 blur-3xl" />
-              <h2 className="mx-auto max-w-2xl text-3xl font-bold leading-tight text-slate-900 sm:text-4xl">{t.cta.title}</h2>
-              <div className="mt-8">
+            <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 px-6 py-14 shadow-2xl shadow-slate-900/30">
+              <div className="pointer-events-none absolute -inset-10 z-0 bg-gradient-to-tr from-brand-500/30 via-indigo-500/25 to-violet-500/30 blur-3xl" />
+              {/* subtle dot-grid inside the spotlight so it reads designed, not a flat block */}
+              <div aria-hidden className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] opacity-[0.06] [background-size:22px_22px]" />
+              <h2 className="relative z-10 mx-auto max-w-2xl text-3xl font-bold leading-tight text-white sm:text-4xl">{t.cta.title}</h2>
+              <div className="relative z-10 mt-8">
                 <Link
                   to="/login?mode=guest"
-                  className="inline-block rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-8 py-3.5 text-base font-semibold text-white shadow-xl shadow-brand-500/30 transition hover:-translate-y-0.5 hover:from-brand-600 hover:to-brand-700"
+                  className="inline-block rounded-xl bg-gradient-to-r from-brand-400 to-brand-500 px-8 py-3.5 text-base font-semibold text-white shadow-xl shadow-brand-500/40 ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:from-brand-300 hover:to-brand-400"
                 >
                   {t.cta.enter}
                 </Link>
               </div>
-              <p className="mt-4 text-sm text-slate-500">{t.cta.note}</p>
+              <p className="relative z-10 mt-4 text-sm text-slate-400">{t.cta.note}</p>
             </div>
           </Reveal>
         </section>
