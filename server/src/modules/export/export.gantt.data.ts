@@ -47,7 +47,7 @@ export interface GanttExport {
   generatedAt: Date;
 }
 
-type TreeNode = Awaited<ReturnType<typeof getGantt>>['tree'][number];
+export type TreeNode = Awaited<ReturnType<typeof getGantt>>['tree'][number];
 
 // Assigned owners, lead (picResource) first; falls back to legacy pic/User.
 function ownerNames(n: TreeNode): string {
@@ -56,28 +56,47 @@ function ownerNames(n: TreeNode): string {
   return n.picResource?.name ?? n.pic?.name ?? '—';
 }
 
-function flatten(nodes: TreeNode[], critical: Set<string>, depth = 0, acc: GanttRow[] = []): GanttRow[] {
-  for (const n of nodes) {
-    const isSummary = !!n.children?.length;
-    acc.push({
-      id: n.id,
-      depth,
-      wbsCode: n.wbsCode,
-      name: n.name,
-      isMilestone: !!n.isMilestone,
-      isCritical: critical.has(n.id),
-      isSummary,
-      planStart: new Date(n.planStart),
-      planEnd: new Date(n.planEnd),
-      baselineStart: n.baselineStart ? new Date(n.baselineStart) : null,
-      baselineFinish: n.baselineFinish ? new Date(n.baselineFinish) : null,
-      actualStart: n.actualStart ? new Date(n.actualStart) : null,
-      actualFinish: n.actualFinish ? new Date(n.actualFinish) : null,
-      progressPct: n.progressPct ?? 0,
-      pic: ownerNames(n),
-    });
-    if (isSummary) flatten(n.children, critical, depth + 1, acc);
-  }
+// Work-package weight a node contributes: its effective project share, falling back to duration
+// (mirrors the client roll-up so the exported summary % matches what the PM sees on screen).
+function nodeWeight(n: TreeNode): number {
+  return (n.effectiveWeightPct || n.durationDays || 0);
+}
+
+// Flatten the tree (pre-order) AND roll a WEIGHT-weighted progress % up onto every summary
+// (Main Task) row — a parent's stored progressPct is 0, so without this the PDF/Excel showed
+// only leaf progress. Matches WbsPanel's rollup(): leaf weight = effectiveWeightPct||duration,
+// parent % = Σ(child% · childWeight) / ΣchildWeight. Returns each node's {pct, wt} for its parent.
+function flattenNode(n: TreeNode, critical: Set<string>, depth: number, acc: GanttRow[]): { pct: number; wt: number } {
+  const isSummary = !!n.children?.length;
+  const row: GanttRow = {
+    id: n.id,
+    depth,
+    wbsCode: n.wbsCode,
+    name: n.name,
+    isMilestone: !!n.isMilestone,
+    isCritical: critical.has(n.id),
+    isSummary,
+    planStart: new Date(n.planStart),
+    planEnd: new Date(n.planEnd),
+    baselineStart: n.baselineStart ? new Date(n.baselineStart) : null,
+    baselineFinish: n.baselineFinish ? new Date(n.baselineFinish) : null,
+    actualStart: n.actualStart ? new Date(n.actualStart) : null,
+    actualFinish: n.actualFinish ? new Date(n.actualFinish) : null,
+    progressPct: n.progressPct ?? 0,
+    pic: ownerNames(n),
+  };
+  acc.push(row);
+  if (!isSummary) return { pct: row.progressPct, wt: nodeWeight(n) };
+
+  const kids = n.children.map((c) => flattenNode(c, critical, depth + 1, acc));
+  const totalWt = kids.reduce((s, k) => s + k.wt, 0);
+  row.progressPct = totalWt > 0 ? Math.round(kids.reduce((s, k) => s + k.pct * k.wt, 0) / totalWt) : 0;
+  return { pct: row.progressPct, wt: totalWt };
+}
+
+export function flatten(nodes: TreeNode[], critical: Set<string>): GanttRow[] {
+  const acc: GanttRow[] = [];
+  for (const n of nodes) flattenNode(n, critical, 0, acc);
   return acc;
 }
 
