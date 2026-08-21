@@ -6,15 +6,13 @@ import { Card, Spinner } from './ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
 import { formatNum } from '../lib/format';
 import { computeMargin } from '../lib/margin';
-import HealthGauge from './HealthGauge';
-import HealthArcGauge from './HealthArcGauge';
+import HealthBulletGauge from './HealthBulletGauge';
 import { smoothPath, areaPath, type Pt } from './chart/smoothPath';
 import InfoTip from './InfoTip';
 import { useLang } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
 
 // Graphic-first, mobile-friendly project summary — the default landing on phones.
-// Reuses the existing SVG charts (HealthGauge speedometer + EvmTrendChart S-curve) and
+// Reuses the existing SVG charts (HealthBulletGauge SPI/CPI + EvmTrendChart S-curve) and
 // adds a single physical-% progress bar, an EV/AC/BAC cost-bar comparison, and
 // colour-coded metric tiles, so a PM sees where the project stands at a glance.
 
@@ -186,8 +184,6 @@ function SCurveCaption({ planLabel, actualLabel, actualSwatch, planNow, actualNo
 export default function ProjectOverview({ projectId, onJump }: { projectId: string; onJump?: (tab: string) => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
-  const { theme } = useTheme();
-  const light = theme === 'light';
   const evmQ = useQuery({
     queryKey: ['evm', `/projects/${projectId}`, '', 'overview'],
     queryFn: () => api.get<Evm>(`/projects/${projectId}/evm`),
@@ -225,7 +221,6 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const taskTip = id
     ? 'Jumlah tugas yang 100% selesai dibagi total tugas — tiap tugas berbobot sama, dan progres parsial (mis. 90%) belum dihitung selesai.'
     : 'Count of 100%-done tasks ÷ total tasks — every task counts equally, and partial progress (e.g. 90%) is not yet counted as done.';
-  const ragLabel = health === 'NO_DATA' ? (id ? 'Tanpa data' : 'No data') : health.charAt(0) + health.slice(1).toLowerCase();
   const costMax = Math.max(e.bac, e.ac, e.ev, e.pv, 1);
   const overBudget = e.ac > 0 && e.cpi < 1;
 
@@ -271,56 +266,12 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     // key figures run full-width along the bottom. `lg:order-*` sets the desktop visual order while
     // the DOM order stays mobile-friendly (order is ignored in the mobile block-flow layout).
     <div className="space-y-3 lg:grid lg:grid-cols-12 lg:gap-3 lg:space-y-0">
-      {/* Health gauge — compact on mobile (side-by-side: gauge left, quick KPIs right).
-          On sm+ the gauge is centred and larger with progress bar below. Bento hero on lg+. */}
+      {/* Performance — Schedule (SPI) & Cost (CPI) bullet gauges vs the 1.0 target, then progress. */}
       <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="lg:col-span-4 lg:row-span-2 lg:self-start lg:order-1">
-        {/* Mobile: gauge (small, left) + progress bar + SPI/CPI mini tiles (right) */}
-        <div className="flex items-start gap-4 sm:hidden">
-          {light
-            ? <HealthArcGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} compact className="max-w-[128px] shrink-0" />
-            : <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={null} compact className="max-w-[128px] shrink-0" />}
-          <div className="min-w-0 flex-1 space-y-2.5 pt-1">
-            <div>
-              <div className="mb-1 flex items-baseline justify-between text-xs">
-                <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres' : 'Progress'}<InfoTip text={progressTip} /></span>
-                <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                <div className={`h-full rounded-full ${barColor(health)} transition-[width] duration-700`} style={{ width: `${pct}%` }} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-800/40">
-                <div className="text-[9px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">SPI</div>
-                <div className={`text-sm font-bold tabular-nums ${e.pv > 0 && e.spi < 1 ? 'text-red-600 dark:text-red-400' : e.pv > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100'}`}>
-                  {e.pv > 0 ? formatNum(e.spi, 2) : '—'}
-                </div>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-800/40">
-                <div className="text-[9px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">CPI</div>
-                <div className={`text-sm font-bold tabular-nums ${e.ac > 0 && e.cpi < 1 ? 'text-red-600 dark:text-red-400' : e.ac > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100'}`}>
-                  {e.ac > 0 ? formatNum(e.cpi, 2) : '—'}
-                </div>
-              </div>
-            </div>
-            {marginLine && (
-              <p className={`text-[11px] font-semibold ${marginLine.warn ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{marginLine.text}</p>
-            )}
-          </div>
-        </div>
+        <HealthBulletGauge spi={e.spi} cpi={e.cpi} hasSchedule={e.pv > 0} hasCost={e.ac > 0} id={id} />
 
-        {/* Desktop: gauge centred (compact — smaller than the old 250px centrepiece). Light theme
-            uses the flat HealthArcGauge (no in-gauge margin slot) with the margin line below;
-            dark keeps the speedometer with the margin rendered inside it. */}
-        <div className="hidden sm:flex sm:flex-col sm:items-center">
-          {light
-            ? <HealthArcGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} className="max-w-[200px]" />
-            : <HealthGauge spi={e.spi} cpi={e.cpi} pct={pct} status={health} statusLabel={ragLabel} margin={marginLine} className="max-w-[200px]" />}
-          {light && marginLine && (
-            <p className={`mt-1 text-xs font-semibold ${marginLine.warn ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{marginLine.text}</p>
-          )}
-        </div>
-        <div className="mt-1 hidden sm:block">
+        {/* Weighted % complete (the official EVM progress). */}
+        <div className="mt-3.5">
           <div className="mb-1 flex items-baseline justify-between text-xs">
             <span className="font-medium text-slate-600 dark:text-slate-300">{id ? 'Progres (selesai)' : 'Progress (complete)'}<InfoTip text={progressTip} /></span>
             <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{pct}%</span>
@@ -329,6 +280,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
             <div className={`h-full rounded-full ${barColor(health)} transition-[width] duration-700`} style={{ width: `${pct}%` }} />
           </div>
         </div>
+        {marginLine && (
+          <p className={`mt-2 text-xs font-semibold ${marginLine.warn ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{marginLine.text}</p>
+        )}
 
         {/* EVM cost bars — always shown */}
         <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
