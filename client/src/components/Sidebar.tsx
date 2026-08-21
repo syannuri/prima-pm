@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
@@ -99,11 +99,14 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
   return (
     <div className={`flex h-full flex-col border-r shadow-[6px_0_24px_-18px_rgba(0,0,0,0.55)] transition-[width,background-color] duration-200 ${collapsed ? 'w-16' : 'w-60'} ${platform ? 'border-violet-400/20 bg-indigo-950 text-indigo-200' : 'border-black/20 bg-slate-800 text-slate-300'}`}>
       <div className={`flex h-14 items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
-        <span className={`relative inline-block border-[3px] font-brand font-bold tracking-wide text-white ${platform ? 'border-violet-300' : 'border-white'} ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
-          {collapsed ? (platform ? '◆' : 'P') : (platform ? 'PLATFORM' : 'PRISMATIX')}
-          <span className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${platform ? 'bg-violet-400' : 'bg-brand-500'}`} />
-        </span>
-        {platform && !collapsed && <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-300/80">console</span>}
+        {/* Logo → home (Dashboard, or the platform console home). Closes the mobile drawer. */}
+        <Link to={platform ? '/admin/tenants' : '/'} onClick={onNavigate} aria-label="Prismatix — home" className="inline-flex items-center rounded-md outline-none transition hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand-400">
+          <span className={`relative inline-block border-[3px] font-brand font-bold tracking-wide text-white ${platform ? 'border-violet-300' : 'border-white'} ${collapsed ? 'px-2 py-0.5 text-sm' : 'px-2.5 py-1 text-base'}`}>
+            {collapsed ? (platform ? '◆' : 'P') : (platform ? 'PLATFORM' : 'PRISMATIX')}
+            <span className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${platform ? 'bg-violet-400' : 'bg-brand-500'}`} />
+          </span>
+          {platform && !collapsed && <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-300/80">console</span>}
+        </Link>
       </div>
 
       <nav
