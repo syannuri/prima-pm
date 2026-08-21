@@ -489,7 +489,7 @@ export default function HomePage() {
         {/* Frosted white wash — fades in on scroll so the header reads as a clean light bar. */}
         <div className={`pointer-events-none absolute inset-0 -z-10 bg-white/70 transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0'}`} />
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5 sm:px-8">
-          <Wordmark bare />
+          <Link to="/" aria-label="Prismatix — home" className="inline-block rounded-md outline-none transition hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand-400"><Wordmark bare /></Link>
           {/* center nav — anchored to on-page sections (desktop only) */}
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 md:flex">
             {([['#features', t.nav.features], ['#security', t.nav.security], ['#faq', t.nav.faq]] as const).map(([href, label]) => (
