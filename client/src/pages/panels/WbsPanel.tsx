@@ -66,9 +66,9 @@ const SHEEN = 'shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-1px_1px_rgb
 // readable in the pinned pane WITHOUT a translucent bg (which would let scrolled content bleed
 // through the sticky cell).
 const NAME_ACCENT: Record<string, string> = {
-  green: 'border-l-4 border-l-emerald-500 dark:border-l-emerald-500/80',
-  amber: 'border-l-4 border-l-amber-500 dark:border-l-amber-500/80',
-  red: 'border-l-4 border-l-red-500 dark:border-l-red-500/80',
+  green: 'border-l-4 border-l-emerald-400 dark:border-l-emerald-500/70',
+  amber: 'border-l-4 border-l-amber-400 dark:border-l-amber-500/70',
+  red: 'border-l-4 border-l-red-400 dark:border-l-red-500/70',
   slate: 'border-l-4 border-l-transparent',
 };
 
@@ -87,7 +87,7 @@ const SCALE_LABEL: Record<ScaleOpt, string> = { width: 'Fit', fit: 'Auto', day: 
 
 // Shared header control-button chrome (Full screen / Today / Options trigger) and the row style
 // used inside the Options popover, so the toolbar and the menu stay visually consistent.
-const CTRL_BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-100 hover:text-brand-800 dark:border-brand-700 dark:bg-brand-900/20 dark:text-brand-300 dark:hover:bg-brand-900/40 dark:hover:text-brand-200';
+const CTRL_BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200';
 const OPT_ROW = 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700';
 
 // Persist the Gantt view preferences (timeline scale · show-timeline · show-dates) across reloads
@@ -107,9 +107,9 @@ const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 // Header band: a faint brand tint across the whole header (frozen pane + scrolling
 // timeline share the SAME bg so there's no seam at the frozen edge). Opaque so scrolled
 // bars never bleed through the sticky header.
-const FROZEN_TH = 'sticky !z-30 bg-slate-100 dark:bg-slate-800';
+const FROZEN_TH = 'sticky !z-30 bg-brand-50 dark:bg-slate-800';
 const FROZEN_TD = 'sticky z-10'; // opaque zebra bg + group-hover are applied per-row (see rowBg)
-const FROZEN_EDGE = 'border-r border-slate-300 dark:border-slate-800 shadow-[2px_0_6px_-3px_rgba(15,23,42,0.35)]';
+const FROZEN_EDGE = 'border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-3px_rgba(15,23,42,0.25)]';
 
 // WBS dictionary (per-row ⓘ detail: description / deliverable / acceptance criteria / owner) is
 // hidden for now — flip to true to bring back the row toggle, expandable detail and menu entry.
@@ -554,7 +554,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   // narrow so the row-level header sticky doesn't re-freeze the columns horizontally.
   const isNarrow = useIsMobile();
   const stickyCol = !isNarrow;
-  const frozenTh = stickyCol ? FROZEN_TH : 'bg-slate-100 dark:bg-slate-800';
+  const frozenTh = stickyCol ? FROZEN_TH : 'bg-brand-50 dark:bg-slate-800';
   const frozenTd = stickyCol ? FROZEN_TD : '';
   const frozenEdge = stickyCol ? FROZEN_EDGE : '';
   const frozenLeft = (n: number, rest: CSSProperties = {}) => (stickyCol ? { left: n, ...rest } : rest);
@@ -1337,26 +1337,26 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               {/* Row 1 — ✓/WBS/Task are frozen (sticky-left). Plan & Actual groups + Dur/Budget
                   appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
                   then (rowSpan=hrs), 1 otherwise. */}
-              <tr className="text-left text-xs font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-100 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-300 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title="Mark task / subtask complete"><span className="text-slate-500 dark:text-slate-400">✓</span></th>
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-300 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-300 align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
-                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-300 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
+              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
+                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
                 {showDates && (
                   <>
-                    <th colSpan={2} className="border-b border-slate-300 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Planned (baseline plan) dates">Plan</th>
-                    <th colSpan={2} className="border-b border-slate-300 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Actual start & finish (tracking)">Actual</th>
-                    <th rowSpan={2} className="border-b border-slate-300 text-right align-bottom dark:border-slate-800">Dur</th>
-                    <th rowSpan={2} className="border-b border-slate-300 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
-                    <th rowSpan={2} className="border-b border-slate-300 text-right align-bottom dark:border-slate-800" title="Manual work-package weight. Set it on a Main Task to steer the top-down % roll-up; the grey % is the effective share of the whole project (blank = auto from cost/duration).">Weight</th>
+                    <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Planned (baseline plan) dates">Plan</th>
+                    <th colSpan={2} className="border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Actual start & finish (tracking)">Actual</th>
+                    <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">Dur</th>
+                    <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (manpower + material) for this work package — the EVM budget weight">Budget</th>
+                    <th rowSpan={2} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Manual work-package weight. Set it on a Main Task to steer the top-down % roll-up; the grey % is the effective share of the whole project (blank = auto from cost/duration).">Weight</th>
                   </>
                 )}
-                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-300 text-right align-bottom dark:border-slate-800">% </th>
-                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-300 align-bottom dark:border-slate-800">Status</th>
-                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-300 text-right align-bottom dark:border-slate-800" title="Finish variance vs baseline (days)">Var</th>
+                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800">% </th>
+                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">Status</th>
+                <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Finish variance vs baseline (days)">Var</th>
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
                 {showGantt && (
-                  <th ref={timelineRef} rowSpan={showDates ? 2 : 1} className="border-b border-slate-300 align-bottom dark:border-slate-800">
+                  <th ref={timelineRef} rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">
                     <div className="relative h-4" style={{ width: axis?.width }}>
                       {axis?.ticks.map((t) => (
                         <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
@@ -1370,7 +1370,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each group (spreadsheet view only). */}
               {showDates && (
-                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-100 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-bold">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-600 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
                   <th>Start</th>
                   <th>Finish</th>
                   <th>Start</th>
@@ -1388,8 +1388,8 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 // Zebra bg MUST be opaque: these classes land on the sticky/frozen cells, and a
                 // translucent fill let the horizontally-scrolled columns bleed THROUGH the frozen
                 // Task/WBS panel. Opaque slate-50 keeps the zebra subtle while sealing the bleed.
-                const rowBg = alt ? 'bg-slate-100 dark:bg-slate-800' : 'bg-white dark:bg-slate-900';
-                const rowHover = 'group-hover:bg-brand-100 dark:group-hover:bg-slate-700/70';
+                const rowBg = alt ? 'bg-slate-50 dark:bg-slate-800' : 'bg-white dark:bg-slate-900';
+                const rowHover = 'group-hover:bg-slate-100 dark:group-hover:bg-slate-800';
                 const hasKids = !!node.children?.length;
                 const isCollapsed = collapsed.has(node.id);
                 const isCritical = criticalIds.has(node.id);
@@ -1445,7 +1445,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       e.preventDefault();
                       openRowMenu(node, e.clientX, e.clientY);
                     }}
-                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 [&>td]:py-3 [&>td]:pr-3 ${alt ? 'bg-slate-100 dark:bg-slate-800' : ''} hover:bg-brand-100 dark:hover:bg-slate-700/70`}>
+                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 [&>td]:py-3 [&>td]:pr-3 ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent || node.stepCount > 0} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
