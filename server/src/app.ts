@@ -87,7 +87,7 @@ export function createApp() {
                 // are fixed strings so their hashes are stable. If either <script> body changes,
                 // regenerate the hash (the browser console reports the expected sha256 when blocked).
                 scriptSrc: ["'self'",
-                  "'sha256-gJ9Qv9VU/346gdpDRI3qPE9+6RkSI+W4FxyEcgZFlyY='", // pre-paint theme script
+                  "'sha256-nUH+/6Pagm8YhEn7Qpz5imuCh+v9lItqcWNWL8XenFs='", // pre-paint theme script
                   "'sha256-hlEddLEYaHG6RXY0nLDhaOX/rz/CKjL/h5Z3HrkkRd0='", // prerender #root-clear script
                   // Cloudflare Web Analytics beacon (auto-injected when the site is CF-proxied).
                   'https://static.cloudflareinsights.com',
