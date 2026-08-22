@@ -65,6 +65,13 @@ export default function ProjectPage() {
   // specific tab via ?tab=<TabId>. It seeds the initial tab; once the user clicks a tab, that
   // local choice takes over. Validated against the project's actual tab list below.
   const requestedTab = searchParams.get('tab') as Tab | null;
+  // Deep-link from an OVERDUE_TASK notification: ?focus=<taskId> opens Schedule AND scrolls/
+  // highlights that task. Read once on mount, then strip from the URL so a refresh doesn't re-flash.
+  const [focusTaskId] = useState<string | null>(() => searchParams.get('focus'));
+  useEffect(() => {
+    if (searchParams.get('focus')) { searchParams.delete('focus'); setSearchParams(searchParams, { replace: true }); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [tab, setTab] = useState<Tab | null>(null);
   const isMobile = useIsMobile();
   // Anchor at the top of the tab strip — selecting a tab scrolls it up so the freshly-loaded
@@ -268,7 +275,7 @@ export default function ProjectPage() {
       {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
       {activeTab === 'RAID' && <RaidPanel projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
       {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}
-      {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} />}
+      {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} focusTaskId={focusTaskId} />}
       {activeTab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
       {activeTab === 'Kick-Off' && chartered && <KickoffPanel projectId={projectId} />}
       {activeTab === 'UAT' && chartered && <UatPanel projectId={projectId} />}

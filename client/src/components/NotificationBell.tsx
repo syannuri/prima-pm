@@ -14,8 +14,29 @@ interface AttentionItem {
   severity: 'HIGH' | 'MEDIUM' | 'LOW';
   tab: string;
   message: string;
+  entityId?: string; // e.g. the overdue task id → deep-link opens the tab AND highlights it
   key: string; // dismissal signature — POST to follow it up
 }
+
+// Deep-link a project notification to the AFFECTED tab (ProjectPage reads ?tab=). Stored inbox
+// notifications carry only a `type`; change items carry an `area` — map each to the project tab
+// so a click lands where the change happened, not just the Overview.
+const TYPE_TAB: Record<string, string> = {
+  OVERDUE_TASK: 'Schedule', SCHEDULE: 'Schedule',
+  HIGH_RISK: 'Risk',
+  BUDGET_OVERRUN: 'Cost', OVERSPEND: 'Cost', COST_BASELINE: 'Cost',
+  CHANGE_REQUEST: 'Change Req', CR_SUBMITTED: 'Change Req',
+  APPROVAL_PENDING: 'Change Req', APPROVAL_OVERDUE: 'Change Req',
+};
+const AREA_TAB: Record<string, string> = { WBS: 'Schedule', Cost: 'Cost', Risk: 'Risk' };
+// Build /projects/:id, appending ?tab= (and &focus=) when we know where the event happened.
+const projectLink = (projectId: string, tab?: string, extra?: string) => {
+  const qs = new URLSearchParams();
+  if (tab) qs.set('tab', tab);
+  if (extra) qs.set('focus', extra);
+  const q = qs.toString();
+  return `/projects/${projectId}${q ? `?${q}` : ''}`;
+};
 
 // Small ✓ "followed up" action shared by both lists — hides the item (re-appears for a live alert
 // only if it changes).
@@ -256,7 +277,7 @@ export default function NotificationBell() {
                         <div className="min-w-0 flex-1">
                           {n.type === 'ORG_SIGNUP_PENDING'
                             ? <Link to="/admin/tenants" onClick={() => setOpen(false)} className="block">{inner}</Link>
-                            : n.projectId ? <Link to={`/projects/${n.projectId}${n.type === 'ACTIVATION_READY' ? '?review=activation' : ''}`} onClick={() => setOpen(false)} className="block">{inner}</Link> : inner}
+                            : n.projectId ? <Link to={n.type === 'ACTIVATION_READY' ? `/projects/${n.projectId}?review=activation` : projectLink(n.projectId, TYPE_TAB[n.type])} onClick={() => setOpen(false)} className="block">{inner}</Link> : inner}
                         </div>
                         <FollowUpButton onClick={() => followUpInbox.mutate(n.id)} />
                       </li>
@@ -283,7 +304,7 @@ export default function NotificationBell() {
                 {attn.items.map((it, i) => (
                   <li key={it.key ?? i} className="flex items-center gap-1">
                     <Link
-                      to={`/projects/${it.projectId}`}
+                      to={projectLink(it.projectId, it.tab, it.entityId)}
                       onClick={() => setOpen(false)}
                       className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
                     >
@@ -312,7 +333,7 @@ export default function NotificationBell() {
                   <ul className="max-h-64 space-y-0.5 overflow-y-auto">
                     {changes.changes.map((c) => (
                       <li key={c.id}>
-                        <Link to={`/projects/${c.projectId}`} onClick={() => setOpen(false)} className={`block rounded-lg px-2 py-1 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 ${c.isNew ? 'bg-brand-50/70 dark:bg-brand-600/15' : ''}`}>
+                        <Link to={c.projectId ? projectLink(c.projectId, AREA_TAB[c.area]) : '#'} onClick={() => setOpen(false)} className={`block rounded-lg px-2 py-1 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 ${c.isNew ? 'bg-brand-50/70 dark:bg-brand-600/15' : ''}`}>
                           <div className="flex items-center gap-1.5 text-xs">
                             {c.isNew && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" title="New" />}
                             <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${AREA_COLOR[c.area] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{c.area}</span>
