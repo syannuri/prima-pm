@@ -500,7 +500,7 @@ function nextTaskStart(rows: Row[], parentId: string | null): Date | null {
   return Number.isFinite(maxEnd) ? new Date(maxEnd) : null;
 }
 
-export default function WbsPanel({ projectId }: { projectId: string }) {
+export default function WbsPanel({ projectId, focusTaskId }: { projectId: string; focusTaskId?: string | null }) {
   const qc = useQueryClient();
   const base = `/projects/${projectId}/schedule`;
   const canEdit = useProjectWrite(projectId);
@@ -602,6 +602,19 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
   };
 
   const rows = useMemo(() => (ganttQ.data ? flatten(ganttQ.data.tree, collapsed) : []), [ganttQ.data, collapsed]);
+  // Deep-link from an OVERDUE_TASK notification (?focus=<taskId>): once the rows render, scroll
+  // that task into view and flash a highlight so the PM lands directly on the culprit.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusTaskId || !rows.some((r) => r.node.id === focusTaskId)) return;
+    setFlashId(focusTaskId);
+    const scrollT = setTimeout(() => {
+      (scrollRef.current?.querySelector(`[data-task-row="${focusTaskId}"]`) as HTMLElement | null)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    const clearT = setTimeout(() => setFlashId(null), 2800);
+    return () => { clearTimeout(scrollT); clearTimeout(clearT); };
+  }, [focusTaskId, rows]);
   // Every parent id (for "collapse all") + whether anything is currently collapsed.
   const allParentIds = useMemo(() => {
     const ids: string[] = [];
@@ -1438,6 +1451,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                 return (
                   <Fragment key={node.id}>
                   <tr
+                    data-task-row={node.id}
                     onContextMenu={(e) => {
                       // Right-click a task row → the action menu. Skip when the target is a form field
                       // (date/owner/% inline editors) so their native context menu still works.
@@ -1445,7 +1459,7 @@ export default function WbsPanel({ projectId }: { projectId: string }) {
                       e.preventDefault();
                       openRowMenu(node, e.clientX, e.clientY);
                     }}
-                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 [&>td]:py-3 [&>td]:pr-3 ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800`}>
+                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 [&>td]:py-3 [&>td]:pr-3 [&>td]:transition-colors ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent || node.stepCount > 0} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />

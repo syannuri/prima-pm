@@ -21,6 +21,9 @@ export interface Alert {
   severity: AlertSeverity;
   tab: 'Schedule' | 'Risk' | 'Cost';
   message: string;
+  // Optional id of the specific entity the alert is about (e.g. the overdue task) so the client
+  // can deep-link to it and scroll/highlight it, not just open the tab.
+  entityId?: string;
 }
 
 // Raw inputs the alert rules need, per project. Loaded in bulk (loadAlertInputs) so many
@@ -98,6 +101,7 @@ function computeAlerts(input: AlertInput, now: Date): { alerts: Alert[]; counts:
         severity: daysLate > 14 ? 'HIGH' : 'MEDIUM',
         tab: 'Schedule',
         message: `Task "${t.name}" is ${daysLate}d overdue (${t.progressPct}% done)`,
+        entityId: t.id,
       });
     }
   }
@@ -299,6 +303,7 @@ export interface AttentionItem {
   severity: AlertSeverity;
   tab: string;
   message: string;
+  entityId?: string; // specific entity (e.g. overdue task id) for deep-link + highlight
   key: string; // dismissal signature (POST /attention/dismiss to follow it up)
 }
 
@@ -329,7 +334,7 @@ export async function getAttentionItems(userId: string, role: string, now: Date)
   const push = (i: Omit<AttentionItem, 'key'>) => items.push({ ...i, key: alertSignature(i.projectId, i.type, i.message) });
   projects.forEach((p) => {
     for (const a of computeAlerts(inputs.get(p.id)!, now).alerts) {
-      push({ projectId: p.id, projectCode: p.code, projectName: p.name, type: a.type, severity: a.severity, tab: a.tab, message: a.message });
+      push({ projectId: p.id, projectCode: p.code, projectName: p.name, type: a.type, severity: a.severity, tab: a.tab, message: a.message, entityId: a.entityId });
     }
   });
 
