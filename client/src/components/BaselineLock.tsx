@@ -45,6 +45,8 @@ export default function BaselineLock({ projectId }: { projectId: string }) {
       // the ['gantt', projectId] query, so it must refetch here — otherwise unlocking flips the
       // badge but the Gantt keeps its stale locked state and plan dates stay un-editable.
       qc.invalidateQueries({ queryKey: ['gantt', projectId] });
+      // Locking captures a new baseline revision — refresh the history panel.
+      qc.invalidateQueries({ queryKey: ['baseline-versions', projectId] });
       // A matching approval workflow routes the lock/unlock for sign-off instead of applying it now.
       if (res.approvalPending) {
         qc.invalidateQueries({ queryKey: ['my-approvals-count'] });
