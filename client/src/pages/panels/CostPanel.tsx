@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
@@ -79,7 +79,7 @@ function AccordionHeader({ title, count, total, open, onToggle }: { title: strin
   );
 }
 
-export default function CostPanel({ projectId, onNavigateTab }: { projectId: string; onNavigateTab?: (tab: string) => void }) {
+export default function CostPanel({ projectId, onNavigateTab, focusId }: { projectId: string; onNavigateTab?: (tab: string) => void; focusId?: string | null }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState({ direct: true, indirect: false, actual: false });
   const toggle = (k: 'direct' | 'indirect' | 'actual') => setOpen((o) => ({ ...o, [k]: !o[k] }));
@@ -108,6 +108,18 @@ export default function CostPanel({ projectId, onNavigateTab }: { projectId: str
     qc.invalidateQueries({ queryKey: ['gantt', projectId] }); // WBS mandays/budget + Owner prefilled from a manpower resource
   };
 
+  // Deep-link from a budget notification (?focus=): a project-level cost alert has no single line,
+  // so we flash the relevant summary section — 'baseline' (charter↔baseline banner) for a budget
+  // overrun, 'spent' (drawdown tiles) for an overspend.
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusId || (focusId !== 'baseline' && focusId !== 'spent') || !data) return;
+    setFlash(focusId);
+    const s = setTimeout(() => document.querySelector(`[data-cost-focus="${focusId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+    const c = setTimeout(() => setFlash(null), 2800);
+    return () => { clearTimeout(s); clearTimeout(c); };
+  }, [focusId, data]);
+
   if (isLoading) return <PanelLoading />;
   const b = data?.baseline;
   // Overall spend vs remaining across ALL costed lines (Direct + Indirect). Reserves
@@ -134,14 +146,14 @@ export default function CostPanel({ projectId, onNavigateTab }: { projectId: str
       </div>
       {/* Overall drawdown across Direct + Indirect: committed, spent, remaining (budget − spent),
           and available (budget − spent − committed = truly free to commit). */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div data-cost-focus="spent" className={`grid grid-cols-2 gap-3 rounded-xl transition-all sm:grid-cols-4 ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
         <Stat label="Committed" value={formatIdr(data?.committedTotal ?? 0)} hint="Awarded→delivered contracts charged to budget lines (Procurement). Obligated, not necessarily paid." />
         <Stat label="Spent to date" value={formatIdr(totalSpent)} hint="Direct + Indirect actuals (manpower from timesheet)" />
         <Stat label="Remaining budget" value={formatIdr(totalRemaining)} hint="Direct + Indirect budget − spent (does not net open commitments)" valueClass={totalRemaining < 0 ? 'text-red-600 dark:text-red-400' : undefined} />
         <Stat label="Available" value={formatIdr(data?.availableTotal ?? 0)} hint="Budget − spent − committed: what's still free to commit after open contracts/POs." strong valueClass={(data?.availableTotal ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} />
       </div>
       {data?.highLevelCharterCost != null && b && (
-        <CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} />
+        <div data-cost-focus="baseline" className={`rounded-xl transition-all ${flash === 'baseline' ? 'ring-2 ring-amber-400' : ''}`}><CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} /></div>
       )}
 
       {/* Cost lines as collapsible accordion sections (header + total always visible). */}

@@ -65,9 +65,10 @@ export default function ProjectPage() {
   // specific tab via ?tab=<TabId>. It seeds the initial tab; once the user clicks a tab, that
   // local choice takes over. Validated against the project's actual tab list below.
   const requestedTab = searchParams.get('tab') as Tab | null;
-  // Deep-link from an OVERDUE_TASK notification: ?focus=<taskId> opens Schedule AND scrolls/
-  // highlights that task. Read once on mount, then strip from the URL so a refresh doesn't re-flash.
-  const [focusTaskId] = useState<string | null>(() => searchParams.get('focus'));
+  // Deep-link from a notification: ?focus=<id> opens the affected tab AND scrolls/highlights the
+  // entity — a task id (Schedule), a risk id (Risk), or a Cost section keyword ('baseline'|'spent').
+  // Read once on mount, then strip from the URL so a refresh doesn't re-flash.
+  const [focusId] = useState<string | null>(() => searchParams.get('focus'));
   useEffect(() => {
     if (searchParams.get('focus')) { searchParams.delete('focus'); setSearchParams(searchParams, { replace: true }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -257,7 +258,7 @@ export default function ProjectPage() {
       {activeTab === 'Overview' && chartered && <ProjectOverview projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
       {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} costBaselineIdr={project.costBaselineIdr} personalOwnerId={project.personalOwnerId ?? null} assignedPmId={project.pmUserId} assignedPmName={project.pm?.name ?? null} />}
       {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
-      {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} />}
+      {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} focusId={focusId} />}
       {activeTab === 'Procurement' && chartered && <ProcurementPanel projectId={projectId} />}
       {activeTab === 'Stakeholders' && <StakeholderPanel projectId={projectId} />}
       {activeTab === 'Requirements' && <RequirementsPanel projectId={projectId} />}
@@ -272,10 +273,10 @@ export default function ProjectPage() {
       )}
       {activeTab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
       {activeTab === 'EVM Trend' && chartered && <EvmTrendPanel projectId={projectId} />}
-      {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} />}
+      {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} focusId={focusId} />}
       {activeTab === 'RAID' && <RaidPanel projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
       {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}
-      {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} focusTaskId={focusTaskId} />}
+      {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} focusTaskId={focusId} />}
       {activeTab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
       {activeTab === 'Kick-Off' && chartered && <KickoffPanel projectId={projectId} />}
       {activeTab === 'UAT' && chartered && <UatPanel projectId={projectId} />}

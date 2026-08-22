@@ -30,7 +30,7 @@ export interface Alert {
 // projects share a FIXED number of queries instead of ~9 per project via getCostSummary.
 interface AlertInput {
   tasks: { id: string; name: string; parentTaskId: string | null; planEnd: Date; progressPct: number }[];
-  risks: { code: string; title: string; severity: string; status: string }[];
+  risks: { id: string; code: string; title: string; severity: string; status: string }[];
   bac: number;            // cost baseline (PMB) = costBaseline.costBaseline
   charterCost: number;    // charter high-level estimate (hiCostIdr)
   actualCostTotal: number; // Σ ActualCostEntry.amount — same value getCostSummary sums
@@ -46,7 +46,7 @@ async function loadAlertInputs(ids: string[]): Promise<Map<string, AlertInput>> 
 
   const [taskRows, riskRows, baselines, charters, acAgg] = await Promise.all([
     prisma.task.findMany({ where: { projectId: { in: ids } }, select: { id: true, projectId: true, name: true, parentTaskId: true, planEnd: true, progressPct: true } }),
-    prisma.risk.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, code: true, title: true, severity: true, status: true } }),
+    prisma.risk.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, id: true, code: true, title: true, severity: true, status: true } }),
     prisma.costBaseline.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, costBaseline: true } }),
     prisma.projectCharter.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, hiCostIdr: true } }),
     prisma.actualCostEntry.groupBy({ by: ['projectId'], where: { projectId: { in: ids } }, _sum: { amount: true } }),
@@ -62,7 +62,7 @@ async function loadAlertInputs(ids: string[]): Promise<Map<string, AlertInput>> 
   for (const r of riskRows) {
     let arr = risksBy.get(r.projectId);
     if (!arr) risksBy.set(r.projectId, (arr = []));
-    arr.push({ code: r.code, title: r.title, severity: r.severity, status: r.status });
+    arr.push({ id: r.id, code: r.code, title: r.title, severity: r.severity, status: r.status });
   }
   const bacBy = new Map(baselines.map((b) => [b.projectId, dec(b.costBaseline)] as const));
   const charterBy = new Map(charters.map((c) => [c.projectId, dec(c.hiCostIdr)] as const));
@@ -115,6 +115,7 @@ function computeAlerts(input: AlertInput, now: Date): { alerts: Alert[]; counts:
         severity: r.severity === 'CRITICAL' ? 'HIGH' : 'MEDIUM',
         tab: 'Risk',
         message: `Risk ${r.code} "${r.title}" is ${r.severity}`,
+        entityId: r.id,
       });
     }
   }
@@ -130,6 +131,8 @@ function computeAlerts(input: AlertInput, now: Date): { alerts: Alert[]; counts:
       severity: 'MEDIUM',
       tab: 'Cost',
       message: `Detailed budget (BAC) exceeds the charter estimate by Rp ${Math.round(bacOverCharter).toLocaleString('id-ID')}`,
+      // Project-level budget signal — no single line to point at, so focus the charter↔baseline banner.
+      entityId: 'baseline',
     });
   }
   if (bac > 0 && actualCostTotal > bac) {
@@ -138,6 +141,8 @@ function computeAlerts(input: AlertInput, now: Date): { alerts: Alert[]; counts:
       severity: 'HIGH',
       tab: 'Cost',
       message: `Actual cost has exceeded BAC by Rp ${Math.round(actualCostTotal - bac).toLocaleString('id-ID')}`,
+      // Project-level overspend — focus the Spent/Available summary tiles.
+      entityId: 'spent',
     });
   }
 
