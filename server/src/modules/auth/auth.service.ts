@@ -8,6 +8,7 @@ import { emailEnabled, sendMail } from '../../lib/mailer.js';
 import { orgSignupAdminAlertMail } from '../../lib/mail/templates.js';
 import { initialEmailVerifiedAt, issueActivationEmail } from './verification.service.js';
 import { writeAudit } from '../../lib/audit.js';
+import { logger } from '../../lib/observability.js';
 import { verifyGoogleIdToken } from '../../lib/google.js';
 import { isGuestSignupEnabled, isGoogleLoginEnabled, isOrgSignupEnabled } from '../settings/settings.service.js';
 import { multitenancyEnforced, runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
@@ -47,13 +48,17 @@ async function resolveActiveMembership(userId: string, preferred?: string): Prom
 // stale global role=ADMIN. Such an account must NOT authenticate on that leftover role. Guests always
 // hold an ACTIVE personal membership (so they pass the ACTIVE check); platform admins may operate
 // without a tenant membership, so they are exempted.
-async function assertNotFullySuspended(user: { id: string; isPlatformAdmin: boolean }): Promise<void> {
+async function assertNotFullySuspended(user: { id: string; email: string; isPlatformAdmin: boolean }): Promise<void> {
   if (!multitenancyEnforced()) return;
   const memberships = await prisma.membership.findMany({ where: { userId: user.id }, select: { tenant: { select: { status: true } } } });
   if (memberships.some((m) => m.tenant.status === 'ACTIVE')) return;
   if (user.isPlatformAdmin) return;
-  // Orphaned account: no workspace at all. Refuse — never fall back to the stale global role.
+  // Orphaned account: no workspace at all. Refuse — never fall back to the stale global role. This is
+  // also an EARLY-WARNING signal: a live, non-guest account with zero memberships shouldn't exist under
+  // enforcement, so a login attempt on one likely means an orphan slipped through (see ghost-admin fix).
   if (memberships.length === 0) {
+    logger.warn({ event: 'security.ghost_login_blocked', userId: user.id, email: user.email }, 'blocked login: account attached to no workspace (possible orphaned/ghost account)');
+    await alertPlatformAdminsOfGhostLogin(user.email);
     throw Forbidden('Your account is not attached to any workspace. Contact your administrator.');
   }
   // Has membership(s) but none ACTIVE. Tailor the message: a self-serve org owner whose only tenant is
@@ -62,6 +67,26 @@ async function assertNotFullySuspended(user: { id: string; isPlatformAdmin: bool
     throw Forbidden('Your workspace is awaiting administrator approval.');
   }
   throw Forbidden('Your workspace has been suspended. Contact your administrator.');
+}
+
+// Early-warning alert: a login was refused because the account belongs to NO workspace (an orphaned /
+// "ghost" account — see the ghost-admin fix). Drops an in-app notification into every platform admin's
+// inbox so the leftover account gets reviewed/cleaned up. Best-effort: never let alerting break login.
+async function alertPlatformAdminsOfGhostLogin(email: string): Promise<void> {
+  try {
+    await runAsSystem(async () => {
+      const admins = await prisma.user.findMany({ where: { isPlatformAdmin: true, isActive: true }, select: { id: true } });
+      for (const admin of admins) {
+        const home = await prisma.membership.findFirst({ where: { userId: admin.id }, orderBy: { createdAt: 'asc' }, select: { tenantId: true } });
+        if (!home) continue; // an admin with no membership has no scoped inbox to write to
+        await prisma.notification.create({
+          data: { userId: admin.id, tenantId: home.tenantId, type: 'SECURITY_GHOST_LOGIN', title: 'Blocked login: account with no workspace', body: `A login was refused for “${email}” — the account is attached to no workspace (a possible orphaned/ghost account). Review it in the platform console.` },
+        });
+      }
+    });
+  } catch (err) {
+    logger.error({ err }, '[security] failed to alert platform admins of ghost-login attempt');
+  }
 }
 
 // Give a brand-new GUEST their OWN personal tenant — the tenant-native sandbox that replaces the

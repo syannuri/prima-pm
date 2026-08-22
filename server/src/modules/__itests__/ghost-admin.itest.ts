@@ -63,6 +63,15 @@ describe('ghost-admin: orphaned accounts cannot authenticate (Layer 1)', () => {
     expect(res.status).toBe(403);
     expect(res.body.error.message).toMatch(/not attached to any workspace/i);
     expect(res.body.accessToken).toBeUndefined();
+
+    // Early-warning: the blocked attempt drops a SECURITY_GHOST_LOGIN alert into the platform admin inbox.
+    const alert = await runAsSystem(() => prisma.notification.findFirst({
+      where: { type: 'SECURITY_GHOST_LOGIN' }, orderBy: { createdAt: 'desc' },
+    }));
+    expect(alert).toBeTruthy();
+    expect(alert!.body).toContain('ghost@x.test');
+    const plat = await prisma.user.findUniqueOrThrow({ where: { email: 'plat@ghost.test' }, select: { id: true } });
+    expect(alert!.userId).toBe(plat.id);
   });
 
   it('still lets a GUEST in — a guest holds an ACTIVE personal membership (200)', async () => {
