@@ -500,7 +500,7 @@ function nextTaskStart(rows: Row[], parentId: string | null): Date | null {
   return Number.isFinite(maxEnd) ? new Date(maxEnd) : null;
 }
 
-export default function WbsPanel({ projectId, focusTaskId }: { projectId: string; focusTaskId?: string | null }) {
+export default function WbsPanel({ projectId, focusTaskId, focusKey }: { projectId: string; focusTaskId?: string | null; focusKey?: number }) {
   const qc = useQueryClient();
   const base = `/projects/${projectId}/schedule`;
   const canEdit = useProjectWrite(projectId);
@@ -614,7 +614,7 @@ export default function WbsPanel({ projectId, focusTaskId }: { projectId: string
     }, 120);
     const clearT = setTimeout(() => setFlashId(null), 2800);
     return () => { clearTimeout(scrollT); clearTimeout(clearT); };
-  }, [focusTaskId, rows]);
+  }, [focusTaskId, focusKey, rows]);
   // Every parent id (for "collapse all") + whether anything is currently collapsed.
   const allParentIds = useMemo(() => {
     const ids: string[] = [];

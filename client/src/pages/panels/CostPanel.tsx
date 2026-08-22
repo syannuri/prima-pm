@@ -79,7 +79,7 @@ function AccordionHeader({ title, count, total, open, onToggle }: { title: strin
   );
 }
 
-export default function CostPanel({ projectId, onNavigateTab, focusId }: { projectId: string; onNavigateTab?: (tab: string) => void; focusId?: string | null }) {
+export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey }: { projectId: string; onNavigateTab?: (tab: string) => void; focusId?: string | null; focusKey?: number }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState({ direct: true, indirect: false, actual: false });
   const toggle = (k: 'direct' | 'indirect' | 'actual') => setOpen((o) => ({ ...o, [k]: !o[k] }));
@@ -118,7 +118,7 @@ export default function CostPanel({ projectId, onNavigateTab, focusId }: { proje
     const s = setTimeout(() => document.querySelector(`[data-cost-focus="${focusId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
     const c = setTimeout(() => setFlash(null), 2800);
     return () => { clearTimeout(s); clearTimeout(c); };
-  }, [focusId, data]);
+  }, [focusId, focusKey, data]);
 
   if (isLoading) return <PanelLoading />;
   const b = data?.baseline;

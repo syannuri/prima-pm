@@ -23,7 +23,7 @@ const RESPONSES_BY_KIND: Record<string, string[]> = {
 };
 const cap = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : s);
 
-export default function RiskPanel({ projectId, focusId }: { projectId: string; focusId?: string | null }) {
+export default function RiskPanel({ projectId, focusId, focusKey }: { projectId: string; focusId?: string | null; focusKey?: number }) {
   const qc = useQueryClient();
   const [filesFor, setFilesFor] = useState<{ id: string; code: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function RiskPanel({ projectId, focusId }: { projectId: string; f
     const s = setTimeout(() => document.querySelector(`[data-risk-row="${focusId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
     const c = setTimeout(() => setFlashId(null), 2800);
     return () => { clearTimeout(s); clearTimeout(c); };
-  }, [focusId, risksQ.data]);
+  }, [focusId, focusKey, risksQ.data]);
   const analysisQ = useQuery({ queryKey: ['risk-analysis', projectId], queryFn: () => api.get<RiskAnalysis>(`${base}/analysis`) });
 
   const invalidate = () => {

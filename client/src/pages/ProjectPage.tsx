@@ -65,15 +65,23 @@ export default function ProjectPage() {
   // specific tab via ?tab=<TabId>. It seeds the initial tab; once the user clicks a tab, that
   // local choice takes over. Validated against the project's actual tab list below.
   const requestedTab = searchParams.get('tab') as Tab | null;
-  // Deep-link from a notification: ?focus=<id> opens the affected tab AND scrolls/highlights the
-  // entity — a task id (Schedule), a risk id (Risk), or a Cost section keyword ('baseline'|'spent').
-  // Read once on mount, then strip from the URL so a refresh doesn't re-flash.
-  const [focusId] = useState<string | null>(() => searchParams.get('focus'));
-  useEffect(() => {
-    if (searchParams.get('focus')) { searchParams.delete('focus'); setSearchParams(searchParams, { replace: true }); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [tab, setTab] = useState<Tab | null>(null);
+  // Deep-link from a notification: ?focus=<id> opens the affected tab AND scrolls/highlights the
+  // entity (task id → Schedule, risk id → Risk, or a Cost keyword 'baseline'|'spent'). Reactive to
+  // EVERY param change (not just mount) so it works even when the project is ALREADY open — e.g.
+  // clicking an overdue notification while already on the Gantt. `key` bumps per click so clicking
+  // the SAME task re-scrolls/re-flashes. ?focus is stripped after so a refresh doesn't re-flash.
+  const [focus, setFocus] = useState<{ id: string; key: number } | null>(null);
+  useEffect(() => {
+    const f = searchParams.get('focus');
+    if (!f) return;
+    setFocus({ id: f, key: Date.now() });
+    const tabParam = searchParams.get('tab') as Tab | null;
+    if (tabParam) setTab(tabParam); // force the affected tab even if the user was on another one
+    const next = new URLSearchParams(searchParams);
+    next.delete('focus');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const isMobile = useIsMobile();
   // Anchor at the top of the tab strip — selecting a tab scrolls it up so the freshly-loaded
   // panel is in view (the project header/alerts above can push content below the fold).
@@ -258,7 +266,7 @@ export default function ProjectPage() {
       {activeTab === 'Overview' && chartered && <ProjectOverview projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
       {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} costBaselineIdr={project.costBaselineIdr} personalOwnerId={project.personalOwnerId ?? null} assignedPmId={project.pmUserId} assignedPmName={project.pm?.name ?? null} />}
       {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
-      {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} focusId={focusId} />}
+      {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} focusId={focus?.id ?? null} focusKey={focus?.key} />}
       {activeTab === 'Procurement' && chartered && <ProcurementPanel projectId={projectId} />}
       {activeTab === 'Stakeholders' && <StakeholderPanel projectId={projectId} />}
       {activeTab === 'Requirements' && <RequirementsPanel projectId={projectId} />}
@@ -273,10 +281,10 @@ export default function ProjectPage() {
       )}
       {activeTab === 'Forecast' && chartered && <ForecastPanel projectId={projectId} />}
       {activeTab === 'EVM Trend' && chartered && <EvmTrendPanel projectId={projectId} />}
-      {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} focusId={focusId} />}
+      {activeTab === 'Risk' && chartered && <RiskPanel projectId={projectId} focusId={focus?.id ?? null} focusKey={focus?.key} />}
       {activeTab === 'RAID' && <RaidPanel projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
       {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}
-      {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} focusTaskId={focusId} />}
+      {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} focusTaskId={focus?.id ?? null} focusKey={focus?.key} />}
       {activeTab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
       {activeTab === 'Kick-Off' && chartered && <KickoffPanel projectId={projectId} />}
       {activeTab === 'UAT' && chartered && <UatPanel projectId={projectId} />}

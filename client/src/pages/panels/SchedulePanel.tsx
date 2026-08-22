@@ -5,7 +5,7 @@ import { formatNum } from '../../lib/format';
 import WbsPanel from './WbsPanel';
 import CriticalPathPanel from './CriticalPathPanel';
 
-export default function SchedulePanel({ projectId, focusTaskId }: { projectId: string; focusTaskId?: string | null }) {
+export default function SchedulePanel({ projectId, focusTaskId, focusKey }: { projectId: string; focusTaskId?: string | null; focusKey?: number }) {
   const base = `/projects/${projectId}/schedule`;
   const syncQ = useQuery({ queryKey: ['mp-sync', projectId], queryFn: () => api.get<{ rows: ManpowerSyncRow[] }>(`${base}/manpower-sync`) });
 
@@ -13,7 +13,7 @@ export default function SchedulePanel({ projectId, focusTaskId }: { projectId: s
     <div className="space-y-5">
       {/* Project Health (EVM) moved to its own Monitoring → Health tab + the header strip.
           Anchor ids let the header "More → Jump to" menu deep-link to these sections. */}
-      <div id="section-wbs" className="scroll-mt-24"><WbsPanel projectId={projectId} focusTaskId={focusTaskId} /></div>
+      <div id="section-wbs" className="scroll-mt-24"><WbsPanel projectId={projectId} focusTaskId={focusTaskId} focusKey={focusKey} /></div>
       <div id="section-cpm" className="scroll-mt-24"><CriticalPathPanel projectId={projectId} /></div>
       <div id="section-manpower" className="scroll-mt-24"><ManpowerSync rows={syncQ.data?.rows ?? []} /></div>
     </div>
