@@ -5,6 +5,8 @@ import Layout from './components/Layout';
 import AppShellSkeleton from './components/AppShellSkeleton';
 import { PanelLoading } from './components/ui';
 import { OnboardingProvider } from './context/OnboardingContext';
+import { GuidedSetupProvider } from './context/GuidedSetupContext';
+import GuidedSetup from './components/GuidedSetup';
 import OnboardingTour from './components/OnboardingTour';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -58,6 +60,7 @@ export default function App() {
 
   return (
     <OnboardingProvider>
+     <GuidedSetupProvider>
       <Layout>
         <Suspense fallback={<PanelLoading className="py-24" />}>
         <Routes>
@@ -84,6 +87,8 @@ export default function App() {
         </Suspense>
       </Layout>
       <OnboardingTour />
+      <GuidedSetup />
+     </GuidedSetupProvider>
     </OnboardingProvider>
   );
 }
