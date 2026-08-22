@@ -39,14 +39,24 @@ async function resolveActiveMembership(userId: string, preferred?: string): Prom
   return first ? { tenantId: first.tenantId, role: first.role } : undefined;
 }
 
-// A member of ONLY suspended workspace(s) must be refused login outright (not handed a token that
-// merely 403s on the next request — the client stays "logged in" on a 403). No membership at all is
-// left alone (guests/off-mode). Enforcement-gated, mirroring the requireAuth suspend check.
-async function assertNotFullySuspended(userId: string): Promise<void> {
+// A member of ONLY suspended workspace(s) — OR of no workspace at all — must be refused login outright
+// (not handed a token that merely 401/403s on the next request — the client stays "logged in").
+// Enforcement-gated, mirroring the requireAuth suspend check. SECURITY (ghost-admin fix): under
+// enforcement every real account has a membership, so ZERO memberships means an orphaned row — e.g. an
+// org-signup owner whose only tenant was later rejected/hard-deleted, leaving the User behind with its
+// stale global role=ADMIN. Such an account must NOT authenticate on that leftover role. Guests always
+// hold an ACTIVE personal membership (so they pass the ACTIVE check); platform admins may operate
+// without a tenant membership, so they are exempted.
+async function assertNotFullySuspended(user: { id: string; isPlatformAdmin: boolean }): Promise<void> {
   if (!multitenancyEnforced()) return;
-  const memberships = await prisma.membership.findMany({ where: { userId }, select: { tenant: { select: { status: true } } } });
-  if (memberships.length === 0 || memberships.some((m) => m.tenant.status === 'ACTIVE')) return;
-  // No ACTIVE workspace to sign into. Tailor the message: a self-serve org owner whose only tenant is
+  const memberships = await prisma.membership.findMany({ where: { userId: user.id }, select: { tenant: { select: { status: true } } } });
+  if (memberships.some((m) => m.tenant.status === 'ACTIVE')) return;
+  if (user.isPlatformAdmin) return;
+  // Orphaned account: no workspace at all. Refuse — never fall back to the stale global role.
+  if (memberships.length === 0) {
+    throw Forbidden('Your account is not attached to any workspace. Contact your administrator.');
+  }
+  // Has membership(s) but none ACTIVE. Tailor the message: a self-serve org owner whose only tenant is
   // still PENDING is awaiting approval (not a punitive suspend); everything else reads as suspended.
   if (memberships.every((m) => m.tenant.status === 'PENDING')) {
     throw Forbidden('Your workspace is awaiting administrator approval.');
@@ -173,7 +183,7 @@ export async function login(input: LoginInput, opts: { hostTenantId?: string } =
   // accounts. The distinct code lets the SPA offer "resend activation email".
   if (emailEnabled() && !user.emailVerifiedAt) throw EmailNotVerified();
 
-  await assertNotFullySuspended(user.id);
+  await assertNotFullySuspended(user);
   // On a tenant's own domain (subdomain / custom domain), pin the session to THAT workspace — and
   // refuse a user who isn't a member of it (they'd otherwise land in a workspace this domain isn't).
   if (opts.hostTenantId) {
@@ -272,7 +282,11 @@ export async function registerOrg(input: OrgSignupInput, country: string | null 
       name: input.ownerName,
       email: input.email,
       passwordHash: await hashPassword(input.password),
-      role: 'ADMIN', // dual-written until User.role is dropped (4c-drop)
+      // SECURITY (ghost-admin fix): do NOT grant a privileged global role before approval. The
+      // per-tenant OWNER role lives on the Membership (ADMIN, below); this global User.role is only a
+      // fallback used when there's no active membership — precisely the orphaned/rejected case — so it
+      // must stay non-privileged. It's promoted to ADMIN on approval (platform.routes /approve).
+      role: 'VIEWER', // dual-written until User.role is dropped (4c-drop)
       isGuest: false,
       emailVerifiedAt: initialEmailVerifiedAt(),
       ...(country ? { country } : {}),
@@ -362,7 +376,7 @@ export async function refresh(refreshToken: string): Promise<AuthResult> {
   if ((payload.tv ?? 0) !== user.tokenVersion) throw Unauthorized('Session has been revoked');
   // If their workspace was suspended mid-session, end it here rather than minting a tenant-less
   // token that would 401-loop against requireAuth's fail-closed enforcement.
-  await assertNotFullySuspended(user.id);
+  await assertNotFullySuspended(user);
 
   if (payload.jti) {
     const stored = await prisma.refreshToken.findUnique({ where: { id: payload.jti } });

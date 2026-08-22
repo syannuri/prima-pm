@@ -308,17 +308,20 @@ router.post(
     if (tenant.status !== 'PENDING') throw BadRequest(`Only a PENDING signup can be approved (this one is ${tenant.status}).`);
     const updated = await prisma.tenant.update({ where: { id: tenant.id }, data: { status: 'ACTIVE' } });
     await writeAudit({ userId: req.user!.id, entity: 'Tenant', entityId: tenant.id, action: 'UPDATE', before: { status: tenant.status }, after: { status: updated.status, approved: true } });
-    // Tell the owner their workspace is live (best-effort; no-op unless SMTP is configured). The owner
-    // is the earliest ADMIN member of the tenant.
-    if (emailEnabled()) {
-      const owner = await prisma.membership.findFirst({
-        where: { tenantId: tenant.id, role: 'ADMIN' },
-        orderBy: { createdAt: 'asc' },
-        select: { user: { select: { name: true, email: true } } },
-      });
-      if (owner) {
-        await sendMail({ to: owner.user.email, ...orgApprovedMail({ name: owner.user.name, orgName: updated.name, loginUrl: `${appBaseUrl()}/login` }) });
-      }
+    // The owner is the earliest ADMIN member of the tenant.
+    const owner = await prisma.membership.findFirst({
+      where: { tenantId: tenant.id, role: 'ADMIN' },
+      orderBy: { createdAt: 'asc' },
+      select: { userId: true, user: { select: { name: true, email: true, role: true } } },
+    });
+    // Promote the owner's global User.role to ADMIN now that the workspace is approved (signup keeps it
+    // non-privileged — see the ghost-admin fix in auth.service registerOrg). Only lifts it upward.
+    if (owner && owner.user.role !== 'ADMIN') {
+      await prisma.user.update({ where: { id: owner.userId }, data: { role: 'ADMIN' } });
+    }
+    // Tell the owner their workspace is live (best-effort; no-op unless SMTP is configured).
+    if (emailEnabled() && owner) {
+      await sendMail({ to: owner.user.email, ...orgApprovedMail({ name: owner.user.name, orgName: updated.name, loginUrl: `${appBaseUrl()}/login` }) });
     }
     res.json({ tenant: { id: updated.id, name: updated.name, slug: updated.slug, status: updated.status } });
   }),
@@ -460,8 +463,24 @@ router.delete(
       await tx.projectBookmark.deleteMany({ where: { tenantId } });
       await tx.auditLog.deleteMany({ where: { tenantId } });
       await tx.appSetting.deleteMany({ where: { tenantId } });
+      // Capture this tenant's members BEFORE removing their memberships, so we can spot any left
+      // orphaned by the delete (SECURITY / ghost-admin fix): an org-signup owner whose only workspace
+      // was this tenant would otherwise linger as an unreachable global-ADMIN account that can still
+      // log in. Deactivate such staff accounts (isActive=false + bump tokenVersion to kill live
+      // sessions). Guests keep their own personal tenant and platform admins may live tenant-less, so
+      // both are exempt. The User rows are kept (deactivated, not deleted) to preserve audit history.
+      const memberUserIds = (await tx.membership.findMany({ where: { tenantId }, select: { userId: true } })).map((m) => m.userId);
       await tx.membership.deleteMany({ where: { tenantId } });
       await tx.tenant.delete({ where: { id: tenantId } });
+      for (const uid of memberUserIds) {
+        const remaining = await tx.membership.count({ where: { userId: uid } });
+        if (remaining === 0) {
+          await tx.user.updateMany({
+            where: { id: uid, isGuest: false, isPlatformAdmin: false, isActive: true },
+            data: { isActive: false, tokenVersion: { increment: 1 } },
+          });
+        }
+      }
     }));
     // Remove the tenant's uploaded files (best-effort).
     try { fs.rmSync(path.join(UPLOAD_DIR, tenantId), { recursive: true, force: true }); } catch { /* */ }
