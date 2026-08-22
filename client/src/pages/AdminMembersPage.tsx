@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
+import SandboxNotice from '../components/SandboxNotice';
 import { formatDate } from '../lib/format';
 
 // The 7 corporate roles a membership can carry (GUEST is a self-service sandbox identity, never a member).
@@ -29,7 +30,7 @@ export default function AdminMembersPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['members'] });
 
   if (user?.role !== 'ADMIN') {
-    return <Card><p className="py-6 text-center text-slate-500 dark:text-slate-400">{id ? 'Butuh peran Admin untuk mengelola anggota.' : 'You need the Admin role to manage members.'}</p></Card>;
+    return <SandboxNotice fallback={<Card><p className="py-6 text-center text-slate-500 dark:text-slate-400">{id ? 'Butuh peran Admin untuk mengelola anggota.' : 'You need the Admin role to manage members.'}</p></Card>} />;
   }
 
   return (

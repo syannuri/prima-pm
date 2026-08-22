@@ -107,6 +107,10 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
           </span>
           {platform && !collapsed && <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-300/80">console</span>}
         </Link>
+        {/* Sandbox chip — labels a guest's personal workspace clearly (not a corporate "Trial"). */}
+        {isGuest && !collapsed && (
+          <span className="ml-2 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-300 ring-1 ring-brand-400/30">Sandbox</span>
+        )}
       </div>
 
       <nav
@@ -165,7 +169,7 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
         {/* Resource Pool sits with the daily-work items — Finance & Guests use it too, so it's
             not an admin-only tool. */}
         {!!user && ['ADMIN', 'PMO', 'FINANCE', 'GUEST'].includes(user.role) && (
-          <NavLink to="/admin/resources" onClick={onNavigate} aria-label={user.role === 'GUEST' ? 'My Resource Pool' : 'Resource Pool'} className={({ isActive }) => cx(isActive)}>
+          <NavLink to={user.role === 'GUEST' ? '/my-resources' : '/admin/resources'} onClick={onNavigate} aria-label={user.role === 'GUEST' ? 'My Resource Pool' : 'Resource Pool'} className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.resources} /> {!collapsed && (user.role === 'GUEST' ? 'My Resources' : 'Resource Pool')}
           </NavLink>
         )}
