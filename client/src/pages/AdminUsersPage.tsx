@@ -6,6 +6,7 @@ import { Badge, Button, Card, Field, Input, Modal, SectionTitle, Select, Spinner
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
+import SandboxNotice from '../components/SandboxNotice';
 import { formatDate } from '../lib/format';
 import { fieldState, isEmailValid, isNameValid, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
@@ -28,9 +29,13 @@ export default function AdminUsersPage() {
 
   if (user?.role !== 'ADMIN') {
     return (
-      <Card>
-        <p className="py-6 text-center text-slate-500 dark:text-slate-400">You need the Admin role to manage users.</p>
-      </Card>
+      <SandboxNotice
+        fallback={
+          <Card>
+            <p className="py-6 text-center text-slate-500 dark:text-slate-400">You need the Admin role to manage users.</p>
+          </Card>
+        }
+      />
     );
   }
 

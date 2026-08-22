@@ -76,6 +76,8 @@ export default function App() {
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
           <Route path="/admin/projects" element={<AdminProjectDatabasePage />} />
           <Route path="/admin/resources" element={<AdminResourcesPage />} />
+          {/* Guests reach the same resource pool under a non-admin URL (their sidebar links here). */}
+          <Route path="/my-resources" element={<AdminResourcesPage />} />
           <Route path="/admin/audit" element={<AdminAuditPage />} />
           <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
           <Route path="/admin/billing" element={<AdminBillingPage />} />

@@ -5,6 +5,7 @@ import { Badge, Button, Card, SectionTitle, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
+import SandboxNotice from '../components/SandboxNotice';
 import { formatDate } from '../lib/format';
 
 interface BillingStatus {
@@ -69,7 +70,7 @@ export default function AdminBillingPage() {
   });
 
   if (user?.role !== 'ADMIN') {
-    return <Card><p className="py-6 text-center text-slate-500 dark:text-slate-400">{id ? 'Butuh peran Admin untuk mengelola langganan.' : 'You need the Admin role to manage billing.'}</p></Card>;
+    return <SandboxNotice fallback={<Card><p className="py-6 text-center text-slate-500 dark:text-slate-400">{id ? 'Butuh peran Admin untuk mengelola langganan.' : 'You need the Admin role to manage billing.'}</p></Card>} />;
   }
 
   const currentPlan = status?.plan ?? activeTenant?.plan ?? 'TRIAL';
