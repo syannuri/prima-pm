@@ -17,6 +17,7 @@ type Block =
   | { type: 'steps'; items: string[] }
   | { type: 'bullets'; items: string[] }
   | { type: 'roles'; rows: { role: string; color: string; desc: string }[] }
+  | { type: 'img'; src: string; caption?: string }
   | { type: 'faq'; rows: { q: string; a: string }[] };
 
 type Sec = { id: string; nav: string; heading: string; blocks: Block[] };
@@ -45,6 +46,7 @@ const DOC: Record<Lang, Doc> = {
     switchLabel: 'Bahasa',
     sections: [
       { id: 'mulai', nav: 'Mulai cepat', heading: '🚀 Mulai cepat', blocks: [
+        { type: 'img', src: '/guide/02-overview.png', caption: 'Overview proyek — bullet gauge SPI/CPI, kurva-S & tile EVM' },
         { type: 'p', text: 'Prismatix membantu Anda merencanakan & memantau proyek dari awal sampai selesai: Charter → WBS/Jadwal → Biaya → Risiko → Perubahan, dengan analisis kinerja Earned Value (EVM).' },
         { type: 'steps', items: [
           'Masuk dengan akun Anda. Tampilan default dark mode (bisa diganti di Settings).',
@@ -104,6 +106,7 @@ const DOC: Record<Lang, Doc> = {
         { type: 'p', text: 'Tip: tekan Esc untuk keluar, atau tombol panah ←/→ untuk berpindah langkah. Panduan mengikuti bahasa aplikasi dan sekali tampil per perangkat.' },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
+        { type: 'img', src: '/guide/01-dashboard.png', caption: 'Dashboard — portfolio health gauge, KPI tiles & the project table' },
         { type: 'p', text: 'Tiga tampilan lewat tombol di kanan atas:' },
         { type: 'bullets', items: [
           'Portfolio EVM — KPI (Total BAC, EV, AC, CPI, SPI, % Complete), panel “Needs attention”, kesehatan jadwal, & diagram status.',
@@ -113,9 +116,11 @@ const DOC: Record<Lang, Doc> = {
         { type: 'p', text: 'Atur Status date ke tanggal yang relevan agar CPI/SPI terisi. Warna merah hanya untuk hal yang benar-benar perlu perhatian.' },
       ] },
       { id: 'charter', nav: 'Charter', heading: '📜 Charter', blocks: [
+        { type: 'img', src: '/guide/03-charter.png', caption: 'Initiating → Charter (committed baseline v1)' },
         { type: 'p', text: 'Piagam proyek: deskripsi, tujuan, lingkup, kategori, PM, jadwal & biaya tingkat-tinggi. Klik Commit Charter untuk mengunci baseline — setelah ini perubahan harus lewat Change Request. Dokumen pendukung bisa dilampirkan.' },
       ] },
       { id: 'schedule', nav: 'WBS & Schedule', heading: '🗓️ WBS & Schedule', blocks: [
+        { type: 'img', src: '/guide/04-schedule.png', caption: 'Schedule — WBS tree, plan/actual dates, weights & tracking Gantt' },
         { type: 'bullets', items: [
           'WBS — struktur rincian kerja (tugas & subtugas), nomor outline, %-progress, PIC, kamus WBS (deliverable, kriteria).',
           'Timeline Gantt — bar jadwal per tugas dengan penanda "Today" & bar baseline (bayangan); skala Hari/Minggu/Bulan.',
@@ -126,6 +131,7 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'cost', nav: 'Cost & EVM', heading: '💰 Cost & EVM', blocks: [
+        { type: 'img', src: '/guide/05-cost.png', caption: 'Cost — budget baseline (BAC/PMB), committed/spent/available & cost lines' },
         { type: 'bullets', items: [
           'Direct Cost — material (qty × harga) & manpower (rate × mandays); manpower bisa ditautkan ke resource & tugas.',
           'Indirect Cost — transport, akomodasi, dll.',
@@ -134,18 +140,21 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'risk', nav: 'Risk', heading: '⚠️ Risk', blocks: [
+        { type: 'img', src: '/guide/06-risk.png', caption: 'Risk — 5×5 probability×impact heatmap, EMV reserve & the register' },
         { type: 'p', text: 'Daftarkan risiko dengan probabilitas & dampak. Aplikasi menghitung skor (P×I), menampilkan heatmap 5×5, dan EMV (Expected Monetary Value). Risiko terbuka yang ditandai “include in reserve” menambah cadangan kontingensi (dan ikut ke BAC).' },
       ] },
       { id: 'change', nav: 'Change Request', heading: '🔁 Change Request', blocks: [
         { type: 'p', text: 'Setelah charter di-commit, perubahan diajukan sebagai Change Request: pilih magnitudo (MINOR/MAJOR), area dampak (biaya/jadwal/dll.), & apakah chargeable. PMO/Admin menyetujui atau menolak; persetujuan membuka charter untuk revisi & menaikkan versi.' },
       ] },
       { id: 'forecast', nav: 'Forecast & EVM Trend', heading: '🔮 Forecast & EVM Trend', blocks: [
+        { type: 'img', src: '/guide/07-monitoring.png', caption: 'Monitoring → Health — CPI/SPI, BAC & forecast (EAC)' },
         { type: 'bullets', items: [
           'Forecast — proyeksi biaya & tanggal selesai: skenario EAC (optimistis/likely/pesimistis), ETC, VAC, TCPI, kurva-S, dan perkiraan tanggal selesai dari SPI.',
           'EVM Trend — rekam "status" berkala (Capture status) untuk melihat CPI/SPI & EV dari waktu ke waktu (grafik tren + tabel snapshot).',
         ] },
       ] },
       { id: 'closeout', nav: 'Closing', heading: '🏁 Closing (Acceptance & Lessons)', blocks: [
+        { type: 'img', src: '/guide/08-closing.png', caption: 'Closing — lessons learned register & acceptance sign-off' },
         { type: 'bullets', items: [
           'Acceptance Sign-off — persetujuan formal deliverable dari sponsor/customer (pihak, keputusan Accepted / Accepted-with-conditions / Rejected, nama penandatangan, tanggal).',
           'Lessons Learned — catatan Went-well / Went-wrong / Rekomendasi untuk proyek berikutnya.',
@@ -154,6 +163,7 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'reports', nav: 'Reports', heading: '📈 Reports', blocks: [
+        { type: 'img', src: '/guide/09-reports.png', caption: 'Reports — Executive view: portfolio health RAG, KPIs & heatmap' },
         { type: 'p', text: 'Menu Reports (PM & PMO) menghasilkan Status Report satu proyek — Mingguan atau Bulanan — berisi RAG health, %-complete (per jumlah task DAN per bobot nilai), SPI/CPI, task selesai vs sisa, kurva-S EVM, dan forecast. Bisa diunduh sebagai PDF profesional.' },
       ] },
       { id: 'more2', nav: 'Issues · Agile · Timesheet', heading: '🧩 Issues, Agile & Timesheet', blocks: [
@@ -194,6 +204,7 @@ const DOC: Record<Lang, Doc> = {
     switchLabel: 'Language',
     sections: [
       { id: 'mulai', nav: 'Quick start', heading: '🚀 Quick start', blocks: [
+        { type: 'img', src: '/guide/02-overview.png', caption: 'Project Overview — SPI/CPI bullet gauge, S-curve & EVM tiles' },
         { type: 'p', text: 'Prismatix helps you plan & track projects from start to finish: Charter → WBS/Schedule → Cost → Risk → Change, with Earned Value (EVM) performance analysis.' },
         { type: 'steps', items: [
           'Sign in with your account. The default theme is dark mode (changeable in Settings).',
@@ -253,6 +264,7 @@ const DOC: Record<Lang, Doc> = {
         { type: 'p', text: 'Tip: press Esc to exit, or the ←/→ arrows to move between steps. The tour follows the app language and shows once per device.' },
       ] },
       { id: 'dashboard', nav: 'Dashboard', heading: '📊 Dashboard', blocks: [
+        { type: 'img', src: '/guide/01-dashboard.png', caption: 'Dashboard — portfolio health gauge, KPI tiles & the project table' },
         { type: 'p', text: 'Three views via the buttons at the top right:' },
         { type: 'bullets', items: [
           'Portfolio EVM — KPIs (Total BAC, EV, AC, CPI, SPI, % Complete), the “Needs attention” panel, schedule health & status charts.',
@@ -262,9 +274,11 @@ const DOC: Record<Lang, Doc> = {
         { type: 'p', text: 'Set the Status date to a relevant date so CPI/SPI populate. Red is reserved for things that genuinely need attention.' },
       ] },
       { id: 'charter', nav: 'Charter', heading: '📜 Charter', blocks: [
+        { type: 'img', src: '/guide/03-charter.png', caption: 'Initiating → Charter (committed baseline v1)' },
         { type: 'p', text: 'The project charter: description, goals, scope, category, PM, high-level schedule & cost. Click Commit Charter to lock the baseline — after this, changes must go through a Change Request. Supporting documents can be attached.' },
       ] },
       { id: 'schedule', nav: 'WBS & Schedule', heading: '🗓️ WBS & Schedule', blocks: [
+        { type: 'img', src: '/guide/04-schedule.png', caption: 'Schedule — WBS tree, plan/actual dates, weights & tracking Gantt' },
         { type: 'bullets', items: [
           'WBS — the work breakdown (tasks & subtasks), outline numbering, % progress, PIC, WBS dictionary (deliverable, criteria).',
           'Gantt timeline — a schedule bar per task with a "Today" marker & a baseline (ghost) bar; Day/Week/Month scale.',
@@ -275,6 +289,7 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'cost', nav: 'Cost & EVM', heading: '💰 Cost & EVM', blocks: [
+        { type: 'img', src: '/guide/05-cost.png', caption: 'Cost — budget baseline (BAC/PMB), committed/spent/available & cost lines' },
         { type: 'bullets', items: [
           'Direct Cost — material (qty × price) & manpower (rate × mandays); manpower can link to a resource & task.',
           'Indirect Cost — transport, accommodation, etc.',
@@ -283,18 +298,21 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'risk', nav: 'Risk', heading: '⚠️ Risk', blocks: [
+        { type: 'img', src: '/guide/06-risk.png', caption: 'Risk — 5×5 probability×impact heatmap, EMV reserve & the register' },
         { type: 'p', text: 'Register risks with probability & impact. The app computes the score (P×I), shows a 5×5 heatmap, and EMV (Expected Monetary Value). Open risks flagged “include in reserve” add to the contingency reserve (and into BAC).' },
       ] },
       { id: 'change', nav: 'Change Request', heading: '🔁 Change Request', blocks: [
         { type: 'p', text: 'After the charter is committed, changes are raised as a Change Request: pick magnitude (MINOR/MAJOR), impact areas (cost/schedule/etc.), and whether it is chargeable. PMO/Admin approve or reject; approval unlocks the charter for revision & bumps the version.' },
       ] },
       { id: 'forecast', nav: 'Forecast & EVM Trend', heading: '🔮 Forecast & EVM Trend', blocks: [
+        { type: 'img', src: '/guide/07-monitoring.png', caption: 'Monitoring → Health — CPI/SPI, BAC & forecast (EAC)' },
         { type: 'bullets', items: [
           'Forecast — cost & date projection: EAC scenarios (optimistic/likely/pessimistic), ETC, VAC, TCPI, an S-curve, and a forecast finish date from SPI.',
           'EVM Trend — capture periodic "status" snapshots to see CPI/SPI & EV over time (trend chart + snapshot table).',
         ] },
       ] },
       { id: 'closeout', nav: 'Closing', heading: '🏁 Closing (Acceptance & Lessons)', blocks: [
+        { type: 'img', src: '/guide/08-closing.png', caption: 'Closing — lessons learned register & acceptance sign-off' },
         { type: 'bullets', items: [
           'Acceptance Sign-off — formal deliverable acceptance from the sponsor/customer (party, decision Accepted / Accepted-with-conditions / Rejected, signer name, date).',
           'Lessons Learned — Went-well / Went-wrong / Recommendation notes for future projects.',
@@ -303,6 +321,7 @@ const DOC: Record<Lang, Doc> = {
         ] },
       ] },
       { id: 'reports', nav: 'Reports', heading: '📈 Reports', blocks: [
+        { type: 'img', src: '/guide/09-reports.png', caption: 'Reports — Executive view: portfolio health RAG, KPIs & heatmap' },
         { type: 'p', text: 'The Reports menu (PM & PMO) produces a single-project Status Report — Weekly or Monthly — with RAG health, % complete (by task count AND by weighted value), SPI/CPI, tasks done vs remaining, the EVM S-curve, and the forecast. Downloadable as a professional PDF.' },
       ] },
       { id: 'more2', nav: 'Issues · Agile · Timesheet', heading: '🧩 Issues, Agile & Timesheet', blocks: [
@@ -361,6 +380,13 @@ function renderBlock(b: Block, i: number) {
             </tbody>
           </table>
         </div>
+      );
+    case 'img':
+      return (
+        <figure key={i} className="my-3">
+          <img src={b.src} alt={b.caption ?? ''} loading="lazy" className="w-full rounded-xl border border-slate-200 shadow-sm dark:border-slate-700" />
+          {b.caption && <figcaption className="mt-1.5 text-center text-xs text-slate-500 dark:text-slate-400">{b.caption}</figcaption>}
+        </figure>
       );
     case 'faq':
       return (
