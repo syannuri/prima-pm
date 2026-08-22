@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Risk, RiskAnalysis } from '../../api/types';
@@ -23,12 +23,22 @@ const RESPONSES_BY_KIND: Record<string, string[]> = {
 };
 const cap = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : s);
 
-export default function RiskPanel({ projectId }: { projectId: string }) {
+export default function RiskPanel({ projectId, focusId }: { projectId: string; focusId?: string | null }) {
   const qc = useQueryClient();
   const [filesFor, setFilesFor] = useState<{ id: string; code: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const base = `/projects/${projectId}/risk`;
   const risksQ = useQuery({ queryKey: ['risks', projectId], queryFn: () => api.get<{ risks: Risk[] }>(base) });
+  // Deep-link from a HIGH_RISK notification (?focus=<riskId>): once the register loads, scroll the
+  // risk into view and flash it (mirrors the Gantt overdue-task highlight).
+  const [flashId, setFlashId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusId || !risksQ.data?.risks.some((r) => r.id === focusId)) return;
+    setFlashId(focusId);
+    const s = setTimeout(() => document.querySelector(`[data-risk-row="${focusId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+    const c = setTimeout(() => setFlashId(null), 2800);
+    return () => { clearTimeout(s); clearTimeout(c); };
+  }, [focusId, risksQ.data]);
   const analysisQ = useQuery({ queryKey: ['risk-analysis', projectId], queryFn: () => api.get<RiskAnalysis>(`${base}/analysis`) });
 
   const invalidate = () => {
@@ -91,7 +101,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
             <tbody>
               {risksQ.data?.risks.map((r) => (
                 <Fragment key={r.id}>
-                  <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <tr data-risk-row={r.id} className={`border-b border-slate-100 transition-colors dark:border-slate-800 ${r.id === flashId ? 'bg-amber-100 dark:bg-amber-900/40' : ''}`}>
                     <td className="py-2 font-mono text-xs">{r.code}</td>
                     <td>{r.title}</td>
                     <td><Badge color={r.kind === 'THREAT' ? 'red' : 'green'}>{r.kind}</Badge></td>
@@ -132,7 +142,7 @@ export default function RiskPanel({ projectId }: { projectId: string }) {
         </div>
         <div className="mt-4 space-y-2 sm:hidden">
           {risksQ.data?.risks.map((r) => (
-            <div key={r.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <div key={r.id} data-risk-row={r.id} className={`rounded-xl border p-3 transition-colors ${r.id === flashId ? 'border-amber-300 bg-amber-100 dark:border-amber-700 dark:bg-amber-900/40' : 'border-slate-200 dark:border-slate-800'}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{r.code}</span>
