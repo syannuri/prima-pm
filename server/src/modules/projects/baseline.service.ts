@@ -84,6 +84,42 @@ export async function setBaselineLock(projectId: string, locked: boolean, reason
   return { project, approvalPending: false as const };
 }
 
+// List a project's baseline revisions, newest first — a lightweight summary for the history panel
+// (metadata + the small cost figures; the full per-task schedule is fetched on demand via
+// getBaselineVersion). Committer display names are resolved from the global User model.
+export async function listBaselineVersions(projectId: string) {
+  const rows = await prisma.baselineVersion.findMany({
+    where: { projectId },
+    orderBy: { version: 'desc' },
+    select: { id: true, version: true, reason: true, committedBy: true, committedAt: true, cost: true },
+  });
+  const ids = [...new Set(rows.map((r) => r.committedBy))];
+  const users = ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true } }) : [];
+  const nameById = new Map(users.map((u) => [u.id, u.name || u.email]));
+  return rows.map((r) => {
+    const c = (r.cost ?? {}) as { costBaseline?: string; budgetAtCompletion?: string };
+    return {
+      id: r.id,
+      version: r.version,
+      reason: r.reason,
+      committedBy: r.committedBy,
+      committedByName: nameById.get(r.committedBy) ?? null,
+      committedAt: r.committedAt,
+      costBaseline: c.costBaseline ?? null,
+      budgetAtCompletion: c.budgetAtCompletion ?? null,
+    };
+  });
+}
+
+// A single baseline revision, with the full schedule + cost snapshot (for the version viewer /
+// compare). Committer name resolved for display.
+export async function getBaselineVersion(projectId: string, version: number) {
+  const v = await prisma.baselineVersion.findFirst({ where: { projectId, version } });
+  if (!v) throw NotFound('Baseline version not found');
+  const committer = await prisma.user.findUnique({ where: { id: v.committedBy }, select: { name: true, email: true } });
+  return { ...v, committedByName: committer ? committer.name || committer.email : null };
+}
+
 // Persist a new COMBINED baseline version (schedule + cost snapshot) — the auditable revision the
 // live single-snapshot stores (Task.baseline* + CostBaseline) don't keep. Called at each lock
 // transition (the commit) and by the one-time backfill. Version number is max+1 per project.
