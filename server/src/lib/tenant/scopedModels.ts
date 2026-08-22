@@ -5,7 +5,7 @@
 // value in a client extension). Keep in sync with the schema; the extension asserts membership.
 export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   // roots (tenantId -> owning tenant directly)
-  'Project', 'ProjectBookmark', 'RateCard', 'Resource', 'AuditLog', 'Notification',
+  'Project', 'ProjectBookmark', 'RateCard', 'Resource', 'AuditLog', 'Notification', 'Feedback',
   'Conversation', 'ConversationMember', 'Message', 'PushSubscription', 'MessageReaction',
   'AppSetting', 'ApiKey', 'WebhookSubscription', 'WebhookDelivery', 'AutomationRule',
   'ApprovalWorkflow', 'ApprovalRequest', 'ApprovalDelegation',

@@ -194,6 +194,11 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
           </NavLink>
         )}
         {user?.role === 'ADMIN' && (
+          <NavLink to="/admin/feedback" onClick={onNavigate} aria-label="Feedback inbox" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.chat} /> {!collapsed && 'Feedback'}
+          </NavLink>
+        )}
+        {user?.role === 'ADMIN' && (
           <NavLink to="/admin/billing" onClick={onNavigate} aria-label="Billing & plan" className={({ isActive }) => cx(isActive)}>
             <Icon path={ICONS.billing} /> {!collapsed && 'Billing'}
           </NavLink>
