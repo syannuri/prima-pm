@@ -267,6 +267,7 @@ model User {
   resourceProfiles  Resource[]      @relation("ResourceUser")
   assignedBacklog   BacklogItem[]   @relation("BacklogAssignee")
   notifications     Notification[]  @relation("UserNotifications")
+  feedbacks         Feedback[]      @relation("UserFeedback")
   alertDismissals   AlertDismissal[] @relation("UserAlertDismissals")
   refreshTokens     RefreshToken[]  @relation("UserRefreshTokens")
   emailTokens       EmailToken[]    @relation("UserEmailTokens")
@@ -341,6 +342,7 @@ model Tenant {
   resources  Resource[]
   auditLogs  AuditLog[]
   notifications  Notification[]
+  feedbacks  Feedback[]
   conversations  Conversation[]
   conversationMembers  ConversationMember[]
   messages  Message[]
@@ -1774,6 +1776,29 @@ model Notification {
 
   @@index([userId, createdAt])
   @@index([tenantId])
+}
+
+// In-app product feedback (bug / idea / other) from any signed-in user, incl. sandbox guests.
+// Tenant-scoped like Notification. Captured with the page/role/release context so a one-line
+// report is actionable; admins triage it in the /admin/feedback inbox. See docs (feedback feature).
+model Feedback {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  userId    String
+  user      User     @relation("UserFeedback", fields: [userId], references: [id])
+  type      String   // BUG | IDEA | OTHER
+  message   String   @db.Text
+  pageUrl   String?
+  role      String?
+  release   String?
+  userAgent String?  @db.Text
+  status    String   @default("OPEN") // OPEN | REVIEWED | CLOSED
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([status])
+  @@index([userId])
 }
 
 // Per-user "followed up / dismissed" markers for the LIVE "Needs attention" alerts (which are

@@ -21,6 +21,7 @@ import projectsRoutes from './modules/projects/projects.routes.js';
 import rateCardRoutes from './modules/ratecard/ratecard.routes.js';
 import portfolioRoutes from './modules/portfolio/portfolio.routes.js';
 import notificationRoutes from './modules/notification/notification.routes.js';
+import feedbackRoutes from './modules/feedback/feedback.routes.js';
 import resourceRoutes from './modules/resource/resource.routes.js';
 import myTimesheetRoutes from './modules/timesheet/timesheet.me.routes.js';
 import bookmarkRoutes from './modules/bookmark/bookmark.routes.js';
@@ -211,6 +212,7 @@ export function createApp() {
   api.use('/ratecards', rateCardRoutes);
   api.use('/portfolio', portfolioRoutes);
   api.use('/notifications', notificationRoutes);
+  api.use('/feedback', feedbackRoutes);
   api.use('/resources', resourceRoutes);
   api.use('/me/timesheet', myTimesheetRoutes);
   api.use('/bookmarks', bookmarkRoutes);
