@@ -36,6 +36,20 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<{ id: 
   return { id: fb.id };
 }
 
+// --- Admin triage (per-tenant inbox; tenant extension scopes reads to the admin's tenant) ---
+export async function listFeedback(status?: string) {
+  return prisma.feedback.findMany({
+    where: status && status !== 'ALL' ? { status } : {},
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+    include: { user: { select: { name: true, email: true } } },
+  });
+}
+
+export async function updateFeedbackStatus(id: string, status: 'OPEN' | 'REVIEWED' | 'CLOSED') {
+  return prisma.feedback.update({ where: { id }, data: { status }, select: { id: true, status: true } });
+}
+
 const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] ?? c));
 
 async function notifyAdmin(id: string, i: CreateFeedbackInput): Promise<void> {
