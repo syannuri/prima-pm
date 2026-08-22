@@ -14,7 +14,7 @@ export default function GuidedCoachmark() {
   const { lang } = useLang();
   const id = lang === 'id';
   const step = g.active && !g.allDone ? GUIDED_STEPS[g.currentIndex] : undefined;
-  const anchor = step?.anchor;
+  const anchor = g.currentAnchor; // step 3 is two-phase (add-task → schedule-baseline)
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   useLayoutEffect(() => {

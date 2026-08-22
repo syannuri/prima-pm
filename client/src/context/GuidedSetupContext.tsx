@@ -10,6 +10,7 @@ interface GuidedValue {
   active: boolean;                 // the guide should be shown
   steps: ComputedStep[];           // 6 steps + computed done
   currentIndex: number;            // first not-done step (== steps.length when all done)
+  currentAnchor?: string;          // the data-tour anchor to spotlight now (step 3 is two-phase)
   allDone: boolean;
   projectId?: string;              // the project the guide is following
   dismiss: () => void;
@@ -64,7 +65,7 @@ export function GuidedSetupProvider({ children }: { children: ReactNode }) {
   // Baseline signals for the followed project (schedule baseline / combined lock, and cost BAC).
   const ganttQ = useQuery({
     queryKey: ['gantt', projectId],
-    queryFn: () => api.get<{ baselinedAt: string | null; baselineLocked?: boolean }>(`${base}/schedule/gantt`),
+    queryFn: () => api.get<{ baselinedAt: string | null; baselineLocked?: boolean; tree?: unknown[] }>(`${base}/schedule/gantt`),
     enabled: active && !!projectId,
     refetchInterval: active && !!projectId ? 4000 : false,
   });
@@ -91,10 +92,17 @@ export function GuidedSetupProvider({ children }: { children: ReactNode }) {
   const currentIndex = steps.findIndex((s) => !s.done);
   const allDone = currentIndex === -1;
 
+  // Step 3 (schedule) is two-phase: point at "add task" until ≥1 task exists, then at "capture
+  // baseline". Every other step uses its static anchor.
+  const hasTasks = (ganttQ.data?.tree?.length ?? 0) > 0;
+  const cur = allDone ? undefined : GUIDED_STEPS[currentIndex];
+  const currentAnchor = cur ? (cur.id === 'schedule' && !hasTasks ? 'add-task' : cur.anchor) : undefined;
+
   const value: GuidedValue = {
     active,
     steps,
     currentIndex: allDone ? steps.length : currentIndex,
+    currentAnchor,
     allDone,
     projectId,
     dismiss: () => patch({ dismissed: true }),
