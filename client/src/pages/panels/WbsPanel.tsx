@@ -1289,6 +1289,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               {canEdit && (
                 <div className="mt-3 flex justify-center">
                   <button
+                    data-tour="add-task"
                     onClick={() => { const s = nextTaskStart(rows, null) ?? new Date(); setDraft({ parentId: null, name: '', picResourceId: '', planStart: formatDateInput(s), planEnd: formatDateInput(new Date(s.getTime() + DEFAULT_TASK_DAYS * day)) }); }}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100 dark:border-brand-700 dark:bg-brand-900/20 dark:text-brand-300 dark:hover:bg-brand-900/40">
                     + Add first task
