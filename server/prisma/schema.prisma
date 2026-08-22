@@ -351,6 +351,7 @@ model Tenant {
   appSettings  AppSetting[]
   projectCharters  ProjectCharter[]
   charterVersions  CharterVersion[]
+  baselineVersions BaselineVersion[]
   costItemDirects  CostItemDirect[]
   costItemIndirects  CostItemIndirect[]
   costBaselines  CostBaseline[]
@@ -648,6 +649,7 @@ model Project {
 
   charter          ProjectCharter?
   charterVersions  CharterVersion[]
+  baselineVersions BaselineVersion[]
   directCosts      CostItemDirect[]
   indirectCosts    CostItemIndirect[]
   risks            Risk[]
@@ -745,6 +747,31 @@ model CharterVersion {
   snapshot    Json
   committedBy String
   committedAt DateTime @default(now())
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@index([tenantId])
+}
+
+// A committed revision of the project's COMBINED baseline (schedule + cost), captured at each
+// baseline LOCK (the commit event — see baseline.service applyBaselineLock). Re-baselining
+// (unlock → change → re-lock) appends the next version, so B1/B2/B3… form an auditable history
+// that the live single-snapshot stores (Task.baseline* + CostBaseline) do not retain. Snapshots
+// are self-contained Json (task name/wbsCode captured too) so a comparison survives later renames
+// /deletes. Mirrors CharterVersion. `committedAt` is the real commit time (for a backfilled v1 it's
+// the historical lock date, not now).
+model BaselineVersion {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version     Int
+  reason      String?  // why re-baselined (carried from the lock/unlock reason); null for the first
+  committedBy String
+  committedAt DateTime @default(now())
+  schedule    Json     // [{ taskId, wbsCode, name, baselineStart, baselineFinish, weight }]
+  cost        Json     // { directTotal, indirectTotal, contingencyReserve, managementReserve, costBaseline, budgetAtCompletion }
 
   @@unique([projectId, version])
   @@index([projectId])

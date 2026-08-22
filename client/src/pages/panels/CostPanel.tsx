@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
 import { Button, Card, FormError, Input, MoneyInput, Select, PanelLoading } from '../../components/ui';
 import BaselineLock from '../../components/BaselineLock';
+import BaselineHistory from '../../components/BaselineHistory';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -133,6 +134,7 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
     <div className="space-y-5">
       {/* Baseline lock control — freezes cost lines / WBS / schedule baseline (PMB/BAC). */}
       <div className="flex flex-wrap items-center justify-end gap-2">
+        <BaselineHistory projectId={projectId} />
         <BaselineLock projectId={projectId} />
       </div>
       {/* Baseline summary */}

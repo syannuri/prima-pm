@@ -5,10 +5,11 @@ import { requireRole, requireProjectAccess, requireProjectGovernance } from '../
 import { createProjectSchema, updateProjectSchema, reassignPmSchema } from './projects.schemas.js';
 import { z } from 'zod';
 import * as svc from './projects.service.js';
-import { setBaselineLock } from './baseline.service.js';
+import { setBaselineLock, listBaselineVersions, getBaselineVersion } from './baseline.service.js';
 import { getClosureReadiness } from './closure.js';
 import { getActivationReadiness, getActivationReview, notifyActivationReady } from './activation.js';
 import { getNextSteps } from './nextsteps.js';
+import { BadRequest } from '../../lib/errors.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
 import riskRoutes from '../risk/risk.routes.js';
@@ -187,6 +188,28 @@ router.patch(
     // when the lock is only pending approval (it hasn't actually locked yet).
     if (req.body.locked && !approvalPending) await notifyActivationReady(req.params.id, req.user!.id);
     res.json({ project, approvalPending });
+  }),
+);
+
+// Baseline revision history (schedule + cost snapshots captured at each lock). Read-only, any
+// project member — mirrors the other project reads. List is a light summary; :version is the full
+// snapshot (per-task schedule + cost) for the viewer / compare.
+router.get(
+  '/:id/baseline/versions',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    const versions = await listBaselineVersions(req.params.id);
+    res.json({ versions });
+  }),
+);
+router.get(
+  '/:id/baseline/versions/:version',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    const n = Number(req.params.version);
+    if (!Number.isInteger(n) || n < 1) throw BadRequest('Invalid version');
+    const version = await getBaselineVersion(req.params.id, n);
+    res.json({ version });
   }),
 );
 

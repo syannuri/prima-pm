@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "backfill:baseline-versions": "tsx scripts/backfill-baseline-versions.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration:setup": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' prisma migrate deploy",
