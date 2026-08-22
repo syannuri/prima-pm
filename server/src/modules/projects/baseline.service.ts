@@ -84,19 +84,80 @@ export async function setBaselineLock(projectId: string, locked: boolean, reason
   return { project, approvalPending: false as const };
 }
 
+// Persist a new COMBINED baseline version (schedule + cost snapshot) — the auditable revision the
+// live single-snapshot stores (Task.baseline* + CostBaseline) don't keep. Called at each lock
+// transition (the commit) and by the one-time backfill. Version number is max+1 per project.
+// `committedAt` lets the backfill stamp the HISTORICAL lock date; live locks omit it (defaults to
+// now). Runs on the passed tx so it commits atomically with the lock. Relies on the tenant
+// extension to stamp tenantId (same as every other baseline write on these paths).
+export async function captureBaselineVersion(
+  db: Db,
+  projectId: string,
+  reason: string | undefined,
+  actorId: string,
+  committedAt?: Date,
+): Promise<{ version: number }> {
+  const [tasks, cost, last] = await Promise.all([
+    db.task.findMany({
+      where: { projectId },
+      orderBy: { wbsCode: 'asc' },
+      select: { id: true, wbsCode: true, name: true, baselineStart: true, baselineFinish: true, baselineWeight: true },
+    }),
+    db.costBaseline.findUnique({ where: { projectId } }),
+    db.baselineVersion.findFirst({ where: { projectId }, orderBy: { version: 'desc' }, select: { version: true } }),
+  ]);
+  const version = (last?.version ?? 0) + 1;
+  const schedule = tasks.map((t) => ({
+    taskId: t.id,
+    wbsCode: t.wbsCode,
+    name: t.name,
+    baselineStart: t.baselineStart,
+    baselineFinish: t.baselineFinish,
+    weight: t.baselineWeight,
+  }));
+  // Decimals stored as strings to preserve full precision through JSON.
+  const costSnap = {
+    directTotal: cost?.directTotal?.toString() ?? '0',
+    indirectTotal: cost?.indirectTotal?.toString() ?? '0',
+    contingencyReserve: cost?.contingencyReserve?.toString() ?? '0',
+    managementReserve: cost?.managementReserve?.toString() ?? '0',
+    costBaseline: cost?.costBaseline?.toString() ?? '0',
+    budgetAtCompletion: cost?.budgetAtCompletion?.toString() ?? '0',
+  };
+  await db.baselineVersion.create({
+    data: {
+      projectId,
+      version,
+      reason: reason?.trim() || null,
+      committedBy: actorId,
+      ...(committedAt ? { committedAt } : {}),
+      schedule: schedule as object,
+      cost: costSnap as object,
+    },
+  });
+  return { version };
+}
+
 // Apply the lock/unlock to the DB (no approval gate). Called directly by setBaselineLock when no
 // workflow matches, and by the approval finalizer when a gated lock is approved (locked defaults
-// to true there). Audited; emits baseline.locked only on a real lock transition.
+// to true there). Audited; emits baseline.locked + captures a new BaselineVersion only on a real
+// lock transition.
 export async function applyBaselineLock(projectId: string, reason: string | undefined, actorId: string, locked = true) {
   const before = await prisma.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { baselineLockedAt: true } });
   if (!before) throw NotFound('Project not found');
   const wasLocked = before.baselineLockedAt != null;
+  const isLockTransition = locked && !wasLocked;
 
-  const project = await prisma.project.update({
-    where: { id: projectId },
-    data: locked
-      ? { baselineLockedAt: new Date(), baselineLockedById: actorId }
-      : { baselineLockedAt: null, baselineLockedById: null },
+  const project = await prisma.$transaction(async (tx) => {
+    const updated = await tx.project.update({
+      where: { id: projectId },
+      data: locked
+        ? { baselineLockedAt: new Date(), baselineLockedById: actorId }
+        : { baselineLockedAt: null, baselineLockedById: null },
+    });
+    // Snapshot the committed baseline as a new version — only when locking (the commit event).
+    if (isLockTransition) await captureBaselineVersion(tx, projectId, reason, actorId);
+    return updated;
   });
   await writeAudit({
     projectId,
