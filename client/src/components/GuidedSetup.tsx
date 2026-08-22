@@ -1,7 +1,16 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGuidedSetup } from '../context/GuidedSetupContext';
 import { useLang } from '../context/LanguageContext';
-import { GUIDED_STEPS } from '../lib/guidedSetup';
+import { GUIDED_STEPS, type GuidedStepId } from '../lib/guidedSetup';
+
+// Where each step lives, so "Go →" takes the user straight there (the coach-mark then rings the
+// exact control). Steps 2–6 need the adopted projectId; step 1 lives on the dashboard.
+function routeFor(stepId: GuidedStepId, pid?: string): string {
+  if (stepId === 'create' || !pid) return '/';
+  const tab = stepId === 'charter' ? 'Initiating' : stepId === 'schedule' ? 'Schedule' : stepId === 'cost' || stepId === 'lock' ? 'Cost' : null;
+  return tab ? `/projects/${pid}?tab=${tab}` : `/projects/${pid}`;
+}
 
 // First-project guided setup — a resumable checklist (the backbone). Auto-advances off real state
 // (see GuidedSetupContext). Coach-marks that spotlight each step's target are P2. Guests only.
@@ -9,6 +18,7 @@ export default function GuidedSetup() {
   const g = useGuidedSetup();
   const { lang } = useLang();
   const id = lang === 'id';
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   if (!g.active) return null;
 
@@ -65,6 +75,11 @@ export default function GuidedSetup() {
                   <div className="min-w-0 flex-1">
                     <div className={`text-sm ${done ? 'text-slate-400 line-through dark:text-slate-500' : isCurrent ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300'}`}>{step.title[id ? 'id' : 'en']}</div>
                     {isCurrent && <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{step.hint[id ? 'id' : 'en']}</p>}
+                    {isCurrent && (
+                      <button onClick={() => navigate(routeFor(step.id, g.projectId))} className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-brand-700">
+                        {id ? 'Ke sana' : 'Go there'} →
+                      </button>
+                    )}
                   </div>
                 </div>
               </li>

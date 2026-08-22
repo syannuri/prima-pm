@@ -622,7 +622,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Material (qty × unit cost) and Manpower (rate × mandays)</p>
       {/* Always-visible "add line" toolbar — one chip per family, so ANY family (incl. empty ones
           and a brand-new project) can be added to. Clicking opens the add-form at the top below. */}
-      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+      <div data-tour="cost-add-line" className="mb-3 flex flex-wrap items-center gap-1.5">
         <span className="mr-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Add line</span>
         {DIRECT_FAMILIES.map((fam) => (
           <button key={fam.key} onClick={() => openAdd(fam)} title={`Add a ${fam.label} line`}

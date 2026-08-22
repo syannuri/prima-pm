@@ -7,6 +7,7 @@ import { PanelLoading } from './components/ui';
 import { OnboardingProvider } from './context/OnboardingContext';
 import { GuidedSetupProvider } from './context/GuidedSetupContext';
 import GuidedSetup from './components/GuidedSetup';
+import GuidedCoachmark from './components/GuidedCoachmark';
 import OnboardingTour from './components/OnboardingTour';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -88,6 +89,7 @@ export default function App() {
       </Layout>
       <OnboardingTour />
       <GuidedSetup />
+      <GuidedCoachmark />
      </GuidedSetupProvider>
     </OnboardingProvider>
   );
