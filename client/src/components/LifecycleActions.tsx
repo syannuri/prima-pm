@@ -59,7 +59,7 @@ export default function LifecycleActions({ project, onReview }: { project: Proje
   return (
     <>
       {canActivate && (
-        <Button variant="secondary" onClick={onReview ?? (() => setActivating(true))}>
+        <Button variant="secondary" data-tour="activate" onClick={onReview ?? (() => setActivating(true))}>
           ▶ Activate
         </Button>
       )}

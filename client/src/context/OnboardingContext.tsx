@@ -57,11 +57,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       setActive(true);
       return;
     }
-    if (!localStorage.getItem(onboardedKey(user.id))) {
-      // Let the dashboard paint first so the "+ New Project" anchor exists to spotlight.
-      const t = setTimeout(() => { setIndex(0); setActive(true); }, 900);
-      return () => clearTimeout(t);
-    }
+    // First-run auto-start is now owned by the guided setup checklist (GuidedSetupProvider), which
+    // replaces this passive tour for new guests. The passive tour stays available as a manual
+    // "Replay tour" (start()), and still resumes above if one was left mid-session.
   }, [user, total]);
 
   // Persist progress so a reload / route change mid-tour resumes on the same step.
