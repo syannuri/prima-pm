@@ -199,7 +199,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         <ImpersonationBanner />
         <TrialBanner />
         <UpgradeWall />
-        <main className={`flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-6 ${platform ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}>
+        {/* pb clears the fixed chat bubble (bottom-right, ~80px tall zone) so a table's last-row
+            actions are never hidden behind it — see ChatWidget. */}
+        <main className={`flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-24 ${platform ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}>
           <div className="mx-auto max-w-7xl"><PageTransition>{children}</PageTransition></div>
         </main>
       </div>
