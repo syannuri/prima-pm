@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import type { ApprovalDelegation, MyApproval } from '../api/types';
 import { Badge, Button, Card, Field, Input, Select, Spinner, Textarea } from '../components/ui';
@@ -16,6 +16,9 @@ export default function ApprovalsPage() {
     refetchInterval: 60_000,
   });
   const approvals = data?.approvals ?? [];
+  // Deep-link from the approval email (…/approvals?focus=<requestId>) — scroll to & flash that row.
+  const [params] = useSearchParams();
+  const focusId = params.get('focus');
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 pb-12">
@@ -32,7 +35,7 @@ export default function ApprovalsPage() {
         <Card><p className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">Nothing awaiting your approval. 🎉</p></Card>
       ) : (
         <div className="space-y-3">
-          {approvals.map((a) => <ApprovalRow key={a.id} a={a} />)}
+          {approvals.map((a) => <ApprovalRow key={a.id} a={a} focused={a.id === focusId} />)}
         </div>
       )}
     </div>
@@ -94,10 +97,21 @@ function DelegationCard() {
   );
 }
 
-function ApprovalRow({ a }: { a: MyApproval }) {
+function ApprovalRow({ a, focused = false }: { a: MyApproval; focused?: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [comment, setComment] = useState('');
+  // When arrived via ?focus=<id> (from the approval email), scroll this row into view and flash a
+  // ring for a couple of seconds so it's obvious which item the email was about.
+  const ref = useRef<HTMLDivElement>(null);
+  const [flash, setFlash] = useState(false);
+  useEffect(() => {
+    if (!focused || !ref.current) return;
+    ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setFlash(true);
+    const t = setTimeout(() => setFlash(false), 2500);
+    return () => clearTimeout(t);
+  }, [focused]);
   const cr = a.changeRequest;
   // Final approver of a chargeable CR can add its agreed amount to project revenue (mirrors the
   // legacy single-decider option). Only offered on the LAST step so it's applied once, at sign-off.
@@ -120,6 +134,7 @@ function ApprovalRow({ a }: { a: MyApproval }) {
   });
 
   return (
+    <div ref={ref} className={`rounded-2xl transition-shadow duration-500 ${flash ? 'ring-2 ring-brand-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900' : ''}`}>
     <Card className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
@@ -168,5 +183,6 @@ function ApprovalRow({ a }: { a: MyApproval }) {
         </>
       )}
     </Card>
+    </div>
   );
 }
