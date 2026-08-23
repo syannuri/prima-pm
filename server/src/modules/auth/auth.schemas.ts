@@ -77,6 +77,10 @@ export const updatePreferencesSchema = z
     digestFrequency: z.enum(['OFF', 'DAILY', 'WEEKLY']).optional(),
     dashboardLayout: z.array(z.enum(DASHBOARD_WIDGET_KEYS)).max(20).optional(),
     dashboardDefaultView: z.enum(['portfolio', 'forecast', 'resources', 'cards']).optional(),
+    // Per-category channel prefs. Partial merge server-side; a category defaults to ON when absent.
+    notificationPrefs: z.object({
+      email: z.object({ approvals: z.boolean() }).partial(),
+    }).partial().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'No preferences provided' });
 

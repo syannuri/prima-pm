@@ -476,28 +476,39 @@ export async function switchTenant(userId: string, tenantId: string): Promise<Au
 export async function me(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, role: true, isActive: true, isPlatformAdmin: true, isGuest: true, digestFrequency: true, dashboardLayout: true, dashboardDefaultView: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, isActive: true, isPlatformAdmin: true, isGuest: true, digestFrequency: true, dashboardLayout: true, dashboardDefaultView: true, notificationPrefs: true, createdAt: true },
   });
   if (!user) throw Unauthorized();
   return user;
 }
 
+interface NotificationPrefs { email?: { approvals?: boolean } }
+
 // Self-service account preferences (the caller updates only their own row): emailed alert-digest
-// cadence + desktop dashboard layout/default-view. All fields optional (partial update); returns the
-// saved values so the client can reflect them immediately.
+// cadence + desktop dashboard layout/default-view + per-category channel prefs. All fields optional
+// (partial update); returns the saved values so the client can reflect them immediately.
 export async function updatePreferences(userId: string, input: {
   digestFrequency?: 'OFF' | 'DAILY' | 'WEEKLY';
   dashboardLayout?: string[];
   dashboardDefaultView?: 'portfolio' | 'forecast' | 'resources' | 'cards';
+  notificationPrefs?: NotificationPrefs;
 }) {
+  // Deep-merge notificationPrefs so a partial patch (e.g. just email.approvals) doesn't wipe siblings.
+  let mergedPrefs: NotificationPrefs | undefined;
+  if (input.notificationPrefs !== undefined) {
+    const existing = await prisma.user.findUnique({ where: { id: userId }, select: { notificationPrefs: true } });
+    const cur = (existing?.notificationPrefs ?? {}) as NotificationPrefs;
+    mergedPrefs = { ...cur, ...input.notificationPrefs, email: { ...cur.email, ...input.notificationPrefs.email } };
+  }
   const user = await prisma.user.update({
     where: { id: userId },
     data: {
       ...(input.digestFrequency !== undefined ? { digestFrequency: input.digestFrequency } : {}),
       ...(input.dashboardLayout !== undefined ? { dashboardLayout: input.dashboardLayout } : {}),
       ...(input.dashboardDefaultView !== undefined ? { dashboardDefaultView: input.dashboardDefaultView } : {}),
+      ...(mergedPrefs !== undefined ? { notificationPrefs: mergedPrefs as object } : {}),
     },
-    select: { digestFrequency: true, dashboardLayout: true, dashboardDefaultView: true },
+    select: { digestFrequency: true, dashboardLayout: true, dashboardDefaultView: true, notificationPrefs: true },
   });
   return user;
 }

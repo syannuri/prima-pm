@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 import { formatDate } from '../lib/format';
 
 interface AttentionItem {
@@ -74,6 +75,8 @@ const ACTION_LABEL: Record<string, string> = { CREATE: 'added', UPDATE: 'edited'
 
 export default function NotificationBell() {
   const { user } = useAuth();
+  const { lang } = useLang();
+  const id = lang === 'id';
   const isAdminPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -350,6 +353,12 @@ export default function NotificationBell() {
                 )}
               </div>
             )}
+            {/* Footer: jump to the full Notification Center (history + filters). */}
+            <div className="mt-2 border-t border-slate-200/70 pt-2 dark:border-slate-800/70">
+              <Link to="/notifications" onClick={() => setOpen(false)} className="block rounded-lg px-2 py-1.5 text-center text-sm font-medium text-brand-600 transition hover:bg-slate-100/70 dark:text-brand-400 dark:hover:bg-slate-800/70">
+                {id ? 'Lihat semua' : 'See all'}
+              </Link>
+            </div>
           </div>
         </>,
         document.body,

@@ -272,6 +272,51 @@ export async function getInbox(userId: string, limit = 20) {
   return { items, unread: items.length };
 }
 
+// ---- Notification categories (shared by the Center's filters + the email prefs) ----
+// Derived from the stored `type`. Only STORED notification types appear here; the derived project
+// alerts (OVERDUE_TASK/DUE_SOON_TASK/… from computeAlerts) live in the bell's live "Attention" feed,
+// never as rows, so they aren't a history category.
+export type NotifCategory = 'approvals' | 'assignments' | 'account' | 'other';
+const APPROVAL_TYPES = ['APPROVAL_PENDING', 'APPROVAL_OVERDUE', 'CR_SUBMITTED', 'CR_APPROVED', 'CR_REJECTED', 'ACTIVATION_APPROVED', 'ACTIVATION_READY', 'ACTIVATION_REVISION'];
+const ASSIGNMENT_TYPES = ['PROJECT_ASSIGNED'];
+const ACCOUNT_TYPES = ['ORG_SIGNUP_PENDING', 'SECURITY_GHOST_LOGIN'];
+const KNOWN_TYPES = [...APPROVAL_TYPES, ...ASSIGNMENT_TYPES, ...ACCOUNT_TYPES];
+
+export function notifCategory(type: string): NotifCategory {
+  if (APPROVAL_TYPES.includes(type)) return 'approvals';
+  if (ASSIGNMENT_TYPES.includes(type)) return 'assignments';
+  if (ACCOUNT_TYPES.includes(type) || type.startsWith('trial-reminder')) return 'account';
+  return 'other';
+}
+
+// Prisma filter for a category tab (undefined/'all' = no filter). Done in-DB so pagination stays
+// correct. 'account' also matches the dynamically-suffixed trial-reminder:<bucket> types.
+function categoryFilter(category?: string): Prisma.NotificationWhereInput {
+  switch (category) {
+    case 'approvals': return { type: { in: APPROVAL_TYPES } };
+    case 'assignments': return { type: { in: ASSIGNMENT_TYPES } };
+    case 'account': return { OR: [{ type: { in: ACCOUNT_TYPES } }, { type: { startsWith: 'trial-reminder' } }] };
+    case 'other': return { AND: [{ type: { notIn: KNOWN_TYPES } }, { NOT: { type: { startsWith: 'trial-reminder' } } }] };
+    default: return {};
+  }
+}
+
+// Full notification history (read + unread), newest first, cursor-paginated. The Notification Center
+// page uses this (the bell keeps its unread-only getInbox). Each item carries its derived category.
+export async function getNotificationHistory(userId: string, opts: { cursor?: string | null; limit?: number; category?: string } = {}) {
+  const limit = Math.min(opts.limit ?? 25, 50);
+  const rows = await prisma.notification.findMany({
+    where: { userId, ...categoryFilter(opts.category) },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+  });
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const items = page.map((n) => ({ ...n, category: notifCategory(n.type) }));
+  return { items, nextCursor: hasMore ? page[page.length - 1].id : null };
+}
+
 // Mark ONE inbox notification followed up (✓). Scoped to the caller so nobody can clear another
 // user's inbox.
 export async function markNotificationRead(userId: string, id: string) {

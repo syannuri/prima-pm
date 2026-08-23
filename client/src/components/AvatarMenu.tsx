@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import FeedbackModal from './FeedbackModal';
-import DigestSettingsModal from './DigestSettingsModal';
+import NotificationPrefsModal from './NotificationPrefsModal';
 
 const initials = (name?: string) =>
   (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase() || 'U';
@@ -26,6 +26,7 @@ const I = {
   check: 'M20 6 9 17l-5-5',
   feedback: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
   bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0',
+  tune: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
 };
 
 const Ico = ({ d }: { d: string }) => (
@@ -89,6 +90,7 @@ export default function AvatarMenu({
   // menu isn't a half-English/half-Indonesian mix when the toggle is flipped.
   const t = {
     account: id ? 'Akun & pengaturan' : 'Account & settings',
+    notifications: id ? 'Notifikasi' : 'Notifications',
     settings: id ? 'Pengaturan' : 'Settings',
     manual: id ? 'Panduan & bantuan' : 'Manual & help',
     users: id ? 'Pengguna' : 'Users',
@@ -100,7 +102,7 @@ export default function AvatarMenu({
     darkMode: id ? 'Mode gelap' : 'Dark mode',
     logout: id ? 'Keluar' : 'Logout',
     feedback: id ? 'Kirim masukan' : 'Send feedback',
-    emailNotifs: id ? 'Notifikasi email' : 'Email notifications',
+    emailNotifs: id ? 'Preferensi notifikasi' : 'Notification preferences',
   };
   const itemCls = 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800';
 
@@ -177,6 +179,7 @@ export default function AvatarMenu({
               </div>
             )}
             <nav className="p-1.5 text-sm">
+              <Link to="/notifications" onClick={close} className={itemCls}><Ico d={I.bell} /> {t.notifications}</Link>
               <Link to="/settings" onClick={close} className={itemCls}><Ico d={I.gear} /> {t.settings}</Link>
               <Link to="/manual" onClick={close} className={itemCls}><Ico d={I.help} /> {t.manual}</Link>
               {user?.role === 'ADMIN' && <Link to="/admin/users" onClick={close} className={itemCls}><Ico d={I.users} /> {t.users}</Link>}
@@ -198,7 +201,7 @@ export default function AvatarMenu({
               </button>
               {/* Email-digest opt-in — self-service; hidden for sandbox guests (they get no digest). */}
               {user?.role !== 'GUEST' && (
-                <button onClick={() => { close(); setDigestOpen(true); }} className={`w-full ${itemCls}`}><Ico d={I.bell} /> {t.emailNotifs}</button>
+                <button onClick={() => { close(); setDigestOpen(true); }} className={`w-full ${itemCls}`}><Ico d={I.tune} /> {t.emailNotifs}</button>
               )}
               <button onClick={() => { close(); setFeedbackOpen(true); }} className={`w-full ${itemCls}`}><Ico d={I.feedback} /> {t.feedback}</button>
             </nav>
@@ -210,7 +213,7 @@ export default function AvatarMenu({
         document.body,
       )}
       {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
-      {digestOpen && <DigestSettingsModal onClose={() => setDigestOpen(false)} />}
+      {digestOpen && <NotificationPrefsModal onClose={() => setDigestOpen(false)} />}
     </div>
   );
 }
