@@ -34,6 +34,34 @@ function countTasks(nodes: GanttNode[]): { completed: number; remaining: number 
   return { completed, remaining };
 }
 
+const DAY = 86_400_000;
+// The "Upcoming deadlines" agenda: leaf tasks/milestones (not complete) that are due within the next
+// window OR already overdue — the deadlines a PM must not miss. Mirrors the server DUE_SOON_TASK rule
+// (whole-day floor). `daysLate` > 0 = overdue; ≤ 0 = due in −daysLate days. Sorted most-urgent first.
+interface Upcoming { id: string; name: string; isMilestone: boolean; owner: string | null; daysLate: number }
+function collectUpcoming(nodes: GanttNode[], now: number, windowDays = 7): Upcoming[] {
+  const today = Math.floor(now / DAY);
+  const out: Upcoming[] = [];
+  const walk = (n: GanttNode) => {
+    if (n.children && n.children.length) { n.children.forEach(walk); return; }
+    if ((n.progressPct ?? 0) >= 100 || !n.planEnd) return;
+    const daysLate = today - Math.floor(new Date(n.planEnd).getTime() / DAY);
+    if (daysLate < -windowDays) return; // due further out than the window
+    out.push({ id: n.id, name: n.name, isMilestone: n.isMilestone, owner: n.picResource?.name ?? n.owners?.[0]?.name ?? null, daysLate });
+  };
+  nodes.forEach(walk);
+  return out.sort((a, b) => b.daysLate - a.daysLate);
+}
+// A due-status chip (text + tone) for one upcoming row.
+function dueChip(daysLate: number, id: boolean): { text: string; tone: string } {
+  if (daysLate >= 1) return { text: id ? `${daysLate}h lewat` : `${daysLate}d overdue`, tone: 'text-red-600 dark:text-red-400' };
+  const du = -daysLate;
+  if (du === 0) return { text: id ? 'hari ini' : 'due today', tone: 'text-amber-600 dark:text-amber-400' };
+  if (du === 1) return { text: id ? 'besok' : 'tomorrow', tone: 'text-amber-600 dark:text-amber-400' };
+  return { text: id ? `${du} hari lagi` : `in ${du}d`, tone: 'text-slate-500 dark:text-slate-400' };
+}
+const dueDot = (daysLate: number) => (daysLate >= 1 ? 'bg-red-500' : daysLate >= -1 ? 'bg-amber-400' : 'bg-slate-300 dark:bg-slate-600');
+
 // Compact donut of completed (emerald) vs remaining (slate). Centre reads the % complete
 // (the donut's meaning) with the task total as a small sub-label.
 function TaskDonut({ completed, remaining, label }: { completed: number; remaining: number; label: string }) {
@@ -258,6 +286,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
   const tasks = ganttQ.data ? countTasks(ganttQ.data.tree) : null;
   const taskTotal = tasks ? tasks.completed + tasks.remaining : 0;
+  const upcoming = ganttQ.data ? collectUpcoming(ganttQ.data.tree, Date.now()) : [];
 
   return (
     // Mobile/tablet: a single stacked column (unchanged). Desktop (lg+): a 12-col bento so the
@@ -339,6 +368,36 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
               </div>
             </div>
           </div>
+        </Panel>
+      )}
+
+      {/* Upcoming deadlines — leaf tasks/milestones due within 7 days or overdue, so a PM catches
+          them before they slip. Derived from the already-loaded WBS tree (no extra request). */}
+      {upcoming.length > 0 && (
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:col-span-4 lg:order-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tenggat terdekat' : 'Upcoming deadlines'}</h3>
+            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{id ? '7 hari' : 'next 7 days'}</span>
+          </div>
+          <ul className="space-y-1.5">
+            {upcoming.slice(0, 6).map((u) => {
+              const chip = dueChip(u.daysLate, id);
+              return (
+                <li key={u.id} className="flex items-center gap-2 text-sm">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${dueDot(u.daysLate)}`} />
+                  <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
+                    {u.isMilestone && <span className="mr-1" aria-hidden="true">🔷</span>}
+                    {u.name}
+                    {u.owner && <span className="ml-1.5 text-xs text-slate-400">· {u.owner}</span>}
+                  </span>
+                  <span className={`shrink-0 whitespace-nowrap text-xs font-medium tabular-nums ${chip.tone}`}>{chip.text}</span>
+                </li>
+              );
+            })}
+          </ul>
+          {upcoming.length > 6 && (
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">+ {upcoming.length - 6} {id ? 'lagi' : 'more'}</p>
+          )}
         </Panel>
       )}
 
