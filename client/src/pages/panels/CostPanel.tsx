@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
 import { Button, Card, FormError, Input, MoneyInput, Select, PanelLoading } from '../../components/ui';
 import BaselineLock from '../../components/BaselineLock';
+import RebaselineReminder from '../../components/RebaselineReminder';
 import BaselineHistory from '../../components/BaselineHistory';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -137,6 +138,8 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
         <BaselineHistory projectId={projectId} />
         <BaselineLock projectId={projectId} />
       </div>
+      {/* Nudge to re-lock after a change opened the baseline (e.g. an approved CR). */}
+      <RebaselineReminder projectId={projectId} />
       {/* Baseline summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Direct" value={formatIdr(b?.directTotal)} />

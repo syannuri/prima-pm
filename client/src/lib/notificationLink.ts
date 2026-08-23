@@ -18,8 +18,10 @@ export function projectLink(projectId: string, tab?: string, focus?: string): st
   return `/projects/${projectId}${q ? `?${q}` : ''}`;
 }
 
-// The href a notification row links to: its project tab, else nothing (non-project events).
-export function notificationHref(n: { type: string; projectId: string | null }): string | null {
+// The href a notification row links to: an explicit stored link wins (e.g. a CR's target tab),
+// else its project tab, else nothing (non-project events).
+export function notificationHref(n: { type: string; projectId: string | null; link?: string | null }): string | null {
+  if (n.link) return n.link;
   if (!n.projectId) return null;
   return projectLink(n.projectId, TYPE_TAB[n.type]);
 }
