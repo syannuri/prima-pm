@@ -26,6 +26,8 @@ export interface User {
   dashboardLayout?: string[] | null;
   // Preferred landing view on the dashboard (null/undefined = portfolio).
   dashboardDefaultView?: DashboardView | null;
+  // Per-category channel prefs (email opt-outs); absent = all on.
+  notificationPrefs?: { email?: { approvals?: boolean } } | null;
 }
 
 // Platform console — a tenant as seen by a super-admin (GET /admin/tenants).

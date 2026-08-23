@@ -108,6 +108,19 @@ describe('approval emails', () => {
     expect(overdue!.html).toContain('/approvals?focus=');
   });
 
+  it('respects the per-user approval-email opt-out (notificationPrefs.email.approvals=false)', async () => {
+    await prisma.user.update({ where: { id: pmId }, data: { notificationPrefs: { email: { approvals: false } } } });
+    try {
+      await createWorkflow({ name: 'PM gate', steps: [{ name: 'PM', mode: 'ANY', approvers: [{ kind: 'PROJECT_PM' }] }] }, adminId);
+      await createChangeRequest(projectId, crInput(), adminId); // PM is the approver but opted out
+      expect(to(pmEmail).length).toBe(0); // no approval email to the opted-out PM
+      // The requester (admin) still gets their under-review receipt (default ON).
+      expect(to(adminEmail).some((m) => m.subject.includes('sedang ditinjau'))).toBe(true);
+    } finally {
+      await prisma.user.update({ where: { id: pmId }, data: { notificationPrefs: { email: { approvals: true } } } });
+    }
+  });
+
   it('sends nothing when SMTP is not configured (dormant)', async () => {
     delete process.env.SMTP_HOST; // disarm emailEnabled(); sink stays but the approval path gates on emailEnabled()
     try {

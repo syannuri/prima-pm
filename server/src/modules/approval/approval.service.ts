@@ -187,14 +187,20 @@ const projectWhereId = (project: { name: string | null; code: string | null } | 
   `pada proyek "${project?.name ?? 'sebuah proyek'}"${project?.code ? ` (${project.code})` : ''}`;
 
 // Send one rendered mail to each of the given user ids (best-effort; skips inactive / no-email).
+// All callers here are approval-category emails, so we honour the per-user opt-out
+// notificationPrefs.email.approvals === false (default ON when the pref is absent).
 async function emailUserIds(userIds: string[], mail: RenderedMail): Promise<void> {
   if (!emailEnabled() || userIds.length === 0) return;
   // User is a GLOBAL model (no tenant scoping) — safe to look up by id directly.
   const users = await prisma.user.findMany({
     where: { id: { in: userIds }, isActive: true, email: { not: '' } },
-    select: { email: true },
+    select: { email: true, notificationPrefs: true },
   });
-  await Promise.all(users.map((u) => sendMail({ to: u.email, subject: mail.subject, html: mail.html, text: mail.text })));
+  const optedIn = users.filter((u) => {
+    const prefs = (u.notificationPrefs ?? null) as { email?: { approvals?: boolean } } | null;
+    return prefs?.email?.approvals !== false; // default ON
+  });
+  await Promise.all(optedIn.map((u) => sendMail({ to: u.email, subject: mail.subject, html: mail.html, text: mail.text })));
 }
 
 // Resolve a step's approvers to concrete, de-duplicated user ids for the CURRENT state of the tenant
