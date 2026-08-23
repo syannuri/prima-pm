@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { Button, Field, Input } from '../components/ui';
 import { useLang, type Lang } from '../context/LanguageContext';
+import TurnstileWidget from '../components/TurnstileWidget';
 
 const TXT: Record<Lang, Record<string, string>> = {
   en: {
@@ -37,17 +38,28 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  // When the deployment has CAPTCHA on, the public forgot-password endpoint requires a Turnstile
+  // token — so we render the widget and block submit until it yields one.
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaEnabled, setCaptchaEnabled] = useState(false);
+  const [error, setError] = useState('');
+
+  const canSubmit = !!email.trim() && !busy && (!captchaEnabled || !!captchaToken);
 
   const submit = async () => {
-    if (busy || !email.trim()) return;
+    if (!canSubmit) return;
     setBusy(true);
+    setError('');
     try {
-      await api.post('/auth/forgot-password', { email: email.trim().toLowerCase() });
-    } catch {
-      /* Deliberately swallow — never signal success/failure differently (anti-enumeration). */
+      await api.post('/auth/forgot-password', { email: email.trim().toLowerCase(), captchaToken: captchaToken || undefined });
+      setSent(true); // success is identical for existing & non-existing accounts (anti-enumeration)
+    } catch (e) {
+      // Every error here is account-INDEPENDENT (captcha / validation / rate-limit) — the server's
+      // 200 success path is the same whether or not the address has an account. So surfacing the
+      // error leaks nothing, and it avoids a silent false "check your email" on a real failure.
+      setError(e instanceof ApiError ? e.message : 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
-      setSent(true); // same outcome regardless
     }
   };
 
@@ -68,7 +80,9 @@ export default function ForgotPasswordPage() {
               <Field label={tx.email}>
                 <Input type="email" autoComplete="email" autoFocus required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
               </Field>
-              <Button type="submit" className="w-full" disabled={busy || !email.trim()}>{busy ? tx.sending : tx.send}</Button>
+              <TurnstileWidget onToken={setCaptchaToken} onEnabled={setCaptchaEnabled} />
+              {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
+              <Button type="submit" className="w-full" disabled={!canSubmit}>{busy ? tx.sending : tx.send}</Button>
             </form>
             <Link to="/login" className="mt-5 inline-block text-sm text-brand-600 hover:underline dark:text-brand-400">← {tx.back}</Link>
           </>
