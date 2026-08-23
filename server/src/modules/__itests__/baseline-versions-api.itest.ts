@@ -13,6 +13,7 @@ const api = (p: string) => `/api/v1${p}`;
 const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 let adminToken = '';
+let ownerPmToken = '';
 let strangerPmToken = '';
 let projectId = '';
 
@@ -25,6 +26,7 @@ beforeAll(async () => {
   const pm = await prisma.user.create({ data: { name: 'BVA PM', email: 'bva-pm@t.test', role: 'PROJECT_MANAGER', passwordHash: await hashPassword('x'), isActive: true } });
   const stranger = await prisma.user.create({ data: { name: 'BVA Other', email: 'bva-other@t.test', role: 'PROJECT_MANAGER', passwordHash: await hashPassword('x'), isActive: true } });
   adminToken = signAccessToken({ sub: admin.id, role: 'ADMIN', email: admin.email });
+  ownerPmToken = signAccessToken({ sub: pm.id, role: 'PROJECT_MANAGER', email: pm.email });
   strangerPmToken = signAccessToken({ sub: stranger.id, role: 'PROJECT_MANAGER', email: stranger.email });
 
   const p = await prisma.project.create({
@@ -83,5 +85,43 @@ describe('baseline versions read API (Fase 2)', () => {
   it('403 for a PM who does not own the project (requireProjectAccess)', async () => {
     const res = await request(app).get(api(`/projects/${projectId}/baseline/versions`)).set(auth(strangerPmToken));
     expect(res.status).toBe(403);
+  });
+});
+
+// Fase 4 — restore/adopt endpoint. ADMIN/PMO governance only (requireProjectGovernance), on top of
+// requireProjectAccess. The successful restore mutates (appends a revision) so it runs last.
+describe('baseline restore API (Fase 4)', () => {
+  const restore = (v: number) => api(`/projects/${projectId}/baseline/versions/${v}/restore`);
+
+  it('401 without a token', async () => {
+    expect((await request(app).post(restore(1))).status).toBe(401);
+  });
+
+  it('403 for a PM who does not own the project (requireProjectAccess)', async () => {
+    const res = await request(app).post(restore(1)).set(auth(strangerPmToken)).send({});
+    expect(res.status).toBe(403);
+  });
+
+  it('403 for the owning PM — restore is ADMIN/PMO governance, not project-write', async () => {
+    const res = await request(app).post(restore(1)).set(auth(ownerPmToken)).send({});
+    expect(res.status).toBe(403);
+  });
+
+  it('400 for a non-numeric version', async () => {
+    const res = await request(app).post(api(`/projects/${projectId}/baseline/versions/abc/restore`)).set(auth(adminToken)).send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('ADMIN restores v1 → appends v3 re-based to the v1 numbers', async () => {
+    const res = await request(app).post(restore(1)).set(auth(adminToken)).send({ reason: 'revert' });
+    expect(res.status).toBe(200);
+    expect(res.body.fromVersion).toBe(1);
+    expect(res.body.newVersion).toBe(3);
+    expect(res.body.tasksRestored).toBe(1);
+
+    // The live cost baseline is re-based back to v1 (1000/1200), not the re-baselined 1500/1800.
+    const detail = await request(app).get(api(`/projects/${projectId}/baseline/versions/3`)).set(auth(adminToken));
+    expect(Number(detail.body.version.cost.costBaseline)).toBe(1000);
+    expect(detail.body.version.reason).toBe('revert');
   });
 });

@@ -5,7 +5,7 @@ import { requireRole, requireProjectAccess, requireProjectGovernance } from '../
 import { createProjectSchema, updateProjectSchema, reassignPmSchema } from './projects.schemas.js';
 import { z } from 'zod';
 import * as svc from './projects.service.js';
-import { setBaselineLock, listBaselineVersions, getBaselineVersion } from './baseline.service.js';
+import { setBaselineLock, listBaselineVersions, getBaselineVersion, restoreBaselineVersion } from './baseline.service.js';
 import { getClosureReadiness } from './closure.js';
 import { getActivationReadiness, getActivationReview, notifyActivationReady } from './activation.js';
 import { getNextSteps } from './nextsteps.js';
@@ -210,6 +210,23 @@ router.get(
     if (!Number.isInteger(n) || n < 1) throw BadRequest('Invalid version');
     const version = await getBaselineVersion(req.params.id, n);
     res.json({ version });
+  }),
+);
+// Restore/adopt a prior baseline revision (Fase 4) — ADMIN/PMO governance. Writes the snapshot back
+// into the live baseline (Task.baseline* + CostBaseline) and appends a new "Restored from Bn"
+// version. Single locked→locked op; audited (RESTORE_BASELINE). requireProjectAccess (no write:true
+// so it isn't blocked by the baseline-locked freeze — restore is a governance action).
+const restoreBaselineSchema = z.object({ reason: z.string().trim().max(500).optional() });
+router.post(
+  '/:id/baseline/versions/:version/restore',
+  requireProjectAccess(),
+  requireProjectGovernance('ADMIN', 'PMO'),
+  validateBody(restoreBaselineSchema),
+  asyncHandler(async (req, res) => {
+    const n = Number(req.params.version);
+    if (!Number.isInteger(n) || n < 1) throw BadRequest('Invalid version');
+    const result = await restoreBaselineVersion(req.params.id, n, req.body.reason, req.user!.id);
+    res.json(result);
   }),
 );
 

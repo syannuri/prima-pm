@@ -20,6 +20,7 @@ type AuditAction =
   | 'RESUBMIT_ACTIVATION'
   | 'ARCHIVE'
   | 'UNARCHIVE'
+  | 'RESTORE_BASELINE'
   | 'IMPERSONATE'
   | 'EXPORT'
   | 'API_ACCESS';
