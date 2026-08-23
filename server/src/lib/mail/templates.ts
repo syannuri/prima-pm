@@ -167,3 +167,62 @@ export function orgSignupAdminAlertMail(opts: { orgName: string }): RenderedMail
     text: textBlock([`Organisasi "${opts.orgName}" menunggu persetujuan.`, `Review di: ${url}`]),
   };
 }
+
+// --- Approval workflow (transactional) --------------------------------------
+// `phrase` is a lowercase Indonesian noun-phrase for the item under approval, e.g.
+// `permintaan perubahan "…"`, `penguncian baseline biaya`, `penutupan proyek`. `where` is the
+// project context, e.g. `pada proyek "Nama" (KODE)`. Callers assemble both.
+const capFirst = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// An approver has a new item awaiting their decision → deep-links to the approvals inbox (focused).
+export function approvalPendingMail(opts: { phrase: string; where: string; stepName: string; url: string }): RenderedMail {
+  return {
+    subject: `Persetujuan diperlukan: ${capFirst(opts.phrase)}`,
+    html: layout(
+      'Ada yang menunggu persetujuanmu',
+      [`${capFirst(opts.phrase)} ${opts.where} menunggu keputusanmu (langkah "${opts.stepName}").`],
+      { label: 'Tinjau & putuskan', url: opts.url },
+    ),
+    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} menunggu keputusanmu (langkah "${opts.stepName}").`, `Tinjau & putuskan: ${opts.url}`]),
+  };
+}
+
+// The requester's item was decided (approved/rejected) → deep-links to the entity's project tab.
+export function approvalDecidedMail(opts: { phrase: string; where: string; outcome: 'APPROVED' | 'REJECTED'; url: string }): RenderedMail {
+  const verb = opts.outcome === 'APPROVED' ? 'disetujui' : 'ditolak';
+  return {
+    subject: `${capFirst(opts.phrase)} ${verb}`,
+    html: layout(
+      opts.outcome === 'APPROVED' ? 'Permintaanmu disetujui' : 'Permintaanmu ditolak',
+      [`${capFirst(opts.phrase)} ${opts.where} telah <strong>${verb}</strong>.`],
+      { label: 'Lihat detail', url: opts.url },
+    ),
+    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} telah ${verb}.`, `Lihat detail: ${opts.url}`]),
+  };
+}
+
+// The requester's item was submitted and is now awaiting approval → deep-links to the entity.
+export function approvalUnderReviewMail(opts: { phrase: string; where: string; url: string }): RenderedMail {
+  return {
+    subject: `${capFirst(opts.phrase)} sedang ditinjau`,
+    html: layout(
+      'Permintaanmu sedang ditinjau',
+      [`${capFirst(opts.phrase)} ${opts.where} telah dikirim dan sedang menunggu persetujuan. Kamu akan diberi tahu begitu ada keputusan.`],
+      { label: 'Lihat status', url: opts.url },
+    ),
+    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} sedang menunggu persetujuan.`, `Lihat status: ${opts.url}`]),
+  };
+}
+
+// An approval blew its SLA deadline → notify the escalation target(s); links to the inbox (focused).
+export function approvalOverdueMail(opts: { phrase: string; where: string; stepName: string; url: string }): RenderedMail {
+  return {
+    subject: `Persetujuan melewati tenggat: ${capFirst(opts.phrase)}`,
+    html: layout(
+      'Persetujuan melewati tenggat',
+      [`${capFirst(opts.phrase)} ${opts.where} sudah melewati tenggat pada langkah "${opts.stepName}" dan perlu segera ditangani.`],
+      { label: 'Tinjau sekarang', url: opts.url },
+    ),
+    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} melewati tenggat (langkah "${opts.stepName}").`, `Tinjau: ${opts.url}`]),
+  };
+}

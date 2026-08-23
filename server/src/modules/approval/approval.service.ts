@@ -6,6 +6,8 @@ import { createNotification } from '../notification/notification.service.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import { getTenantStore, runAsSystem, runWithTenant } from '../../lib/tenant/context.js';
 import { decideChangeRequest } from '../charter/charter.service.js';
+import { emailEnabled, sendMail, appBaseUrl } from '../../lib/mailer.js';
+import { approvalPendingMail, approvalDecidedMail, approvalUnderReviewMail, approvalOverdueMail, type RenderedMail } from '../../lib/mail/templates.js';
 
 // Admin-configured, multi-step approval routing (Phase 1: Change Requests). A workflow is a chain
 // of ordered steps; each step lists approvers (by ROLE / specific USER / the project's PM) and a
@@ -152,6 +154,49 @@ async function entityLabel(ref: Pick<EntityRef, 'entityType' | 'entityId'>): Pro
   return 'a project closure';
 }
 
+// ---------------------------------------------------------------------------
+// Transactional approval emails (best-effort, dormant unless SMTP is configured). These ride
+// ALONGSIDE the in-app notifications above — never replacing them — and carry a deep-link so the
+// recipient can act in one click. Emails use Indonesian copy (the product's email voice).
+// ---------------------------------------------------------------------------
+
+// Lowercase Indonesian noun-phrase for the item under approval (mirrors entityLabel, ID copy).
+async function entityPhraseId(ref: Pick<EntityRef, 'entityType' | 'entityId'>): Promise<string> {
+  if (ref.entityType === 'CHANGE_REQUEST') {
+    const cr = await prisma.changeRequest.findUnique({ where: { id: ref.entityId }, select: { title: true } });
+    return `permintaan perubahan "${cr?.title ?? ''}"`;
+  }
+  if (ref.entityType === 'COST_BASELINE') return 'penguncian baseline biaya';
+  if (ref.entityType === 'BASELINE_UNLOCK') return 'pembukaan baseline biaya';
+  return 'penutupan proyek';
+}
+
+// The project tab where a requester lands to see the decided/under-review entity.
+function entityTab(entityType: EntityType): string {
+  if (entityType === 'CHANGE_REQUEST') return 'Change Req';
+  if (entityType === 'PROJECT_CLOSURE') return 'Closeout';
+  return 'Cost'; // COST_BASELINE / BASELINE_UNLOCK both live under the Cost tab
+}
+
+const entityUrl = (projectId: string, entityType: EntityType) =>
+  `${appBaseUrl()}/projects/${projectId}?tab=${encodeURIComponent(entityTab(entityType))}`;
+// The approvals inbox, focused on the specific request (client scrolls/highlights it).
+const inboxUrl = (requestId: string) => `${appBaseUrl()}/approvals?focus=${encodeURIComponent(requestId)}`;
+// `pada proyek "Name" (CODE)` — the shared project-context phrase used across the emails.
+const projectWhereId = (project: { name: string | null; code: string | null } | null) =>
+  `pada proyek "${project?.name ?? 'sebuah proyek'}"${project?.code ? ` (${project.code})` : ''}`;
+
+// Send one rendered mail to each of the given user ids (best-effort; skips inactive / no-email).
+async function emailUserIds(userIds: string[], mail: RenderedMail): Promise<void> {
+  if (!emailEnabled() || userIds.length === 0) return;
+  // User is a GLOBAL model (no tenant scoping) — safe to look up by id directly.
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds }, isActive: true, email: { not: '' } },
+    select: { email: true },
+  });
+  await Promise.all(users.map((u) => sendMail({ to: u.email, subject: mail.subject, html: mail.html, text: mail.text })));
+}
+
 // Resolve a step's approvers to concrete, de-duplicated user ids for the CURRENT state of the tenant
 // and project (roles → members holding them, USER → the id, PROJECT_PM → the project's PM).
 async function resolveStepApproverIds(step: StepWithApprovers, projectId: string): Promise<string[]> {
@@ -196,6 +241,27 @@ async function notifyStepApprovers(ref: EntityRef, step: StepWithApprovers, excl
     body: `${cap(label)} ${where} needs your approval (step "${step.name}").`,
     projectId: ref.projectId,
   })));
+  // Transactional email alongside the in-app notice — deep-links to the focused inbox row.
+  if (emailEnabled()) {
+    const phrase = await entityPhraseId(ref);
+    await emailUserIds(ids, approvalPendingMail({ phrase, where: projectWhereId(project), stepName: step.name, url: inboxUrl(ref.id) }));
+  }
+}
+
+// Email the requester that their item was decided (all entity types) — additive to the in-app
+// decision notice, which lives in charter.service (CR) / notifyRequester (baseline, closure).
+// Best-effort; skips self-decisions and the SMTP-off case.
+async function emailRequesterDecided(ref: EntityRef, payload: unknown, outcome: 'APPROVED' | 'REJECTED', actorId: string): Promise<void> {
+  if (!emailEnabled()) return;
+  const requesterId = ref.entityType === 'CHANGE_REQUEST'
+    ? (await prisma.changeRequest.findUnique({ where: { id: ref.entityId }, select: { requestedBy: true } }))?.requestedBy
+    : ((payload ?? {}) as { requestedById?: string }).requestedById;
+  if (!requesterId || requesterId === actorId) return;
+  const [project, phrase] = await Promise.all([
+    prisma.project.findUnique({ where: { id: ref.projectId }, select: { name: true, code: true } }),
+    entityPhraseId(ref),
+  ]);
+  await emailUserIds([requesterId], approvalDecidedMail({ phrase, where: projectWhereId(project), outcome, url: entityUrl(ref.projectId, ref.entityType) }));
 }
 
 // Advance the request to the first actionable step at/after `fromOrder` (auto-skipping steps that
@@ -237,6 +303,10 @@ async function finalize(ref: EntityRef, outcome: 'APPROVED' | 'REJECTED', actorI
     action: outcome === 'APPROVED' ? 'APPROVE' : 'REJECT',
     after: { status: outcome, entityType: ref.entityType, entityId: ref.entityId },
   });
+
+  // Requester decision email — uniform across all entity types (the in-app notice is emitted
+  // per-type below / in charter.service). Sent before the CR branch's early return.
+  await emailRequesterDecided(ref, row.payload, outcome, actorId);
 
   if (ref.entityType === 'CHANGE_REQUEST') {
     await decideChangeRequest(ref.projectId, ref.entityId, outcome, actorId, opts.applyToRevenue ?? false);
@@ -319,8 +389,21 @@ export async function startApproval(
     },
   });
   await writeAudit({ projectId: ref.projectId, userId: actorId, entity: 'ApprovalRequest', entityId: req.id, action: 'CREATE', after: { workflow: workflow.name, entityType: ref.entityType, entityId: ref.entityId } });
-  await routeFrom({ id: req.id, entityType: ref.entityType, entityId: ref.entityId, projectId: ref.projectId }, workflow, 1, actorId);
+  const entityRef: EntityRef = { id: req.id, entityType: ref.entityType, entityId: ref.entityId, projectId: ref.projectId };
+  const status = await routeFrom(entityRef, workflow, 1, actorId);
+  // Receipt to the requester that their item is now under review (only if it didn't auto-approve).
+  if (status === 'PENDING') await emailRequesterUnderReview(entityRef, actorId);
   return req;
+}
+
+// Email the requester that their submitted item is now awaiting approval. Best-effort; dormant off.
+async function emailRequesterUnderReview(ref: EntityRef, requesterId: string): Promise<void> {
+  if (!emailEnabled() || !requesterId) return;
+  const [project, phrase] = await Promise.all([
+    prisma.project.findUnique({ where: { id: ref.projectId }, select: { name: true, code: true } }),
+    entityPhraseId(ref),
+  ]);
+  await emailUserIds([requesterId], approvalUnderReviewMail({ phrase, where: projectWhereId(project), url: entityUrl(ref.projectId, ref.entityType) }));
 }
 
 // Back-compat wrapper for the CR call-site.
@@ -495,6 +578,11 @@ export async function escalateOverdueApprovals(now = new Date()) {
           body: `${cap(label)} ${where} is past its deadline at step "${step?.name ?? ''}".`,
           projectId: r.projectId,
         })));
+        // Transactional email to the escalation target(s) — deep-links to the focused inbox row.
+        if (emailEnabled()) {
+          const phrase = await entityPhraseId({ entityType: r.entityType, entityId: r.entityId });
+          await emailUserIds(targets, approvalOverdueMail({ phrase, where: projectWhereId(project), stepName: step?.name ?? '', url: inboxUrl(r.id) }));
+        }
       }
       await prisma.approvalRequest.update({ where: { id: r.id }, data: { escalatedAt: now } });
     };
