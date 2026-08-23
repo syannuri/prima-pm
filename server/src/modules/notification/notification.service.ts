@@ -13,8 +13,11 @@ const DAY = 86_400_000;
 // Prune dismissals this old so the table can't grow unbounded (old signatures never match again).
 const DISMISSAL_TTL = 60 * DAY;
 
-export type AlertType = 'OVERDUE_TASK' | 'HIGH_RISK' | 'BUDGET_OVERRUN' | 'OVERSPEND';
+export type AlertType = 'OVERDUE_TASK' | 'DUE_SOON_TASK' | 'HIGH_RISK' | 'BUDGET_OVERRUN' | 'OVERSPEND';
 export type AlertSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
+// A leaf task/milestone is "due soon" when its planned finish falls within the next N whole days
+// (proactive heads-up BEFORE it slips into OVERDUE). Kept in lock-step with the overdue rule.
+const DUE_SOON_WINDOW_DAYS = 7;
 
 export interface Alert {
   type: AlertType;
@@ -29,7 +32,7 @@ export interface Alert {
 // Raw inputs the alert rules need, per project. Loaded in bulk (loadAlertInputs) so many
 // projects share a FIXED number of queries instead of ~9 per project via getCostSummary.
 interface AlertInput {
-  tasks: { id: string; name: string; parentTaskId: string | null; planEnd: Date; progressPct: number }[];
+  tasks: { id: string; name: string; parentTaskId: string | null; planEnd: Date; progressPct: number; isMilestone: boolean }[];
   risks: { id: string; code: string; title: string; severity: string; status: string }[];
   bac: number;            // cost baseline (PMB) = costBaseline.costBaseline
   charterCost: number;    // charter high-level estimate (hiCostIdr)
@@ -45,7 +48,7 @@ async function loadAlertInputs(ids: string[]): Promise<Map<string, AlertInput>> 
   if (ids.length === 0) return out;
 
   const [taskRows, riskRows, baselines, charters, acAgg] = await Promise.all([
-    prisma.task.findMany({ where: { projectId: { in: ids } }, select: { id: true, projectId: true, name: true, parentTaskId: true, planEnd: true, progressPct: true } }),
+    prisma.task.findMany({ where: { projectId: { in: ids } }, select: { id: true, projectId: true, name: true, parentTaskId: true, planEnd: true, progressPct: true, isMilestone: true } }),
     prisma.risk.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, id: true, code: true, title: true, severity: true, status: true } }),
     prisma.costBaseline.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, costBaseline: true } }),
     prisma.projectCharter.findMany({ where: { projectId: { in: ids } }, select: { projectId: true, hiCostIdr: true } }),
@@ -56,7 +59,7 @@ async function loadAlertInputs(ids: string[]): Promise<Map<string, AlertInput>> 
   for (const t of taskRows) {
     let arr = tasksBy.get(t.projectId);
     if (!arr) tasksBy.set(t.projectId, (arr = []));
-    arr.push({ id: t.id, name: t.name, parentTaskId: t.parentTaskId, planEnd: t.planEnd, progressPct: t.progressPct });
+    arr.push({ id: t.id, name: t.name, parentTaskId: t.parentTaskId, planEnd: t.planEnd, progressPct: t.progressPct, isMilestone: t.isMilestone });
   }
   const risksBy = new Map<string, AlertInput['risks']>();
   for (const r of riskRows) {
@@ -87,20 +90,36 @@ function computeAlerts(input: AlertInput, now: Date): { alerts: Alert[]; counts:
   const { tasks, risks, bac, charterCost, actualCostTotal } = input;
   const alerts: Alert[] = [];
 
-  // 1) Overdue leaf tasks (planned end passed, not complete).
+  // 1) Overdue leaf tasks (planned end passed, not complete) + a proactive "due soon" heads-up for
+  // leaf tasks/milestones whose finish is within the next window (before they slip into overdue).
   const parentIds = new Set(tasks.filter((t) => t.parentTaskId).map((t) => t.parentTaskId!));
+  const today = Math.floor(now.getTime() / DAY);
   for (const t of tasks) {
     if (parentIds.has(t.id)) continue; // skip summary rows
     if (t.progressPct >= 100) continue;
-    // Overdue by WHOLE calendar days — a task due TODAY is not overdue until tomorrow (floor to
-    // the day, matching the Gantt + report.service). Prevents a confusing "0d overdue" alert.
-    const daysLate = Math.floor(now.getTime() / DAY) - Math.floor(new Date(t.planEnd).getTime() / DAY);
+    // WHOLE calendar days late — a task due TODAY is not overdue until tomorrow (floor to the day,
+    // matching the Gantt + report.service). Prevents a confusing "0d overdue" alert. daysLate<0 = the
+    // finish is still ahead (−daysLate = days until due).
+    const daysLate = today - Math.floor(new Date(t.planEnd).getTime() / DAY);
+    const noun = t.isMilestone ? 'Milestone' : 'Task';
     if (daysLate >= 1) {
       alerts.push({
         type: 'OVERDUE_TASK',
         severity: daysLate > 14 ? 'HIGH' : 'MEDIUM',
         tab: 'Schedule',
-        message: `Task "${t.name}" is ${daysLate}d overdue (${t.progressPct}% done)`,
+        message: `${noun} "${t.name}" is ${daysLate}d overdue (${t.progressPct}% done)`,
+        entityId: t.id,
+      });
+    } else if (daysLate >= -DUE_SOON_WINDOW_DAYS) {
+      // Due within the window (daysLate in [−7, 0]). "Due today/tomorrow" is the more urgent MEDIUM;
+      // the rest is a low-priority LOW so it never drowns out genuinely-late work.
+      const daysUntil = -daysLate;
+      const when = daysUntil === 0 ? 'due today' : daysUntil === 1 ? 'due tomorrow' : `due in ${daysUntil}d`;
+      alerts.push({
+        type: 'DUE_SOON_TASK',
+        severity: daysUntil <= 1 ? 'MEDIUM' : 'LOW',
+        tab: 'Schedule',
+        message: `${noun} "${t.name}" is ${when} (${t.progressPct}% done)`,
         entityId: t.id,
       });
     }
