@@ -10,7 +10,7 @@ import { createNotification } from '../notification/notification.service.js';
 import { emitDomainEvent } from '../events/dispatch.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
 import { emailEnabled, sendMail, appBaseUrl } from '../../lib/mailer.js';
-import { crDecidedMail } from '../../lib/mail/templates.js';
+import { crDecidedMail, crSubmittedMail } from '../../lib/mail/templates.js';
 
 // The project tab a CR is "about", so its approved/rejected notice deep-links where the PM must act.
 // Schedule wins (re-plan happens there); then Cost, Charter, Risk; else the Change Req tab.
@@ -208,6 +208,7 @@ export async function createChangeRequest(
     prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true } }),
     tenantMemberUserIds(['ADMIN', 'PMO'], { excludeUserId: actorId }),
   ]);
+  const where = `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`;
   // Notify all approvers concurrently (was serial).
   await Promise.all(
     approvers
@@ -216,11 +217,27 @@ export async function createChangeRequest(
           userId: id,
           type: 'CR_SUBMITTED',
           title: 'Change request awaits your decision',
-          body: `"${input.title}" on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''} needs approval.`,
+          body: `"${input.title}" ${where} needs approval.`,
           projectId,
+          link: `/projects/${projectId}?tab=${encodeURIComponent('Change Req')}`,
         }),
       ),
   );
+  // Email the approvers too (best-effort). The workflow path emails via notifyStepApprovers; this
+  // closes the gap so ADMIN/PMO still get an email when NO approval workflow is configured. Honours
+  // the per-user approvals opt-out; deep-links to the project's Change Req tab.
+  if (emailEnabled() && approvers.length) {
+    const recips = await prisma.user.findMany({
+      where: { id: { in: approvers }, isActive: true, email: { not: '' } },
+      select: { email: true, notificationPrefs: true },
+    });
+    const mail = crSubmittedMail({ title: input.title, where, url: `${appBaseUrl()}/projects/${projectId}?tab=${encodeURIComponent('Change Req')}` });
+    await Promise.all(
+      recips
+        .filter((u) => ((u.notificationPrefs ?? null) as { email?: { approvals?: boolean } } | null)?.email?.approvals !== false)
+        .map((u) => sendMail({ to: u.email, subject: mail.subject, html: mail.html, text: mail.text })),
+    );
+  }
   return cr;
 }
 
