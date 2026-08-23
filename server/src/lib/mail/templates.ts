@@ -1,11 +1,20 @@
 import { appBaseUrl } from '../mailer.js';
 
 // Pure email builders (no I/O) so they unit-test without SMTP. Each returns a subject + HTML + a plain
-// text fallback (multipart/alternative). Copy is Indonesian to match the product UI.
+// text fallback (multipart/alternative). Copy is English — Prismatix serves a global audience.
 export interface RenderedMail {
   subject: string;
   html: string;
   text: string;
+}
+
+// The dark brand header band: the Prismatix prism logo + wordmark. The logo is an absolute URL (email
+// clients need that); alt="" keeps it clean when images are blocked — the wordmark text still shows.
+function headerBand(): string {
+  return `<tr><td style="background:#4c1d95;padding:16px 28px">
+        <img src="${appBaseUrl()}/logo.png" width="26" height="26" alt="" style="vertical-align:middle;margin-right:9px">
+        <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.3px;vertical-align:middle">Prismatix</span>
+      </td></tr>`;
 }
 
 // Minimal branded HTML shell — inline styles only (email clients strip <style>/external CSS). The
@@ -18,17 +27,17 @@ function layout(heading: string, paragraphs: string[], cta?: { label: string; ur
     ? `<p style="margin:24px 0"><a href="${cta.url}" style="background:#7c3aed;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;font-size:15px;display:inline-block">${cta.label}</a></p>`
     : '';
   const fallback = cta
-    ? `<p style="margin:0 0 8px;color:#64748b;font-size:13px;line-height:1.6">Kalau tombol tidak berfungsi, salin tautan ini ke browser:<br><a href="${cta.url}" style="color:#7c3aed;word-break:break-all">${cta.url}</a></p>`
+    ? `<p style="margin:0 0 8px;color:#64748b;font-size:13px;line-height:1.6">If the button doesn't work, copy this link into your browser:<br><a href="${cta.url}" style="color:#7c3aed;word-break:break-all">${cta.url}</a></p>`
     : '';
   return `<!doctype html><html><body style="margin:0;background:#f1f5f9;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
     <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0">
-      <tr><td style="background:#4c1d95;padding:18px 28px"><span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.3px">Prismatix</span></td></tr>
+      ${headerBand()}
       <tr><td style="padding:28px">
         <h1 style="margin:0 0 16px;color:#0f172a;font-size:20px">${heading}</h1>
         ${body}${button}${fallback}
       </td></tr>
-      <tr><td style="padding:16px 28px;border-top:1px solid #f1f5f9"><p style="margin:0;color:#94a3b8;font-size:12px">Prismatix — platform manajemen proyek. Email ini dikirim otomatis, mohon tidak membalas.</p></td></tr>
+      <tr><td style="padding:16px 28px;border-top:1px solid #f1f5f9"><p style="margin:0;color:#94a3b8;font-size:12px">Prismatix — project management platform. This is an automated message; please don't reply.</p></td></tr>
     </table>
   </td></tr></table>
 </body></html>`;
@@ -42,20 +51,20 @@ function textBlock(lines: string[]): string {
 export function verifyEmailMail(opts: { name: string; token: string }): RenderedMail {
   const url = `${appBaseUrl()}/verify-email?token=${encodeURIComponent(opts.token)}`;
   return {
-    subject: 'Aktivasi akun Prismatix kamu',
+    subject: 'Activate your Prismatix account',
     html: layout(
-      `Halo ${opts.name}, aktifkan akunmu`,
+      `Hi ${opts.name}, activate your account`,
       [
-        'Terima kasih sudah mendaftar di Prismatix. Satu langkah lagi: konfirmasi alamat email ini untuk mengaktifkan akun dan mulai masuk.',
-        'Tautan aktivasi berlaku 24 jam.',
+        'Thanks for signing up to Prismatix. One more step — confirm this email address to activate your account and sign in.',
+        'This activation link is valid for 24 hours.',
       ],
-      { label: 'Aktifkan akun', url },
+      { label: 'Activate account', url },
     ),
     text: textBlock([
-      `Halo ${opts.name},`,
-      'Aktifkan akun Prismatix-mu dengan membuka tautan berikut (berlaku 24 jam):',
+      `Hi ${opts.name},`,
+      'Activate your Prismatix account by opening this link (valid for 24 hours):',
       url,
-      'Kalau kamu tidak merasa mendaftar, abaikan saja email ini.',
+      "If you didn't sign up, you can ignore this email.",
     ]),
   };
 }
@@ -63,17 +72,17 @@ export function verifyEmailMail(opts: { name: string; token: string }): Rendered
 // Org signup approved by a platform admin: the workspace is live, the owner can sign in.
 export function orgApprovedMail(opts: { name: string; orgName: string; loginUrl: string }): RenderedMail {
   return {
-    subject: `Workspace “${opts.orgName}” sudah disetujui`,
+    subject: `Workspace “${opts.orgName}” approved`,
     html: layout(
-      `Selamat ${opts.name}!`,
+      `Congratulations, ${opts.name}!`,
       [
-        `Permintaan workspace <strong>${opts.orgName}</strong> telah disetujui. Kamu sekarang bisa masuk sebagai admin dan mulai mengundang tim.`,
+        `Your workspace request <strong>${opts.orgName}</strong> has been approved. You can now sign in as an admin and start inviting your team.`,
       ],
-      { label: 'Masuk ke Prismatix', url: opts.loginUrl },
+      { label: 'Sign in to Prismatix', url: opts.loginUrl },
     ),
     text: textBlock([
-      `Selamat ${opts.name}!`,
-      `Workspace "${opts.orgName}" telah disetujui. Silakan masuk:`,
+      `Congratulations, ${opts.name}!`,
+      `Workspace "${opts.orgName}" has been approved. Sign in:`,
       opts.loginUrl,
     ]),
   };
@@ -98,7 +107,7 @@ export function alertDigestMail(opts: {
   totalHigh: number;
 }): RenderedMail {
   const base = appBaseUrl();
-  const when = opts.cadence === 'DAILY' ? 'harian' : 'mingguan';
+  const when = opts.cadence === 'DAILY' ? 'daily' : 'weekly';
   const projUrl = (p: DigestProject, tab?: string) =>
     `${base}/projects/${p.projectId}${tab ? `?tab=${encodeURIComponent(tab)}` : ''}`;
 
@@ -111,8 +120,8 @@ export function alertDigestMail(opts: {
             `<li style="margin:0 0 6px;color:#334155;font-size:14px;line-height:1.5"><a href="${projUrl(p, l.tab)}${l.entityId ? `&focus=${encodeURIComponent(l.entityId)}` : ''}" style="color:#334155;text-decoration:none">${l.message}</a></li>`,
         )
         .join('');
-      const more = p.total > p.lines.length ? `<li style="margin:2px 0 0;color:#94a3b8;font-size:13px;list-style:none">+ ${p.total - p.lines.length} lagi</li>` : '';
-      const highChip = p.high > 0 ? `<span style="background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:8px">${p.high} tinggi</span>` : '';
+      const more = p.total > p.lines.length ? `<li style="margin:2px 0 0;color:#94a3b8;font-size:13px;list-style:none">+ ${p.total - p.lines.length} more</li>` : '';
+      const highChip = p.high > 0 ? `<span style="background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:8px">${p.high} high</span>` : '';
       return `<div style="margin:0 0 20px">
         <p style="margin:0 0 8px;font-size:15px"><a href="${projUrl(p)}" style="color:#4c1d95;font-weight:700;text-decoration:none">${p.name}</a> <span style="color:#94a3b8;font-size:13px">(${p.code})</span>${highChip}</p>
         <ul style="margin:0;padding:0 0 0 18px">${items}${more}</ul>
@@ -120,36 +129,37 @@ export function alertDigestMail(opts: {
     })
     .join('');
 
-  const heading = `Ringkasan peringatan ${when}`;
-  const intro = `Halo ${opts.name}, ada <strong>${opts.totalAlerts}</strong> peringatan aktif di ${opts.projects.length} proyek${opts.totalHigh > 0 ? ` (<strong style="color:#b91c1c">${opts.totalHigh} prioritas tinggi</strong>)` : ''} yang perlu perhatianmu.`;
+  const heading = `${when === 'daily' ? 'Daily' : 'Weekly'} alert digest`;
+  const projWord = opts.projects.length === 1 ? 'project' : 'projects';
+  const intro = `Hi ${opts.name}, there are <strong>${opts.totalAlerts}</strong> active alerts across ${opts.projects.length} ${projWord}${opts.totalHigh > 0 ? ` (<strong style="color:#b91c1c">${opts.totalHigh} high priority</strong>)` : ''} that need your attention.`;
   const html = `<!doctype html><html><body style="margin:0;background:#f1f5f9;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
     <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0">
-      <tr><td style="background:#4c1d95;padding:18px 28px"><span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.3px">Prismatix</span></td></tr>
+      ${headerBand()}
       <tr><td style="padding:28px">
         <h1 style="margin:0 0 12px;color:#0f172a;font-size:20px">${heading}</h1>
         <p style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.6">${intro}</p>
         ${blocks}
-        <p style="margin:24px 0 0"><a href="${base}/dashboard" style="background:#7c3aed;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;font-size:15px;display:inline-block">Buka dashboard</a></p>
+        <p style="margin:24px 0 0"><a href="${base}/dashboard" style="background:#7c3aed;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;font-size:15px;display:inline-block">Open dashboard</a></p>
       </td></tr>
-      <tr><td style="padding:16px 28px;border-top:1px solid #f1f5f9"><p style="margin:0;color:#94a3b8;font-size:12px">Ringkasan ${when} otomatis. Atur frekuensi atau matikan di Pengaturan akun. Mohon tidak membalas email ini.</p></td></tr>
+      <tr><td style="padding:16px 28px;border-top:1px solid #f1f5f9"><p style="margin:0;color:#94a3b8;font-size:12px">Automatic ${when} summary. Manage the frequency or turn it off in account settings. Please don't reply.</p></td></tr>
     </table>
   </td></tr></table>
 </body></html>`;
 
   const textLines = opts.projects.map((p) => {
     const items = p.lines.map((l) => `  - ${l.message}`).join('\n');
-    const more = p.total > p.lines.length ? `\n  + ${p.total - p.lines.length} lagi` : '';
-    return `${p.name} (${p.code})${p.high > 0 ? ` — ${p.high} tinggi` : ''}\n${items}${more}`;
+    const more = p.total > p.lines.length ? `\n  + ${p.total - p.lines.length} more` : '';
+    return `${p.name} (${p.code})${p.high > 0 ? ` — ${p.high} high` : ''}\n${items}${more}`;
   });
   return {
-    subject: `Ringkasan peringatan ${when}: ${opts.totalAlerts} perlu perhatian`,
+    subject: `${when === 'daily' ? 'Daily' : 'Weekly'} alert digest: ${opts.totalAlerts} need attention`,
     html,
     text: textBlock([
-      `Halo ${opts.name},`,
-      `${opts.totalAlerts} peringatan aktif di ${opts.projects.length} proyek${opts.totalHigh > 0 ? ` (${opts.totalHigh} prioritas tinggi)` : ''}:`,
+      `Hi ${opts.name},`,
+      `${opts.totalAlerts} active alerts across ${opts.projects.length} ${projWord}${opts.totalHigh > 0 ? ` (${opts.totalHigh} high priority)` : ''}:`,
       ...textLines,
-      `Buka dashboard: ${base}/dashboard`,
+      `Open dashboard: ${base}/dashboard`,
     ]),
   };
 }
@@ -158,59 +168,59 @@ export function alertDigestMail(opts: {
 export function orgSignupAdminAlertMail(opts: { orgName: string }): RenderedMail {
   const url = `${appBaseUrl()}/admin/tenants`;
   return {
-    subject: `Permintaan workspace baru: ${opts.orgName}`,
+    subject: `New workspace request: ${opts.orgName}`,
     html: layout(
-      'Ada workspace menunggu persetujuan',
-      [`Organisasi <strong>${opts.orgName}</strong> baru saja mendaftar dan menunggu review di konsol platform.`],
-      { label: 'Buka antrean persetujuan', url },
+      'A workspace is awaiting approval',
+      [`Organization <strong>${opts.orgName}</strong> just signed up and is awaiting review in the platform console.`],
+      { label: 'Open the approval queue', url },
     ),
-    text: textBlock([`Organisasi "${opts.orgName}" menunggu persetujuan.`, `Review di: ${url}`]),
+    text: textBlock([`Organization "${opts.orgName}" is awaiting approval.`, `Review at: ${url}`]),
   };
 }
 
 // --- Approval workflow (transactional) --------------------------------------
-// `phrase` is a lowercase Indonesian noun-phrase for the item under approval, e.g.
-// `permintaan perubahan "…"`, `penguncian baseline biaya`, `penutupan proyek`. `where` is the
-// project context, e.g. `pada proyek "Nama" (KODE)`. Callers assemble both.
+// `phrase` is a lowercase English noun-phrase for the item under approval, e.g. `change request "…"`,
+// `a cost baseline lock`, `a project closure`. `where` is the project context, e.g. `on "Name" (CODE)`.
+// Callers assemble both.
 const capFirst = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 // An approver has a new item awaiting their decision → deep-links to the approvals inbox (focused).
 export function approvalPendingMail(opts: { phrase: string; where: string; stepName: string; url: string }): RenderedMail {
   return {
-    subject: `Persetujuan diperlukan: ${capFirst(opts.phrase)}`,
+    subject: `Approval needed: ${capFirst(opts.phrase)}`,
     html: layout(
-      'Ada yang menunggu persetujuanmu',
-      [`${capFirst(opts.phrase)} ${opts.where} menunggu keputusanmu (langkah "${opts.stepName}").`],
-      { label: 'Tinjau & putuskan', url: opts.url },
+      'Something needs your approval',
+      [`${capFirst(opts.phrase)} ${opts.where} needs your decision (step "${opts.stepName}").`],
+      { label: 'Review & decide', url: opts.url },
     ),
-    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} menunggu keputusanmu (langkah "${opts.stepName}").`, `Tinjau & putuskan: ${opts.url}`]),
+    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} needs your decision (step "${opts.stepName}").`, `Review & decide: ${opts.url}`]),
   };
 }
 
 // The requester's item was decided (approved/rejected) → deep-links to the entity's project tab.
 export function approvalDecidedMail(opts: { phrase: string; where: string; outcome: 'APPROVED' | 'REJECTED'; url: string }): RenderedMail {
-  const verb = opts.outcome === 'APPROVED' ? 'disetujui' : 'ditolak';
+  const verb = opts.outcome === 'APPROVED' ? 'approved' : 'rejected';
   return {
     subject: `${capFirst(opts.phrase)} ${verb}`,
     html: layout(
-      opts.outcome === 'APPROVED' ? 'Permintaanmu disetujui' : 'Permintaanmu ditolak',
-      [`${capFirst(opts.phrase)} ${opts.where} telah <strong>${verb}</strong>.`],
-      { label: 'Lihat detail', url: opts.url },
+      opts.outcome === 'APPROVED' ? 'Your request was approved' : 'Your request was rejected',
+      [`${capFirst(opts.phrase)} ${opts.where} was <strong>${verb}</strong>.`],
+      { label: 'View details', url: opts.url },
     ),
-    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} telah ${verb}.`, `Lihat detail: ${opts.url}`]),
+    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} was ${verb}.`, `View details: ${opts.url}`]),
   };
 }
 
 // The requester's item was submitted and is now awaiting approval → deep-links to the entity.
 export function approvalUnderReviewMail(opts: { phrase: string; where: string; url: string }): RenderedMail {
   return {
-    subject: `${capFirst(opts.phrase)} sedang ditinjau`,
+    subject: `${capFirst(opts.phrase)} is under review`,
     html: layout(
-      'Permintaanmu sedang ditinjau',
-      [`${capFirst(opts.phrase)} ${opts.where} telah dikirim dan sedang menunggu persetujuan. Kamu akan diberi tahu begitu ada keputusan.`],
-      { label: 'Lihat status', url: opts.url },
+      'Your request is under review',
+      [`${capFirst(opts.phrase)} ${opts.where} has been submitted and is awaiting approval. You'll be notified once it's decided.`],
+      { label: 'View status', url: opts.url },
     ),
-    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} sedang menunggu persetujuan.`, `Lihat status: ${opts.url}`]),
+    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} is awaiting approval.`, `View status: ${opts.url}`]),
   };
 }
 
@@ -219,22 +229,22 @@ export function approvalUnderReviewMail(opts: { phrase: string; where: string; u
 // CR's target tab.
 export function crDecidedMail(opts: { title: string; where: string; outcome: 'APPROVED' | 'REJECTED'; baselineOpened: boolean; url: string }): RenderedMail {
   const approved = opts.outcome === 'APPROVED';
-  const verb = approved ? 'disetujui' : 'ditolak';
-  const paras = [`Permintaan perubahan "<strong>${opts.title}</strong>" ${opts.where} telah <strong>${verb}</strong>.`];
+  const verb = approved ? 'approved' : 'rejected';
+  const paras = [`Change request "<strong>${opts.title}</strong>" ${opts.where} was <strong>${verb}</strong>.`];
   if (opts.baselineOpened) {
-    paras.push('Baseline biaya & jadwal telah <strong>dibuka</strong> agar perubahan bisa diterapkan. Setelah selesai, lakukan <strong>re-baseline lalu kunci kembali</strong> di tab Cost agar EVM/variansi kembali terukur.');
+    paras.push("The cost &amp; schedule baseline has been <strong>opened</strong> so the change can be applied. When you're done, <strong>re-baseline and lock it again</strong> on the Cost tab so EVM &amp; variance stay meaningful.");
   }
   return {
-    subject: `Permintaan perubahan "${opts.title}" ${verb}`,
+    subject: `Change request "${opts.title}" ${verb}`,
     html: layout(
-      approved ? 'Permintaan perubahanmu disetujui' : 'Permintaan perubahanmu ditolak',
+      approved ? 'Your change request was approved' : 'Your change request was rejected',
       paras,
-      { label: approved && opts.baselineOpened ? 'Terapkan & kunci baseline' : 'Lihat detail', url: opts.url },
+      { label: approved && opts.baselineOpened ? 'Apply & lock baseline' : 'View details', url: opts.url },
     ),
     text: textBlock([
-      `Permintaan perubahan "${opts.title}" ${opts.where} telah ${verb}.`,
-      ...(opts.baselineOpened ? ['Baseline dibuka — terapkan perubahan lalu re-baseline & kunci kembali di tab Cost.'] : []),
-      `Buka: ${opts.url}`,
+      `Change request "${opts.title}" ${opts.where} was ${verb}.`,
+      ...(opts.baselineOpened ? ['The baseline was opened — apply the change, then re-baseline & lock it again on the Cost tab.'] : []),
+      `Open: ${opts.url}`,
     ]),
   };
 }
@@ -242,12 +252,12 @@ export function crDecidedMail(opts: { title: string; where: string; outcome: 'AP
 // An approval blew its SLA deadline → notify the escalation target(s); links to the inbox (focused).
 export function approvalOverdueMail(opts: { phrase: string; where: string; stepName: string; url: string }): RenderedMail {
   return {
-    subject: `Persetujuan melewati tenggat: ${capFirst(opts.phrase)}`,
+    subject: `Approval overdue: ${capFirst(opts.phrase)}`,
     html: layout(
-      'Persetujuan melewati tenggat',
-      [`${capFirst(opts.phrase)} ${opts.where} sudah melewati tenggat pada langkah "${opts.stepName}" dan perlu segera ditangani.`],
-      { label: 'Tinjau sekarang', url: opts.url },
+      'Approval overdue',
+      [`${capFirst(opts.phrase)} ${opts.where} has passed its deadline at step "${opts.stepName}" and needs attention.`],
+      { label: 'Review now', url: opts.url },
     ),
-    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} melewati tenggat (langkah "${opts.stepName}").`, `Tinjau: ${opts.url}`]),
+    text: textBlock([`${capFirst(opts.phrase)} ${opts.where} is past its deadline (step "${opts.stepName}").`, `Review: ${opts.url}`]),
   };
 }

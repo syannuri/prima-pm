@@ -346,7 +346,7 @@ export async function decideChangeRequest(
       if (req?.email && prefs?.email?.approvals !== false) {
         const mail = crDecidedMail({
           title: cr.title,
-          where: `pada proyek "${project?.name ?? 'sebuah proyek'}"${project?.code ? ` (${project.code})` : ''}`,
+          where: `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`,
           outcome: approved ? 'APPROVED' : 'REJECTED',
           baselineOpened: reLock,
           url: `${appBaseUrl()}${link}`,

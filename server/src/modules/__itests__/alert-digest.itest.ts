@@ -98,7 +98,7 @@ describe('alert-digest email sweep', () => {
     expect(sent).toBe(1);
     expect(captured).toHaveLength(1);
     expect(captured[0].to).toBe(u.email);
-    expect(captured[0].subject).toContain('harian');
+    expect(captured[0].subject).toContain('Daily');
     const after = await prisma.user.findUnique({ where: { id: u.id } });
     expect(after?.digestLastSentAt?.getTime()).toBe(NOW.getTime());
   });
@@ -150,7 +150,7 @@ describe('alert-digest email sweep', () => {
     // Right weekday: sends.
     const { sent } = await runDigestSweepIfDue(NOW);
     expect(sent).toBe(1);
-    expect(captured[0].subject).toContain('mingguan');
+    expect(captured[0].subject).toContain('Weekly');
   });
 
   it('is idempotent within a window via the lastSent guard', async () => {

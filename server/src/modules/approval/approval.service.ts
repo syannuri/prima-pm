@@ -157,19 +157,11 @@ async function entityLabel(ref: Pick<EntityRef, 'entityType' | 'entityId'>): Pro
 // ---------------------------------------------------------------------------
 // Transactional approval emails (best-effort, dormant unless SMTP is configured). These ride
 // ALONGSIDE the in-app notifications above — never replacing them — and carry a deep-link so the
-// recipient can act in one click. Emails use Indonesian copy (the product's email voice).
+// recipient can act in one click. Emails use English copy (Prismatix serves a global audience).
 // ---------------------------------------------------------------------------
 
-// Lowercase Indonesian noun-phrase for the item under approval (mirrors entityLabel, ID copy).
-async function entityPhraseId(ref: Pick<EntityRef, 'entityType' | 'entityId'>): Promise<string> {
-  if (ref.entityType === 'CHANGE_REQUEST') {
-    const cr = await prisma.changeRequest.findUnique({ where: { id: ref.entityId }, select: { title: true } });
-    return `permintaan perubahan "${cr?.title ?? ''}"`;
-  }
-  if (ref.entityType === 'COST_BASELINE') return 'penguncian baseline biaya';
-  if (ref.entityType === 'BASELINE_UNLOCK') return 'pembukaan baseline biaya';
-  return 'penutupan proyek';
-}
+// Lowercase English noun-phrase for the item under approval — reuses the shared entityLabel.
+const entityPhrase = (ref: Pick<EntityRef, 'entityType' | 'entityId'>): Promise<string> => entityLabel(ref);
 
 // The project tab where a requester lands to see the decided/under-review entity.
 function entityTab(entityType: EntityType): string {
@@ -182,9 +174,9 @@ const entityUrl = (projectId: string, entityType: EntityType) =>
   `${appBaseUrl()}/projects/${projectId}?tab=${encodeURIComponent(entityTab(entityType))}`;
 // The approvals inbox, focused on the specific request (client scrolls/highlights it).
 const inboxUrl = (requestId: string) => `${appBaseUrl()}/approvals?focus=${encodeURIComponent(requestId)}`;
-// `pada proyek "Name" (CODE)` — the shared project-context phrase used across the emails.
-const projectWhereId = (project: { name: string | null; code: string | null } | null) =>
-  `pada proyek "${project?.name ?? 'sebuah proyek'}"${project?.code ? ` (${project.code})` : ''}`;
+// `on "Name" (CODE)` — the shared project-context phrase used across the emails.
+const projectWhere = (project: { name: string | null; code: string | null } | null) =>
+  `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`;
 
 // Send one rendered mail to each of the given user ids (best-effort; skips inactive / no-email).
 // All callers here are approval-category emails, so we honour the per-user opt-out
@@ -249,8 +241,8 @@ async function notifyStepApprovers(ref: EntityRef, step: StepWithApprovers, excl
   })));
   // Transactional email alongside the in-app notice — deep-links to the focused inbox row.
   if (emailEnabled()) {
-    const phrase = await entityPhraseId(ref);
-    await emailUserIds(ids, approvalPendingMail({ phrase, where: projectWhereId(project), stepName: step.name, url: inboxUrl(ref.id) }));
+    const phrase = await entityPhrase(ref);
+    await emailUserIds(ids, approvalPendingMail({ phrase, where: projectWhere(project), stepName: step.name, url: inboxUrl(ref.id) }));
   }
 }
 
@@ -265,9 +257,9 @@ async function emailRequesterDecided(ref: EntityRef, payload: unknown, outcome: 
   if (!requesterId || requesterId === actorId) return;
   const [project, phrase] = await Promise.all([
     prisma.project.findUnique({ where: { id: ref.projectId }, select: { name: true, code: true } }),
-    entityPhraseId(ref),
+    entityPhrase(ref),
   ]);
-  await emailUserIds([requesterId], approvalDecidedMail({ phrase, where: projectWhereId(project), outcome, url: entityUrl(ref.projectId, ref.entityType) }));
+  await emailUserIds([requesterId], approvalDecidedMail({ phrase, where: projectWhere(project), outcome, url: entityUrl(ref.projectId, ref.entityType) }));
 }
 
 // Advance the request to the first actionable step at/after `fromOrder` (auto-skipping steps that
@@ -408,9 +400,9 @@ async function emailRequesterUnderReview(ref: EntityRef, requesterId: string): P
   if (!emailEnabled() || !requesterId) return;
   const [project, phrase] = await Promise.all([
     prisma.project.findUnique({ where: { id: ref.projectId }, select: { name: true, code: true } }),
-    entityPhraseId(ref),
+    entityPhrase(ref),
   ]);
-  await emailUserIds([requesterId], approvalUnderReviewMail({ phrase, where: projectWhereId(project), url: entityUrl(ref.projectId, ref.entityType) }));
+  await emailUserIds([requesterId], approvalUnderReviewMail({ phrase, where: projectWhere(project), url: entityUrl(ref.projectId, ref.entityType) }));
 }
 
 // Back-compat wrapper for the CR call-site.
@@ -587,8 +579,8 @@ export async function escalateOverdueApprovals(now = new Date()) {
         })));
         // Transactional email to the escalation target(s) — deep-links to the focused inbox row.
         if (emailEnabled()) {
-          const phrase = await entityPhraseId({ entityType: r.entityType, entityId: r.entityId });
-          await emailUserIds(targets, approvalOverdueMail({ phrase, where: projectWhereId(project), stepName: step?.name ?? '', url: inboxUrl(r.id) }));
+          const phrase = await entityPhrase({ entityType: r.entityType, entityId: r.entityId });
+          await emailUserIds(targets, approvalOverdueMail({ phrase, where: projectWhere(project), stepName: step?.name ?? '', url: inboxUrl(r.id) }));
         }
       }
       await prisma.approvalRequest.update({ where: { id: r.id }, data: { escalatedAt: now } });
