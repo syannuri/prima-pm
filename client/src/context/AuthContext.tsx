@@ -28,6 +28,9 @@ interface AuthState {
   // Drives the trial-countdown banner, the upgrade wall, and per-feature UI locks.
   workspace: Workspace | null;
   hasFeature: (feature: PlanFeature) => boolean;
+  // Merge a partial update into the cached user (e.g. after saving a self-service preference) so the
+  // UI reflects it immediately without a full /auth/me round-trip.
+  patchUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -183,8 +186,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the active plan's capability set includes it.
   const hasFeature = (feature: PlanFeature) => !workspace || workspace.capabilities.includes(feature);
 
+  const patchUser = (patch: Partial<User>) => setUser((u) => (u ? { ...u, ...patch } : u));
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, guestRegister, signupOrg, loginWithGoogle, logout, tenants, activeTenantId, switchTenant, impersonating, impersonate, stopImpersonating, workspace, hasFeature }}>
+    <AuthContext.Provider value={{ user, loading, login, guestRegister, signupOrg, loginWithGoogle, logout, tenants, activeTenantId, switchTenant, impersonating, impersonate, stopImpersonating, workspace, hasFeature, patchUser }}>
       {children}
     </AuthContext.Provider>
   );

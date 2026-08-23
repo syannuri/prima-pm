@@ -64,6 +64,11 @@ export const switchTenantSchema = z.object({
   tenantId: z.string().min(1),
 });
 
+// Self-service account preferences. Only the emailed alert-digest cadence for now.
+export const updatePreferencesSchema = z.object({
+  digestFrequency: z.enum(['OFF', 'DAILY', 'WEEKLY']),
+});
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1),

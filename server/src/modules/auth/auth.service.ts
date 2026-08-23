@@ -476,8 +476,19 @@ export async function switchTenant(userId: string, tenantId: string): Promise<Au
 export async function me(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, role: true, isActive: true, isPlatformAdmin: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, isActive: true, isPlatformAdmin: true, isGuest: true, digestFrequency: true, createdAt: true },
   });
   if (!user) throw Unauthorized();
+  return user;
+}
+
+// Self-service account preferences (the caller updates only their own row). Currently just the
+// emailed alert-digest cadence; returns the saved value so the client can reflect it immediately.
+export async function updatePreferences(userId: string, input: { digestFrequency: 'OFF' | 'DAILY' | 'WEEKLY' }) {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { digestFrequency: input.digestFrequency },
+    select: { digestFrequency: true },
+  });
   return user;
 }
