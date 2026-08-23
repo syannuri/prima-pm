@@ -89,6 +89,7 @@ export default function AvatarMenu({
   // menu isn't a half-English/half-Indonesian mix when the toggle is flipped.
   const t = {
     account: id ? 'Akun & pengaturan' : 'Account & settings',
+    notifications: id ? 'Notifikasi' : 'Notifications',
     settings: id ? 'Pengaturan' : 'Settings',
     manual: id ? 'Panduan & bantuan' : 'Manual & help',
     users: id ? 'Pengguna' : 'Users',
@@ -177,6 +178,7 @@ export default function AvatarMenu({
               </div>
             )}
             <nav className="p-1.5 text-sm">
+              <Link to="/notifications" onClick={close} className={itemCls}><Ico d={I.bell} /> {t.notifications}</Link>
               <Link to="/settings" onClick={close} className={itemCls}><Ico d={I.gear} /> {t.settings}</Link>
               <Link to="/manual" onClick={close} className={itemCls}><Ico d={I.help} /> {t.manual}</Link>
               {user?.role === 'ADMIN' && <Link to="/admin/users" onClick={close} className={itemCls}><Ico d={I.users} /> {t.users}</Link>}

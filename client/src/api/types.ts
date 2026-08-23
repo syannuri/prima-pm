@@ -214,6 +214,8 @@ export interface SprintSnapshot {
 }
 export interface AgileBoard { sprints: Sprint[]; items: BacklogItem[]; snapshots: SprintSnapshot[]; mandaysPerPoint: number }
 
+export type NotifCategory = 'approvals' | 'assignments' | 'account' | 'other';
+
 export interface AppNotification {
   id: string;
   type: string;
@@ -222,6 +224,8 @@ export interface AppNotification {
   projectId: string | null;
   readAt: string | null;
   createdAt: string;
+  // Present on the history endpoint (derived server-side); absent on the unread bell inbox.
+  category?: NotifCategory;
 }
 
 export interface Project {
