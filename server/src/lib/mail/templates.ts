@@ -214,6 +214,31 @@ export function approvalUnderReviewMail(opts: { phrase: string; where: string; u
   };
 }
 
+// A change request was decided → tell the requesting PM. On approval that opened the baseline, the
+// copy reminds them to re-baseline & re-lock on Cost once the change is applied. Deep-links to the
+// CR's target tab.
+export function crDecidedMail(opts: { title: string; where: string; outcome: 'APPROVED' | 'REJECTED'; baselineOpened: boolean; url: string }): RenderedMail {
+  const approved = opts.outcome === 'APPROVED';
+  const verb = approved ? 'disetujui' : 'ditolak';
+  const paras = [`Permintaan perubahan "<strong>${opts.title}</strong>" ${opts.where} telah <strong>${verb}</strong>.`];
+  if (opts.baselineOpened) {
+    paras.push('Baseline biaya & jadwal telah <strong>dibuka</strong> agar perubahan bisa diterapkan. Setelah selesai, lakukan <strong>re-baseline lalu kunci kembali</strong> di tab Cost agar EVM/variansi kembali terukur.');
+  }
+  return {
+    subject: `Permintaan perubahan "${opts.title}" ${verb}`,
+    html: layout(
+      approved ? 'Permintaan perubahanmu disetujui' : 'Permintaan perubahanmu ditolak',
+      paras,
+      { label: approved && opts.baselineOpened ? 'Terapkan & kunci baseline' : 'Lihat detail', url: opts.url },
+    ),
+    text: textBlock([
+      `Permintaan perubahan "${opts.title}" ${opts.where} telah ${verb}.`,
+      ...(opts.baselineOpened ? ['Baseline dibuka — terapkan perubahan lalu re-baseline & kunci kembali di tab Cost.'] : []),
+      `Buka: ${opts.url}`,
+    ]),
+  };
+}
+
 // An approval blew its SLA deadline → notify the escalation target(s); links to the inbox (focused).
 export function approvalOverdueMail(opts: { phrase: string; where: string; stepName: string; url: string }): RenderedMail {
   return {

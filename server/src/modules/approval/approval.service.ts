@@ -310,9 +310,10 @@ async function finalize(ref: EntityRef, outcome: 'APPROVED' | 'REJECTED', actorI
     after: { status: outcome, entityType: ref.entityType, entityId: ref.entityId },
   });
 
-  // Requester decision email — uniform across all entity types (the in-app notice is emitted
-  // per-type below / in charter.service). Sent before the CR branch's early return.
-  await emailRequesterDecided(ref, row.payload, outcome, actorId);
+  // Requester decision email for baseline/closure. CHANGE_REQUEST is intentionally SKIPPED here —
+  // decideChangeRequest owns the (richer, re-baseline-aware) CR email so it fires on BOTH the
+  // workflow-finalize path and the legacy single-decider path, with no duplicate.
+  if (ref.entityType !== 'CHANGE_REQUEST') await emailRequesterDecided(ref, row.payload, outcome, actorId);
 
   if (ref.entityType === 'CHANGE_REQUEST') {
     await decideChangeRequest(ref.projectId, ref.entityId, outcome, actorId, opts.applyToRevenue ?? false);
