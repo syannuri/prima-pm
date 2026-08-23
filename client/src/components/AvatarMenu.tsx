@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import FeedbackModal from './FeedbackModal';
+import DigestSettingsModal from './DigestSettingsModal';
 
 const initials = (name?: string) =>
   (name ?? '').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase() || 'U';
@@ -24,6 +25,7 @@ const I = {
   org: 'M3 21h18M6 21V7l6-4 6 4v14M10 9h.01M14 9h.01M10 13h.01M14 13h.01M10 17h.01M14 17h.01',
   check: 'M20 6 9 17l-5-5',
   feedback: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0',
 };
 
 const Ico = ({ d }: { d: string }) => (
@@ -54,6 +56,7 @@ export default function AvatarMenu({
   const { canInstall, promptInstall } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [digestOpen, setDigestOpen] = useState(false);
   const close = () => setOpen(false);
   // The dropdown is PORTALED to <body> so it escapes the app-shell stacking context — the fixed
   // bottom tab bar (its own backdrop-blur context) otherwise painted OVER the menu no matter its
@@ -97,6 +100,7 @@ export default function AvatarMenu({
     darkMode: id ? 'Mode gelap' : 'Dark mode',
     logout: id ? 'Keluar' : 'Logout',
     feedback: id ? 'Kirim masukan' : 'Send feedback',
+    emailNotifs: id ? 'Notifikasi email' : 'Email notifications',
   };
   const itemCls = 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800';
 
@@ -192,6 +196,10 @@ export default function AvatarMenu({
                   <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${dark ? 'left-[1.125rem]' : 'left-0.5'}`} />
                 </span>
               </button>
+              {/* Email-digest opt-in — self-service; hidden for sandbox guests (they get no digest). */}
+              {user?.role !== 'GUEST' && (
+                <button onClick={() => { close(); setDigestOpen(true); }} className={`w-full ${itemCls}`}><Ico d={I.bell} /> {t.emailNotifs}</button>
+              )}
               <button onClick={() => { close(); setFeedbackOpen(true); }} className={`w-full ${itemCls}`}><Ico d={I.feedback} /> {t.feedback}</button>
             </nav>
             <div className="border-t border-slate-100 p-1.5 dark:border-slate-800">
@@ -202,6 +210,7 @@ export default function AvatarMenu({
         document.body,
       )}
       {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
+      {digestOpen && <DigestSettingsModal onClose={() => setDigestOpen(false)} />}
     </div>
   );
 }

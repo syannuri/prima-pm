@@ -6,6 +6,7 @@ import { runWeeklyAutoCaptureIfDueAllTenants } from './modules/evm/evm.portfolio
 import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
 import { escalateOverdueApprovals } from './modules/approval/approval.service.js';
 import { runTrialReminderSweep } from './modules/billing/trialReminders.js';
+import { runDigestSweepIfDue } from './modules/notification/digest.service.js';
 import { logger, release, initSentry } from './lib/observability.js';
 
 // Initialise error tracking before anything else (no-op unless SENTRY_DSN is set).
@@ -112,6 +113,22 @@ async function main() {
   const trialReminderTimer = setInterval(() => void sweepTrialReminders(), TRIAL_REMINDER_SWEEP_MS);
   trialReminderTimer.unref();
 
+  // Alert-digest sweep: mail each opted-in user their open-alert rollup at the configured send hour
+  // (DIGEST_HOUR, default 07:00 server-local; WEEKLY on DIGEST_WEEKDAY). Checked hourly so the send
+  // hour is hit within the window; a cheap no-op outside that hour or when SMTP is unconfigured.
+  const DIGEST_SWEEP_MS = 60 * 60 * 1000;
+  const sweepDigests = async () => {
+    try {
+      const r = await runDigestSweepIfDue();
+      if (r.sent > 0) console.log(`[prima-pm] sent ${r.sent} alert digest(s)`);
+    } catch (err) {
+      console.error('[prima-pm] alert digest sweep failed', err);
+    }
+  };
+  void sweepDigests();
+  const digestTimer = setInterval(() => void sweepDigests(), DIGEST_SWEEP_MS);
+  digestTimer.unref();
+
   const shutdown = async (signal: string) => {
     console.log(`[prima-pm] ${signal} received, shutting down...`);
     clearInterval(pruneTimer);
@@ -119,6 +136,7 @@ async function main() {
     clearInterval(webhookTimer);
     clearInterval(approvalSlaTimer);
     clearInterval(trialReminderTimer);
+    clearInterval(digestTimer);
     server.close();
     await prisma.$disconnect();
     process.exit(0);

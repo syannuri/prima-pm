@@ -3,7 +3,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authRateLimit } from '../../middleware/rateLimit.js';
 import { verifyCaptcha } from '../../middleware/captcha.js';
-import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, orgSignupSchema, refreshSchema, switchTenantSchema, verifyEmailSchema, resendActivationSchema } from './auth.schemas.js';
+import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, orgSignupSchema, refreshSchema, switchTenantSchema, updatePreferencesSchema, verifyEmailSchema, resendActivationSchema } from './auth.schemas.js';
 import * as ctrl from './auth.controller.js';
 
 const router = Router();
@@ -82,6 +82,8 @@ router.get('/me', requireAuth, asyncHandler(ctrl.meHandler));
 router.get('/tenants', requireAuth, asyncHandler(ctrl.myTenantsHandler));
 router.post('/switch-tenant', requireAuth, validateBody(switchTenantSchema), asyncHandler(ctrl.switchTenantHandler));
 router.post('/change-password', requireAuth, validateBody(changePasswordSchema), asyncHandler(ctrl.changePasswordHandler));
+// Self-service account preferences (emailed alert-digest cadence). Caller updates only their own row.
+router.patch('/preferences', requireAuth, validateBody(updatePreferencesSchema), asyncHandler(ctrl.updatePreferencesHandler));
 // Logout revokes every outstanding token for the caller (tokenVersion bump).
 router.post('/logout', requireAuth, asyncHandler(ctrl.logoutHandler));
 

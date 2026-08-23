@@ -118,6 +118,11 @@ export async function changePasswordHandler(req: Request, res: Response): Promis
   res.json(result);
 }
 
+export async function updatePreferencesHandler(req: Request, res: Response): Promise<void> {
+  const prefs = await authService.updatePreferences(req.user!.id, req.body);
+  res.json(prefs);
+}
+
 export async function logoutHandler(req: Request, res: Response): Promise<void> {
   await authService.logoutAll(req.user!.id);
   clearAuthCookies(res);

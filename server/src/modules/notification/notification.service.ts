@@ -212,6 +212,35 @@ export async function getPortfolioAlerts(userId: string, role: string, now: Date
   return { projects: rows, total, high };
 }
 
+export interface PortfolioAlertDetail {
+  projectId: string;
+  code: string;
+  name: string;
+  alerts: Alert[];
+  counts: Record<AlertSeverity, number>;
+}
+
+// Like getPortfolioAlerts but keeps the actual Alert[] per project (messages + deep-link entityId),
+// not just counts — the alert-digest email needs the individual lines. Same single-batch query path
+// and same visibility scoping (a non-global role sees only projects they manage). Projects with no
+// alerts are omitted; most-severe project first (HIGH count, then total).
+export async function getPortfolioAlertDetail(userId: string, role: string, now: Date): Promise<PortfolioAlertDetail[]> {
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { not: 'DRAFT' } };
+  if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
+
+  const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
+  const inputs = await loadAlertInputs(projects.map((p) => p.id));
+
+  const out: PortfolioAlertDetail[] = [];
+  projects.forEach((p) => {
+    const { alerts, counts } = computeAlerts(inputs.get(p.id)!, now);
+    if (alerts.length === 0) return;
+    out.push({ projectId: p.id, code: p.code, name: p.name, alerts, counts });
+  });
+  out.sort((a, b) => b.counts.HIGH - a.counts.HIGH || b.alerts.length - a.alerts.length);
+  return out;
+}
+
 // Recent edits to WBS / Cost / Risk across the portfolio — surfaced to ADMIN & PMO
 // so they're notified of every change the PMs make. Reads the append-only audit log.
 const CHANGE_ENTITIES = ['Task', 'CostItemDirect', 'CostItemIndirect', 'Risk'];

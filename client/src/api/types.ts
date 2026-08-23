@@ -8,6 +8,8 @@ export type Role =
   | 'VIEWER'
   | 'GUEST';
 
+export type DigestFrequency = 'OFF' | 'DAILY' | 'WEEKLY';
+
 export interface User {
   id: string;
   name: string;
@@ -15,6 +17,10 @@ export interface User {
   role: Role;
   // Global platform (super-admin) privilege — gates the tenant-provisioning console.
   isPlatformAdmin?: boolean;
+  // Sandbox guest — guests never receive the emailed alert digest, so the setting is hidden for them.
+  isGuest?: boolean;
+  // Emailed alert-digest cadence (self-service, opt-in; default OFF).
+  digestFrequency?: DigestFrequency;
 }
 
 // Platform console — a tenant as seen by a super-admin (GET /admin/tenants).
