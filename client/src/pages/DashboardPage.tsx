@@ -22,21 +22,17 @@ const HEALTH_PILL: Record<string, [string, string]> = {
 };
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet, dateLocale } from '../context/LanguageContext';
-import PortfolioSummary from '../components/PortfolioSummary';
 import MobileDashboard from '../components/MobileDashboard';
 import Fab from '../components/Fab';
 import PullToRefresh from '../components/PullToRefresh';
 import { useSwipe } from '../hooks/useSwipe';
 import { useIsMobile } from '../hooks/useIsMobile';
 import PortfolioForecast from '../components/PortfolioForecast';
-import PortfolioEvmTrend from '../components/PortfolioEvmTrend';
 import AssignmentBanner from '../components/AssignmentBanner';
-import AwaitingActivation from '../components/AwaitingActivation';
-import AwaitingClosure from '../components/AwaitingClosure';
-import PlanningReminders from '../components/PlanningReminders';
-import PendingApprovals from '../components/PendingApprovals';
-import ActionCenter from '../components/ActionCenter';
 import ResourceCapacity from '../components/ResourceCapacity';
+// Customizable desktop portfolio widgets (show/hide + reorder) — rendered from the user's saved layout.
+import CustomizeDashboardModal from '../components/CustomizeDashboardModal';
+import { WIDGET_BY_KEY, resolveEnabledWidgets } from '../components/dashboardWidgets';
 
 const STATUS_COLOR = PROJECT_STATUS_BADGE;
 
@@ -46,13 +42,16 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { lang } = useLang();
   const [showForm, setShowForm] = useState(false);
-  const [view, setView] = useState<'portfolio' | 'forecast' | 'resources' | 'cards'>('portfolio');
+  const [showCustomize, setShowCustomize] = useState(false);
+  // Seed from the user's saved default landing view; an explicit ?view param always wins.
+  const [view, setView] = useState<'portfolio' | 'forecast' | 'resources' | 'cards'>(user?.dashboardDefaultView ?? 'portfolio');
   // The mobile "Projects" tab deep-links to ?view=cards; keep the view in sync with the URL.
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const v = searchParams.get('view');
-    setView(v === 'cards' ? 'cards' : v === 'forecast' ? 'forecast' : v === 'resources' ? 'resources' : 'portfolio');
-  }, [searchParams]);
+    if (v === 'cards' || v === 'forecast' || v === 'resources' || v === 'portfolio') setView(v);
+    else setView(user?.dashboardDefaultView ?? 'portfolio'); // no ?view → the user's preferred landing view
+  }, [searchParams, user?.dashboardDefaultView]);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [clientName, setClientName] = useState('');
@@ -193,6 +192,9 @@ export default function DashboardPage() {
               Project Cards
             </button>
           </div>
+          {view === 'portfolio' && (
+            <Button variant="secondary" onClick={() => setShowCustomize(true)}>{lang === 'id' ? 'Sesuaikan' : 'Customize'}</Button>
+          )}
           {canCreate && <Button data-tour="new-project" onClick={() => setShowForm((s) => !s)}>+ New Project</Button>}
         </div>
       </div>
@@ -205,13 +207,12 @@ export default function DashboardPage() {
         </PullToRefresh>
       ) : (
         <>
-          <ActionCenter />
-          <PlanningReminders />
-          <AwaitingActivation />
-          <AwaitingClosure />
-          <PendingApprovals />
-          <PortfolioSummary />
-          <PortfolioEvmTrend />
+          {/* Desktop portfolio widgets, in the user's saved order (hidden ones omitted). Each widget
+              self-hides when it has nothing to show, so the layout stays tidy regardless. */}
+          {resolveEnabledWidgets(user?.dashboardLayout).map((key) => {
+            const W = WIDGET_BY_KEY[key]?.Component;
+            return W ? <W key={key} /> : null;
+          })}
         </>
       ))}
       {view === 'forecast' && <PortfolioForecast />}
@@ -221,6 +222,8 @@ export default function DashboardPage() {
       {isMobile && canCreate && !showForm && (view === 'portfolio' || view === 'cards') && (
         <Fab label={lang === 'id' ? 'Proyek baru' : 'New Project'} onClick={() => setShowForm(true)} />
       )}
+
+      {showCustomize && <CustomizeDashboardModal onClose={() => setShowCustomize(false)} />}
 
       {showForm && (
         <Modal onClose={() => setShowForm(false)} title="New Project" size="lg">

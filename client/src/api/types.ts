@@ -9,6 +9,7 @@ export type Role =
   | 'GUEST';
 
 export type DigestFrequency = 'OFF' | 'DAILY' | 'WEEKLY';
+export type DashboardView = 'portfolio' | 'forecast' | 'resources' | 'cards';
 
 export interface User {
   id: string;
@@ -21,6 +22,10 @@ export interface User {
   isGuest?: boolean;
   // Emailed alert-digest cadence (self-service, opt-in; default OFF).
   digestFrequency?: DigestFrequency;
+  // Desktop dashboard customization: ordered list of enabled widget keys (null/undefined = default).
+  dashboardLayout?: string[] | null;
+  // Preferred landing view on the dashboard (null/undefined = portfolio).
+  dashboardDefaultView?: DashboardView | null;
 }
 
 // Platform console — a tenant as seen by a super-admin (GET /admin/tenants).
