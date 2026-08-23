@@ -15,7 +15,7 @@ const TXT: Record<Lang, {
   orgName: string; yourName: string; name: string; email: string; emailBad: string; password: string; pwHint: string; show: string; hide: string;
   submitSignin: string; submitGuest: string; submitOrg: string; signingIn: string; settingUp: string;
   or: string; sandbox: string; haveAccount: string; newHere: string; createOrgLink: string;
-  forgot: string; secure: string;
+  forgot: string; forgotLink: string; secure: string;
   notFound: string; notFoundSub: (h: string) => string; goMain: string; awaiting: string; awaitingSub: (o: string) => string; back: string; yourAddress: string;
   checkEmail: string; checkEmailSub: (e: string) => string; resend: string; resendSent: string; notVerified: string;
 }> = {
@@ -31,7 +31,7 @@ const TXT: Record<Lang, {
     password: 'Password', pwHint: 'At least 10 characters, with a letter and a number.', show: 'Show password', hide: 'Hide password',
     submitSignin: 'Sign in', submitGuest: 'Start exploring', submitOrg: 'Create organization', signingIn: 'Signing in…', settingUp: 'Setting up…',
     or: 'or', sandbox: 'Explore Prismatix in your own sandbox.', haveAccount: 'Have an account? Sign in', newHere: 'New here? Try Prismatix free', createOrgLink: 'Create an organization',
-    forgot: 'Forgot your password? Ask your workspace admin to reset it.', secure: 'Encrypted in transit · your data stays in your workspace',
+    forgot: 'Forgot your password? Ask your workspace admin to reset it.', forgotLink: 'Forgot password?', secure: 'Encrypted in transit · your data stays in your workspace',
     notFound: 'Workspace not found', notFoundSub: (h) => `There’s no workspace at ${h}. Check the address, or head to the main site to sign in.`, goMain: 'Go to Prismatix',
     awaiting: 'Awaiting approval', awaitingSub: (o) => `Your request for the ${o} workspace has been received. An administrator will review and activate it — you'll be able to sign in once it's approved.`, back: 'Back to sign in', yourAddress: 'Your workspace address:',
     checkEmail: 'Check your email', checkEmailSub: (e) => `We've sent an activation link to ${e}. Click it to activate your account, then sign in.`, resend: 'Resend activation email', resendSent: 'Activation email sent — check your inbox.', notVerified: 'Your email isn’t activated yet. Open the link we emailed you, or resend it below.',
@@ -48,7 +48,7 @@ const TXT: Record<Lang, {
     password: 'Kata sandi', pwHint: 'Minimal 10 karakter, dengan huruf dan angka.', show: 'Tampilkan sandi', hide: 'Sembunyikan sandi',
     submitSignin: 'Masuk', submitGuest: 'Mulai menjelajah', submitOrg: 'Buat organisasi', signingIn: 'Sedang masuk…', settingUp: 'Menyiapkan…',
     or: 'atau', sandbox: 'Jelajahi Prismatix di sandbox Anda sendiri.', haveAccount: 'Sudah punya akun? Masuk', newHere: 'Baru di sini? Coba gratis', createOrgLink: 'Buat organisasi',
-    forgot: 'Lupa kata sandi? Minta admin workspace Anda untuk meresetnya.', secure: 'Terenkripsi saat transit · data Anda tetap di workspace Anda',
+    forgot: 'Lupa kata sandi? Minta admin workspace Anda untuk meresetnya.', forgotLink: 'Lupa kata sandi?', secure: 'Terenkripsi saat transit · data Anda tetap di workspace Anda',
     notFound: 'Workspace tidak ditemukan', notFoundSub: (h) => `Tidak ada workspace di ${h}. Periksa alamatnya, atau buka situs utama untuk masuk.`, goMain: 'Ke Prismatix',
     awaiting: 'Menunggu persetujuan', awaitingSub: (o) => `Permintaan untuk workspace ${o} telah diterima. Administrator akan meninjau dan mengaktifkannya — Anda dapat masuk setelah disetujui.`, back: 'Kembali ke masuk', yourAddress: 'Alamat workspace Anda:',
     checkEmail: 'Cek email Anda', checkEmailSub: (e) => `Kami mengirim tautan aktivasi ke ${e}. Klik untuk mengaktifkan akun, lalu masuk.`, resend: 'Kirim ulang email aktivasi', resendSent: 'Email aktivasi terkirim — periksa kotak masuk Anda.', notVerified: 'Email Anda belum diaktifkan. Buka tautan yang kami kirim, atau kirim ulang di bawah.',
@@ -132,6 +132,7 @@ export default function LoginPage() {
   const [googleClientId, setGoogleClientId] = useState('');
   const [guestEnabled, setGuestEnabled] = useState(false);
   const [orgEnabled, setOrgEnabled] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(false);
   const [workspace, setWorkspace] = useState<{ slug: string; name: string } | null>(null);
   const [workspaceNotFound, setWorkspaceNotFound] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
@@ -145,10 +146,11 @@ export default function LoginPage() {
   // public, so it's safe to send. Hides the guest option entirely when disabled.
   useEffect(() => {
     api
-      .get<{ google?: { enabled: boolean; clientId: string }; turnstile?: { enabled: boolean; siteKey: string }; guestSignup?: boolean; orgSignup?: boolean; workspace?: { slug: string; name: string } | null; workspaceNotFound?: boolean }>('/auth/providers')
+      .get<{ google?: { enabled: boolean; clientId: string }; turnstile?: { enabled: boolean; siteKey: string }; guestSignup?: boolean; orgSignup?: boolean; emailEnabled?: boolean; workspace?: { slug: string; name: string } | null; workspaceNotFound?: boolean }>('/auth/providers')
       .then((p) => {
         if (p.google?.enabled && p.google.clientId) setGoogleClientId(p.google.clientId);
         if (p.turnstile?.enabled && p.turnstile.siteKey) setTurnstileSiteKey(p.turnstile.siteKey);
+        setEmailEnabled(Boolean(p.emailEnabled));
         // The Host is a workspace-shaped subdomain that owns no tenant → show a "not found" page.
         setWorkspaceNotFound(Boolean(p.workspaceNotFound));
         // On a tenant's own domain (subdomain / custom domain) it's a sign-in-only page for that
@@ -395,7 +397,9 @@ export default function LoginPage() {
                     </button>
                   </div>
                   {isSignup && <span className="mt-1 block text-xs text-slate-400">{tx.pwHint}</span>}
-                  {!isSignup && !workspace && <p className="mt-1.5 text-right text-xs text-slate-400">{tx.forgot}</p>}
+                  {!isSignup && (emailEnabled
+                    ? <p className="mt-1.5 text-right text-xs"><Link to="/forgot-password" className="text-brand-600 hover:underline dark:text-brand-400">{tx.forgotLink}</Link></p>
+                    : !workspace && <p className="mt-1.5 text-right text-xs text-slate-400">{tx.forgot}</p>)}
                 </Field>
                 {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
                 {notVerifiedEmail && (

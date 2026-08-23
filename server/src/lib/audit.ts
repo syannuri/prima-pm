@@ -11,6 +11,7 @@ type AuditAction =
   | 'LOGIN'
   | 'LOGOUT'
   | 'PASSWORD_CHANGE'
+  | 'PASSWORD_RESET'
   | 'FORCE_CLOSE'
   | 'REOPEN'
   | 'ACTIVATE'

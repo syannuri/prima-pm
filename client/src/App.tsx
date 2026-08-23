@@ -12,6 +12,8 @@ import OnboardingTour from './components/OnboardingTour';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import { isWorkspaceHost } from './lib/workspaceHost';
 
 // The authenticated pages are code-split: each lands in its own chunk that's fetched only when its
@@ -55,6 +57,9 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         {/* Public activation landing for the emailed link — must resolve while signed out. */}
         <Route path="/verify-email" element={<VerifyEmailPage />} />
+        {/* Public self-service password reset — request a link, then set a new password. */}
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );

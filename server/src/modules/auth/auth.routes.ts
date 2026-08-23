@@ -3,7 +3,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { authRateLimit } from '../../middleware/rateLimit.js';
 import { verifyCaptcha } from '../../middleware/captcha.js';
-import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, orgSignupSchema, refreshSchema, switchTenantSchema, updatePreferencesSchema, verifyEmailSchema, resendActivationSchema } from './auth.schemas.js';
+import { changePasswordSchema, googleLoginSchema, guestRegisterSchema, loginSchema, orgSignupSchema, refreshSchema, switchTenantSchema, updatePreferencesSchema, verifyEmailSchema, resendActivationSchema, forgotPasswordSchema, resetPasswordSchema } from './auth.schemas.js';
 import * as ctrl from './auth.controller.js';
 
 const router = Router();
@@ -50,6 +50,20 @@ const resendLimiter = authRateLimit({
   },
 });
 
+// Throttle password-reset requests per IP + email so the endpoint can't spam an inbox or be used to
+// probe accounts. Same shape as the activation resend limiter.
+const forgotLimiter = authRateLimit({
+  windowMs: FIFTEEN_MIN,
+  max: 5,
+  name: 'forgot-password',
+  keyBy: (req) => {
+    const email = (req.body as { email?: unknown })?.email;
+    return [typeof email === 'string' ? `email:${email.trim().toLowerCase()}` : undefined];
+  },
+});
+// Throttle reset-token redemptions per IP to blunt brute-forcing tokens.
+const resetLimiter = authRateLimit({ windowMs: FIFTEEN_MIN, max: 10, name: 'reset-password' });
+
 // Throttle org signups per IP + email (same as guest/login) to blunt bulk tenant creation.
 const orgSignupLimiter = authRateLimit({
   windowMs: FIFTEEN_MIN,
@@ -76,6 +90,10 @@ router.post('/google', googleLimiter, validateBody(googleLoginSchema), asyncHand
 // Email activation (public): redeem a token, or resend a fresh link. Both open (no auth) but throttled.
 router.post('/verify-email', validateBody(verifyEmailSchema), asyncHandler(ctrl.verifyEmailHandler));
 router.post('/resend-activation', resendLimiter, validateBody(resendActivationSchema), asyncHandler(ctrl.resendActivationHandler));
+// Self-service password reset (public): request a link, then redeem the token with a new password.
+// forgot-password is captcha-gated (like login/signup) + throttled; both are anti-enumeration.
+router.post('/forgot-password', forgotLimiter, verifyCaptcha, validateBody(forgotPasswordSchema), asyncHandler(ctrl.forgotPasswordHandler));
+router.post('/reset-password', resetLimiter, validateBody(resetPasswordSchema), asyncHandler(ctrl.resetPasswordHandler));
 router.post('/refresh', refreshLimiter, validateBody(refreshSchema), asyncHandler(ctrl.refreshHandler));
 router.get('/me', requireAuth, asyncHandler(ctrl.meHandler));
 // Tenants the caller belongs to + the active one (for a tenant switcher).
