@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { dismissAttention, getAttentionItems, getInbox, getPendingApprovals, getPortfolioAlerts, getRecentChanges, markChangesSeen, markInboxSeen, markNotificationRead } from './notification.service.js';
+import { dismissAttention, getAttentionItems, getInbox, getNotificationHistory, getPendingApprovals, getPortfolioAlerts, getRecentChanges, markChangesSeen, markInboxSeen, markNotificationRead } from './notification.service.js';
 
 // Portfolio-wide alerts for the header bell. Mounted at /api/v1/notifications.
 const router = Router();
@@ -64,6 +64,21 @@ router.post(
   '/inbox/seen',
   asyncHandler(async (req, res) => {
     res.json(await markInboxSeen(req.user!.id));
+  }),
+);
+
+// Full notification history (read + unread), cursor-paginated, optional ?category= filter — the
+// Notification Center page. "Mark all read" reuses POST /inbox/seen; per-item ✓ reuses /inbox/:id/read.
+const historyQuery = z.object({
+  cursor: z.string().min(1).max(64).optional(),
+  category: z.enum(['all', 'approvals', 'assignments', 'account', 'other']).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+router.get(
+  '/history',
+  asyncHandler(async (req, res) => {
+    const q = historyQuery.parse(req.query);
+    res.json(await getNotificationHistory(req.user!.id, q));
   }),
 );
 // Follow up (mark done) ONE inbox notification (✓) — it won't come back.
