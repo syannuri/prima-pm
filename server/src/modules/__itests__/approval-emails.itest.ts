@@ -53,6 +53,16 @@ describe('approval emails', () => {
     await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null, status: 'IN_PROGRESS' } });
   });
 
+  it('emails ADMIN/PMO approvers when a CR is submitted with NO workflow (legacy path)', async () => {
+    // No createWorkflow → the legacy single-decider path. ADMIN/PMO must still get an EMAIL (not just
+    // in-app), deep-linked to the project's Change Req tab. Requester (actor) is excluded.
+    await createChangeRequest(projectId, crInput(), pmId);
+    const mail = to(adminEmail).find((m) => m.subject.includes('awaits your decision'));
+    expect(mail).toBeTruthy();
+    expect(mail!.html).toContain('tab=Change');
+    expect(to(pmEmail).some((m) => m.subject.includes('awaits your decision'))).toBe(false);
+  });
+
   it('emails the approver (pending, deep-linked to the focused inbox) + the requester (under review)', async () => {
     await createWorkflow({ name: 'PM gate', steps: [{ name: 'PM sign-off', mode: 'ANY', approvers: [{ kind: 'PROJECT_PM' }] }] }, adminId);
     const cr = await createChangeRequest(projectId, crInput(), adminId); // requester = admin

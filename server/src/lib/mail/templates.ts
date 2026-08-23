@@ -8,12 +8,12 @@ export interface RenderedMail {
   text: string;
 }
 
-// The dark brand header band: the Prismatix prism logo + wordmark. The logo is an absolute URL (email
-// clients need that); alt="" keeps it clean when images are blocked — the wordmark text still shows.
+// The dark brand header band carrying the same boxed "PRISMATIX" wordmark as the login page — a
+// bordered lockup with a brand accent dot. Rendered as pure inline HTML/CSS (no <img>) so it never
+// depends on image loading and can't be blocked by an email client. White on the dark violet band.
 function headerBand(): string {
-  return `<tr><td style="background:#4c1d95;padding:16px 28px">
-        <img src="${appBaseUrl()}/logo.png" width="26" height="26" alt="" style="vertical-align:middle;margin-right:9px">
-        <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.3px;vertical-align:middle">Prismatix</span>
+  return `<tr><td style="background:#4c1d95;padding:18px 28px">
+        <span style="display:inline-block;border:3px solid #ffffff;border-radius:6px;padding:6px 13px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;font-weight:800;letter-spacing:3px;line-height:1;color:#ffffff">PRISMATIX<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#c4b5fd;margin-left:3px;vertical-align:top"></span></span>
       </td></tr>`;
 }
 
@@ -221,6 +221,20 @@ export function approvalUnderReviewMail(opts: { phrase: string; where: string; u
       { label: 'View status', url: opts.url },
     ),
     text: textBlock([`${capFirst(opts.phrase)} ${opts.where} is awaiting approval.`, `View status: ${opts.url}`]),
+  };
+}
+
+// A change request was submitted and awaits an approver's decision (legacy single-decider path, used
+// when no approval workflow is configured). Deep-links to the project's Change Req tab.
+export function crSubmittedMail(opts: { title: string; where: string; url: string }): RenderedMail {
+  return {
+    subject: `Change request awaits your decision: ${opts.title}`,
+    html: layout(
+      'A change request needs your approval',
+      [`Change request "<strong>${opts.title}</strong>" ${opts.where} has been submitted and awaits your decision.`],
+      { label: 'Review the change request', url: opts.url },
+    ),
+    text: textBlock([`Change request "${opts.title}" ${opts.where} awaits your decision.`, `Review: ${opts.url}`]),
   };
 }
 
