@@ -1,11 +1,13 @@
 import type { Request, Response } from 'express';
 import * as authService from './auth.service.js';
 import * as verificationService from './verification.service.js';
+import * as passwordResetService from './passwordReset.service.js';
 import { setAuthCookies, clearAuthCookies, RT_COOKIE } from '../../lib/cookies.js';
 import { Unauthorized } from '../../lib/errors.js';
 import { env } from '../../config/env.js';
 import { getAppSettings, isGoogleConfigured } from '../settings/settings.service.js';
 import { captchaEnabled } from '../../lib/turnstile.js';
+import { emailEnabled } from '../../lib/mailer.js';
 import { readCountry, captureUserCountry } from '../../lib/geo.js';
 
 // Public auth config so the SPA can render provider buttons without a rebuild. The Google
@@ -20,6 +22,9 @@ export async function providersHandler(req: Request, res: Response): Promise<voi
     turnstile: { enabled: captchaEnabled(), siteKey: env.turnstile.siteKey },
     guestSignup: s.guestSignupEnabled,
     orgSignup: s.orgSignupEnabled,
+    // Whether email delivery is configured — the SPA only offers self-service "Forgot password?" when
+    // a reset email can actually be sent (else it keeps the "ask your admin" fallback).
+    emailEnabled: emailEnabled(),
     // When this Host maps to a workspace (subdomain / custom domain), the SPA brands the login page
     // for it and scopes sign-in to that tenant. Null on the bare base domain / LAN-by-IP.
     workspace: req.hostTenant ? { slug: req.hostTenant.slug, name: req.hostTenant.name, status: req.hostTenant.status } : null,
@@ -70,6 +75,20 @@ export async function resendActivationHandler(req: Request, res: Response): Prom
   // Always 200 with the same shape regardless of whether the email exists / is already verified —
   // no user enumeration. The route throttles by IP + email.
   await verificationService.resendActivation(String(req.body?.email ?? ''));
+  res.json({ ok: true });
+}
+
+export async function forgotPasswordHandler(req: Request, res: Response): Promise<void> {
+  // Always 200 with the same shape regardless of whether the email exists / is eligible — no user
+  // enumeration. The route throttles by IP + email; the service is a no-op when email is off.
+  await passwordResetService.issuePasswordReset(String(req.body?.email ?? ''));
+  res.json({ ok: true });
+}
+
+export async function resetPasswordHandler(req: Request, res: Response): Promise<void> {
+  // Redeem the reset token + set the new password (revokes all sessions). NO auto-login by design —
+  // the client routes to /login so the user signs in with the new password.
+  await passwordResetService.consumePasswordReset(String(req.body?.token ?? ''), String(req.body?.newPassword ?? ''));
   res.json({ ok: true });
 }
 

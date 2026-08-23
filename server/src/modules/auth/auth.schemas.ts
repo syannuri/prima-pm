@@ -102,6 +102,15 @@ export const resendActivationSchema = z.object({
   email: z.string().email().toLowerCase(),
 });
 
+// Self-service password reset: request a link by email, then redeem the token with a new password.
+export const forgotPasswordSchema = z.object({
+  email: z.string().email().toLowerCase(),
+});
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: strongPassword,
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type GuestRegisterInput = z.infer<typeof guestRegisterSchema>;
 export type OrgSignupInput = z.infer<typeof orgSignupSchema>;

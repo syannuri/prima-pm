@@ -443,7 +443,8 @@ model RefreshToken {
 
 // What a one-time email token authorizes. Kept an enum so future flows (e.g. password reset) slot in.
 enum EmailTokenPurpose {
-  VERIFY_EMAIL // confirm email ownership → activate the account (sets User.emailVerifiedAt)
+  VERIFY_EMAIL   // confirm email ownership → activate the account (sets User.emailVerifiedAt)
+  PASSWORD_RESET // self-service password reset (sets a new passwordHash + revokes all sessions)
 }
 
 // How often a user receives the emailed alert digest (overdue / due-soon / risk / budget across

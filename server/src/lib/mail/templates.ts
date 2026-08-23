@@ -69,6 +69,49 @@ export function verifyEmailMail(opts: { name: string; token: string }): Rendered
   };
 }
 
+// Self-service password reset: a single-use link to set a new password (link valid 30 min).
+export function passwordResetMail(opts: { name: string; token: string }): RenderedMail {
+  const url = `${appBaseUrl()}/reset-password?token=${encodeURIComponent(opts.token)}`;
+  return {
+    subject: 'Reset your Prismatix password',
+    html: layout(
+      `Hi ${opts.name}, reset your password`,
+      [
+        'We received a request to reset your Prismatix password. Click the button below to choose a new one.',
+        'This link is valid for 30 minutes and can be used once. If you didn\'t request this, you can safely ignore this email — your password stays unchanged.',
+      ],
+      { label: 'Reset password', url },
+    ),
+    text: textBlock([
+      `Hi ${opts.name},`,
+      'Reset your Prismatix password using this link (valid 30 minutes, single use):',
+      url,
+      "If you didn't request this, ignore this email — your password stays unchanged.",
+    ]),
+  };
+}
+
+// Security notification: the password was just changed (via reset or self-service). Lets a user
+// spot an unauthorised change.
+export function passwordChangedMail(opts: { name: string }): RenderedMail {
+  return {
+    subject: 'Your Prismatix password was changed',
+    html: layout(
+      `Hi ${opts.name}, your password was changed`,
+      [
+        'Your Prismatix password was just changed and all other sessions were signed out.',
+        "If this was you, no action is needed. If it wasn't, reset your password immediately and contact your workspace admin.",
+      ],
+      { label: 'Go to Prismatix', url: appBaseUrl() },
+    ),
+    text: textBlock([
+      `Hi ${opts.name},`,
+      'Your Prismatix password was just changed and all other sessions were signed out.',
+      "If this wasn't you, reset your password immediately and contact your workspace admin.",
+    ]),
+  };
+}
+
 // Org signup approved by a platform admin: the workspace is live, the owner can sign in.
 export function orgApprovedMail(opts: { name: string; orgName: string; loginUrl: string }): RenderedMail {
   return {
