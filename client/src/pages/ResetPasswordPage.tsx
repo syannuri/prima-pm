@@ -5,6 +5,7 @@ import { Button, Field, Input } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useLang, type Lang } from '../context/LanguageContext';
 import BrandMark from '../components/BrandMark';
+import AuthShell from '../components/AuthShell';
 
 const TXT: Record<Lang, Record<string, string>> = {
   en: {
@@ -70,7 +71,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4">
+    <AuthShell>
       <BrandMark />
       <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">{tx.title}</h1>
@@ -95,6 +96,6 @@ export default function ResetPasswordPage() {
           </>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }
