@@ -55,9 +55,9 @@ describe('CR approved → re-baseline reminder + email', () => {
     expect(n!.body).toMatch(/re-baseline|Cost tab/i);
 
     // Email to the PM, Indonesian, with the re-lock guidance + link.
-    const mail = toPm().find((m) => m.subject.includes('disetujui'));
+    const mail = toPm().find((m) => m.subject.includes('approved'));
     expect(mail).toBeTruthy();
-    expect(mail!.html).toMatch(/kunci/i);
+    expect(mail!.html).toMatch(/re-baseline|lock/i);
     expect(mail!.html).toContain(`?tab=Schedule`);
   });
 

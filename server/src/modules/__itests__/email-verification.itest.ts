@@ -81,7 +81,7 @@ describe('email armed → HARD verification wall', () => {
     expect(user?.emailVerifiedAt).toBeNull();
     expect(captured).toHaveLength(1);
     expect(captured[0].to).toBe('wall@test.dev');
-    expect(captured[0].subject).toMatch(/aktivasi/i);
+    expect(captured[0].subject).toMatch(/activate/i);
   });
 
   it('login is blocked with EMAIL_NOT_VERIFIED until the token is redeemed, then succeeds', async () => {

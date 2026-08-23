@@ -58,12 +58,12 @@ describe('approval emails', () => {
     const cr = await createChangeRequest(projectId, crInput(), adminId); // requester = admin
     const req = await prisma.approvalRequest.findFirst({ where: { entityId: cr.id } });
 
-    const pending = to(pmEmail).find((m) => m.subject.includes('Persetujuan diperlukan'));
+    const pending = to(pmEmail).find((m) => m.subject.includes('Approval needed'));
     expect(pending).toBeTruthy();
     expect(pending!.html).toContain(`/approvals?focus=${req!.id}`);
     expect(pending!.html).toContain('PM sign-off');
 
-    const review = to(adminEmail).find((m) => m.subject.includes('sedang ditinjau'));
+    const review = to(adminEmail).find((m) => m.subject.includes('under review'));
     expect(review).toBeTruthy();
     expect(review!.html).toContain(`/projects/${projectId}?tab=`);
   });
@@ -76,11 +76,11 @@ describe('approval emails', () => {
 
     await decideApproval(req!.id, pmId, 'APPROVED'); // decider = PM, requester = admin
 
-    const decided = to(adminEmail).find((m) => m.subject.includes('disetujui'));
+    const decided = to(adminEmail).find((m) => m.subject.includes('approved'));
     expect(decided).toBeTruthy();
     expect(decided!.html).toContain(`/projects/${projectId}?tab=`);
     // No spurious rejected mail.
-    expect(to(adminEmail).some((m) => m.subject.includes('ditolak'))).toBe(false);
+    expect(to(adminEmail).some((m) => m.subject.includes('rejected'))).toBe(false);
   });
 
   it('emails the requester when the item is REJECTED', async () => {
@@ -91,7 +91,7 @@ describe('approval emails', () => {
 
     await decideApproval(req!.id, pmId, 'REJECTED', 'not now');
 
-    expect(to(adminEmail).some((m) => m.subject.includes('ditolak'))).toBe(true);
+    expect(to(adminEmail).some((m) => m.subject.includes('rejected'))).toBe(true);
   });
 
   it('emails escalation targets when an approval blows its SLA', async () => {
@@ -103,7 +103,7 @@ describe('approval emails', () => {
     const r = await escalateOverdueApprovals(new Date(Date.now() + 5 * 3600_000));
     expect(r.escalated).toBeGreaterThanOrEqual(1);
 
-    const overdue = to(adminEmail).find((m) => m.subject.includes('melewati tenggat'));
+    const overdue = to(adminEmail).find((m) => m.subject.includes('overdue'));
     expect(overdue).toBeTruthy();
     expect(overdue!.html).toContain('/approvals?focus=');
   });
@@ -115,7 +115,7 @@ describe('approval emails', () => {
       await createChangeRequest(projectId, crInput(), adminId); // PM is the approver but opted out
       expect(to(pmEmail).length).toBe(0); // no approval email to the opted-out PM
       // The requester (admin) still gets their under-review receipt (default ON).
-      expect(to(adminEmail).some((m) => m.subject.includes('sedang ditinjau'))).toBe(true);
+      expect(to(adminEmail).some((m) => m.subject.includes('under review'))).toBe(true);
     } finally {
       await prisma.user.update({ where: { id: pmId }, data: { notificationPrefs: { email: { approvals: true } } } });
     }
