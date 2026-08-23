@@ -1811,6 +1811,7 @@ model Notification {
   title     String
   body      String?   @db.Text
   projectId String?
+  link      String?   // explicit deep-link path (overrides the type-derived link), e.g. a CR's target tab
   readAt    DateTime?
   createdAt DateTime  @default(now())
 

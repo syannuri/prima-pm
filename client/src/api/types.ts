@@ -226,6 +226,8 @@ export interface AppNotification {
   projectId: string | null;
   readAt: string | null;
   createdAt: string;
+  // Explicit deep-link path (overrides the type-derived link) — e.g. a CR's target tab.
+  link?: string | null;
   // Present on the history endpoint (derived server-side); absent on the unread bell inbox.
   category?: NotifCategory;
 }

@@ -9,6 +9,18 @@ import {
 import { createNotification } from '../notification/notification.service.js';
 import { emitDomainEvent } from '../events/dispatch.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
+import { emailEnabled, sendMail, appBaseUrl } from '../../lib/mailer.js';
+import { crDecidedMail } from '../../lib/mail/templates.js';
+
+// The project tab a CR is "about", so its approved/rejected notice deep-links where the PM must act.
+// Schedule wins (re-plan happens there); then Cost, Charter, Risk; else the Change Req tab.
+function crTargetTab(areas: string[]): string {
+  if (areas.includes('SCHEDULE')) return 'Schedule';
+  if (areas.includes('COST')) return 'Cost';
+  if (areas.includes('CHARTER')) return 'Charter';
+  if (areas.includes('RISK')) return 'Risk';
+  return 'Change Req';
+}
 import type { UpsertCharterInput, ChangeRequestInput } from './charter.schemas.js';
 
 export async function getCharter(projectId: string) {
@@ -307,18 +319,41 @@ export async function decideChangeRequest(
     });
   }
 
-  // Notify the requester (the PM who raised it) of the decision — mirrors the
-  // CR_SUBMITTED notification that approvers receive. Skip self-decisions.
+  // Notify the requester (the PM who raised it) of the decision — in-app + email. The in-app notice
+  // deep-links to the CR's TARGET tab (e.g. a schedule change → Schedule), and when the approval
+  // opened the baseline it reminds the PM to re-baseline & re-lock on Cost once the change is applied.
+  // Skip self-decisions. (Owns the CR email for BOTH paths — the approval finalizer skips CHANGE_REQUEST.)
   if (cr.requestedBy && cr.requestedBy !== actorId) {
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true, code: true } });
     const where = `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`;
+    const approved = decision === 'APPROVED';
+    const targetTab = crTargetTab(cr.impactAreas);
+    const link = `/projects/${projectId}?tab=${encodeURIComponent(targetTab)}`;
+    const reLock = approved && baselineUnlocked; // baseline was opened to apply this change
+    const relockEn = ' The baseline was opened — apply the change, then re-baseline & lock it on the Cost tab.';
     await createNotification({
       userId: cr.requestedBy,
-      type: decision === 'APPROVED' ? 'CR_APPROVED' : 'CR_REJECTED',
-      title: `Change request ${decision === 'APPROVED' ? 'approved' : 'rejected'}`,
-      body: `Your change request "${cr.title}" ${where} was ${decision === 'APPROVED' ? 'approved' : 'rejected'}.`,
+      type: approved ? 'CR_APPROVED' : 'CR_REJECTED',
+      title: `Change request ${approved ? 'approved' : 'rejected'}`,
+      body: `Your change request "${cr.title}" ${where} was ${approved ? 'approved' : 'rejected'}.${reLock ? relockEn : ''}`,
       projectId,
+      link,
     });
+    // Transactional email (Indonesian; approval category → honours the per-user opt-out). Best-effort.
+    if (emailEnabled()) {
+      const req = await prisma.user.findUnique({ where: { id: cr.requestedBy }, select: { email: true, notificationPrefs: true } });
+      const prefs = (req?.notificationPrefs ?? null) as { email?: { approvals?: boolean } } | null;
+      if (req?.email && prefs?.email?.approvals !== false) {
+        const mail = crDecidedMail({
+          title: cr.title,
+          where: `pada proyek "${project?.name ?? 'sebuah proyek'}"${project?.code ? ` (${project.code})` : ''}`,
+          outcome: approved ? 'APPROVED' : 'REJECTED',
+          baselineOpened: reLock,
+          url: `${appBaseUrl()}${link}`,
+        });
+        await sendMail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text });
+      }
+    }
   }
   if (decision === 'APPROVED') {
     await emitDomainEvent('change_request.approved', { projectId, changeRequestId: crId, title: cr.title });

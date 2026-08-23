@@ -254,10 +254,10 @@ export async function markChangesSeen(userId: string) {
 }
 
 // ---- Persistent per-user inbox (discrete events, e.g. project assignment) ----
-export async function createNotification(input: { userId: string; type: string; title: string; body?: string | null; projectId?: string | null }) {
+export async function createNotification(input: { userId: string; type: string; title: string; body?: string | null; projectId?: string | null; link?: string | null }) {
   try {
     await prisma.notification.create({
-      data: { userId: input.userId, type: input.type, title: input.title, body: input.body ?? null, projectId: input.projectId ?? null },
+      data: { userId: input.userId, type: input.type, title: input.title, body: input.body ?? null, projectId: input.projectId ?? null, link: input.link ?? null },
     });
   } catch (err) {
     // Notifications must never break the business operation that triggered them.

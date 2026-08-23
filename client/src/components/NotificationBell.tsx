@@ -278,7 +278,9 @@ export default function NotificationBell() {
                     return (
                       <li key={n.id} className="flex items-center gap-1">
                         <div className="min-w-0 flex-1">
-                          {n.type === 'ORG_SIGNUP_PENDING'
+                          {n.link
+                            ? <Link to={n.link} onClick={() => setOpen(false)} className="block">{inner}</Link>
+                            : n.type === 'ORG_SIGNUP_PENDING'
                             ? <Link to="/admin/tenants" onClick={() => setOpen(false)} className="block">{inner}</Link>
                             : n.projectId ? <Link to={n.type === 'ACTIVATION_READY' ? `/projects/${n.projectId}?review=activation` : projectLink(n.projectId, TYPE_TAB[n.type])} onClick={() => setOpen(false)} className="block">{inner}</Link> : inner}
                         </div>
