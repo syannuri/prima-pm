@@ -248,6 +248,8 @@ model User {
   // rejects any token whose tv is stale.
   tokenVersion Int      @default(0)
   changesSeenAt DateTime? // last time this user viewed the change-notification feed
+  digestFrequency DigestFrequency @default(OFF) // emailed alert digest cadence (opt-in)
+  digestLastSentAt DateTime? // scheduler-managed: last time a digest was sent to this user
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -439,6 +441,14 @@ model RefreshToken {
 // What a one-time email token authorizes. Kept an enum so future flows (e.g. password reset) slot in.
 enum EmailTokenPurpose {
   VERIFY_EMAIL // confirm email ownership → activate the account (sets User.emailVerifiedAt)
+}
+
+// How often a user receives the emailed alert digest (overdue / due-soon / risk / budget across
+// their projects). OFF = never (the default — opt-in). Guests never receive a digest regardless.
+enum DigestFrequency {
+  OFF
+  DAILY
+  WEEKLY
 }
 
 // Single-use, expiring token backing email flows (activation). Only the SHA-256 HASH of the random
