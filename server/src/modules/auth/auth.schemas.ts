@@ -64,10 +64,21 @@ export const switchTenantSchema = z.object({
   tenantId: z.string().min(1),
 });
 
-// Self-service account preferences. Only the emailed alert-digest cadence for now.
-export const updatePreferencesSchema = z.object({
-  digestFrequency: z.enum(['OFF', 'DAILY', 'WEEKLY']),
-});
+// The customizable desktop dashboard widgets (keys the client renders + the layout stores).
+export const DASHBOARD_WIDGET_KEYS = [
+  'actionCenter', 'planningReminders', 'awaitingActivation', 'awaitingClosure',
+  'pendingApprovals', 'portfolioSummary', 'portfolioEvmTrend',
+] as const;
+
+// Self-service account preferences — all fields optional (a partial update). digestFrequency = emailed
+// alert-digest cadence; dashboardLayout = ordered enabled-widget keys; dashboardDefaultView = landing tab.
+export const updatePreferencesSchema = z
+  .object({
+    digestFrequency: z.enum(['OFF', 'DAILY', 'WEEKLY']).optional(),
+    dashboardLayout: z.array(z.enum(DASHBOARD_WIDGET_KEYS)).max(20).optional(),
+    dashboardDefaultView: z.enum(['portfolio', 'forecast', 'resources', 'cards']).optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: 'No preferences provided' });
 
 export const changePasswordSchema = z
   .object({

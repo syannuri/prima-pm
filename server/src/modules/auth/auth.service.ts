@@ -476,19 +476,28 @@ export async function switchTenant(userId: string, tenantId: string): Promise<Au
 export async function me(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, role: true, isActive: true, isPlatformAdmin: true, isGuest: true, digestFrequency: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, isActive: true, isPlatformAdmin: true, isGuest: true, digestFrequency: true, dashboardLayout: true, dashboardDefaultView: true, createdAt: true },
   });
   if (!user) throw Unauthorized();
   return user;
 }
 
-// Self-service account preferences (the caller updates only their own row). Currently just the
-// emailed alert-digest cadence; returns the saved value so the client can reflect it immediately.
-export async function updatePreferences(userId: string, input: { digestFrequency: 'OFF' | 'DAILY' | 'WEEKLY' }) {
+// Self-service account preferences (the caller updates only their own row): emailed alert-digest
+// cadence + desktop dashboard layout/default-view. All fields optional (partial update); returns the
+// saved values so the client can reflect them immediately.
+export async function updatePreferences(userId: string, input: {
+  digestFrequency?: 'OFF' | 'DAILY' | 'WEEKLY';
+  dashboardLayout?: string[];
+  dashboardDefaultView?: 'portfolio' | 'forecast' | 'resources' | 'cards';
+}) {
   const user = await prisma.user.update({
     where: { id: userId },
-    data: { digestFrequency: input.digestFrequency },
-    select: { digestFrequency: true },
+    data: {
+      ...(input.digestFrequency !== undefined ? { digestFrequency: input.digestFrequency } : {}),
+      ...(input.dashboardLayout !== undefined ? { dashboardLayout: input.dashboardLayout } : {}),
+      ...(input.dashboardDefaultView !== undefined ? { dashboardDefaultView: input.dashboardDefaultView } : {}),
+    },
+    select: { digestFrequency: true, dashboardLayout: true, dashboardDefaultView: true },
   });
   return user;
 }

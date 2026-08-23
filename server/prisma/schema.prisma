@@ -250,6 +250,8 @@ model User {
   changesSeenAt DateTime? // last time this user viewed the change-notification feed
   digestFrequency DigestFrequency @default(OFF) // emailed alert digest cadence (opt-in)
   digestLastSentAt DateTime? // scheduler-managed: last time a digest was sent to this user
+  dashboardLayout Json?    // per-user desktop dashboard: ordered array of enabled widget keys (null = default)
+  dashboardDefaultView String? // default landing view: portfolio | forecast | resources | cards (null = portfolio)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
