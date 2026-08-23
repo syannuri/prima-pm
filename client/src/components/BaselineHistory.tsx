@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../api/client';
-import { Button, Modal, Select, Spinner } from './ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, ApiError } from '../api/client';
+import type { Project } from '../api/types';
+import { Button, Modal, Select, Spinner, Textarea } from './ui';
 import { formatIdr, formatDate } from '../lib/format';
+import { useAuth } from '../context/AuthContext';
+import { canGovernProject } from '../lib/perms';
+import { useToast } from './Toast';
 
 // Baseline revision history (Fase 3). Read-only viewer over the versions captured at each baseline
 // lock: list the revisions, and compare any two — schedule variance per task (Δstart/Δfinish/Δweight)
@@ -65,12 +69,20 @@ export default function BaselineHistory({ projectId }: { projectId: string }) {
 }
 
 function HistoryModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const { user } = useAuth();
   const listQ = useQuery({
     queryKey: ['baseline-versions', projectId],
     queryFn: () => api.get<{ versions: VersionSummary[] }>(`/projects/${projectId}/baseline/versions`),
   });
+  // Restore/adopt is an ADMIN/PMO governance action — mirror the server's requireProjectGovernance.
+  const projectQ = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => api.get<{ project: Project }>(`/projects/${projectId}`),
+  });
+  const canManage = !!projectQ.data?.project && canGovernProject(user, projectQ.data.project, ['ADMIN', 'PMO']);
   const versions = listQ.data?.versions ?? [];
   const [compare, setCompare] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<VersionSummary | null>(null);
 
   return (
     <Modal onClose={onClose} title="Baseline history">
@@ -90,14 +102,19 @@ function HistoryModal({ projectId, onClose }: { projectId: string; onClose: () =
               </Button>
             )}
           </div>
-          {compare ? <CompareView projectId={projectId} versions={versions} /> : <VersionList versions={versions} />}
+          {compare
+            ? <CompareView projectId={projectId} versions={versions} />
+            : <VersionList versions={versions} canManage={canManage} onRestore={setRestoreTarget} />}
         </div>
+      )}
+      {restoreTarget && (
+        <RestoreModal projectId={projectId} target={restoreTarget} isLatest={restoreTarget.version === versions[0]?.version} onClose={() => setRestoreTarget(null)} />
       )}
     </Modal>
   );
 }
 
-function VersionList({ versions }: { versions: VersionSummary[] }) {
+function VersionList({ versions, canManage, onRestore }: { versions: VersionSummary[]; canManage: boolean; onRestore: (v: VersionSummary) => void }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -108,23 +125,88 @@ function VersionList({ versions }: { versions: VersionSummary[] }) {
             <th className="py-2 pr-3">By</th>
             <th className="py-2 pr-3">Reason</th>
             <th className="py-2 pr-3 text-right">PMB</th>
-            <th className="py-2 text-right">BAC</th>
+            <th className="py-2 pr-3 text-right">BAC</th>
+            {canManage && <th className="py-2 text-right"></th>}
           </tr>
         </thead>
         <tbody>
-          {versions.map((v) => (
+          {versions.map((v, i) => (
             <tr key={v.id} className="border-b border-slate-100 dark:border-slate-800">
               <td className="py-2 pr-3 font-semibold">B{v.version}</td>
               <td className="py-2 pr-3 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(v.committedAt)}</td>
               <td className="py-2 pr-3 text-slate-600 dark:text-slate-300">{v.committedByName ?? '—'}</td>
               <td className="py-2 pr-3 text-slate-500 dark:text-slate-400">{v.reason ?? <span className="text-slate-400">—</span>}</td>
               <td className="py-2 pr-3 text-right tabular-nums">{formatIdr(v.costBaseline)}</td>
-              <td className="py-2 text-right tabular-nums">{formatIdr(v.budgetAtCompletion)}</td>
+              <td className="py-2 pr-3 text-right tabular-nums">{formatIdr(v.budgetAtCompletion)}</td>
+              {canManage && (
+                <td className="py-2 text-right whitespace-nowrap">
+                  {i === 0 ? (
+                    <span className="text-[11px] text-slate-400" title="This is the current baseline.">current</span>
+                  ) : (
+                    <Button variant="secondary" className="!py-0.5 text-[11px]" onClick={() => onRestore(v)}>Restore</Button>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Confirm + apply a restore/adopt of a prior revision. ADMIN/PMO only (server-enforced). Adopts the
+// chosen revision as a NEW "Restored from Bn" version and re-bases the live baseline to it.
+function RestoreModal({ projectId, target, isLatest, onClose }: { projectId: string; target: VersionSummary; isLatest: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [reason, setReason] = useState('');
+  const restore = useMutation({
+    mutationFn: () => api.post<{ fromVersion: number; newVersion: number; tasksRestored: number; tasksMissing: number; tasksUntouched: number }>(
+      `/projects/${projectId}/baseline/versions/${target.version}/restore`,
+      { reason: reason.trim() || undefined },
+    ),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['baseline-versions', projectId] });
+      qc.invalidateQueries({ queryKey: ['cost', projectId] });
+      qc.invalidateQueries({ queryKey: ['gantt', projectId] });
+      qc.invalidateQueries({ queryKey: ['project', projectId] });
+      const extras = [
+        res.tasksMissing ? `${res.tasksMissing} since-deleted task${res.tasksMissing > 1 ? 's' : ''} skipped` : '',
+        res.tasksUntouched ? `${res.tasksUntouched} newer task${res.tasksUntouched > 1 ? 's' : ''} left as-is` : '',
+      ].filter(Boolean).join(' · ');
+      toast.success(`Restored B${res.fromVersion} → B${res.newVersion} · ${res.tasksRestored} task${res.tasksRestored === 1 ? '' : 's'} re-based${extras ? ` (${extras})` : ''}.`);
+      onClose();
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to restore baseline version'),
+  });
+
+  return (
+    <Modal onClose={onClose} title={`Restore baseline B${target.version}`}>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          This adopts revision <span className="font-semibold">B{target.version}</span> ({formatDate(target.committedAt)}) as the current
+          baseline — the schedule freeze (per-task) and the cost baseline (PMB {formatIdr(target.costBaseline)} / BAC {formatIdr(target.budgetAtCompletion)})
+          are re-based to it, and it is recorded as a new revision. Nothing is deleted; the live plan and actuals are untouched. Only the
+          cost baseline TOTALS are restored (individual cost lines aren't reconstructed). Tasks added since B{target.version} keep their current baseline.
+        </p>
+        {isLatest && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+            This is already the current baseline — restoring it just re-stamps it as a new revision.
+          </p>
+        )}
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Reason (optional)</label>
+          <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={`e.g. Reverting the re-baseline — adopt B${target.version} as the plan of record.`} />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
+          <Button className="flex-1" disabled={restore.isPending} onClick={() => restore.mutate()}>
+            {restore.isPending ? 'Restoring…' : `Restore B${target.version}`}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

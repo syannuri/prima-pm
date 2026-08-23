@@ -120,6 +120,94 @@ export async function getBaselineVersion(projectId: string, version: number) {
   return { ...v, committedByName: committer ? committer.name || committer.email : null };
 }
 
+// Restore/adopt a prior baseline revision (Fase 4) — ADMIN/PMO governance. Writes the chosen
+// version's snapshot BACK into the live baseline stores (per-task Task.baseline* + the CostBaseline
+// numbers) and appends the result as a NEW version ("Restored from Bn"), so history stays
+// append-only (nothing is destroyed). Runs as ONE locked→locked operation: it never unlocks, so no
+// cost-line mutation can race the recompute (the written CostBaseline stays frozen). The live plan
+// (planStart/planEnd/weight) is untouched — only the baseline is re-based, so variance recomputes
+// against the restored freeze. Cost-line DETAIL isn't reconstructed (the snapshot holds only totals);
+// the six CostBaseline figures are restored exactly. Tasks in the snapshot that were since deleted
+// are skipped; live tasks absent from the snapshot keep their current baseline (both reported).
+export async function restoreBaselineVersion(projectId: string, version: number, reason: string | undefined, actorId: string) {
+  const snap = await prisma.baselineVersion.findFirst({ where: { projectId, version } });
+  if (!snap) throw NotFound('Baseline version not found');
+  const project = await prisma.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { id: true } });
+  if (!project) throw NotFound('Project not found');
+
+  const schedule = (snap.schedule ?? []) as Array<{
+    taskId: string;
+    baselineStart: string | null;
+    baselineFinish: string | null;
+    weight: number | null;
+  }>;
+  const cost = (snap.cost ?? {}) as {
+    directTotal?: string;
+    indirectTotal?: string;
+    contingencyReserve?: string;
+    managementReserve?: string;
+    costBaseline?: string;
+    budgetAtCompletion?: string;
+  };
+
+  const liveIds = new Set((await prisma.task.findMany({ where: { projectId }, select: { id: true } })).map((t) => t.id));
+  const snapIds = new Set(schedule.map((s) => s.taskId));
+
+  const outcome = await prisma.$transaction(async (tx) => {
+    let restored = 0;
+    let missing = 0; // in the snapshot but since deleted
+    for (const s of schedule) {
+      if (!liveIds.has(s.taskId)) { missing++; continue; }
+      await tx.task.update({
+        where: { id: s.taskId },
+        data: {
+          baselineStart: s.baselineStart ? new Date(s.baselineStart) : null,
+          baselineFinish: s.baselineFinish ? new Date(s.baselineFinish) : null,
+          baselineWeight: s.weight ?? null,
+        },
+      });
+      restored++;
+    }
+    // Overwrite the six CostBaseline figures directly from the snapshot (frozen, exact to the version).
+    await tx.costBaseline.upsert({
+      where: { projectId },
+      create: {
+        projectId,
+        directTotal: cost.directTotal ?? '0',
+        indirectTotal: cost.indirectTotal ?? '0',
+        contingencyReserve: cost.contingencyReserve ?? '0',
+        managementReserve: cost.managementReserve ?? '0',
+        costBaseline: cost.costBaseline ?? '0',
+        budgetAtCompletion: cost.budgetAtCompletion ?? '0',
+      },
+      update: {
+        directTotal: cost.directTotal ?? '0',
+        indirectTotal: cost.indirectTotal ?? '0',
+        contingencyReserve: cost.contingencyReserve ?? '0',
+        managementReserve: cost.managementReserve ?? '0',
+        costBaseline: cost.costBaseline ?? '0',
+        budgetAtCompletion: cost.budgetAtCompletion ?? '0',
+      },
+    });
+    // Append the restored state as a new adopted version (reads the just-written baseline in-tx).
+    const { version: newVersion } = await captureBaselineVersion(tx, projectId, reason?.trim() || `Restored from B${version}`, actorId);
+    return { restored, missing, newVersion };
+  });
+
+  const extra = [...liveIds].filter((id) => !snapIds.has(id)).length; // live tasks absent from the snapshot
+  await writeAudit({
+    projectId,
+    userId: actorId,
+    entity: 'Project',
+    entityId: projectId,
+    action: 'RESTORE_BASELINE',
+    before: { fromVersion: version },
+    after: { newVersion: outcome.newVersion, tasksRestored: outcome.restored, tasksMissing: outcome.missing, tasksUntouched: extra, reason: reason?.trim() || null },
+  });
+
+  return { fromVersion: version, newVersion: outcome.newVersion, tasksRestored: outcome.restored, tasksMissing: outcome.missing, tasksUntouched: extra };
+}
+
 // Persist a new COMBINED baseline version (schedule + cost snapshot) — the auditable revision the
 // live single-snapshot stores (Task.baseline* + CostBaseline) don't keep. Called at each lock
 // transition (the commit) and by the one-time backfill. Version number is max+1 per project.
