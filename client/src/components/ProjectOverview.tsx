@@ -288,6 +288,13 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const taskTotal = tasks ? tasks.completed + tasks.remaining : 0;
   const upcoming = ganttQ.data ? collectUpcoming(ganttQ.data.tree, Date.now()) : [];
 
+  // The three secondary cards share the 8-col region beside the gauge hero's lower half.
+  // Grouping them in one flex band makes them tile evenly (1, 2 or 3 present) — no lone-card gap.
+  const hasMargin = !!(m && m.revenue > 0);
+  const hasTasks = !!(tasks && taskTotal > 0);
+  const hasUpcoming = upcoming.length > 0;
+  const hasSecondary = hasMargin || hasTasks || hasUpcoming;
+
   return (
     // Mobile/tablet: a single stacked column (unchanged). Desktop (lg+): a 12-col bento so the
     // charts sit tight side-by-side instead of a narrow centred column with big vertical gaps —
@@ -296,7 +303,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     // the DOM order stays mobile-friendly (order is ignored in the mobile block-flow layout).
     <div className="space-y-3 lg:grid lg:grid-cols-12 lg:gap-3 lg:space-y-0">
       {/* Performance — Schedule (SPI) & Cost (CPI) bullet gauges vs the 1.0 target, then progress. */}
-      <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="lg:col-span-4 lg:row-span-2 lg:self-start lg:order-1">
+      <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="lg:col-span-4 lg:order-1">
         <HealthBulletGauge spi={e.spi} cpi={e.cpi} hasSchedule={e.pv > 0} hasCost={e.ac > 0} id={id} />
 
         {/* Weighted % complete (the official EVM progress). */}
@@ -329,9 +336,14 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
         </div>
       </Panel>
 
+      {/* Secondary band — Margin · Tasks · Upcoming deadlines. One flex row (col-span-8) that sits
+          beside the gauge hero's lower half and tiles its cards evenly however many are present, so
+          a single card never spills onto its own row leaving an empty gap. */}
+      {hasSecondary && (
+      <div className="space-y-3 lg:col-span-12 lg:order-3 lg:flex lg:items-stretch lg:gap-3 lg:space-y-0">
       {/* Margin & profit — plan vs actual */}
-      {m && m.revenue > 0 && (
-        <Panel onClick={onJump ? () => onJump('Forecast') : undefined} className="lg:col-span-4 lg:order-3">
+      {hasMargin && (
+        <Panel onClick={onJump ? () => onJump('Forecast') : undefined} className="lg:min-w-0 lg:flex-1">
           <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Margin & Laba — Rencana vs Proyeksi' : 'Margin & profit — plan vs projected'}</h3>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
@@ -350,8 +362,8 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       )}
 
       {/* Completed vs remaining tasks */}
-      {tasks && taskTotal > 0 && (
-        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:col-span-4 lg:order-4">
+      {hasTasks && (
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1">
           <h3 className="mb-2 flex items-center text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}<InfoTip text={taskTip} /></h3>
           <div className="flex items-center gap-4">
             <TaskDonut completed={tasks.completed} remaining={tasks.remaining} label={id ? 'tugas' : 'tasks'} />
@@ -373,8 +385,8 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
       {/* Upcoming deadlines — leaf tasks/milestones due within 7 days or overdue, so a PM catches
           them before they slip. Derived from the already-loaded WBS tree (no extra request). */}
-      {upcoming.length > 0 && (
-        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:col-span-4 lg:order-4">
+      {hasUpcoming && (
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{id ? 'Tenggat terdekat' : 'Upcoming deadlines'}</h3>
             <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{id ? '7 hari' : 'next 7 days'}</span>
@@ -399,6 +411,8 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">+ {upcoming.length - 6} {id ? 'lagi' : 'more'}</p>
           )}
         </Panel>
+      )}
+      </div>
       )}
 
       {/* S-curve — two views (Progress % / Cost IDR) in one panel with a tab toggle.
