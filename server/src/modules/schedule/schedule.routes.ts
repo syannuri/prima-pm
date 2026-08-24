@@ -59,7 +59,17 @@ router.post('/tasks', ...canWrite, validateBody(upsertTaskSchema), asyncHandler(
 
 router.put('/tasks/:taskId', ...canWrite, validateBody(upsertTaskSchema), asyncHandler(async (req, res) => {
   const task = await svc.updateTask(req.params.projectId, req.params.taskId, req.body, req.user!.id);
-  res.json({ task });
+  // Moving a task's dates may violate a dependency downstream — push successors (see applyAutoSchedule).
+  const auto = await svc.applyAutoSchedule(req.params.projectId, { actorId: req.user!.id });
+  res.json({ task, autoScheduled: auto.moved });
+}));
+
+// Recompute the whole schedule against its dependency network. ?dryRun=1 previews
+// the moves without persisting (used by the "Rapikan jadwal" confirm dialog).
+router.post('/reschedule', ...canWrite, asyncHandler(async (req, res) => {
+  const dryRun = req.query.dryRun === '1' || req.body?.dryRun === true;
+  const out = await svc.applyAutoSchedule(req.params.projectId, { dryRun, actorId: req.user!.id });
+  res.json(out);
 }));
 
 // Capture the schedule baseline (snapshot planned dates).
@@ -99,7 +109,9 @@ router.delete('/tasks/:taskId', ...canWrite, asyncHandler(async (req, res) => {
 // Dependencies (successor task gains a predecessor).
 router.post('/tasks/:taskId/dependencies', ...canWrite, validateBody(dependencySchema), asyncHandler(async (req, res) => {
   const dep = await svc.addDependency(req.params.projectId, req.params.taskId, req.body, req.user!.id);
-  res.status(201).json({ dependency: dep });
+  // A new link can immediately make the successor illegal — settle the schedule now.
+  const auto = await svc.applyAutoSchedule(req.params.projectId, { actorId: req.user!.id });
+  res.status(201).json({ dependency: dep, autoScheduled: auto.moved });
 }));
 
 router.delete('/dependencies/:depId', ...canWrite, asyncHandler(async (req, res) => {
