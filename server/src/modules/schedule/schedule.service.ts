@@ -17,10 +17,12 @@ import {
   computeCpm,
   computeLeafWeights,
   deriveStepProgress,
+  autoSchedule,
   type DependencyEdge,
   type CpmDepType,
+  type AutoTaskInput,
 } from './schedule.helpers.js';
-import type { DependencyInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
+import type { DependencyInput, DependencyEditInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
   v == null ? 0 : Number(v);
@@ -546,6 +548,87 @@ export async function addDependency(
   });
   await writeAudit({ projectId, userId: actorId, entity: 'TaskDependency', entityId: dep.id, action: 'CREATE', after: dep });
   return dep;
+}
+
+// --- Auto-scheduling (weekend-aware dependency propagation) ---
+
+export interface AutoMoveRow {
+  id: string;
+  wbsCode: string;
+  name: string;
+  fromStart: Date;
+  fromEnd: Date;
+  toStart: Date;
+  toEnd: Date;
+}
+export interface AutoScheduleOutcome {
+  cyclic: boolean;
+  moved: AutoMoveRow[];
+}
+
+/**
+ * Recompute leaf task dates so every FS/SS/FF/SF dependency is honoured, pushing
+ * only successors that currently violate a constraint (see autoSchedule). Persists
+ * the moved rows (unless `dryRun`) and returns them for the UI. Callers that gate on
+ * the baseline lock (updateTask/addDependency) have already asserted it; the
+ * standalone /reschedule apply path asserts it here.
+ */
+export async function applyAutoSchedule(
+  projectId: string,
+  opts: { dryRun?: boolean; actorId?: string } = {},
+): Promise<AutoScheduleOutcome> {
+  const [tasks, deps] = await Promise.all([
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, wbsCode: true, name: true, planStart: true, planEnd: true } }),
+    prisma.taskDependency.findMany({ where: { predecessor: { projectId } }, select: { predecessorId: true, successorId: true, type: true, lagDays: true } }),
+  ]);
+  // Only leaf tasks carry real dates; parents roll up (mirror getCpm).
+  const parentIds = new Set(tasks.map((t) => t.parentTaskId).filter(Boolean) as string[]);
+  const leaves = tasks.filter((t) => !parentIds.has(t.id));
+  const byId = new Map(leaves.map((t) => [t.id, t]));
+
+  const result = autoSchedule(
+    leaves.map<AutoTaskInput>((t) => ({ id: t.id, planStart: t.planStart, planEnd: t.planEnd })),
+    deps.map((d) => ({ predecessorId: d.predecessorId, successorId: d.successorId, type: d.type as CpmDepType, lagDays: d.lagDays })),
+  );
+
+  const moved: AutoMoveRow[] = result.moved.map((id) => {
+    const t = byId.get(id)!;
+    const r = result.tasks[id];
+    return { id, wbsCode: t.wbsCode, name: t.name, fromStart: t.planStart, fromEnd: t.planEnd, toStart: new Date(r.start), toEnd: new Date(r.end) };
+  });
+
+  if (opts.dryRun || moved.length === 0) return { cyclic: result.cyclic, moved };
+
+  await assertBaselineUnlocked(projectId);
+  await prisma.$transaction(
+    moved.map((m) => prisma.task.update({ where: { id: m.id }, data: { planStart: m.toStart, planEnd: m.toEnd } })),
+  );
+  if (opts.actorId) {
+    await writeAudit({
+      projectId, userId: opts.actorId, entity: 'Task', entityId: projectId, action: 'UPDATE',
+      after: { autoReschedule: moved.map((m) => ({ id: m.id, wbsCode: m.wbsCode, toStart: m.toStart, toEnd: m.toEnd })) },
+    });
+  }
+  return { cyclic: result.cyclic, moved };
+}
+
+export async function updateDependency(
+  projectId: string,
+  depId: string,
+  input: DependencyEditInput,
+  actorId: string,
+) {
+  const dep = await prisma.taskDependency.findFirst({
+    where: { id: depId, predecessor: { projectId } },
+  });
+  if (!dep) throw NotFound('Dependency not found');
+  await assertBaselineUnlocked(projectId);
+  const updated = await prisma.taskDependency.update({
+    where: { id: depId },
+    data: { type: input.type, lagDays: input.lagDays },
+  });
+  await writeAudit({ projectId, userId: actorId, entity: 'TaskDependency', entityId: depId, action: 'UPDATE', before: dep, after: updated });
+  return updated;
 }
 
 export async function deleteDependency(projectId: string, depId: string, actorId: string) {

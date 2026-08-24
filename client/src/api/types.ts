@@ -760,12 +760,29 @@ export interface Task {
   sortOrder: number;
 }
 
+export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF';
+
 export interface TaskDependency {
   id: string;
   predecessorId: string;
   successorId: string;
-  type: 'FS' | 'SS' | 'FF' | 'SF';
+  type: DependencyType;
   lagDays: number;
+}
+
+// A leaf task the auto-scheduler pushed to keep a dependency legal (working-day dates).
+export interface AutoMoveRow {
+  id: string;
+  wbsCode: string;
+  name: string;
+  fromStart: string;
+  fromEnd: string;
+  toStart: string;
+  toEnd: string;
+}
+export interface AutoScheduleResult {
+  cyclic: boolean;
+  moved: AutoMoveRow[];
 }
 
 export interface TaskStep {

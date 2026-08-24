@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { CpmResult, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
+import type { AutoMoveRow, AutoScheduleResult, CpmResult, DependencyType, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
 import { Badge, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import ImportTasksModal from '../../components/ImportTasksModal';
@@ -916,10 +916,15 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     onSuccess: () => { invalidate(); toast.success('Task deleted'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete task'),
   });
+  // When an edit auto-shifts downstream tasks, tell the user how many moved (honest & non-modal).
+  const notifyAutoMoves = (res: { autoScheduled?: AutoMoveRow[] } | undefined) => {
+    const n = res?.autoScheduled?.length ?? 0;
+    if (n > 0) toast.success(`${n} downstream task${n === 1 ? '' : 's'} auto-shifted to keep dependencies`);
+  };
   // Drag-to-reschedule: PUT replaces the whole task, so preserve every field and only move the dates.
   const reschedule = useMutation({
     mutationFn: ({ node, planStart, planEnd }: { node: GanttNode; planStart: string; planEnd: string }) =>
-      api.put(`${base}/tasks/${node.id}`, {
+      api.put<{ autoScheduled?: AutoMoveRow[] }>(`${base}/tasks/${node.id}`, {
         name: node.name, planStart, planEnd,
         parentTaskId: node.parentTaskId, sortOrder: node.sortOrder,
         picUserId: node.picUserId ?? undefined, picResourceId: node.picResourceId ?? undefined,
@@ -927,7 +932,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         actualStart: node.actualStart ?? undefined, actualFinish: node.actualFinish ?? undefined,
         progressPct: node.progressPct, isMilestone: node.isMilestone, weight: node.weight,
       }),
-    onSuccess: invalidate,
+    onSuccess: (res) => { invalidate(); notifyAutoMoves(res); },
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to reschedule'); },
   });
   // Inline single-field edit (dates / owner): PUT replaces the whole task, so send the full
@@ -935,7 +940,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // progress auto-stamp isn't the only way to set them.
   const patchTask = useMutation({
     mutationFn: ({ node, patch }: { node: GanttNode; patch: Record<string, unknown> }) =>
-      api.put(`${base}/tasks/${node.id}`, {
+      api.put<{ autoScheduled?: AutoMoveRow[] }>(`${base}/tasks/${node.id}`, {
         name: node.name, planStart: node.planStart, planEnd: node.planEnd,
         progressPct: node.progressPct, isMilestone: node.isMilestone, weight: node.weight,
         parentTaskId: node.parentTaskId, sortOrder: node.sortOrder,
@@ -944,7 +949,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         actualStart: node.actualStart ?? undefined, actualFinish: node.actualFinish ?? undefined,
         ...patch,
       }),
-    onSuccess: invalidate,
+    onSuccess: (res) => { invalidate(); notifyAutoMoves(res); },
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to save'); },
   });
 
@@ -985,15 +990,55 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   });
   const addDep = useMutation({
     mutationFn: ({ predecessorId, successorId }: { predecessorId: string; successorId: string }) =>
-      api.post(`${base}/tasks/${successorId}/dependencies`, { predecessorId, type: 'FS', lagDays: 0 }),
-    onSuccess: () => { invalidate(); toast.success('Dependency linked'); },
+      api.post<{ autoScheduled?: AutoMoveRow[] }>(`${base}/tasks/${successorId}/dependencies`, { predecessorId, type: 'FS', lagDays: 0 }),
+    onSuccess: (res) => { invalidate(); toast.success('Dependency linked'); notifyAutoMoves(res); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not link tasks'),
+  });
+  // Edit a link's type (FS/SS/FF/SF) / lag; the server re-settles the schedule.
+  const updateDep = useMutation({
+    mutationFn: ({ depId, type, lagDays }: { depId: string; type: DependencyType; lagDays: number }) =>
+      api.patch<{ autoScheduled?: AutoMoveRow[] }>(`${base}/dependencies/${depId}`, { type, lagDays }),
+    onSuccess: (res) => { invalidate(); setEditDep(null); toast.success('Dependency updated'); notifyAutoMoves(res); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update dependency'),
   });
   const removeDep = useMutation({
     mutationFn: (depId: string) => api.del(`${base}/dependencies/${depId}`),
-    onSuccess: () => { invalidate(); toast.success('Dependency removed'); },
+    onSuccess: () => { invalidate(); setEditDep(null); toast.success('Dependency removed'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to remove dependency'),
   });
+  // Whole-network recompute ("Tidy schedule") — preview via dry-run, then apply on confirm.
+  const rescheduleAll = useMutation({
+    mutationFn: () => api.post<AutoScheduleResult>(`${base}/reschedule`, {}),
+    onSuccess: (res) => {
+      invalidate();
+      toast.success(res.moved.length ? `Schedule tidied — ${res.moved.length} task${res.moved.length === 1 ? '' : 's'} moved` : 'Schedule already consistent');
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to tidy schedule'),
+  });
+  const tidySchedule = async () => {
+    const preview = await api.post<AutoScheduleResult>(`${base}/reschedule?dryRun=1`, {}).catch((e) => {
+      toast.error(e instanceof ApiError ? e.message : 'Failed to preview'); return null;
+    });
+    if (!preview) return;
+    if (preview.cyclic) { toast.error('Dependencies form a cycle — resolve it before tidying.'); return; }
+    if (preview.moved.length === 0) { toast.success('Schedule already consistent — nothing to move.'); return; }
+    const message = (
+      <div className="space-y-2">
+        <p>These tasks will shift to the earliest working-day dates that keep every dependency legal:</p>
+        <ul className="max-h-40 space-y-0.5 overflow-auto text-xs">
+          {preview.moved.slice(0, 8).map((m: AutoMoveRow) => (
+            <li key={m.id}><span className="font-medium">{m.wbsCode} {m.name}</span> → {formatDate(new Date(m.toStart))}</li>
+          ))}
+          {preview.moved.length > 8 && <li className="text-slate-400">…and {preview.moved.length - 8} more</li>}
+        </ul>
+      </div>
+    );
+    if (await confirm({
+      title: `Tidy schedule — move ${preview.moved.length} task${preview.moved.length === 1 ? '' : 's'}?`,
+      message,
+      confirmLabel: 'Tidy schedule',
+    })) rescheduleAll.mutate();
+  };
 
   // Indent / outdent (MS-Project style) — re-parent a task within the WBS hierarchy via patchTask.
   // canIndent: has a previous sibling (which becomes the new parent). canOutdent: has a parent
@@ -1021,6 +1066,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // Chart interactions: drag a bar to reschedule; click a link handle then another bar to connect them.
   const [drag, setDrag] = useState<{ id: string; mode: 'move' | 'start' | 'end'; dx: number } | null>(null);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
+  // Dependency editor popover: which link is being edited + where to anchor it.
+  const [editDep, setEditDep] = useState<{ id: string; x: number; y: number } | null>(null);
   const barRefs = useRef(new Map<string, HTMLDivElement>());
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [arrows, setArrows] = useState<{ id: string; d: string; bad: boolean; mx: number; my: number }[]>([]);
@@ -1196,6 +1243,12 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               ⚖ Weights
             </button>
           )}
+          {/* Tidy schedule — recompute all dates against the dependency network (preview then apply). */}
+          {canPlan && deps.length > 0 && (
+            <button onClick={tidySchedule} disabled={rescheduleAll.isPending} title="Shift tasks to the earliest working-day dates that keep every dependency legal" className={CTRL_BTN}>
+              🧹 Tidy schedule
+            </button>
+          )}
           {/* Visual Gantt exports — the whole timeline charted horizontally as a PDF / Excel grid. */}
           {rows.length > 0 && (
             <>
@@ -1337,13 +1390,46 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   <path key={a.id} d={a.d} markerEnd={`url(#arrow-${uid})`} className={`fill-none ${a.bad ? 'stroke-red-400' : 'stroke-slate-400 dark:stroke-slate-500'}`} strokeWidth={1.5} />
                 ))}
               </svg>
-              {/* Delete handles — a small ✕ at each connector's midpoint (sits in the row gap, clear of bars). */}
-              {canPlan && arrows.map((a) => (
-                <button key={a.id} type="button" title="Remove dependency"
-                  onClick={async () => { if (await confirm({ title: 'Remove dependency?', message: 'Delete this task link?', confirmLabel: 'Remove', danger: true })) removeDep.mutate(a.id); }}
-                  className="absolute z-[9] grid h-4 w-4 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-slate-300 bg-white text-[9px] leading-none text-slate-500 opacity-0 shadow-sm transition hover:border-red-400 hover:text-red-500 group-hover:opacity-70 hover:!opacity-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                  style={{ left: a.mx, top: a.my }}>✕</button>
-              ))}
+              {/* Edit handles — a small chip at each connector's midpoint. Click to open the
+                  dependency editor (type FS/SS/FF/SF, lag, delete). Shows the current type. */}
+              {canPlan && arrows.map((a) => {
+                const dep = deps.find((d) => d.id === a.id);
+                return (
+                  <button key={a.id} type="button" title="Edit dependency (type / lag)"
+                    onClick={() => setEditDep({ id: a.id, x: a.mx, y: a.my })}
+                    className="absolute z-[9] grid h-4 min-w-[1.1rem] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-slate-300 bg-white px-1 text-[8px] font-semibold leading-none text-slate-500 opacity-0 shadow-sm transition hover:border-brand-400 hover:text-brand-600 group-hover:opacity-70 hover:!opacity-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                    style={{ left: a.mx, top: a.my }}>{dep?.type ?? 'FS'}</button>
+                );
+              })}
+              {/* Dependency editor popover (anchored to the connector midpoint). */}
+              {editDep && (() => {
+                const dep = deps.find((d) => d.id === editDep.id);
+                if (!dep) return null;
+                return (
+                  <>
+                    <div className="fixed inset-0 z-[40]" onClick={() => setEditDep(null)} />
+                    <div className="absolute z-[41] w-56 -translate-x-1/2 translate-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+                      style={{ left: editDep.x, top: editDep.y }} onClick={(e) => e.stopPropagation()}>
+                      <div className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">Dependency</div>
+                      <label className="mb-1 block text-[11px] text-slate-500 dark:text-slate-400">Type</label>
+                      <Select value={dep.type} onChange={(e) => updateDep.mutate({ depId: dep.id, type: e.target.value as DependencyType, lagDays: dep.lagDays })} className="mb-2 w-full text-sm">
+                        <option value="FS">Finish → Start (FS)</option>
+                        <option value="SS">Start → Start (SS)</option>
+                        <option value="FF">Finish → Finish (FF)</option>
+                        <option value="SF">Start → Finish (SF)</option>
+                      </Select>
+                      <label className="mb-1 block text-[11px] text-slate-500 dark:text-slate-400">Lag / lead (working days)</label>
+                      <Input type="number" defaultValue={dep.lagDays} className="mb-3 w-full text-sm"
+                        onBlur={(e) => { const v = parseInt(e.target.value, 10) || 0; if (v !== dep.lagDays) updateDep.mutate({ depId: dep.id, type: dep.type, lagDays: v }); }} />
+                      <div className="flex items-center justify-between">
+                        <button type="button" className="text-xs font-medium text-red-500 hover:underline"
+                          onClick={async () => { if (await confirm({ title: 'Remove dependency?', message: 'Delete this task link?', confirmLabel: 'Remove', danger: true })) removeDep.mutate(dep.id); }}>Remove link</button>
+                        <button type="button" className="text-xs text-slate-500 hover:underline dark:text-slate-400" onClick={() => setEditDep(null)}>Close</button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </>
           )}
           <table className="w-full border-separate border-spacing-0 text-sm">

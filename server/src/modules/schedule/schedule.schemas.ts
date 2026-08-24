@@ -42,6 +42,12 @@ export const dependencySchema = z.object({
   lagDays: z.coerce.number().int().default(0),
 });
 
+// Edit an existing link's type/lag (the predecessor↔successor pair is immutable).
+export const dependencyEditSchema = z.object({
+  type: z.enum(DEPENDENCY_TYPES),
+  lagDays: z.coerce.number().int(),
+});
+
 export const evmQuerySchema = z.object({
   // Optional override; when omitted, EVM uses the stored time-phased Actual Cost.
   actualCost: z.coerce.number().nonnegative().optional(),
@@ -92,5 +98,6 @@ export const applyTemplateSchema = z.object({
 export type TaskStepsInput = z.infer<typeof taskStepsSchema>;
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
+export type DependencyEditInput = z.infer<typeof dependencyEditSchema>;
 export type ProgressInput = z.infer<typeof progressSchema>;
 export type TaskActualsInput = z.infer<typeof taskActualsSchema>;
