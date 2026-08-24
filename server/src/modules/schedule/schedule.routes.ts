@@ -68,7 +68,8 @@ router.put('/tasks/:taskId', ...canWrite, validateBody(upsertTaskSchema), asyncH
 // the moves without persisting (used by the "Rapikan jadwal" confirm dialog).
 router.post('/reschedule', ...canWrite, asyncHandler(async (req, res) => {
   const dryRun = req.query.dryRun === '1' || req.body?.dryRun === true;
-  const out = await svc.applyAutoSchedule(req.params.projectId, { dryRun, actorId: req.user!.id });
+  const mode = (req.query.mode === 'asap' || req.body?.mode === 'asap') ? 'asap' : 'push';
+  const out = await svc.applyAutoSchedule(req.params.projectId, { dryRun, mode, actorId: req.user!.id });
   res.json(out);
 }));
 

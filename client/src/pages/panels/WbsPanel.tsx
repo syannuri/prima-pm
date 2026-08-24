@@ -760,6 +760,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [fullscreen, setFullscreen] = useState(false);
   const fsRef = useRef<HTMLDivElement>(null);
+  // Dialogs/menus opened from the fullscreen Gantt must portal INTO the fullscreen element — under
+  // the native Fullscreen API only that subtree paints, so a <body>-level modal would be invisible
+  // (the "can't add a task in full screen" bug). Outside fullscreen: default portal (undefined).
+  const modalContainer = fullscreen ? fsRef.current : undefined;
   // Resizable Gantt box (normal view only) — drag the bottom handle to grow/shrink the timeline.
   // null = default (max-h-[65vh]); a px height once the user drags. Persisted per project.
   const HKEY = `wbs-h:${projectId}`;
@@ -1007,24 +1011,30 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to remove dependency'),
   });
   // Whole-network recompute ("Tidy schedule") — preview via dry-run, then apply on confirm.
+  // mode 'push' = settle links only (never pulls earlier); 'asap' = compact (pull tasks
+  // earlier to close gaps left by removed/edited links).
   const rescheduleAll = useMutation({
-    mutationFn: () => api.post<AutoScheduleResult>(`${base}/reschedule`, {}),
-    onSuccess: (res) => {
+    mutationFn: (mode: 'push' | 'asap') => api.post<AutoScheduleResult>(`${base}/reschedule?mode=${mode}`, {}),
+    onSuccess: (res, mode) => {
       invalidate();
-      toast.success(res.moved.length ? `Schedule tidied — ${res.moved.length} task${res.moved.length === 1 ? '' : 's'} moved` : 'Schedule already consistent');
+      const verb = mode === 'asap' ? 'compacted' : 'tidied';
+      toast.success(res.moved.length ? `Schedule ${verb} — ${res.moved.length} task${res.moved.length === 1 ? '' : 's'} moved` : 'Schedule already consistent');
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to tidy schedule'),
   });
-  const tidySchedule = async () => {
-    const preview = await api.post<AutoScheduleResult>(`${base}/reschedule?dryRun=1`, {}).catch((e) => {
+  const tidySchedule = async (mode: 'push' | 'asap') => {
+    const preview = await api.post<AutoScheduleResult>(`${base}/reschedule?dryRun=1&mode=${mode}`, {}).catch((e) => {
       toast.error(e instanceof ApiError ? e.message : 'Failed to preview'); return null;
     });
     if (!preview) return;
     if (preview.cyclic) { toast.error('Dependencies form a cycle — resolve it before tidying.'); return; }
     if (preview.moved.length === 0) { toast.success('Schedule already consistent — nothing to move.'); return; }
+    const asap = mode === 'asap';
     const message = (
       <div className="space-y-2">
-        <p>These tasks will shift to the earliest working-day dates that keep every dependency legal:</p>
+        <p>{asap
+          ? 'These tasks will move to the earliest working-day dates their dependencies allow (gaps are closed; some tasks may move earlier):'
+          : 'These tasks will shift forward to the earliest working-day dates that keep every dependency legal:'}</p>
         <ul className="max-h-40 space-y-0.5 overflow-auto text-xs">
           {preview.moved.slice(0, 8).map((m: AutoMoveRow) => (
             <li key={m.id}><span className="font-medium">{m.wbsCode} {m.name}</span> → {formatDate(new Date(m.toStart))}</li>
@@ -1034,10 +1044,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
       </div>
     );
     if (await confirm({
-      title: `Tidy schedule — move ${preview.moved.length} task${preview.moved.length === 1 ? '' : 's'}?`,
+      title: `${asap ? 'Compact' : 'Tidy'} schedule — move ${preview.moved.length} task${preview.moved.length === 1 ? '' : 's'}?`,
       message,
-      confirmLabel: 'Tidy schedule',
-    })) rescheduleAll.mutate();
+      confirmLabel: asap ? 'Compact schedule' : 'Tidy schedule',
+      container: modalContainer,
+    })) rescheduleAll.mutate(mode);
   };
 
   // Indent / outdent (MS-Project style) — re-parent a task within the WBS hierarchy via patchTask.
@@ -1068,6 +1079,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
   // Dependency editor popover: which link is being edited + where to anchor it.
   const [editDep, setEditDep] = useState<{ id: string; x: number; y: number } | null>(null);
+  // "Tidy schedule" mode menu (push vs compact) — anchored at the click point, fullscreen-safe.
+  const [tidyMenu, setTidyMenu] = useState<{ x: number; y: number } | null>(null);
   const barRefs = useRef(new Map<string, HTMLDivElement>());
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [arrows, setArrows] = useState<{ id: string; d: string; bad: boolean; mx: number; my: number }[]>([]);
@@ -1138,11 +1151,6 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   }, [deps, rows, rolled, axis, scale, fullscreen, expanded, geomTick, drag]);
 
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
-
-  // Dialogs opened from the fullscreen Gantt must portal INTO the fullscreen element — under the
-  // native Fullscreen API only that subtree paints, so a <body>-level modal would be invisible
-  // (the "can't add a task in full screen" bug). Outside fullscreen: default portal (undefined).
-  const modalContainer = fullscreen ? fsRef.current : undefined;
 
   // Slip-vs-baseline summary. Rendered inline on the LEFT of the header control row (non-fullscreen)
   // so it doesn't cost a dedicated row above the table — letting the Gantt sit right under the
@@ -1243,9 +1251,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               ⚖ Weights
             </button>
           )}
-          {/* Tidy schedule — recompute all dates against the dependency network (preview then apply). */}
+          {/* Tidy schedule — recompute all dates against the dependency network (preview then apply).
+              Menu: settle links (push-only) vs compact (pull tasks earlier). */}
           {canPlan && deps.length > 0 && (
-            <button onClick={tidySchedule} disabled={rescheduleAll.isPending} title="Shift tasks to the earliest working-day dates that keep every dependency legal" className={CTRL_BTN}>
+            <button onClick={(e) => setTidyMenu({ x: e.clientX, y: e.clientY })} disabled={rescheduleAll.isPending} title="Recompute dates against the dependency network" className={CTRL_BTN}>
               🧹 Tidy schedule
             </button>
           )}
@@ -1423,7 +1432,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         onBlur={(e) => { const v = parseInt(e.target.value, 10) || 0; if (v !== dep.lagDays) updateDep.mutate({ depId: dep.id, type: dep.type, lagDays: v }); }} />
                       <div className="flex items-center justify-between">
                         <button type="button" className="text-xs font-medium text-red-500 hover:underline"
-                          onClick={async () => { if (await confirm({ title: 'Remove dependency?', message: 'Delete this task link?', confirmLabel: 'Remove', danger: true })) removeDep.mutate(dep.id); }}>Remove link</button>
+                          onClick={async () => { if (await confirm({ title: 'Remove dependency?', message: 'Delete this task link?', confirmLabel: 'Remove', danger: true, container: modalContainer })) removeDep.mutate(dep.id); }}>Remove link</button>
                         <button type="button" className="text-xs text-slate-500 hover:underline dark:text-slate-400" onClick={() => setEditDep(null)}>Close</button>
                       </div>
                     </div>
@@ -1883,6 +1892,16 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               { label: 'Delete', icon: '🗑', danger: true, disabled: !canPlan, onClick: async () => { if (await confirm({ title: 'Delete task?', message: <>Delete <strong>{n.name}</strong> and all of its subtasks? This cannot be undone.</>, confirmLabel: 'Delete', danger: true, container: modalContainer })) del.mutate(n.id); } },
             ];
           })()}
+        />
+      )}
+      {/* Tidy-schedule mode chooser — push (settle) vs asap (compact). Portaled → fullscreen-safe. */}
+      {tidyMenu && (
+        <RowMenu
+          x={tidyMenu.x} y={tidyMenu.y} container={modalContainer} onClose={() => setTidyMenu(null)}
+          items={[
+            { label: 'Settle links', icon: '🔗', hint: 'push only', onClick: () => tidySchedule('push') },
+            { label: 'Compact', icon: '🧹', hint: 'pull earlier', onClick: () => tidySchedule('asap') },
+          ]}
         />
       )}
     </Card>

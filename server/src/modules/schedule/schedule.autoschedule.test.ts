@@ -115,6 +115,28 @@ describe('autoSchedule', () => {
     expect(iso(r.tasks.B.start)).toBe('2026-06-04'); // Fri -1 wd = Thu
   });
 
+  it('asap mode pulls a successor EARLIER to close a gap (compact)', () => {
+    // A: Mon–Wed (finishes Wed 06-03). B sits far out at Fri 06-12 with slack.
+    // push leaves B alone; asap pulls B back to hug A's finish (Wed).
+    const tasks = [task('A', '2026-06-01', '2026-06-03'), task('B', '2026-06-12', '2026-06-15')];
+    const edges = [edge('A', 'B')];
+    expect(autoSchedule(tasks, edges, 'push').moved).toEqual([]);
+    const asap = autoSchedule(tasks, edges, 'asap');
+    expect(asap.moved).toEqual(['B']);
+    expect(iso(asap.tasks.B.start)).toBe('2026-06-03'); // pulled back to A's finish
+  });
+
+  it('asap keeps a task with no predecessors anchored', () => {
+    // Only B has a predecessor; A (root) must not be dragged to some project epoch.
+    const tasks = [task('A', '2026-06-08', '2026-06-10'), task('B', '2026-06-15', '2026-06-17')];
+    const asap = autoSchedule(tasks, [], 'asap');
+    expect(asap.moved).toEqual([]); // no edges → nothing moves in either mode
+    // with a link A→B, A stays put and B hugs A
+    const withEdge = autoSchedule(tasks, [edge('A', 'B')], 'asap');
+    expect(iso(withEdge.tasks.A.start)).toBe('2026-06-08'); // anchored
+    expect(iso(withEdge.tasks.B.start)).toBe('2026-06-10'); // pulled to A's finish
+  });
+
   it('leaves a cyclic network untouched and flags it', () => {
     const r = autoSchedule(
       [task('A', '2026-06-01', '2026-06-02'), task('B', '2026-06-01', '2026-06-02')],

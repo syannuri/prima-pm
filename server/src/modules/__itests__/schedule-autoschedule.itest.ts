@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
-import { addDependency, applyAutoSchedule, updateDependency } from '../schedule/schedule.service.js';
+import { addDependency, applyAutoSchedule, updateDependency, deleteDependency } from '../schedule/schedule.service.js';
 import { setScheduleBaseline } from '../schedule/schedule.service.js';
 import { setBaselineLock } from '../projects/baseline.service.js';
 
@@ -91,6 +91,29 @@ describe('auto-schedule — weekend-aware dependency propagation', () => {
     await applyAutoSchedule(p.id, { actorId: pmId }); // B → Wed + 2 wd = Fri
     const bAfter = await prisma.task.findUniqueOrThrow({ where: { id: b.id } });
     expect(ymd(bAfter.planStart)).toBe('2026-06-05');
+  });
+
+  it('deleting a link does NOT move dates (push-only); asap compacts afterwards', async () => {
+    const p = await project();
+    const a = await leaf(p.id, '1', 'A', 1, 5); // Mon–Fri
+    const b = await leaf(p.id, '2', 'B', 1, 2); // Mon–Tue
+    const dep = await addDependency(p.id, b.id, { predecessorId: a.id, type: 'FS', lagDays: 0 }, pmId);
+    await applyAutoSchedule(p.id, { actorId: pmId }); // B pushed to Fri 06-05
+    expect(ymd((await prisma.task.findUniqueOrThrow({ where: { id: b.id } })).planStart)).toBe('2026-06-05');
+
+    // Remove the link — push-only default leaves B parked where it was pushed.
+    await deleteDependency(p.id, dep.id, pmId);
+    const afterDelete = await applyAutoSchedule(p.id, { actorId: pmId });
+    expect(afterDelete.moved).toEqual([]);
+    expect(ymd((await prisma.task.findUniqueOrThrow({ where: { id: b.id } })).planStart)).toBe('2026-06-05');
+
+    // Re-link then compact (asap) pulls B back to hug A again.
+    await addDependency(p.id, b.id, { predecessorId: a.id, type: 'FS', lagDays: 0 }, pmId);
+    // (B already at Fri, still legal) now widen A earlier is not needed — test asap pull with a gap:
+    await prisma.task.update({ where: { id: b.id }, data: { planStart: day(15), planEnd: day(16) } }); // shove B far out
+    const compact = await applyAutoSchedule(p.id, { mode: 'asap', actorId: pmId });
+    expect(compact.moved.map((m) => m.id)).toEqual([b.id]);
+    expect(ymd((await prisma.task.findUniqueOrThrow({ where: { id: b.id } })).planStart)).toBe('2026-06-05'); // hugs A's finish
   });
 
   it('refuses to persist when the baseline is locked', async () => {

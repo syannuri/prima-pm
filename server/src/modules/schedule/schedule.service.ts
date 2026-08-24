@@ -21,6 +21,7 @@ import {
   type DependencyEdge,
   type CpmDepType,
   type AutoTaskInput,
+  type AutoScheduleMode,
 } from './schedule.helpers.js';
 import type { DependencyInput, DependencyEditInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
 
@@ -575,7 +576,7 @@ export interface AutoScheduleOutcome {
  */
 export async function applyAutoSchedule(
   projectId: string,
-  opts: { dryRun?: boolean; actorId?: string } = {},
+  opts: { dryRun?: boolean; actorId?: string; mode?: AutoScheduleMode } = {},
 ): Promise<AutoScheduleOutcome> {
   const [tasks, deps] = await Promise.all([
     prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, wbsCode: true, name: true, planStart: true, planEnd: true } }),
@@ -589,6 +590,7 @@ export async function applyAutoSchedule(
   const result = autoSchedule(
     leaves.map<AutoTaskInput>((t) => ({ id: t.id, planStart: t.planStart, planEnd: t.planEnd })),
     deps.map((d) => ({ predecessorId: d.predecessorId, successorId: d.successorId, type: d.type as CpmDepType, lagDays: d.lagDays })),
+    opts.mode ?? 'push',
   );
 
   const moved: AutoMoveRow[] = result.moved.map((id) => {

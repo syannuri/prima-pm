@@ -265,11 +265,19 @@ export interface AutoScheduleResult {
   moved: string[];
 }
 
+/** Scheduling mode:
+ *  - 'push' (default): push-only — a task never moves earlier than where it sits;
+ *    only successors that VIOLATE a constraint are shifted forward. Minimal moves.
+ *  - 'asap': compact — every task WITH predecessors snaps to the earliest legal
+ *    working-day date (may pull earlier, closing gaps left by removed/edited links).
+ *    Tasks with no predecessors stay anchored where they are. */
+export type AutoScheduleMode = 'push' | 'asap';
+
 /**
- * Push-only, weekend-aware forward pass. Reuses the CPM constraint formulas but
- * in working-day date space. Only leaf tasks should be passed (parents roll up).
+ * Weekend-aware forward pass. Reuses the CPM constraint formulas but in working-day
+ * date space. Only leaf tasks should be passed (parents roll up). See AutoScheduleMode.
  */
-export function autoSchedule(tasks: AutoTaskInput[], edges: CpmEdgeInput[]): AutoScheduleResult {
+export function autoSchedule(tasks: AutoTaskInput[], edges: CpmEdgeInput[], mode: AutoScheduleMode = 'push'): AutoScheduleResult {
   const ids = new Set(tasks.map((t) => t.id));
   const es_edges = edges.filter((e) => ids.has(e.predecessorId) && ids.has(e.successorId));
   const origStart = new Map(tasks.map((t) => [t.id, floorDay(+t.planStart)]));
@@ -310,8 +318,11 @@ export function autoSchedule(tasks: AutoTaskInput[], edges: CpmEdgeInput[]): Aut
   const D = (id: string) => durWd.get(id) ?? 0;
   const endOf = (id: string) => addWorkingDays(start.get(id)!, D(id));
   for (const id of topo) {
-    let required = start.get(id)!; // push-only: never earlier than where it sits
-    for (const e of inAdj.get(id) ?? []) {
+    const incoming = inAdj.get(id) ?? [];
+    // push: floor at current start (never earlier). asap: a constrained task is pulled
+    // to its earliest legal date, so start unbounded-below; a root task stays anchored.
+    let required = mode === 'asap' && incoming.length > 0 ? -Infinity : start.get(id)!;
+    for (const e of incoming) {
       const pStart = start.get(e.predecessorId)!;
       const pEnd = endOf(e.predecessorId);
       const cand =
