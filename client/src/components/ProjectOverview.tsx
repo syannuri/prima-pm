@@ -7,7 +7,7 @@ import { formatIdr, formatIdrShort } from '../lib/format';
 import { formatNum } from '../lib/format';
 import { computeMargin } from '../lib/margin';
 import HealthBulletGauge from './HealthBulletGauge';
-import { smoothPath, areaPath, type Pt } from './chart/smoothPath';
+import EvmTrendChart from './EvmTrendChart';
 import InfoTip from './InfoTip';
 import { useLang } from '../context/LanguageContext';
 
@@ -126,89 +126,6 @@ function Tile({ label, value, tone, hint }: { label: string; value: string; tone
   );
 }
 
-// Linear-interpolate a step-series value at time t (plan value "as of now" for the delta).
-function valAt(series: { t: number; v: number }[], t: number): number | null {
-  if (!series.length) return null;
-  if (t <= series[0].t) return series[0].v;
-  for (let i = 1; i < series.length; i++) {
-    if (t <= series[i].t) {
-      const a = series[i - 1], b = series[i];
-      return a.v + (b.v - a.v) * ((t - a.t) / ((b.t - a.t) || 1));
-    }
-  }
-  return series[series.length - 1].v;
-}
-
-// Compact S-curve: a dashed slate "plan" line + a solid coloured "actual" line with a
-// value label on the latest actual point, so the current figure reads without hovering.
-// Shorter than before (H 92) to keep the Overview tight.
-function MiniSCurve({ planned, actual, actualColor, unitMax, fmt }: {
-  planned: { t: number; v: number }[];
-  actual: { t: number; v: number }[];
-  actualColor: string; // e.g. 'stroke-emerald-500'
-  unitMax?: number; // fixed Y max (100 for %)
-  fmt: (v: number) => string; // label formatter for the latest-actual callout
-}) {
-  const pts = [...planned, ...actual];
-  if (!pts.length) return null;
-  const W = 320, H = 92, padL = 4, padR = 8, padT = 12, padB = 4;
-  const t0 = Math.min(...pts.map((p) => p.t)), t1 = Math.max(...pts.map((p) => p.t));
-  const maxV = unitMax ?? Math.max(1, ...pts.map((p) => p.v)) * 1.12;
-  const X = (t: number) => padL + (t1 > t0 ? (t - t0) / (t1 - t0) : 0) * (W - padL - padR);
-  const Y = (v: number) => padT + (1 - Math.min(v, maxV) / maxV) * (H - padT - padB);
-  const xy = (a: { t: number; v: number }[]): Pt[] => a.map((p) => ({ x: X(p.t), y: Y(p.v) }));
-  const actualPts = xy(actual);
-  const fillClass = actualColor.replace('stroke-', 'fill-');
-  const gradId = `mini-${actualColor.replace(/[^a-z0-9]/gi, '')}`;
-  const last = actual[actual.length - 1];
-  const lx = last ? X(last.t) : 0, ly = last ? Y(last.v) : 0;
-  const labelLeft = lx > W * 0.7; // flip the callout inward near the right edge
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="S-curve plan vs actual">
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" className={fillClass} stopOpacity="0.20" />
-          <stop offset="100%" className={fillClass} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[0, 0.5, 1].map((fr) => <line key={fr} x1={padL} x2={W - padR} y1={Y(maxV * fr)} y2={Y(maxV * fr)} className="stroke-slate-100 dark:stroke-slate-800" strokeWidth="1" />)}
-      {actual.length >= 2 && <path d={areaPath(actualPts, H - padB)} fill={`url(#${gradId})`} stroke="none" />}
-      {planned.length >= 2 && <path d={smoothPath(xy(planned))} fill="none" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" />}
-      {actual.length >= 2 && <path d={smoothPath(actualPts)} fill="none" className={actualColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
-      {actual.map((p, i) => <circle key={i} cx={X(p.t)} cy={Y(p.v)} r="2.4" className={fillClass} stroke="#fff" strokeWidth="0.8" />)}
-      {/* Latest-actual value callout — the one number that matters, on the chart. */}
-      {last && (
-        <>
-          <circle cx={lx} cy={ly} r="3.4" className={fillClass} stroke="#fff" strokeWidth="1.2" />
-          <text x={labelLeft ? lx - 6 : lx + 6} y={Math.max(9, ly - 5)} textAnchor={labelLeft ? 'end' : 'start'} className={`${fillClass} text-[10px] font-bold`} style={{ paintOrder: 'stroke', stroke: '#fff', strokeWidth: 2.6 } as React.CSSProperties}>{fmt(last.v)}</text>
-        </>
-      )}
-    </svg>
-  );
-}
-
-// Informative caption under an S-curve: plan vs actual "as of now" + the signed delta,
-// coloured by whether the actual is favourable (progress ahead = good; cost over = bad).
-function SCurveCaption({ planLabel, actualLabel, actualSwatch, planNow, actualNow, fmt, higherIsGood }: {
-  planLabel: string; actualLabel: string; actualSwatch: string;
-  planNow: number | null; actualNow: number | null;
-  fmt: (v: number) => string; higherIsGood: boolean;
-}) {
-  const delta = planNow != null && actualNow != null ? actualNow - planNow : null;
-  const good = delta == null ? true : higherIsGood ? delta >= 0 : delta <= 0;
-  return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-      <span className="flex items-center gap-1.5"><span className="inline-block h-0 w-4 border-t-[1.5px] border-dashed border-slate-400 dark:border-slate-500" />{planLabel} {planNow != null ? <b className="font-semibold tabular-nums text-slate-600 dark:text-slate-300">{fmt(planNow)}</b> : null}</span>
-      <span className="flex items-center gap-1.5"><span className={`inline-block h-0.5 w-4 rounded ${actualSwatch}`} />{actualLabel} {actualNow != null ? <b className="font-semibold tabular-nums text-slate-600 dark:text-slate-300">{fmt(actualNow)}</b> : null}</span>
-      {delta != null && Math.abs(delta) > 0.5 && (
-        <span className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${good ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
-          {delta > 0 ? '+' : '−'}{fmt(Math.abs(delta))}
-        </span>
-      )}
-    </div>
-  );
-}
-
 export default function ProjectOverview({ projectId, onJump }: { projectId: string; onJump?: (tab: string) => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
@@ -258,23 +175,13 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     ? { text: `Margin ${formatIdrShort(m.projected)} · ${((m.projected / m.revenue) * 100).toFixed(0)}%`, warn: m.projected < 0 }
     : null;
 
-  // S-curve series: plan = the schedule-baseline PV backdrop (continuous), actual = captured
-  // snapshots. Progress curves are PV/EV as a % of BAC; cost curves are the raw PV/AC money.
+  // S-curve: the full EVM trend chart (PV/EV/AC + forecast + markers + hover), shared with the
+  // EVM Trend tab. The tab toggle drives the value unit (physical % of BAC vs money/IDR).
   const trend = trendQ.data;
   const bac = e.bac || trend?.bac || 0;
-  const planCurve = (trend?.plannedCurve ?? []).map((p) => ({ t: +new Date(p.t), v: p.pv }));
-  const snaps = trend?.snapshots ?? [];
-  const actCost = snaps.map((s) => ({ t: +new Date(s.statusDate), v: s.ac }));
-  const planProg = bac > 0 ? planCurve.map((p) => ({ t: p.t, v: (p.v / bac) * 100 })) : [];
-  const actProg = bac > 0 ? snaps.map((s) => ({ t: +new Date(s.statusDate), v: (s.ev / bac) * 100 })) : [];
-  const hasCost = planCurve.length >= 2 || actCost.length > 0;
-  const hasProg = bac > 0 && (planProg.length >= 2 || actProg.length > 0);
-  // Plan vs actual "as of the latest snapshot" — feeds the on-chart callout + delta badge.
-  const progNow = actProg[actProg.length - 1]?.v ?? null;
-  const progPlanNow = progNow != null ? valAt(planProg, actProg[actProg.length - 1].t) : null;
-  const costNow = actCost[actCost.length - 1]?.v ?? null;
-  const costPlanNow = costNow != null ? valAt(planCurve, actCost[actCost.length - 1].t) : null;
-  const pctFmt = (v: number) => `${Math.round(v)}%`;
+  const hasTrend = !!trend && (trend.plannedCurve.length >= 2 || trend.snapshots.length > 0);
+  const hasCost = hasTrend;
+  const hasProg = hasTrend && bac > 0;
 
   // Plan vs projected margin & profit. Plan = Revenue − BAC (the cost baseline); projected =
   // Revenue − EAC (forecast cost at completion) — the honest "where margin will land". We do NOT
@@ -415,57 +322,44 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       </div>
       )}
 
-      {/* S-curve — two views (Progress % / Cost IDR) in one panel with a tab toggle.
-          Saves one full card height on mobile vs the old 2-panel layout. */}
-      {(hasProg || hasCost || trendQ.isLoading) && (
-        <Panel onClick={onJump ? () => onJump('EVM Trend') : undefined} className="lg:col-span-8 lg:order-2">
+      {/* S-curve — the full interactive EVM trend chart (shared with the EVM Trend tab): PV/EV/AC +
+          forecast + today/finish markers + variance shading + hover/zoom. The toggle switches the
+          value unit (physical % vs money). Not a click-to-navigate Panel (that would fight the
+          chart's drag-to-zoom) — an explicit "EVM Trend →" link handles the jump. */}
+      {(hasTrend || trendQ.isLoading) && (
+        <Panel className="lg:col-span-8 lg:order-2">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              {sCurveTab === 'progress'
-                ? (id ? 'Kurva-S — Progres' : 'S-curve — Progress')
-                : (id ? 'Kurva-S — Biaya' : 'S-curve — Cost')}
+              {sCurveTab === 'progress' ? (id ? 'Kurva-S — Progres' : 'S-curve — Progress') : (id ? 'Kurva-S — Biaya' : 'S-curve — Cost')}
             </h3>
-            {/* Tab toggle — stopPropagation so it doesn't fire the Panel's navigate-to-EVM-Trend click */}
-            <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs dark:bg-slate-800">
-              {(['progress', 'cost'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={(e) => { e.stopPropagation(); setSCurveTab(tab); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setSCurveTab(tab); } }}
-                  disabled={(tab === 'progress' && !hasProg) || (tab === 'cost' && !hasCost)}
-                  className={`rounded-md px-2.5 py-1 font-medium transition disabled:opacity-40 ${
-                    sCurveTab === tab
-                      ? 'bg-white text-slate-700 shadow dark:bg-slate-700 dark:text-slate-100'
-                      : 'text-slate-500 dark:text-slate-400'
-                  }`}
-                >
-                  {tab === 'progress' ? (id ? 'Progres' : 'Progress') : (id ? 'Biaya' : 'Cost')}
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs dark:bg-slate-800">
+                {(['progress', 'cost'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setSCurveTab(tab)}
+                    disabled={(tab === 'progress' && !hasProg) || (tab === 'cost' && !hasCost)}
+                    className={`rounded-md px-2.5 py-1 font-medium transition disabled:opacity-40 ${
+                      sCurveTab === tab ? 'bg-white text-slate-700 shadow dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {tab === 'progress' ? (id ? 'Progres' : 'Progress') : (id ? 'Biaya' : 'Cost')}
+                  </button>
+                ))}
+              </div>
+              {onJump && (
+                <button onClick={() => onJump('EVM Trend')} className="whitespace-nowrap text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
+                  {id ? 'EVM Trend →' : 'EVM Trend →'}
                 </button>
-              ))}
+              )}
             </div>
           </div>
           {trendQ.isLoading ? (
             <div className="flex justify-center py-8"><Spinner /></div>
-          ) : sCurveTab === 'progress' ? (
-            hasProg ? (
-              <>
-                <MiniSCurve planned={planProg} actual={actProg} actualColor="stroke-emerald-500" unitMax={100} fmt={pctFmt} />
-                <SCurveCaption planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (EV)' : 'Actual (EV)'} actualSwatch="bg-emerald-500"
-                  planNow={progPlanNow} actualNow={progNow} fmt={pctFmt} higherIsGood />
-              </>
-            ) : (
-              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
-            )
+          ) : hasTrend && trend ? (
+            <EvmTrendChart data={trend} forecast={fcQ.data} mode={sCurveTab === 'progress' ? 'progress' : 'money'} bare compact title={null} />
           ) : (
-            hasCost ? (
-              <>
-                <MiniSCurve planned={planCurve} actual={actCost} actualColor="stroke-brand-500" fmt={formatIdrShort} />
-                <SCurveCaption planLabel={id ? 'Rencana (PV)' : 'Plan (PV)'} actualLabel={id ? 'Aktual (AC)' : 'Actual (AC)'} actualSwatch="bg-brand-500"
-                  planNow={costPlanNow} actualNow={costNow} fmt={formatIdrShort} higherIsGood={false} />
-              </>
-            ) : (
-              <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
-            )
+            <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
           )}
         </Panel>
       )}

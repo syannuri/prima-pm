@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
-import type { EvmSnapshot, EvmTrend } from '../../api/types';
+import type { EvmSnapshot, EvmTrend, Forecast } from '../../api/types';
 import { Button, Card, Input, SectionTitle, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -29,6 +29,11 @@ export default function EvmTrendPanel({ projectId }: { projectId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['evm-trend', projectId, statusDate],
     queryFn: () => api.get<EvmTrend>(`/projects/${projectId}/evm/trend?statusDate=${statusDate}`),
+  });
+  // Forecast payload powers the EAC projection line, cone and the forecast-finish marker.
+  const { data: forecast } = useQuery({
+    queryKey: ['forecast', projectId, 'trend'],
+    queryFn: () => api.get<Forecast>(`/projects/${projectId}/forecast`),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['evm-trend', projectId] });
@@ -90,7 +95,7 @@ export default function EvmTrendPanel({ projectId }: { projectId: string }) {
         <Card><p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No status snapshots captured yet.{canWrite ? ' Pick a status date above and press “Capture status” to record the first point of the trend.' : ' Ask the project manager to capture a status.'}</p></Card>
       ) : (
         <>
-          <EvmTrendChart data={data} />
+          <EvmTrendChart data={data} forecast={forecast} />
           <CpiSpiTrend data={data} />
 
           {/* Snapshot register — table on desktop, cards on mobile (register-table convention) */}
