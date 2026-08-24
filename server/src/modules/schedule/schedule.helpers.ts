@@ -202,6 +202,143 @@ export function computeCpm(tasks: CpmTaskInput[], edges: CpmEdgeInput[]): CpmRes
   return { hasNetwork: true, cyclic: false, projectDuration, tasks: result, criticalTaskIds };
 }
 
+// =====================================================================
+// Auto-scheduling — working-day (weekend-aware) dependency propagation.
+// Pure & unit-testable. Given each leaf's current plan dates + the FS/SS/FF/SF
+// dependency edges, push any successor that VIOLATES its constraint to the
+// earliest legal date (durations preserved) and cascade downstream. Push-only:
+// tasks are never pulled earlier than where they sit, so unrelated work stays put
+// and only genuinely-blocked tasks move ("minimal moves", MS-Project default).
+//
+// All math is in working days (Mon–Fri); Saturdays/Sundays are skipped. Lag is
+// counted in working days too. Holidays are a future extension point (see
+// isWorkingDay). Dates are normalised to UTC midnight so results are stable
+// regardless of the stored time-of-day.
+// =====================================================================
+
+/** True for Mon–Fri. Holidays could be folded in here later. */
+export function isWorkingDay(ms: number): boolean {
+  const day = new Date(ms).getUTCDay();
+  return day !== 0 && day !== 6; // 0 = Sun, 6 = Sat
+}
+
+/** Floor a timestamp to UTC midnight (day granularity). */
+function floorDay(ms: number): number {
+  return Math.floor(ms / MS_PER_DAY) * MS_PER_DAY;
+}
+
+/**
+ * Advance `n` working days from `ms` (n may be negative). The base day itself is
+ * NOT snapped when n === 0. addWorkingDays(Fri, 1) === Mon.
+ */
+export function addWorkingDays(ms: number, n: number): number {
+  let cursor = floorDay(ms);
+  if (n === 0) return cursor;
+  const step = n > 0 ? MS_PER_DAY : -MS_PER_DAY;
+  let remaining = Math.abs(n);
+  while (remaining > 0) {
+    cursor += step;
+    if (isWorkingDay(cursor)) remaining--;
+  }
+  return cursor;
+}
+
+/** Count working days in the half-open span [a, b) (>= 0). A task's "duration". */
+export function workingDaysBetween(aMs: number, bMs: number): number {
+  let cursor = floorDay(aMs);
+  const end = floorDay(bMs);
+  if (end <= cursor) return 0;
+  let count = 0;
+  while (cursor < end) {
+    if (isWorkingDay(cursor)) count++;
+    cursor += MS_PER_DAY;
+  }
+  return count;
+}
+
+export interface AutoTaskInput { id: string; planStart: Date; planEnd: Date }
+export interface AutoScheduledTask { start: number; end: number } // epoch ms, UTC midnight
+export interface AutoScheduleResult {
+  cyclic: boolean;
+  tasks: Record<string, AutoScheduledTask>;
+  /** ids whose start OR end moved vs. their input plan dates. */
+  moved: string[];
+}
+
+/**
+ * Push-only, weekend-aware forward pass. Reuses the CPM constraint formulas but
+ * in working-day date space. Only leaf tasks should be passed (parents roll up).
+ */
+export function autoSchedule(tasks: AutoTaskInput[], edges: CpmEdgeInput[]): AutoScheduleResult {
+  const ids = new Set(tasks.map((t) => t.id));
+  const es_edges = edges.filter((e) => ids.has(e.predecessorId) && ids.has(e.successorId));
+  const origStart = new Map(tasks.map((t) => [t.id, floorDay(+t.planStart)]));
+  const durWd = new Map(tasks.map((t) => [t.id, workingDaysBetween(+t.planStart, +t.planEnd)]));
+
+  const emptyResult = (cyclic: boolean): AutoScheduleResult => ({
+    cyclic,
+    tasks: Object.fromEntries(tasks.map((t) => [t.id, { start: origStart.get(t.id)!, end: addWorkingDays(origStart.get(t.id)!, durWd.get(t.id)!) }])),
+    moved: [],
+  });
+  if (es_edges.length === 0) return emptyResult(false);
+  if (hasDependencyCycle(es_edges.map((e) => ({ from: e.predecessorId, to: e.successorId })))) {
+    return emptyResult(true); // leave dates untouched if the network is cyclic
+  }
+
+  // Adjacency + Kahn topological order over the task set.
+  const inAdj = new Map<string, CpmEdgeInput[]>();
+  const outAdj = new Map<string, CpmEdgeInput[]>();
+  const indeg = new Map<string, number>();
+  for (const t of tasks) { inAdj.set(t.id, []); outAdj.set(t.id, []); indeg.set(t.id, 0); }
+  for (const e of es_edges) {
+    inAdj.get(e.successorId)!.push(e);
+    outAdj.get(e.predecessorId)!.push(e);
+    indeg.set(e.successorId, (indeg.get(e.successorId) ?? 0) + 1);
+  }
+  const topo: string[] = [];
+  const queue = tasks.filter((t) => (indeg.get(t.id) ?? 0) === 0).map((t) => t.id);
+  while (queue.length) {
+    const n = queue.shift()!;
+    topo.push(n);
+    for (const e of outAdj.get(n) ?? []) {
+      indeg.set(e.successorId, (indeg.get(e.successorId) ?? 0) - 1);
+      if ((indeg.get(e.successorId) ?? 0) === 0) queue.push(e.successorId);
+    }
+  }
+
+  const start = new Map(origStart);
+  const D = (id: string) => durWd.get(id) ?? 0;
+  const endOf = (id: string) => addWorkingDays(start.get(id)!, D(id));
+  for (const id of topo) {
+    let required = start.get(id)!; // push-only: never earlier than where it sits
+    for (const e of inAdj.get(id) ?? []) {
+      const pStart = start.get(e.predecessorId)!;
+      const pEnd = endOf(e.predecessorId);
+      const cand =
+        e.type === 'FS' ? addWorkingDays(pEnd, e.lagDays) :
+        e.type === 'SS' ? addWorkingDays(pStart, e.lagDays) :
+        // FF/SF constrain the successor's FINISH; back off its duration to a start.
+        e.type === 'FF' ? addWorkingDays(addWorkingDays(pEnd, e.lagDays), -D(id)) :
+        /* SF */ addWorkingDays(addWorkingDays(pStart, e.lagDays), -D(id));
+      if (cand > required) required = cand;
+    }
+    start.set(id, required);
+  }
+
+  const result: Record<string, AutoScheduledTask> = {};
+  const moved: string[] = [];
+  for (const t of tasks) {
+    const s = start.get(t.id)!;
+    const e = addWorkingDays(s, D(t.id));
+    result[t.id] = { start: s, end: e };
+    // "moved" = pushed by a constraint (start shifted forward). We deliberately do
+    // NOT flag disconnected tasks whose stored span merely straddled a weekend —
+    // push-only means unrelated work stays exactly where it is.
+    if (s !== origStart.get(t.id)!) moved.push(t.id);
+  }
+  return { cyclic: false, tasks: result, moved };
+}
+
 // --- Manpower <-> Schedule reconciliation ---
 
 export interface ManpowerSyncInput {
