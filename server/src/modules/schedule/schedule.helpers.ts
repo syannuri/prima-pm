@@ -227,6 +227,14 @@ function floorDay(ms: number): number {
   return Math.floor(ms / MS_PER_DAY) * MS_PER_DAY;
 }
 
+// Hard iteration caps: these helpers walk calendar days one at a time, so an out-of-range input
+// (a huge lag, a plan date centuries out) would otherwise spin the event loop for billions of
+// iterations — a DoS on the shared multi-tenant server. Inputs are validated at the API edge
+// (schedule.schemas); this is defense-in-depth so NO caller can hang the process. The caps sit far
+// above any legitimate value (~380 years of working days / ~1150 years of span).
+const MAX_WORKING_DAYS = 100_000;
+const MAX_SPAN_DAYS = 420_000;
+
 /**
  * Advance `n` working days from `ms` (n may be negative). The base day itself is
  * NOT snapped when n === 0. addWorkingDays(Fri, 1) === Mon.
@@ -235,7 +243,7 @@ export function addWorkingDays(ms: number, n: number): number {
   let cursor = floorDay(ms);
   if (n === 0) return cursor;
   const step = n > 0 ? MS_PER_DAY : -MS_PER_DAY;
-  let remaining = Math.abs(n);
+  let remaining = Math.min(Math.abs(n), MAX_WORKING_DAYS); // cap: never loop unboundedly
   while (remaining > 0) {
     cursor += step;
     if (isWorkingDay(cursor)) remaining--;
@@ -249,7 +257,8 @@ export function workingDaysBetween(aMs: number, bMs: number): number {
   const end = floorDay(bMs);
   if (end <= cursor) return 0;
   let count = 0;
-  while (cursor < end) {
+  let guard = MAX_SPAN_DAYS; // cap: never loop unboundedly over an out-of-range span
+  while (cursor < end && guard-- > 0) {
     if (isWorkingDay(cursor)) count++;
     cursor += MS_PER_DAY;
   }

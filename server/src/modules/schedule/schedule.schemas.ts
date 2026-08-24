@@ -2,6 +2,14 @@ import { z } from 'zod';
 
 export const DEPENDENCY_TYPES = ['FS', 'SS', 'FF', 'SF'] as const;
 
+// Plan dates and dependency lag feed the working-day scheduler, which walks calendar days one at a
+// time (see schedule.helpers). Bounding them here keeps a single request from spinning the Node
+// event loop for billions of iterations (a DoS on the shared, pooled multi-tenant server).
+const PLAN_MIN = new Date('2000-01-01T00:00:00.000Z');
+const PLAN_MAX = new Date('2100-12-31T00:00:00.000Z');
+const planDate = () => z.coerce.date().min(PLAN_MIN, 'date is out of the supported range').max(PLAN_MAX, 'date is out of the supported range');
+const LAG_MAX = 3650; // ±10 years of working days — far beyond any real lag/lead
+
 export const upsertTaskSchema = z
   .object({
     name: z.string().min(2).max(200),
@@ -11,10 +19,10 @@ export const upsertTaskSchema = z
     deliverable: z.string().max(1000).nullable().optional(),
     acceptanceCriteria: z.string().max(2000).nullable().optional(),
     parentTaskId: z.string().uuid().nullable().optional(),
-    planStart: z.coerce.date(),
-    planEnd: z.coerce.date(),
-    actualStart: z.coerce.date().nullable().optional(),
-    actualFinish: z.coerce.date().nullable().optional(),
+    planStart: planDate(),
+    planEnd: planDate(),
+    actualStart: planDate().nullable().optional(),
+    actualFinish: planDate().nullable().optional(),
     picUserId: z.string().uuid().nullable().optional(),
     // picResourceId = the LEAD owner. ownerResourceIds = the FULL owner set (lead + co-owners).
     // When ownerResourceIds is provided the task's owner links are replaced with it; when omitted
@@ -39,13 +47,13 @@ export const upsertTaskSchema = z
 export const dependencySchema = z.object({
   predecessorId: z.string().uuid(),
   type: z.enum(DEPENDENCY_TYPES).default('FS'),
-  lagDays: z.coerce.number().int().default(0),
+  lagDays: z.coerce.number().int().min(-LAG_MAX).max(LAG_MAX).default(0),
 });
 
 // Edit an existing link's type/lag (the predecessor↔successor pair is immutable).
 export const dependencyEditSchema = z.object({
   type: z.enum(DEPENDENCY_TYPES),
-  lagDays: z.coerce.number().int(),
+  lagDays: z.coerce.number().int().min(-LAG_MAX).max(LAG_MAX),
 });
 
 export const evmQuerySchema = z.object({

@@ -42,6 +42,19 @@ describe('working-day date helpers', () => {
     expect(workingDaysBetween(ms('2026-06-05'), ms('2026-06-08'))).toBe(1); // Fri only ([Fri,Mon))
     expect(workingDaysBetween(ms('2026-06-01'), ms('2026-06-01'))).toBe(0); // milestone
   });
+
+  // DoS guard (security M1): out-of-range inputs must NOT loop unboundedly. These finish instantly
+  // because of the hard iteration caps; a regression would hang the test (and the event loop).
+  it('caps addWorkingDays so a huge lag cannot spin the event loop', () => {
+    const r = addWorkingDays(ms('2026-06-01'), 1_000_000_000);
+    expect(Number.isFinite(r)).toBe(true);
+    expect(r).toBe(addWorkingDays(ms('2026-06-01'), 100_000)); // both clamp to the same cap
+  });
+  it('caps workingDaysBetween so an out-of-range span cannot spin the event loop', () => {
+    const r = workingDaysBetween(ms('2026-06-01'), +new Date('9999-01-01T00:00:00.000Z'));
+    expect(Number.isFinite(r)).toBe(true);
+    expect(r).toBeLessThanOrEqual(420_000);
+  });
 });
 
 describe('autoSchedule', () => {
