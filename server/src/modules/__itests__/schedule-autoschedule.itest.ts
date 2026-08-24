@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
-import { addDependency, applyAutoSchedule } from '../schedule/schedule.service.js';
+import { addDependency, applyAutoSchedule, updateDependency } from '../schedule/schedule.service.js';
 import { setScheduleBaseline } from '../schedule/schedule.service.js';
 import { setBaselineLock } from '../projects/baseline.service.js';
 
@@ -79,6 +79,18 @@ describe('auto-schedule — weekend-aware dependency propagation', () => {
     expect(preview.moved.map((m) => m.id)).toEqual([b.id]);
     const bAfter = await prisma.task.findUniqueOrThrow({ where: { id: b.id } });
     expect(ymd(bAfter.planStart)).toBe('2026-06-01'); // unchanged — dry run
+  });
+
+  it('editing a link lag re-settles the schedule forward', async () => {
+    const p = await project();
+    const a = await leaf(p.id, '1', 'A', 1, 3); // Mon–Wed (finishes Wed 06-03)
+    const b = await leaf(p.id, '2', 'B', 1, 2); // Mon–Tue
+    const dep = await addDependency(p.id, b.id, { predecessorId: a.id, type: 'FS', lagDays: 0 }, pmId);
+    await applyAutoSchedule(p.id, { actorId: pmId }); // B → Wed
+    await updateDependency(p.id, dep.id, { type: 'FS', lagDays: 2 }, pmId);
+    await applyAutoSchedule(p.id, { actorId: pmId }); // B → Wed + 2 wd = Fri
+    const bAfter = await prisma.task.findUniqueOrThrow({ where: { id: b.id } });
+    expect(ymd(bAfter.planStart)).toBe('2026-06-05');
   });
 
   it('refuses to persist when the baseline is locked', async () => {

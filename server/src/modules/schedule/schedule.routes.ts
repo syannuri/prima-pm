@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
-import { upsertTaskSchema, dependencySchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema } from './schedule.schemas.js';
+import { upsertTaskSchema, dependencySchema, dependencyEditSchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
 
@@ -112,6 +112,13 @@ router.post('/tasks/:taskId/dependencies', ...canWrite, validateBody(dependencyS
   // A new link can immediately make the successor illegal — settle the schedule now.
   const auto = await svc.applyAutoSchedule(req.params.projectId, { actorId: req.user!.id });
   res.status(201).json({ dependency: dep, autoScheduled: auto.moved });
+}));
+
+// Edit a link's type (FS/SS/FF/SF) / lag, then re-settle the schedule.
+router.patch('/dependencies/:depId', ...canWrite, validateBody(dependencyEditSchema), asyncHandler(async (req, res) => {
+  const dep = await svc.updateDependency(req.params.projectId, req.params.depId, req.body, req.user!.id);
+  const auto = await svc.applyAutoSchedule(req.params.projectId, { actorId: req.user!.id });
+  res.json({ dependency: dep, autoScheduled: auto.moved });
 }));
 
 router.delete('/dependencies/:depId', ...canWrite, asyncHandler(async (req, res) => {

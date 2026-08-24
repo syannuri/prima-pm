@@ -22,7 +22,7 @@ import {
   type CpmDepType,
   type AutoTaskInput,
 } from './schedule.helpers.js';
-import type { DependencyInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
+import type { DependencyInput, DependencyEditInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
   v == null ? 0 : Number(v);
@@ -610,6 +610,25 @@ export async function applyAutoSchedule(
     });
   }
   return { cyclic: result.cyclic, moved };
+}
+
+export async function updateDependency(
+  projectId: string,
+  depId: string,
+  input: DependencyEditInput,
+  actorId: string,
+) {
+  const dep = await prisma.taskDependency.findFirst({
+    where: { id: depId, predecessor: { projectId } },
+  });
+  if (!dep) throw NotFound('Dependency not found');
+  await assertBaselineUnlocked(projectId);
+  const updated = await prisma.taskDependency.update({
+    where: { id: depId },
+    data: { type: input.type, lagDays: input.lagDays },
+  });
+  await writeAudit({ projectId, userId: actorId, entity: 'TaskDependency', entityId: depId, action: 'UPDATE', before: dep, after: updated });
+  return updated;
 }
 
 export async function deleteDependency(projectId: string, depId: string, actorId: string) {
