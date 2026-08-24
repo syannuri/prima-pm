@@ -718,9 +718,21 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
       const d = new Date(min); d.setUTCHours(0, 0, 0, 0);
       while (+d <= max) { const first = d.getUTCDate() === 1; ticks.push({ key: `${+d}`, label: first ? d.toLocaleString('en', { month: 'short', timeZone: 'UTC' }) : String(d.getUTCDate()), leftPct: pct(+d), major: first }); d.setUTCDate(d.getUTCDate() + 1); }
     }
+    // Weekend shading — one faint band per Saturday & Sunday. Only at day zoom; at week/month a
+    // 2-day band would be sub-pixel noise (and the scheduler already keeps bar dates off weekends).
+    const weekends: { key: string; leftPct: number; widthPct: number }[] = [];
+    if (effScale === 'day') {
+      const dayPct = (day / span) * 100;
+      const d = new Date(min); d.setUTCHours(0, 0, 0, 0);
+      while (+d <= max) {
+        const dow = d.getUTCDay();
+        if (dow === 0 || dow === 6) weekends.push({ key: `w${+d}`, leftPct: pct(+d), widthPct: dayPct });
+        d.setUTCDate(d.getUTCDate() + 1);
+      }
+    }
     const todayPct = now >= min && now <= max ? pct(now) : null;
     const minBarPct = (6 / width) * 100; // keep tiny tasks/milestones visible at any scale
-    return { min, span, width, ticks, todayPct, minBarPct, effScale };
+    return { min, span, width, ticks, weekends, todayPct, minBarPct, effScale };
   }, [rows, rolled, scale, zoom, fitW]);
   // Mirror the live axis into a ref so the (once-bound) wheel/zoom handlers never read a stale copy.
   axisRef.current = axis ? { width: axis.width, effScale: axis.effScale } : null;
@@ -1706,6 +1718,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         className={`group/bar relative h-8 ${linkFrom && linkFrom !== node.id ? 'cursor-crosshair rounded ring-1 ring-inset ring-brand-400/50 hover:bg-brand-500/5' : ''}`}
                         style={{ width: axis?.width }}
                       >
+                        {/* Weekend columns (day zoom only) — faint band behind bars/gridlines */}
+                        {axis?.weekends.map((w) => (
+                          <div key={w.key} aria-hidden className="pointer-events-none absolute inset-y-0 bg-slate-200/45 dark:bg-slate-700/30" style={{ left: `${w.leftPct}%`, width: `${w.widthPct}%` }} />
+                        ))}
                         {/* month/period gridlines + today marker for orientation */}
                         {axis?.ticks.filter((t) => t.major).map((t) => (
                           <div key={t.key} className="absolute inset-y-0 w-px bg-slate-200/70 dark:bg-slate-700/50" style={{ left: `${t.leftPct}%` }} />
