@@ -9,6 +9,7 @@ import { computeMargin } from '../lib/margin';
 import HealthBulletGauge from './HealthBulletGauge';
 import EvmTrendChart from './EvmTrendChart';
 import ExtractFromNotes from './ExtractFromNotes';
+import PredictiveCard from './PredictiveCard';
 import InfoTip from './InfoTip';
 import { useLang } from '../context/LanguageContext';
 
@@ -212,6 +213,8 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     <div className="space-y-3 lg:grid lg:grid-cols-12 lg:gap-3 lg:space-y-0">
       {/* Stage A — extract task-progress + issues from pasted notes (renders nothing when AI is off). */}
       <div className="lg:col-span-12 lg:order-first"><ExtractFromNotes projectId={projectId} /></div>
+      {/* Stage B — deterministic predictive slip/overrun signals (always on; not gated by AI). */}
+      <div className="lg:col-span-12 lg:order-none"><PredictiveCard projectId={projectId} /></div>
       {/* Performance — Schedule (SPI) & Cost (CPI) bullet gauges vs the 1.0 target, then progress. */}
       <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="lg:col-span-4 lg:order-1">
         <HealthBulletGauge spi={e.spi} cpi={e.cpi} hasSchedule={e.pv > 0} hasCost={e.ac > 0} id={id} />

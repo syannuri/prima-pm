@@ -11,6 +11,7 @@ import { getActivationReadiness, getActivationReview, notifyActivationReady } fr
 import { getNextSteps } from './nextsteps.js';
 import { aiAvailableForProject } from '../charter/crImpact.service.js';
 import { extractFromNotes } from '../dataextract/dataExtract.service.js';
+import { getProjectPredictive } from '../predictive/predictive.service.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
 import charterRoutes from '../charter/charter.routes.js';
@@ -297,6 +298,15 @@ router.post(
       return;
     }
     res.json(await extractFromNotes(req.params.projectId, req.body.text));
+  }),
+);
+
+// Predictive slip/overrun signals (deterministic EVM heuristic — always on, no AI key needed).
+router.get(
+  '/:projectId/predictive',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    res.json(await getProjectPredictive(req.params.projectId));
   }),
 );
 
