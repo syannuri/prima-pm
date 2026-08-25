@@ -114,6 +114,16 @@ describe('Approval workflows', () => {
     expect((await prisma.changeRequest.findUnique({ where: { id: cr.id } }))?.status).toBe('APPROVED');
   });
 
+  it('routes an "Approval needed" notification that deep-links to the /approvals inbox', async () => {
+    await createWorkflow({ name: 'PM gate', steps: [{ name: 'PM', mode: 'ANY', approvers: [{ kind: 'PROJECT_PM' }] }] }, adminId);
+    const cr = await createChangeRequest(projectId, crInput(), adminId);
+    const req = await prisma.approvalRequest.findFirst({ where: { entityId: cr.id } });
+    // The PM (dynamic approver) is notified; clicking that notification must land on /approvals,
+    // focused on this request — not the project's Change Req tab.
+    const notif = await prisma.notification.findFirst({ where: { userId: pmId, type: 'APPROVAL_PENDING' } });
+    expect(notif?.link).toBe(`/approvals?focus=${req!.id}`);
+  });
+
   it('an ALL step needs every listed approver before it clears', async () => {
     await createWorkflow({
       name: 'Both must sign',

@@ -180,6 +180,9 @@ const entityUrl = (projectId: string, entityType: EntityType) =>
   `${appBaseUrl()}/projects/${projectId}?tab=${encodeURIComponent(entityTab(entityType))}`;
 // The approvals inbox, focused on the specific request (client scrolls/highlights it).
 const inboxUrl = (requestId: string) => `${appBaseUrl()}/approvals?focus=${encodeURIComponent(requestId)}`;
+// Relative in-app path for the bell / notification-center deep-link (Notification.link) — so clicking
+// an "Approval needed" notification lands the approver on the /approvals inbox, not the project tab.
+const inboxPath = (requestId: string) => `/approvals?focus=${encodeURIComponent(requestId)}`;
 // `on "Name" (CODE)` — the shared project-context phrase used across the emails.
 const projectWhere = (project: { name: string | null; code: string | null } | null) =>
   `on "${project?.name ?? 'a project'}"${project?.code ? ` (${project.code})` : ''}`;
@@ -244,6 +247,7 @@ async function notifyStepApprovers(ref: EntityRef, step: StepWithApprovers, excl
     title: 'Approval needed',
     body: `${cap(label)} ${where} needs your approval (step "${step.name}").`,
     projectId: ref.projectId,
+    link: inboxPath(ref.id),
   })));
   // Transactional email alongside the in-app notice — deep-links to the focused inbox row.
   if (emailEnabled()) {
@@ -594,6 +598,7 @@ export async function escalateOverdueApprovals(now = new Date()) {
           title: 'Approval overdue',
           body: `${cap(label)} ${where} is past its deadline at step "${step?.name ?? ''}".`,
           projectId: r.projectId,
+          link: inboxPath(r.id),
         })));
         // Transactional email to the escalation target(s) — deep-links to the focused inbox row.
         if (emailEnabled()) {
