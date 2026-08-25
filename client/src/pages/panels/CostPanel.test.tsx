@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../components/Toast';
 import { ConfirmProvider } from '../../components/ConfirmDialog';
+import { LanguageProvider } from '../../context/LanguageContext';
 import CostPanel from './CostPanel';
 
 // Regression guard for the EVM cache-invalidation fix:
@@ -66,11 +67,13 @@ function renderPanel() {
   const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
   render(
     <QueryClientProvider client={qc}>
-      <ToastProvider>
-        <ConfirmProvider>
-          <CostPanel projectId="p1" />
-        </ConfirmProvider>
-      </ToastProvider>
+      <LanguageProvider>
+        <ToastProvider>
+          <ConfirmProvider>
+            <CostPanel projectId="p1" />
+          </ConfirmProvider>
+        </ToastProvider>
+      </LanguageProvider>
     </QueryClientProvider>,
   );
   return { invalidateSpy };
