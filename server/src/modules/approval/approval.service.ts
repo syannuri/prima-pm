@@ -489,12 +489,14 @@ export async function listMyApprovals(userId: string) {
         : Promise.resolve(null),
       prisma.project.findUnique({ where: { id: r.projectId }, select: { id: true, name: true, code: true } }),
     ]);
-    const payload = (r.payload ?? null) as { reason?: string } | null;
+    const payload = (r.payload ?? null) as { reason?: string; actionType?: string; rationale?: string | null } | null;
     out.push({
       id: r.id,
       entityType: r.entityType,
       actionLabel: cap(await entityLabel({ entityType: r.entityType, entityId: r.entityId })),
       reason: payload?.reason ?? null,
+      // Stage C — the AI-proposed action's kind + rationale so the inbox can render a badge + note.
+      aiAction: r.entityType === 'AI_ACTION' ? { actionType: payload?.actionType ?? null, rationale: payload?.rationale ?? null } : null,
       workflowName: r.workflow.name,
       stepName: step.name,
       stepOrder: step.order,

@@ -1,14 +1,22 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import request from 'supertest';
+import { createApp } from '../../app.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
+import { signAccessToken } from '../../lib/jwt.js';
 import { proposeAction } from '../aiActions/aiActions.service.js';
 import { decideApproval } from '../approval/approval.service.js';
+
+const app = createApp();
+const api = (p: string) => `/api/v1${p}`;
+const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 // Stage C — AI-proposed actions routed through the approval engine. proposeAction does NOT call the
 // LLM (the draft arrives as params), so we only need the env gate on; no fake AiPort. Runs with
 // MULTITENANCY_ENFORCE=false, so PROJECT_PM/ROLE approvers resolve via the global User.role.
 
 let adminId: string, pmId: string;
+let pmToken: string, viewerToken: string;
 let projectId: string, taskId: string;
 let tenantProjectId: string, tenantId: string;
 let prevKey: string | undefined;
@@ -23,7 +31,10 @@ beforeAll(async () => {
 
   const admin = await prisma.user.create({ data: { name: 'AIA Admin', email: 'aia-admin@corp.test', role: 'ADMIN', passwordHash: await hashPassword('Admin-Pass-1'), isActive: true } });
   const pm = await prisma.user.create({ data: { name: 'AIA PM', email: 'aia-pm@corp.test', role: 'PROJECT_MANAGER', passwordHash: await hashPassword('Pm-Pass-1'), isActive: true } });
+  const viewer = await prisma.user.create({ data: { name: 'AIA Viewer', email: 'aia-view@corp.test', role: 'VIEWER', passwordHash: await hashPassword('View-Pass-1'), isActive: true } });
   adminId = admin.id; pmId = pm.id;
+  pmToken = signAccessToken({ sub: pm.id, role: 'PROJECT_MANAGER', email: pm.email });
+  viewerToken = signAccessToken({ sub: viewer.id, role: 'VIEWER', email: viewer.email });
 
   const project = await prisma.project.create({ data: { code: 'AIA-1', name: 'AI Actions Test', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: pm.id } });
   projectId = project.id;
@@ -119,5 +130,35 @@ describe('Stage C — AI-proposed actions', () => {
     expect(res.status).toBe('REJECTED');
     expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('REJECTED');
     expect(await prisma.risk.count({ where: { projectId, title: 'Should not exist' } })).toBe(0);
+  });
+
+  // ---- HTTP surface -------------------------------------------------------------------------------
+
+  it('POST /ai-actions/propose stages a proposal (201) for the owning PM', async () => {
+    const res = await request(app)
+      .post(api(`/projects/${projectId}/ai-actions/propose`))
+      .set(bearer(pmToken))
+      .send({ actionType: 'TIDY_SCHEDULE', params: { mode: 'push' }, rationale: 'dependencies drifted' });
+    expect(res.status).toBe(201);
+    expect(res.body.routed).toBe(true);
+    expect(await prisma.aiActionProposal.count({ where: { projectId, actionType: 'TIDY_SCHEDULE' } })).toBe(1);
+  });
+
+  it('POST /ai-actions/propose is 403 for a read-only VIEWER', async () => {
+    const res = await request(app)
+      .post(api(`/projects/${projectId}/ai-actions/propose`))
+      .set(bearer(viewerToken))
+      .send({ actionType: 'TIDY_SCHEDULE', params: {} });
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /ai-actions/available reflects the env gate; GET /ai-actions lists proposals', async () => {
+    await proposeAction({ projectId, actionType: 'CREATE_RISK', params: { title: 'Listed risk', probabilityScore: 3, impactScore: 3 } }, pmId);
+    const avail = await request(app).get(api(`/projects/${projectId}/ai-actions/available`)).set(bearer(pmToken));
+    expect(avail.status).toBe(200);
+    expect(avail.body.aiActionsAvailable).toBe(true); // no tenant on this project → env gate alone
+    const list = await request(app).get(api(`/projects/${projectId}/ai-actions`)).set(bearer(pmToken));
+    expect(list.status).toBe(200);
+    expect(list.body.proposals.length).toBeGreaterThanOrEqual(1);
   });
 });

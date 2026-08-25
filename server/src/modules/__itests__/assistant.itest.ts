@@ -124,6 +124,32 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(out.list).not.toContain('OTHER-1');
   });
 
+  it('STAGE C: Anett can propose_action (stages a proposal for approval, never executes)', async () => {
+    // Opt the tenant into AI actions (separate, stronger switch than the narrative gate). No charter
+    // needed: this test only STAGES a proposal (PENDING) — the risk executor runs on approval, later.
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: true } });
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ executeTool }) {
+        const foreign = await executeTool('propose_action', { project_code: 'OTHER-1', action_type: 'TIDY_SCHEDULE', params: {} });
+        const mine = await executeTool('propose_action', { project_code: 'MINE-1', action_type: 'CREATE_RISK', params: { title: 'Vendor may slip', probabilityScore: 4, impactScore: 3 }, rationale: 'SPI down' });
+        return JSON.stringify({ foreign, mine });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    expect(out.foreign).toContain('tidak dapat diakses'); // cross-PM project is refused
+    expect(out.mine).toContain('"ok":true');
+    // The proposal landed as PENDING (nothing applied yet).
+    const proposals = await runWithTenant(aico, () => prisma.aiActionProposal.findMany({ where: { actionType: 'CREATE_RISK' } }));
+    expect(proposals.length).toBe(1);
+    expect(proposals[0].status).toBe('PENDING');
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
+  });
+
   it('502 when the model declines / returns nothing', async () => {
     __setAiPort({ async draftJson() { return null; }, async draftNarrative() { return null; }, async runToolLoop() { return null; } });
     const res = await ask(pmToken);

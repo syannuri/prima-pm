@@ -219,6 +219,16 @@ export async function proposeAction(input: ProposeInput, actorId: string): Promi
   return { id: proposal.id, routed: Boolean(started) };
 }
 
+// Recent proposals for a project (any status) — drives a small "AI actions" history/status surface.
+export async function listProjectProposals(projectId: string) {
+  return prisma.aiActionProposal.findMany({
+    where: { projectId },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+    select: { id: true, actionType: true, params: true, rationale: true, confidence: true, status: true, failureNote: true, createdAt: true, appliedAt: true },
+  });
+}
+
 // ---- Finalize (called by approval.finalize on the terminal decision) ----------------------------
 
 // Approved → run the executor with the approver as actor; mark APPLIED, or FAILED if it throws (no

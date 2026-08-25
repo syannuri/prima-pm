@@ -12,6 +12,7 @@ import { getNextSteps } from './nextsteps.js';
 import { aiAvailableForProject } from '../charter/crImpact.service.js';
 import { extractFromNotes } from '../dataextract/dataExtract.service.js';
 import { getProjectPredictive } from '../predictive/predictive.service.js';
+import { aiActionsAvailableForProject, proposeAction, listProjectProposals, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
 import charterRoutes from '../charter/charter.routes.js';
@@ -307,6 +308,49 @@ router.get(
   requireProjectAccess(),
   asyncHandler(async (req, res) => {
     res.json(await getProjectPredictive(req.params.projectId));
+  }),
+);
+
+// Stage C — semi-autonomous AI actions. The AI drafts a whitelisted write; it is routed through the
+// approval engine and only executes on human approval. STRONGER gate than the other AI features:
+// env (503) + a SEPARATE per-tenant opt-in Tenant.aiActionsEnabled (403 in the service).
+router.get(
+  '/:projectId/ai-actions/available',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    res.json({ aiActionsAvailable: await aiActionsAvailableForProject(req.params.projectId) });
+  }),
+);
+
+// Recent AI-action proposals for the project (any status) — a small history/status surface.
+router.get(
+  '/:projectId/ai-actions',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    res.json({ proposals: await listProjectProposals(req.params.projectId) });
+  }),
+);
+
+// Stage a proposal (write access). The AI-drafted params arrive in the body; the service validates
+// them against the per-action schema and routes the proposal for approval. Nothing is applied here.
+router.post(
+  '/:projectId/ai-actions/propose',
+  requireProjectAccess({ write: true }),
+  validateBody(z.object({
+    actionType: z.enum(AI_ACTION_TYPES),
+    params: z.unknown(),
+    rationale: z.string().max(2000).optional(),
+    confidence: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  })),
+  asyncHandler(async (req, res) => {
+    const result = await proposeAction({
+      projectId: req.params.projectId,
+      actionType: req.body.actionType,
+      params: req.body.params,
+      rationale: req.body.rationale ?? null,
+      confidence: req.body.confidence ?? null,
+    }, req.user!.id);
+    res.status(201).json(result);
   }),
 );
 

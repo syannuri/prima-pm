@@ -6,6 +6,7 @@ import { aiEnabled, getAiPort, type AiToolDef } from '../../lib/ai.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
+import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 
 // Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
 // projects the CALLER can access, via a server-side manual tool loop. The API key and all data
@@ -61,6 +62,34 @@ const TOOLS: AiToolDef[] = [
   },
 ];
 
+// Stage C — the ONE write-adjacent tool. It does NOT change data: it stages an AI-proposed action
+// into the approval engine, and the action runs only after a human approves. Added to the loop only
+// when the caller's tenant has opted into AI actions (aiActionsEnabled). Params vary per action_type
+// and are validated server-side; a bad shape returns an error the model can relay.
+const PROPOSE_ACTION_TOOL: AiToolDef = {
+  name: 'propose_action',
+  description: [
+    'USULKAN sebuah aksi untuk proyek — TIDAK langsung dijalankan; harus disetujui manusia lewat approval dulu.',
+    'Gunakan hanya bila pengguna secara eksplisit meminta melakukan/mengusulkan perubahan. Selalu konfirmasi ke pengguna sebelum memanggil.',
+    'action_type & bentuk params:',
+    '- CREATE_RISK: { title (>=3 char), probabilityScore 1-5, impactScore 1-5, kind "THREAT"|"OPPORTUNITY"?, description? }',
+    '- CREATE_CHANGE_REQUEST: { title, description (>=5 char), impactAreas: ["SCOPE"?...] salah satu dari CHARTER/COST/SCHEDULE/RESOURCE/QUALITY/RISK, magnitude "MINOR"|"MAJOR"?, chargeable? , amountIdr? }',
+    '- TIDY_SCHEDULE: { mode "push"|"asap"? } — rapikan jadwal mengikuti dependensi.',
+    'project_code dari list_projects. rationale = alasan singkat mengapa aksi ini diusulkan.',
+  ].join('\n'),
+  input_schema: {
+    type: 'object',
+    properties: {
+      project_code: { type: 'string' },
+      action_type: { type: 'string', enum: [...AI_ACTION_TYPES] },
+      params: { type: 'object', description: 'Parameter aksi sesuai action_type (lihat deskripsi tool).' },
+      rationale: { type: 'string', description: 'Alasan singkat aksi diusulkan.' },
+    },
+    required: ['project_code', 'action_type', 'params'],
+    additionalProperties: false,
+  },
+};
+
 // Per-tenant opt-in for the CALLER's tenant (no single project here). Applies only when a tenant
 // exists (single-tenant deploy with no tenant → env gate alone governs).
 async function assertCallerTenantOptedIn(): Promise<void> {
@@ -70,6 +99,15 @@ async function assertCallerTenantOptedIn(): Promise<void> {
   if (tenant?.aiNarrativeEnabled !== true) {
     throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
   }
+}
+
+// Whether the CALLER's tenant has opted into AI actions (Stage C) — a SEPARATE, stronger opt-in than
+// the narrative gate above. Governs whether Anett is given the propose_action tool at all.
+async function callerActionsEnabled(): Promise<boolean> {
+  const tid = getTenantStore()?.tenantId;
+  if (!tid) return true; // single-tenant deploy: env gate alone governs
+  const tenant = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiActionsEnabled: true } });
+  return tenant?.aiActionsEnabled === true;
 }
 
 // Whether the assistant is usable for the caller right now: global env gate + the caller tenant's
@@ -97,9 +135,9 @@ function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
 // Build the executeTool callback bound to the caller's accessible project set. Returns a JSON string
 // per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
 // the model can tell the user rather than crash the loop.
-function makeExecuteTool(accessibleByCode: Map<string, string>) {
+function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role }) {
   return async (name: string, input: unknown): Promise<string> => {
-    const args = (input ?? {}) as { project_code?: string };
+    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string };
     const resolveId = (): string | null => {
       const code = typeof args.project_code === 'string' ? args.project_code.trim() : '';
       return accessibleByCode.get(code) ?? null;
@@ -124,6 +162,28 @@ function makeExecuteTool(accessibleByCode: Map<string, string>) {
           riskScore: r.riskScore, emv: Number(r.emv),
         })));
       }
+      case 'propose_action': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        // Write gate mirrors requireProjectAccess({write:true}): VIEWER never writes; a CLOSED
+        // project is frozen. Access is already bounded by the accessible set.
+        if (ctx.role === 'VIEWER') return JSON.stringify({ error: 'Peran read-only tidak dapat mengusulkan perubahan.' });
+        const proj = await prisma.project.findUnique({ where: { id }, select: { status: true } });
+        if (proj?.status === 'CLOSED') return JSON.stringify({ error: 'Proyek sudah ditutup (read-only). Buka kembali untuk mengubah.' });
+        const actionType = typeof args.action_type === 'string' ? args.action_type : '';
+        if (!AI_ACTION_TYPES.includes(actionType as (typeof AI_ACTION_TYPES)[number])) {
+          return JSON.stringify({ error: `action_type tidak dikenal. Pilih salah satu: ${AI_ACTION_TYPES.join(', ')}.` });
+        }
+        try {
+          const { routed } = await proposeAction({ projectId: id, actionType, params: args.params, rationale: args.rationale ?? null }, ctx.userId);
+          return JSON.stringify({ ok: true, routed, message: routed
+            ? 'Usulan aksi telah diajukan untuk approval. Aksi hanya berjalan setelah disetujui.'
+            : 'Usulan tersimpan namun belum ada approver yang bisa dituju — minta admin mengatur workflow AI action.' });
+        } catch (err) {
+          const msg = err instanceof AppError ? err.message : 'Gagal mengajukan usulan aksi.';
+          return JSON.stringify({ error: msg });
+        }
+      }
       default:
         return JSON.stringify({ error: `Tool tidak dikenal: ${name}` });
     }
@@ -145,13 +205,21 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const byCode = new Map<string, string>();
   for (const p of projects.slice(0, 200)) byCode.set(p.code, p.id);
 
+  // Stage C — only expose the propose_action tool when the caller's tenant opted in AND the caller
+  // is not a read-only role (Anett can then STAGE actions for approval, never execute them).
+  const actionsEnabled = role !== 'VIEWER' && (await callerActionsEnabled());
+  const tools = actionsEnabled ? [...TOOLS, PROPOSE_ACTION_TOOL] : TOOLS;
+  const actionNote = actionsEnabled
+    ? '\n\nAnda DAPAT mengusulkan aksi (bukan mengeksekusi) via tool propose_action; aksi hanya berjalan setelah disetujui manusia. Konfirmasikan ke pengguna sebelum mengajukan.'
+    : '';
+
   // Seed the loop with a short, project-list-aware system prompt + the conversation.
-  const system = `${SYSTEM_PROMPT}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.`;
+  const system = `${SYSTEM_PROMPT}${actionNote}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.`;
   const answer = await port.runToolLoop({
     system,
     messages,
-    tools: TOOLS,
-    executeTool: makeExecuteTool(byCode),
+    tools,
+    executeTool: makeExecuteTool(byCode, { userId, role }),
     maxSteps: 6,
     maxTokens: 1500,
   });
