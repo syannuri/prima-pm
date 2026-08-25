@@ -4,6 +4,7 @@ import { asyncHandler } from '../../middleware/validate.js';
 import { requireProjectAccess } from '../../middleware/rbac.js';
 import * as svc from './report.service.js';
 import { generateNarrative } from './narrative.service.js';
+import { generateEvmExplain } from './evmExplain.service.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { buildReportPdf } from '../export/build.report.pdf.js';
 
@@ -60,6 +61,22 @@ router.post(
     }
     const { period, asOf } = reportQuerySchema.parse(req.query);
     res.json(await generateNarrative(req.params.projectId, period, asOf ?? new Date()));
+  }),
+);
+
+// AI EVM explainer — interprets the current EVM/forecast picture and proposes recovery actions.
+// Advisory, ephemeral (never persists). Read access is enough (any project member). Gated globally
+// by ANTHROPIC_API_KEY (503) + per-tenant opt-in (403 in the service).
+router.post(
+  '/evm-explain/ai-draft',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    if (!aiEnabled()) {
+      res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+      return;
+    }
+    const { asOf } = reportQuerySchema.parse(req.query);
+    res.json(await generateEvmExplain(req.params.projectId, asOf ?? new Date()));
   }),
 );
 
