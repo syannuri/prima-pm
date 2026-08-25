@@ -7,6 +7,7 @@ import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
+import { findGuide, guideIndex } from './processGuide.js';
 
 // Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
 // projects the CALLER can access, via a server-side manual tool loop. The API key and all data
@@ -15,7 +16,7 @@ import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.j
 // a project outside that set is unknown to the assistant, so it cannot leak inaccessible data.
 
 const SYSTEM_PROMPT = [
-  'Anda adalah "Anett", asisten AI PMO untuk aplikasi manajemen proyek Prismatix. Anda menjawab pertanyaan pengguna tentang proyek-proyek yang DAPAT DIAKSES olehnya.',
+  'Anda adalah "Anett", PM Assistant untuk aplikasi manajemen proyek Prismatix. Anda menjawab pertanyaan pengguna tentang proyek-proyek yang DAPAT DIAKSES olehnya.',
   'Jika pengguna menyapa atau menanyakan nama Anda, perkenalkan diri sebagai Anett secara singkat dan ramah. Jangan menyebut nama diri di setiap jawaban.',
   'Jawab dalam Bahasa Indonesia manajemen proyek yang natural dan ringkas.',
   '',
@@ -26,6 +27,7 @@ const SYSTEM_PROMPT = [
   '- Anda bersifat READ-ONLY: Anda tidak dapat mengubah data. Jika diminta melakukan aksi, jelaskan langkahnya secara ringkas namun jangan mengklaim sudah melakukannya.',
   '- Jika data tidak cukup untuk menjawab, katakan dengan jujur.',
   '- Jawab ringkas dan langsung; sertakan angka kunci bila relevan.',
+  '- Untuk pertanyaan CARA/PROSES ("bagaimana cara…", "apa yang harus saya lakukan untuk…", "di mana menu…"), GUNAKAN tool get_process_guide lalu sampaikan langkah ringkas + JALUR MENU persis (mis. Proyek → tab Cost → Baseline → Lock). JANGAN mengarang nama menu/tab; jika topik tak ada di panduan, katakan dan sarankan yang terdekat.',
   '',
   'FORMAT JAWABAN (Markdown):',
   '- Bila menyebut beberapa hal (daftar proyek, risiko, langkah), gunakan bullet point ("- ") satu item per baris — jangan menumpuk dalam satu paragraf panjang.',
@@ -57,6 +59,16 @@ const TOOLS: AiToolDef[] = [
       type: 'object',
       properties: { project_code: { type: 'string' } },
       required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_process_guide',
+    description: 'Panduan CARA memakai aplikasi ini: langkah + jalur menu yang benar untuk sebuah tugas (mis. "cara membuat baseline biaya & jadwal", "cara membuat change request", "cara menutup proyek"). Argumen: topic = frasa bebas tentang yang ingin dilakukan pengguna.',
+    input_schema: {
+      type: 'object',
+      properties: { topic: { type: 'string', description: 'Apa yang ingin dilakukan pengguna, mis. "lock baseline" / "buat CR"' } },
+      required: ['topic'],
       additionalProperties: false,
     },
   },
@@ -131,6 +143,10 @@ export async function assistantActionsAvailable(): Promise<boolean> {
 // card). Kept minimal — the full detail lives in the approvals inbox.
 export interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
 
+// A grounded in-app navigation target the process guide surfaced (id-less top-level route only) — the
+// client renders it as a real router-Link button so "buka Reports" actually navigates.
+export interface NavRef { label: string; path: string }
+
 function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
   const overdue = r.tasks.remaining.filter((t) => t.overdue).slice(0, 15)
     .map((t) => ({ name: t.name, pct: t.pct, due: t.planEnd }));
@@ -146,9 +162,9 @@ function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
 // Build the executeTool callback bound to the caller's accessible project set. Returns a JSON string
 // per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
 // the model can tell the user rather than crash the loop.
-function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[] }) {
+function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[] }) {
   return async (name: string, input: unknown): Promise<string> => {
-    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string };
+    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string };
     const resolveId = (): string | null => {
       const code = typeof args.project_code === 'string' ? args.project_code.trim() : '';
       return accessibleByCode.get(code) ?? null;
@@ -172,6 +188,20 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
           code: r.code, title: r.title, kind: r.kind, severity: r.severity, status: r.status,
           riskScore: r.riskScore, emv: Number(r.emv),
         })));
+      }
+      case 'get_process_guide': {
+        const entry = findGuide(typeof args.topic === 'string' ? args.topic : '');
+        if (!entry) return JSON.stringify({ error: 'Topik tidak ada di panduan.', availableTopics: guideIndex() });
+        // Surface an id-less top-level route as a clickable nav button (dedupe by path).
+        if (entry.route && !ctx.navs.some((n) => n.path === entry.route!.path)) ctx.navs.push({ label: entry.route.label, path: entry.route.path });
+        return JSON.stringify({
+          title: entry.title,
+          summary: entry.summary,
+          prerequisites: entry.prerequisites ?? [],
+          steps: entry.steps,
+          menuPath: entry.menuPath,
+          route: entry.route ?? null,
+        });
       }
       case 'propose_action': {
         const id = resolveId();
@@ -207,7 +237,7 @@ export interface AssistantTurn { role: 'user' | 'assistant'; content: string }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[]): Promise<{ answer: string; proposals: ProposedRef[] }> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[]): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }> {
   await assertCallerTenantOptedIn();
   const port = getAiPort();
   if (!port.runToolLoop) throw new AppError(502, 'Asisten AI tidak tersedia.', 'AI_UNAVAILABLE');
@@ -225,18 +255,19 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     ? '\n\nAnda DAPAT mengusulkan aksi (bukan mengeksekusi) via tool propose_action; aksi hanya berjalan setelah disetujui manusia. Konfirmasikan ke pengguna sebelum mengajukan.'
     : '';
 
-  // Proposals Anett stages during this turn are collected here and returned to the client.
+  // Proposals + navigation targets Anett surfaces during this turn are collected here for the client.
   const proposals: ProposedRef[] = [];
-  // Seed the loop with a short, project-list-aware system prompt + the conversation.
-  const system = `${SYSTEM_PROMPT}${actionNote}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.`;
+  const navs: NavRef[] = [];
+  // Seed the loop with a short, project-list-aware system prompt + the how-to topic index.
+  const system = `${SYSTEM_PROMPT}${actionNote}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.`;
   const answer = await port.runToolLoop({
     system,
     messages,
     tools,
-    executeTool: makeExecuteTool(byCode, { userId, role, proposals }),
+    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs }),
     maxSteps: 6,
     maxTokens: 1500,
   });
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
-  return { answer, proposals };
+  return { answer, proposals, navigate: navs };
 }
