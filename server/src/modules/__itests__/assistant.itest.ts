@@ -152,6 +152,30 @@ describe('AI portfolio assistant — /assistant', () => {
     await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
   });
 
+  it('HOW-TO: get_process_guide returns grounded steps + surfaces an id-less route as a nav target', async () => {
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ executeTool }) {
+        const baseline = await executeTool('get_process_guide', { topic: 'cara membuat baseline biaya dan jadwal' });
+        const reports = await executeTool('get_process_guide', { topic: 'buat laporan' });
+        const unknown = await executeTool('get_process_guide', { topic: 'xyzzy tidak ada' });
+        return JSON.stringify({ baseline, reports, unknown });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    // Baseline guide matched and carries the real menu path; it is project-scoped → no nav route.
+    expect(out.baseline).toContain('Lock baseline');
+    expect(out.baseline).toContain('tab Cost');
+    // Unknown topic degrades to the topic list, not a hallucinated answer.
+    expect(out.unknown).toContain('availableTopics');
+    // The id-less Reports route is surfaced to the client as a clickable nav target (deduped).
+    expect(res.body.navigate).toEqual([{ label: 'Buka Reports', path: '/reports' }]);
+  });
+
   it('502 when the model declines / returns nothing', async () => {
     __setAiPort({ async draftJson() { return null; }, async draftNarrative() { return null; }, async runToolLoop() { return null; } });
     const res = await ask(pmToken);

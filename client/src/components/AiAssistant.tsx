@@ -8,7 +8,8 @@ import { Markdown } from '../lib/markdown';
 // actions that a human approves. Launcher sits bottom-RIGHT, stacked ABOVE the DM ChatWidget bubble.
 // Dormant unless AI is available (env + tenant). Persona: "Anett".
 interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
-interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; error?: boolean }
+interface NavRef { label: string; path: string }
+interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; error?: boolean }
 
 const CHAT_KEY = 'anett-chat';
 
@@ -87,8 +88,8 @@ export default function AiAssistant() {
 
   const ask = useMutation({
     // Only real Q&A turns go to the model — error notices are dropped from the sent history.
-    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[] }>(`/assistant/ask`, { messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })) }),
-    onSuccess: (res) => setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined }]),
+    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }>(`/assistant/ask`, { messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })) }),
+    onSuccess: (res) => setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined }]),
     onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : 'AI tidak dapat menjawab saat ini.', error: true }]),
   });
 
@@ -234,6 +235,16 @@ export default function AiAssistant() {
                       ))}
                     </ul>
                     <Link to="/approvals" onClick={() => setOpen(false)} className="mt-1.5 inline-block font-medium text-violet-700 hover:underline dark:text-violet-300">Tinjau di Approvals →</Link>
+                  </div>
+                )}
+                {/* Grounded "how-to" navigation — real in-app router links surfaced by the process guide */}
+                {t.navigate && t.navigate.length > 0 && (
+                  <div className="ml-10 mt-1.5 flex flex-wrap gap-1.5">
+                    {t.navigate.map((n, j) => (
+                      <Link key={j} to={n.path} onClick={() => setOpen(false)} className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-white px-2.5 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-50 dark:border-violet-800/60 dark:bg-slate-900 dark:text-violet-300 dark:hover:bg-violet-900/30">
+                        {n.label} →
+                      </Link>
+                    ))}
                   </div>
                 )}
               </div>
