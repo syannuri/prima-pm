@@ -36,8 +36,9 @@ beforeAll(async () => {
   process.env.MULTITENANCY_ENFORCE = 'true';
   process.env.ANTHROPIC_API_KEY = 'test-key'; // enables the global gate (aiEnabled())
 
-  // Default fake port returns a fixed draft. Individual tests may override.
-  __setAiNarrativePort({ async draftNarrative() { return DRAFT; } });
+  // Default fake port returns a fixed draft. Individual tests may override. (draftJson is part of
+  // the generic AiPort but unused by the narrative flow → returns null.)
+  __setAiNarrativePort({ async draftNarrative() { return DRAFT; }, async draftJson() { return null; } });
 
   await wipeDb();
   const { tenantId: defaultTid } = await backfillDefaultTenant(prisma);
@@ -94,9 +95,9 @@ describe('AI status narrative — ai-draft', () => {
   });
 
   it('502 when the model declines / returns nothing', async () => {
-    __setAiNarrativePort({ async draftNarrative() { return null; } });
+    __setAiNarrativePort({ async draftNarrative() { return null; }, async draftJson() { return null; } });
     const res = await request(app).post(draftUrl()).set(bearer(ownerToken));
-    __setAiNarrativePort({ async draftNarrative() { return DRAFT; } });
+    __setAiNarrativePort({ async draftNarrative() { return DRAFT; }, async draftJson() { return null; } });
     expect(res.status).toBe(502);
     expect(res.body.error.code).toBe('AI_UNAVAILABLE');
   });

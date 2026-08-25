@@ -9,6 +9,7 @@ import { setBaselineLock, listBaselineVersions, getBaselineVersion, restoreBasel
 import { getClosureReadiness } from './closure.js';
 import { getActivationReadiness, getActivationReview, notifyActivationReady } from './activation.js';
 import { getNextSteps } from './nextsteps.js';
+import { aiAvailableForProject } from '../charter/crImpact.service.js';
 import { BadRequest } from '../../lib/errors.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
@@ -271,6 +272,16 @@ router.post(
 );
 
 // Nested module routes under a project.
+// Lightweight AI-availability probe (env gate + per-tenant opt-in) — drives the client's show/hide
+// of AI buttons without computing a full report. Any project member with access.
+router.get(
+  '/:projectId/ai-available',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    res.json({ aiAvailable: await aiAvailableForProject(req.params.projectId) });
+  }),
+);
+
 router.use('/:projectId/charter', charterRoutes);
 router.use('/:projectId/cost', costRoutes);
 router.use('/:projectId/risk', riskRoutes);

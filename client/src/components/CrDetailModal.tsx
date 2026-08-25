@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { ChangeRequest } from '../api/types';
 import { Badge, Button, Modal } from './ui';
@@ -8,6 +8,25 @@ import { useAuth } from '../context/AuthContext';
 import { formatDate, formatIdr } from '../lib/format';
 
 export type CrWithProject = ChangeRequest & { project: { id: string; code: string; name: string } };
+
+// Advisory AI impact analysis for a CR (ephemeral — not persisted). Shape mirrors the server's
+// CrImpactSchema.
+interface CrImpactDraft {
+  scheduleImpact: string;
+  costImpact: string;
+  riskNarrative: string;
+  newRisks: { title: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' }[];
+  recommendation: 'APPROVE' | 'REJECT' | 'NEEDS_INFO';
+  rationale: string;
+  confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+const REC_BADGE: Record<CrImpactDraft['recommendation'], { color: string; label: string }> = {
+  APPROVE: { color: 'green', label: 'Rekomendasi: Setujui' },
+  REJECT: { color: 'red', label: 'Rekomendasi: Tolak' },
+  NEEDS_INFO: { color: 'amber', label: 'Rekomendasi: Perlu info' },
+};
+const SEVERITY_COLOR: Record<CrImpactDraft['newRisks'][number]['severity'], string> = { LOW: 'slate', MEDIUM: 'amber', HIGH: 'red' };
 
 const STATUS_BADGE: Record<string, string> = { SUBMITTED: 'amber', UNDER_REVIEW: 'sky', APPROVED: 'green', REJECTED: 'red' };
 const dt = (s: string | null) => (s ? `${formatDate(s)} · ${new Date(s).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : null);
@@ -32,8 +51,22 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
   const toast = useToast();
   const confirm = useConfirm();
   const canDecide = !!user && ['ADMIN', 'PMO'].includes(user.role) && (cr.status === 'SUBMITTED' || cr.status === 'UNDER_REVIEW');
+  const isDecider = !!user && ['ADMIN', 'PMO'].includes(user.role);
 
   const paidAmount = cr.chargeable && cr.amountIdr != null && Number(cr.amountIdr) > 0 ? Number(cr.amountIdr) : 0;
+
+  // AI impact analysis (advisory) — only surfaced to deciders when AI is available (env + tenant).
+  const aiQ = useQuery({
+    queryKey: ['ai-available', cr.project.id],
+    queryFn: () => api.get<{ aiAvailable: boolean }>(`/projects/${cr.project.id}/ai-available`),
+    enabled: isDecider,
+    staleTime: 5 * 60_000,
+  });
+  const impact = useMutation({
+    mutationFn: () => api.post<CrImpactDraft>(`/projects/${cr.project.id}/charter/change-requests/${cr.id}/impact/ai-draft`),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI tidak dapat membuat analisa dampak'),
+  });
+  const draft = impact.data;
 
   const decide = useMutation({
     mutationFn: (vars: { decision: 'APPROVED' | 'REJECTED'; applyToRevenue?: boolean }) =>
@@ -93,6 +126,53 @@ export default function CrDetailModal({ cr, onClose }: { cr: CrWithProject; onCl
             <div className="flex flex-wrap gap-1.5">
               {cr.impactAreas.map((a) => <Badge key={a} color="slate">{a}</Badge>)}
             </div>
+          </div>
+        )}
+
+        {isDecider && aiQ.data?.aiAvailable && (
+          <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs font-semibold uppercase text-violet-700 dark:text-violet-300">Analisa dampak (AI)</div>
+              <Button variant="secondary" className="!py-1 text-xs" disabled={impact.isPending} onClick={() => impact.mutate()}>
+                {impact.isPending ? 'Menganalisa…' : draft ? '↻ Analisa ulang' : '✨ Analisa dampak dengan AI'}
+              </Button>
+            </div>
+            {draft ? (
+              <div className="mt-3 space-y-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge color={REC_BADGE[draft.recommendation].color}>{REC_BADGE[draft.recommendation].label}</Badge>
+                  <Badge color="slate">Keyakinan: {draft.confidence}</Badge>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300">{draft.rationale}</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="mb-0.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Dampak jadwal</div>
+                    <p className="text-slate-600 dark:text-slate-300">{draft.scheduleImpact}</p>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Dampak biaya</div>
+                    <p className="text-slate-600 dark:text-slate-300">{draft.costImpact}</p>
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-0.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Risiko</div>
+                  <p className="text-slate-600 dark:text-slate-300">{draft.riskNarrative}</p>
+                  {draft.newRisks.length > 0 && (
+                    <ul className="mt-1.5 space-y-1">
+                      {draft.newRisks.map((rk, i) => (
+                        <li key={i} className="flex items-center gap-2 text-xs">
+                          <Badge color={SEVERITY_COLOR[rk.severity]}>{rk.severity}</Badge>
+                          <span className="text-slate-600 dark:text-slate-300">{rk.title}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <p className="text-[11px] italic text-slate-400 dark:text-slate-500">Hasil AI bersifat masukan — keputusan tetap di tangan Anda.</p>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Perkirakan dampak jadwal, biaya, dan risiko dari CR ini terhadap baseline &amp; EVM saat ini.</p>
+            )}
           </div>
         )}
 

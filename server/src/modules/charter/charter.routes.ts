@@ -7,6 +7,8 @@ import {
   crDecisionSchema,
 } from './charter.schemas.js';
 import * as svc from './charter.service.js';
+import { generateCrImpact } from './crImpact.service.js';
+import { aiEnabled } from '../../lib/ai.js';
 
 // mergeParams lets this nested router read :projectId from the parent route.
 const router = Router({ mergeParams: true });
@@ -82,6 +84,22 @@ router.patch(
   asyncHandler(async (req, res) => {
     const cr = await svc.reviewChangeRequest(req.params.projectId, req.params.crId, req.user!.id);
     res.json({ changeRequest: cr });
+  }),
+);
+
+// AI impact analysis for a Change Request (advisory, ephemeral — does not persist or decide).
+// PMO/ADMIN (the deciders). Gated globally by ANTHROPIC_API_KEY (503 when unset) + per-tenant
+// opt-in (403 in the service). Mirrors the report commentary/ai-draft gating.
+router.post(
+  '/change-requests/:crId/impact/ai-draft',
+  requireProjectAccess(),
+  requireRole('ADMIN', 'PMO'),
+  asyncHandler(async (req, res) => {
+    if (!aiEnabled()) {
+      res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+      return;
+    }
+    res.json(await generateCrImpact(req.params.projectId, req.params.crId));
   }),
 );
 
