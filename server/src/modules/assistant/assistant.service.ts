@@ -120,6 +120,17 @@ export async function assistantAvailable(): Promise<boolean> {
   return tenant?.aiNarrativeEnabled === true;
 }
 
+// Whether Anett may PROPOSE actions for the caller (Stage C) — env + the caller tenant's separate
+// aiActionsEnabled opt-in. Drives the client's capability-aware footer + the action suggestion chip.
+export async function assistantActionsAvailable(): Promise<boolean> {
+  if (!aiEnabled()) return false;
+  return callerActionsEnabled();
+}
+
+// A proposal Anett staged during a turn (surfaced to the client so it can show a "view in Approvals"
+// card). Kept minimal — the full detail lives in the approvals inbox.
+export interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
+
 function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
   const overdue = r.tasks.remaining.filter((t) => t.overdue).slice(0, 15)
     .map((t) => ({ name: t.name, pct: t.pct, due: t.planEnd }));
@@ -135,7 +146,7 @@ function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
 // Build the executeTool callback bound to the caller's accessible project set. Returns a JSON string
 // per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
 // the model can tell the user rather than crash the loop.
-function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role }) {
+function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[] }) {
   return async (name: string, input: unknown): Promise<string> => {
     const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string };
     const resolveId = (): string | null => {
@@ -176,6 +187,7 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
         }
         try {
           const { routed } = await proposeAction({ projectId: id, actionType, params: args.params, rationale: args.rationale ?? null }, ctx.userId);
+          ctx.proposals.push({ actionType, projectCode: (typeof args.project_code === 'string' ? args.project_code.trim() : ''), routed });
           return JSON.stringify({ ok: true, routed, message: routed
             ? 'Usulan aksi telah diajukan untuk approval. Aksi hanya berjalan setelah disetujui.'
             : 'Usulan tersimpan namun belum ada approver yang bisa dituju — minta admin mengatur workflow AI action.' });
@@ -195,7 +207,7 @@ export interface AssistantTurn { role: 'user' | 'assistant'; content: string }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[]): Promise<string> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[]): Promise<{ answer: string; proposals: ProposedRef[] }> {
   await assertCallerTenantOptedIn();
   const port = getAiPort();
   if (!port.runToolLoop) throw new AppError(502, 'Asisten AI tidak tersedia.', 'AI_UNAVAILABLE');
@@ -213,16 +225,18 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     ? '\n\nAnda DAPAT mengusulkan aksi (bukan mengeksekusi) via tool propose_action; aksi hanya berjalan setelah disetujui manusia. Konfirmasikan ke pengguna sebelum mengajukan.'
     : '';
 
+  // Proposals Anett stages during this turn are collected here and returned to the client.
+  const proposals: ProposedRef[] = [];
   // Seed the loop with a short, project-list-aware system prompt + the conversation.
   const system = `${SYSTEM_PROMPT}${actionNote}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.`;
   const answer = await port.runToolLoop({
     system,
     messages,
     tools,
-    executeTool: makeExecuteTool(byCode, { userId, role }),
+    executeTool: makeExecuteTool(byCode, { userId, role, proposals }),
     maxSteps: 6,
     maxTokens: 1500,
   });
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
-  return answer;
+  return { answer, proposals };
 }

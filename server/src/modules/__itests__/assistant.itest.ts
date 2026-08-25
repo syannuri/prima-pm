@@ -84,7 +84,7 @@ describe('AI portfolio assistant — /assistant', () => {
   it('/available reflects the gates (false before opt-in)', async () => {
     const res = await request(app).get(availUrl()).set(bearer(pmToken));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ aiAvailable: false });
+    expect(res.body).toEqual({ aiAvailable: false, actionsAvailable: false });
   });
 
   it('400 on an empty message list', async () => {
@@ -95,7 +95,7 @@ describe('AI portfolio assistant — /assistant', () => {
 
   it('200 returns an answer once the tenant opts in', async () => {
     const avail = await request(app).get(availUrl()).set(bearer(pmToken));
-    expect(avail.body).toEqual({ aiAvailable: true });
+    expect(avail.body).toEqual({ aiAvailable: true, actionsAvailable: false }); // narrative on, actions not yet
     const res = await ask(pmToken);
     expect(res.status).toBe(200);
     expect(res.body.answer).toContain('asisten');
@@ -143,6 +143,8 @@ describe('AI portfolio assistant — /assistant', () => {
     const out = JSON.parse(res.body.answer);
     expect(out.foreign).toContain('tidak dapat diakses'); // cross-PM project is refused
     expect(out.mine).toContain('"ok":true');
+    // The staged proposal is surfaced to the client for the "view in Approvals" card.
+    expect(res.body.proposals).toEqual([{ actionType: 'CREATE_RISK', projectCode: 'MINE-1', routed: true }]);
     // The proposal landed as PENDING (nothing applied yet).
     const proposals = await runWithTenant(aico, () => prisma.aiActionProposal.findMany({ where: { actionType: 'CREATE_RISK' } }));
     expect(proposals.length).toBe(1);

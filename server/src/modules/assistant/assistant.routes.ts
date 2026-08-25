@@ -3,14 +3,16 @@ import { z } from 'zod';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { aiEnabled } from '../../lib/ai.js';
-import { askAssistant, assistantAvailable, type AssistantTurn } from './assistant.service.js';
+import { askAssistant, assistantAvailable, assistantActionsAvailable, type AssistantTurn } from './assistant.service.js';
 
 const router = Router();
 router.use(requireAuth);
 
-// Lightweight availability probe (env gate + caller-tenant opt-in) — drives the client launcher.
+// Availability probe: `aiAvailable` = launcher on (env + narrative opt-in); `actionsAvailable` = Stage C
+// propose enabled (env + the separate aiActionsEnabled opt-in) → drives Anett's capability-aware UI.
 router.get('/available', asyncHandler(async (_req, res) => {
-  res.json({ aiAvailable: await assistantAvailable() });
+  const [aiAvailable, actionsAvailable] = await Promise.all([assistantAvailable(), assistantActionsAvailable()]);
+  res.json({ aiAvailable, actionsAvailable });
 }));
 
 // Recent conversation (last turns + the new question). Bounded to keep token cost + payload sane.
@@ -33,8 +35,8 @@ router.post(
       return;
     }
     const messages = req.body.messages as AssistantTurn[];
-    const answer = await askAssistant(req.user!.id, req.user!.role, messages);
-    res.json({ answer });
+    // { answer, proposals } — proposals are any Stage C actions Anett staged this turn (for the card).
+    res.json(await askAssistant(req.user!.id, req.user!.role, messages));
   }),
 );
 
