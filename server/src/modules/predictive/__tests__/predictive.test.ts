@@ -30,14 +30,14 @@ describe('computePredictive (Stage B heuristic)', () => {
     expect(isHealthy(r)).toBe(true);
     expect(r.slip!.score).toBe(0);
     expect(r.overrun!.score).toBe(0);
-    expect(r.slip!.drivers[0]).toMatch(/sesuai rencana/i);
+    expect(r.slip!.drivers[0]).toMatch(/on schedule/i);
   });
 
   it('behind schedule + late forecast → HIGH slip', () => {
     const r = computePredictive(fc({ spi: 0.75, varianceDays: 25 }));
     expect(r.slip!.level).toBe('HIGH');
     expect(r.slip!.drivers.some((d) => d.includes('SPI'))).toBe(true);
-    expect(r.slip!.drivers.some((d) => /telat 25 hari/.test(d))).toBe(true);
+    expect(r.slip!.drivers.some((d) => /25 days late/.test(d))).toBe(true);
   });
 
   it('poor CPI + EAC over BAC → HIGH overrun', () => {

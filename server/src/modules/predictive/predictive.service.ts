@@ -37,9 +37,9 @@ export function computePredictive(f: Forecast): Predictive {
   const slipFromDays = clamp(varianceDays * 2, 0, 40);              // 20d late → 40
   const slipScore = r0(clamp(slipFromSpi + slipFromDays, 0, 100));
   const slipDrivers: string[] = [];
-  if (spi < 0.95) slipDrivers.push(`SPI ${spi.toFixed(2)} — di belakang jadwal`);
-  if (varianceDays > 0) slipDrivers.push(`Perkiraan selesai telat ${varianceDays} hari`);
-  if (slipDrivers.length === 0) slipDrivers.push('Jadwal sesuai rencana');
+  if (spi < 0.95) slipDrivers.push(`SPI ${spi.toFixed(2)} — behind schedule`);
+  if (varianceDays > 0) slipDrivers.push(`Forecast finish ${varianceDays} days late`);
+  if (slipDrivers.length === 0) slipDrivers.push('On schedule');
 
   // --- Cost overrun: CPI below 1 + EAC above BAC (negative VAC), TCPI as a supporting cue. ---
   const cpi = f.cpi ?? 1;
@@ -52,9 +52,9 @@ export function computePredictive(f: Forecast): Predictive {
   const overrunScore = r0(clamp(overrunFromCpi + overrunFromVac, 0, 100));
   const overrunDrivers: string[] = [];
   if (cpi < 0.98) overrunDrivers.push(`CPI ${cpi.toFixed(2)} — over budget`);
-  if (vac < 0) overrunDrivers.push(`EAC di atas BAC (VAC −${idr(vac)})`);
-  if (tcpi > 1.05) overrunDrivers.push(`TCPI ${tcpi.toFixed(2)} — butuh efisiensi lebih tinggi`);
-  if (overrunDrivers.length === 0) overrunDrivers.push('Biaya sesuai anggaran');
+  if (vac < 0) overrunDrivers.push(`EAC above BAC (VAC −${idr(vac)})`);
+  if (tcpi > 1.05) overrunDrivers.push(`TCPI ${tcpi.toFixed(2)} — needs higher efficiency`);
+  if (overrunDrivers.length === 0) overrunDrivers.push('On budget');
 
   return {
     hasData: true,
