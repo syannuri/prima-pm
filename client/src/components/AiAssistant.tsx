@@ -8,7 +8,9 @@ import { Markdown } from '../lib/markdown';
 // actions that a human approves. Launcher sits bottom-RIGHT, stacked ABOVE the DM ChatWidget bubble.
 // Dormant unless AI is available (env + tenant). Persona: "Anett".
 interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
-interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[] }
+interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; error?: boolean }
+
+const CHAT_KEY = 'anett-chat';
 
 // Human labels for the whitelisted Stage C actions (used on the inline "proposed" card).
 const ACTION_LABELS: Record<string, string> = {
@@ -17,6 +19,18 @@ const ACTION_LABELS: Record<string, string> = {
   CREATE_CHANGE_REQUEST: 'Draft change request',
   TIDY_SCHEDULE: 'Rapikan jadwal',
 };
+
+// Respect the user's reduced-motion preference (matches the app's motion convention).
+function usePrefersReducedMotion() {
+  const [reduce, setReduce] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const on = () => setReduce(mq.matches);
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return reduce;
+}
 
 // Anett's mark — a "bot" glyph (Lucide-style stroke SVG).
 function AnettIcon({ className }: { className: string }) {
@@ -41,21 +55,25 @@ function AnettAvatar({ className = 'h-8 w-8', icon = 'h-4 w-4' }: { className?: 
   );
 }
 
-// Animated three-dot "typing" bubble.
-function TypingDots() {
+// Three-dot "typing" bubble; static when the user prefers reduced motion.
+function TypingDots({ reduce }: { reduce: boolean }) {
   return (
     <span className="inline-flex items-center gap-1" aria-label="Anett sedang mengetik">
       {[0, 150, 300].map((d) => (
-        <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 dark:bg-slate-500" style={{ animationDelay: `${d}ms` }} />
+        <span key={d} className={`h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-500 ${reduce ? '' : 'animate-bounce'}`} style={reduce ? undefined : { animationDelay: `${d}ms` }} />
       ))}
     </span>
   );
 }
 
 export default function AiAssistant() {
+  const reduce = usePrefersReducedMotion();
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false); // drives the open transition (mount → next frame → in)
-  const [turns, setTurns] = useState<Turn[]>([]);
+  // Conversation survives close/reopen and an accidental reload within the tab (sessionStorage).
+  const [turns, setTurns] = useState<Turn[]>(() => {
+    try { return JSON.parse(sessionStorage.getItem(CHAT_KEY) || '[]') as Turn[]; } catch { return []; }
+  });
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -68,12 +86,22 @@ export default function AiAssistant() {
   const canPropose = availQ.data?.actionsAvailable === true;
 
   const ask = useMutation({
-    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[] }>(`/assistant/ask`, { messages: history.slice(-12).map(({ role, content }) => ({ role, content })) }),
+    // Only real Q&A turns go to the model — error notices are dropped from the sent history.
+    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[] }>(`/assistant/ask`, { messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })) }),
     onSuccess: (res) => setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined }]),
-    onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: `⚠️ ${e instanceof ApiError ? e.message : 'AI tidak dapat menjawab saat ini.'}` }]),
+    onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : 'AI tidak dapat menjawab saat ini.', error: true }]),
   });
 
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [turns, ask.isPending]);
+  // Persist + keep the view pinned to the latest message.
+  useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reduce ? 'auto' : 'smooth' }); }, [turns, ask.isPending, reduce]);
+
+  // Auto-grow the input up to a cap (mirrors max-h-24 = 6rem).
+  useEffect(() => {
+    const el = inputRef.current; if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
+  }, [input]);
 
   // Open transition + focus the input; Escape closes.
   useEffect(() => {
@@ -96,6 +124,18 @@ export default function AiAssistant() {
     ask.mutate(next);
   };
 
+  // Retry after a failure: drop the trailing error notice and re-ask with the same question intact
+  // (the user's message bubble stays put — no duplicate).
+  const retry = () => {
+    if (ask.isPending) return;
+    const base = turns.filter((t) => !t.error);
+    if (!base.length) return;
+    setTurns(base);
+    ask.mutate(base);
+  };
+
+  const newChat = () => { setTurns([]); setInput(''); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
+
   // Contextual starter chips — the action chip only when Stage C propose is available.
   const chips = [
     'Proyek mana yang paling di belakang jadwal?',
@@ -110,7 +150,7 @@ export default function AiAssistant() {
           onClick={() => setOpen(true)}
           aria-label="Tanya Anett"
           title="Tanya Anett"
-          className="fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 transition-all duration-300 hover:scale-105 active:scale-90 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6"
+          className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'transition-all duration-300 hover:scale-105 active:scale-90'}`}
         >
           <AnettIcon className="h-6 w-6" />
         </button>
@@ -120,7 +160,7 @@ export default function AiAssistant() {
         <div
           role="dialog"
           aria-label="Asisten Anett"
-          className={`fixed right-4 z-[70] flex w-[min(92vw,25rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl transition-all duration-200 ease-out bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${shown ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
+          className={`fixed right-4 z-[70] flex w-[min(92vw,25rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
           style={{ maxHeight: 'min(72vh, 34rem)' }}
         >
           {/* Header — gradient identity band with avatar + status */}
@@ -132,6 +172,9 @@ export default function AiAssistant() {
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> Asisten PMO · {canPropose ? 'baca + usul aksi' : 'membaca data proyek'}
               </div>
             </div>
+            {turns.length > 0 && (
+              <button onClick={newChat} aria-label="Percakapan baru" title="Percakapan baru" className="rounded-lg px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-white/60 dark:text-violet-300 dark:hover:bg-slate-800">+ Baru</button>
+            )}
             <button onClick={() => setOpen(false)} aria-label="Tutup" className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800">✕</button>
           </div>
 
@@ -162,8 +205,23 @@ export default function AiAssistant() {
               <div key={i}>
                 <div className={`flex gap-2 ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {t.role === 'assistant' && <AnettAvatar />}
-                  <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm ${t.role === 'user' ? 'whitespace-pre-wrap rounded-tr-sm bg-violet-600 text-white' : 'rounded-tl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>
-                    {t.role === 'assistant' ? <Markdown text={t.content} className="text-sm" /> : t.content}
+                  <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm ${
+                    t.role === 'user'
+                      ? 'whitespace-pre-wrap rounded-tr-sm bg-violet-600 text-white'
+                      : t.error
+                        ? 'rounded-tl-sm border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200'
+                        : 'rounded-tl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                  }`}>
+                    {t.role === 'assistant' && !t.error ? (
+                      <Markdown text={t.content} className="text-sm" />
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        <span>{t.error ? `⚠️ ${t.content}` : t.content}</span>
+                        {t.error && i === turns.length - 1 && (
+                          <button onClick={retry} disabled={ask.isPending} className="self-start rounded-md bg-amber-600/90 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">Coba lagi</button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {/* Stage C — inline card when Anett staged action proposals this turn */}
@@ -184,7 +242,7 @@ export default function AiAssistant() {
             {ask.isPending && (
               <div className="flex justify-start gap-2">
                 <AnettAvatar />
-                <div className="rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2.5 dark:bg-slate-800"><TypingDots /></div>
+                <div className="rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2.5 dark:bg-slate-800"><TypingDots reduce={reduce} /></div>
               </div>
             )}
           </div>
