@@ -24,7 +24,7 @@ export interface ApproverInput { kind: ApproverKind; role?: Role | null; userId?
 export interface StepInput { name: string; mode: 'ANY' | 'ALL'; approvers: ApproverInput[]; slaHours?: number | null }
 export interface WorkflowInput {
   name: string;
-  appliesTo?: 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE';
+  appliesTo?: 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE' | 'AI_ACTION';
   enabled?: boolean;
   condMagnitude?: ChangeMagnitude | null;
   condChargeable?: boolean | null;
@@ -115,7 +115,7 @@ export async function deleteWorkflow(id: string, actorId: string) {
 // Engine
 // ---------------------------------------------------------------------------
 
-type EntityType = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE';
+type EntityType = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE' | 'AI_ACTION';
 interface CrLike { id: string; projectId: string; magnitude: ChangeMagnitude; chargeable: boolean; amountIdr: unknown }
 type WorkflowWithSteps = Awaited<ReturnType<typeof listWorkflows>>[number];
 type StepWithApprovers = WorkflowWithSteps['steps'][number];
@@ -151,6 +151,11 @@ async function entityLabel(ref: Pick<EntityRef, 'entityType' | 'entityId'>): Pro
   }
   if (ref.entityType === 'COST_BASELINE') return 'a cost baseline lock';
   if (ref.entityType === 'BASELINE_UNLOCK') return 'a cost baseline unlock';
+  if (ref.entityType === 'AI_ACTION') {
+    // Describe the AI-proposed action from its stored registry key + params.
+    const { describeProposal } = await import('../aiActions/aiActions.service.js');
+    return describeProposal(ref.entityId);
+  }
   return 'a project closure';
 }
 
@@ -167,6 +172,7 @@ const entityPhrase = (ref: Pick<EntityRef, 'entityType' | 'entityId'>): Promise<
 function entityTab(entityType: EntityType): string {
   if (entityType === 'CHANGE_REQUEST') return 'Change Req';
   if (entityType === 'PROJECT_CLOSURE') return 'Closeout';
+  if (entityType === 'AI_ACTION') return 'Overview'; // AI action lands the requester on the project Overview
   return 'Cost'; // COST_BASELINE / BASELINE_UNLOCK both live under the Cost tab
 }
 
@@ -347,6 +353,16 @@ async function finalize(ref: EntityRef, outcome: 'APPROVED' | 'REJECTED', actorI
       );
     }
     await notifyRequester(payload.requestedById, actorId, ref.projectId, outcome, 'Project closure');
+    return;
+  }
+
+  if (ref.entityType === 'AI_ACTION') {
+    // Approved → run the whitelisted, audited write with the APPROVER as actor (AI never writes).
+    // Rejected → mark the proposal declined. Dynamic import breaks the aiActions ⇄ approval cycle.
+    const payload = (row.payload ?? {}) as { requestedById?: string };
+    const { finalizeProposal } = await import('../aiActions/aiActions.service.js');
+    await finalizeProposal(ref.entityId, ref.projectId, outcome, actorId);
+    await notifyRequester(payload.requestedById, actorId, ref.projectId, outcome, 'AI-proposed action');
   }
 }
 
