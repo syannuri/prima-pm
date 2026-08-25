@@ -44,32 +44,42 @@ const NARRATIVE_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-// A narrow port so the report service never touches the SDK shape and integration tests can inject
-// a fake (no network, no key). Returns null when the model DECLINED (stop_reason: "refusal") or
-// produced no parseable output — the caller maps that to a graceful "couldn't draft" response.
-export interface AiNarrativePort {
+// A narrow port so feature services never touch the SDK shape and integration tests can inject a
+// fake (no network, no key). Every method returns null when the model DECLINED
+// (stop_reason: "refusal") or produced no parseable output — the caller maps that to a graceful
+// "couldn't draft" response.
+//
+// `draftJson` is the GENERIC core reused by every structured-output AI feature (status narrative,
+// CR impact analysis, EVM explainer, risk suggestions…): pass a stable system prompt, a data
+// payload as `user`, and a raw JSON schema; get back parsed-but-unvalidated JSON (the caller
+// validates with its own zod schema). `draftNarrative` is a thin, typed wrapper kept for the
+// existing report service.
+export interface AiPort {
+  draftJson(input: { system: string; user: string; jsonSchema: Record<string, unknown>; maxTokens?: number }): Promise<unknown | null>;
   draftNarrative(input: { system: string; user: string }): Promise<NarrativeDraft | null>;
 }
+// Back-compat alias (report/narrative code imported this name).
+export type AiNarrativePort = AiPort;
 
-let injected: AiNarrativePort | null = null;
+let injected: AiPort | null = null;
 // Test seam (mirrors webhook.service __setAutoDeliver): inject a fake port in itests.
-export function __setAiNarrativePort(port: AiNarrativePort | null): void {
+export function __setAiNarrativePort(port: AiPort | null): void {
   injected = port;
 }
+export const __setAiPort = __setAiNarrativePort;
 
-export function getAiNarrativePort(): AiNarrativePort {
-  if (injected) return injected;
+function liveAiPort(): AiPort {
   return {
-    async draftNarrative({ system, user }) {
+    async draftJson({ system, user, jsonSchema, maxTokens }) {
       const { apiKey, model } = aiConfig();
       const client = new Anthropic({ apiKey });
-      // Structured output (constrains to valid JSON) + adaptive thinking (light reasoning to judge
-      // health) + medium effort (cost/quality balance). System prompt is stable ⇒ prompt-cached.
+      // Structured output (constrains to valid JSON) + adaptive thinking (light reasoning) + medium
+      // effort (cost/quality balance). System prompt is stable per feature ⇒ prompt-cached.
       const res = await client.messages.create({
         model,
-        max_tokens: 2000,
+        max_tokens: maxTokens ?? 2000,
         thinking: { type: 'adaptive' },
-        output_config: { effort: 'medium', format: { type: 'json_schema', schema: NARRATIVE_JSON_SCHEMA } },
+        output_config: { effort: 'medium', format: { type: 'json_schema', schema: jsonSchema } },
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: user }],
       });
@@ -78,11 +88,22 @@ export function getAiNarrativePort(): AiNarrativePort {
       const text = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
       if (!text) return null;
       try {
-        const parsed = NarrativeSchema.safeParse(JSON.parse(text));
-        return parsed.success ? parsed.data : null;
+        return JSON.parse(text) as unknown;
       } catch {
         return null; // non-JSON output (shouldn't happen with json_schema) → graceful null
       }
     },
+    async draftNarrative({ system, user }) {
+      const raw = await this.draftJson({ system, user, jsonSchema: NARRATIVE_JSON_SCHEMA });
+      if (raw == null) return null;
+      const parsed = NarrativeSchema.safeParse(raw);
+      return parsed.success ? parsed.data : null;
+    },
   };
 }
+
+export function getAiPort(): AiPort {
+  return injected ?? liveAiPort();
+}
+// Back-compat alias.
+export const getAiNarrativePort = getAiPort;
