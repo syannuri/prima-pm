@@ -1,0 +1,154 @@
+import type { Role } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
+import { AppError, Forbidden } from '../../lib/errors.js';
+import { getTenantStore } from '../../lib/tenant/context.js';
+import { aiEnabled, getAiPort, type AiToolDef } from '../../lib/ai.js';
+import { listProjects } from '../projects/projects.service.js';
+import { getProjectReport } from '../report/report.service.js';
+import { listRisks } from '../risk/risk.service.js';
+
+// Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
+// projects the CALLER can access, via a server-side manual tool loop. The API key and all data
+// access stay on the server; the model never touches the DB. Security boundary: every tool operates
+// ONLY on the pre-computed set of projects the user is allowed to see (same rule as listProjects) —
+// a project outside that set is unknown to the assistant, so it cannot leak inaccessible data.
+
+const SYSTEM_PROMPT = [
+  'Anda adalah asisten PMO untuk aplikasi manajemen proyek Prismatix. Anda menjawab pertanyaan pengguna tentang proyek-proyek yang DAPAT DIAKSES olehnya.',
+  'Jawab dalam Bahasa Indonesia manajemen proyek yang natural dan ringkas.',
+  '',
+  'ATURAN (WAJIB):',
+  '- Gunakan tool untuk mengambil data sebelum menjawab hal yang butuh angka. Jangan mengarang angka, tanggal, atau nama.',
+  '- Anda HANYA dapat melihat proyek yang dikembalikan oleh tool. Jika pengguna menyebut proyek yang tidak ada di daftar, katakan Anda tidak menemukannya atau tidak punya akses.',
+  '- Interpretasikan EVM dengan benar: SPI/CPI < 1 = di belakang jadwal / over budget; > 1 = baik.',
+  '- Anda bersifat READ-ONLY: Anda tidak dapat mengubah data. Jika diminta melakukan aksi, jelaskan langkahnya secara ringkas namun jangan mengklaim sudah melakukannya.',
+  '- Jika data tidak cukup untuk menjawab, katakan dengan jujur.',
+  '- Jawab ringkas dan langsung; sertakan angka kunci bila relevan.',
+].join('\n');
+
+// Tool schemas (raw JSON schema — the SDK zod helper targets a different zod major than the app).
+const TOOLS: AiToolDef[] = [
+  {
+    name: 'list_projects',
+    description: 'Daftar proyek yang dapat diakses pengguna (kode, nama, status, PM). Panggil ini dulu untuk mengetahui proyek apa saja yang tersedia.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'get_project_details',
+    description: 'Ringkasan kesehatan sebuah proyek: EVM (BAC/EV/AC/SPI/CPI/% selesai), forecast (EAC, perkiraan selesai, varians hari), dan tugas (total/selesai/overdue). Argumen: project_code dari list_projects.',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string', description: 'Kode proyek, mis. "AI-1"' } },
+      required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_project_risks',
+    description: 'Daftar risiko sebuah proyek (kode, judul, jenis, severity, status, skor, EMV). Argumen: project_code dari list_projects.',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string' } },
+      required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+];
+
+// Per-tenant opt-in for the CALLER's tenant (no single project here). Applies only when a tenant
+// exists (single-tenant deploy with no tenant → env gate alone governs).
+async function assertCallerTenantOptedIn(): Promise<void> {
+  const tid = getTenantStore()?.tenantId;
+  if (!tid) return;
+  const tenant = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true } });
+  if (tenant?.aiNarrativeEnabled !== true) {
+    throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+  }
+}
+
+// Whether the assistant is usable for the caller right now: global env gate + the caller tenant's
+// opt-in. Drives the client's show/hide of the AI assistant launcher.
+export async function assistantAvailable(): Promise<boolean> {
+  if (!aiEnabled()) return false;
+  const tid = getTenantStore()?.tenantId;
+  if (!tid) return true; // single-tenant deploy: env gate alone governs
+  const tenant = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true } });
+  return tenant?.aiNarrativeEnabled === true;
+}
+
+function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
+  const overdue = r.tasks.remaining.filter((t) => t.overdue).slice(0, 15)
+    .map((t) => ({ name: t.name, pct: t.pct, due: t.planEnd }));
+  return {
+    project: { code: r.project.code, name: r.project.name, status: r.project.status },
+    health: r.health,
+    evm: { bac: r.evm.bac, pv: r.evm.pv, ev: r.evm.ev, ac: r.evm.ac, spi: r.evm.spi, cpi: r.evm.cpi, percentComplete: r.evm.percentComplete },
+    forecast: { eac: r.forecast.eac, forecastFinish: r.forecast.schedule.forecastFinish, varianceDays: r.forecast.schedule.varianceDays },
+    tasks: { total: r.tasks.total, completed: r.tasks.completed, inProgress: r.tasks.inProgress, overdueCount: overdue.length, overdue },
+  };
+}
+
+// Build the executeTool callback bound to the caller's accessible project set. Returns a JSON string
+// per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
+// the model can tell the user rather than crash the loop.
+function makeExecuteTool(accessibleByCode: Map<string, string>) {
+  return async (name: string, input: unknown): Promise<string> => {
+    const args = (input ?? {}) as { project_code?: string };
+    const resolveId = (): string | null => {
+      const code = typeof args.project_code === 'string' ? args.project_code.trim() : '';
+      return accessibleByCode.get(code) ?? null;
+    };
+    switch (name) {
+      case 'list_projects': {
+        const list = [...accessibleByCode.keys()];
+        return JSON.stringify({ count: list.length, projectCodes: list });
+      }
+      case 'get_project_details': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const report = await getProjectReport(id, 'monthly', new Date());
+        return JSON.stringify(compactReport(report));
+      }
+      case 'list_project_risks': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const risks = await listRisks(id);
+        return JSON.stringify(risks.map((r) => ({
+          code: r.code, title: r.title, kind: r.kind, severity: r.severity, status: r.status,
+          riskScore: r.riskScore, emv: Number(r.emv),
+        })));
+      }
+      default:
+        return JSON.stringify({ error: `Tool tidak dikenal: ${name}` });
+    }
+  };
+}
+
+// A single conversation turn from the client (text only).
+export interface AssistantTurn { role: 'user' | 'assistant'; content: string }
+
+// Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
+// route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[]): Promise<string> {
+  await assertCallerTenantOptedIn();
+  const port = getAiPort();
+  if (!port.runToolLoop) throw new AppError(502, 'Asisten AI tidak tersedia.', 'AI_UNAVAILABLE');
+
+  // Pre-compute the accessible project set (same rule the user sees elsewhere) → the security scope.
+  const projects = await listProjects(userId, role);
+  const byCode = new Map<string, string>();
+  for (const p of projects.slice(0, 200)) byCode.set(p.code, p.id);
+
+  // Seed the loop with a short, project-list-aware system prompt + the conversation.
+  const system = `${SYSTEM_PROMPT}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.`;
+  const answer = await port.runToolLoop({
+    system,
+    messages,
+    tools: TOOLS,
+    executeTool: makeExecuteTool(byCode),
+    maxSteps: 6,
+    maxTokens: 1500,
+  });
+  if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
+  return answer;
+}

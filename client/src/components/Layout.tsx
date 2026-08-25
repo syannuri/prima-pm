@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
 import MobileTabBar from './MobileTabBar';
 import ChatWidget from './ChatWidget';
+import AiAssistant from './AiAssistant';
 import ChatNotifier from './ChatNotifier';
 import ChatStream from './ChatStream';
 import AvatarMenu from './AvatarMenu';
@@ -210,6 +211,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <ChatStream />
       <ChatNotifier />
       <ChatWidget />
+      <AiAssistant />
       <MobileTabBar />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
