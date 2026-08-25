@@ -6,6 +6,7 @@ import { aiEnabled, getAiPort, type AiToolDef } from '../../lib/ai.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
+import { listMyApprovals } from '../approval/approval.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { findGuide, guideIndex } from './processGuide.js';
 
@@ -55,6 +56,36 @@ const TOOLS: AiToolDef[] = [
   {
     name: 'list_project_risks',
     description: 'Daftar risiko sebuah proyek (kode, judul, jenis, severity, status, skor, EMV). Argumen: project_code dari list_projects.',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string' } },
+      required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_portfolio_summary',
+    description: 'Ringkasan portofolio proyek yang dapat diakses pengguna: jumlah per status, total anggaran (BAC), dan proyek yang punya tugas telat (overdue). Panggil untuk pertanyaan "bagaimana portofolio saya".',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'list_my_approvals',
+    description: 'Item yang MENUNGGU keputusan (approve/reject) pengguna saat ini: CR, lock/unlock baseline, closure, atau aksi AI. Panggil untuk "apa yang menunggu persetujuan saya".',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'list_project_tasks',
+    description: 'Daftar tugas sebuah proyek (kode WBS, nama, % progress, tenggat, status telat/overdue). Fokus ke yang belum selesai & telat. Argumen: project_code dari list_projects.',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string' } },
+      required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_change_requests',
+    description: 'Daftar Change Request sebuah proyek (judul, status, magnitude, chargeable). Argumen: project_code dari list_projects.',
     input_schema: {
       type: 'object',
       properties: { project_code: { type: 'string' } },
@@ -162,7 +193,8 @@ function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
 // Build the executeTool callback bound to the caller's accessible project set. Returns a JSON string
 // per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
 // the model can tell the user rather than crash the loop.
-function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[] }) {
+interface ProjectSummary { id: string; code: string; name: string; status: string; bac: number }
+function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; projectsSummary: ProjectSummary[] }) {
   return async (name: string, input: unknown): Promise<string> => {
     const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string };
     const resolveId = (): string | null => {
@@ -188,6 +220,45 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
           code: r.code, title: r.title, kind: r.kind, severity: r.severity, status: r.status,
           riskScore: r.riskScore, emv: Number(r.emv),
         })));
+      }
+      case 'get_portfolio_summary': {
+        const byStatus: Record<string, number> = {};
+        let totalBac = 0;
+        for (const p of ctx.projectsSummary) { byStatus[p.status] = (byStatus[p.status] ?? 0) + 1; totalBac += p.bac; }
+        // One cheap query: which accessible projects have an unfinished, past-due task.
+        const ids = ctx.projectsSummary.map((p) => p.id);
+        const overdue = ids.length
+          ? await prisma.task.groupBy({ by: ['projectId'], where: { projectId: { in: ids }, progressPct: { lt: 100 }, planEnd: { lt: new Date() } }, _count: { _all: true } })
+          : [];
+        const codeById = new Map(ctx.projectsSummary.map((p) => [p.id, p.code]));
+        return JSON.stringify({
+          totalProjects: ctx.projectsSummary.length,
+          byStatus,
+          totalBacIdr: totalBac,
+          projectsWithOverdueTasks: overdue.map((o) => ({ code: codeById.get(o.projectId), overdueTasks: o._count._all })),
+        });
+      }
+      case 'list_my_approvals': {
+        const items = await listMyApprovals(ctx.userId);
+        return JSON.stringify(items.map((a) => ({ item: a.actionLabel, project: a.project?.code ?? null, step: a.stepName, since: a.createdAt })));
+      }
+      case 'list_project_tasks': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const report = await getProjectReport(id, 'monthly', new Date());
+        const rows = report.tasks.remaining
+          .map((t) => ({ name: t.name, pct: t.pct, due: t.planEnd, overdue: t.overdue, milestone: t.isMilestone }))
+          .slice(0, 40);
+        return JSON.stringify({ total: report.tasks.total, completed: report.tasks.completed, tasks: rows });
+      }
+      case 'list_change_requests': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const crs = await prisma.changeRequest.findMany({
+          where: { projectId: id }, orderBy: { createdAt: 'desc' }, take: 30,
+          select: { title: true, status: true, magnitude: true, chargeable: true, amountIdr: true },
+        });
+        return JSON.stringify(crs.map((c) => ({ title: c.title, status: c.status, magnitude: c.magnitude, chargeable: c.chargeable, amountIdr: c.amountIdr == null ? null : Number(c.amountIdr) })));
       }
       case 'get_process_guide': {
         const entry = findGuide(typeof args.topic === 'string' ? args.topic : '');
@@ -234,10 +305,12 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
 
 // A single conversation turn from the client (text only).
 export interface AssistantTurn { role: 'user' | 'assistant'; content: string }
+// What the user is currently looking at — lets "proyek ini" resolve without naming it.
+export interface AskContext { projectId?: string | null; tab?: string | null }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[]): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }> {
   await assertCallerTenantOptedIn();
   const port = getAiPort();
   if (!port.runToolLoop) throw new AppError(502, 'Asisten AI tidak tersedia.', 'AI_UNAVAILABLE');
@@ -245,7 +318,18 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // Pre-compute the accessible project set (same rule the user sees elsewhere) → the security scope.
   const projects = await listProjects(userId, role);
   const byCode = new Map<string, string>();
-  for (const p of projects.slice(0, 200)) byCode.set(p.code, p.id);
+  const projectsSummary: ProjectSummary[] = [];
+  for (const p of projects.slice(0, 200)) {
+    byCode.set(p.code, p.id);
+    projectsSummary.push({ id: p.id, code: p.code, name: p.name, status: p.status, bac: p.costBaseline?.budgetAtCompletion == null ? 0 : Number(p.costBaseline.budgetAtCompletion) });
+  }
+
+  // Context-awareness: if the caller is viewing an ACCESSIBLE project, tell Anett so "proyek ini"
+  // resolves. A project outside the accessible set is ignored (never leaked).
+  const current = context?.projectId ? projectsSummary.find((p) => p.id === context.projectId) : undefined;
+  const contextNote = current
+    ? `\n\nKonteks: pengguna sedang membuka proyek ${current.code} ("${current.name}")${context?.tab ? ` di tab ${context.tab}` : ''}. Jika ia menyebut "proyek ini" / "di sini", maksudnya ${current.code}.`
+    : '';
 
   // Stage C — only expose the propose_action tool when the caller's tenant opted in AND the caller
   // is not a read-only role (Anett can then STAGE actions for approval, never execute them).
@@ -259,15 +343,39 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const proposals: ProposedRef[] = [];
   const navs: NavRef[] = [];
   // Seed the loop with a short, project-list-aware system prompt + the how-to topic index.
-  const system = `${SYSTEM_PROMPT}${actionNote}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.`;
+  const system = `${SYSTEM_PROMPT}${actionNote}${contextNote}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.`;
   const answer = await port.runToolLoop({
     system,
     messages,
     tools,
-    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs }),
+    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, projectsSummary }),
     maxSteps: 6,
     maxTokens: 1500,
   });
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
   return { answer, proposals, navigate: navs };
+}
+
+// Deterministic (NO LLM, NO cost) briefing for the assistant's proactive open-state: what needs the
+// user's attention right now. Cheap queries only — approvals count + a single overdue-task rollup.
+export async function assistantBriefing(userId: string, role: Role): Promise<{ approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }> {
+  const projects = await listProjects(userId, role);
+  const ids = projects.slice(0, 200).map((p) => p.id);
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  const [approvals, overdue] = await Promise.all([
+    listMyApprovals(userId),
+    ids.length
+      ? prisma.task.groupBy({ by: ['projectId'], where: { projectId: { in: ids }, progressPct: { lt: 100 }, planEnd: { lt: new Date() } }, _count: { _all: true } })
+      : Promise.resolve([] as { projectId: string; _count: { _all: number } }[]),
+  ]);
+  const projectsWithOverdue = overdue
+    .map((o) => ({ code: byId.get(o.projectId)?.code ?? '', name: byId.get(o.projectId)?.name ?? '', count: o._count._all }))
+    .filter((p) => p.code)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+  return {
+    approvalsWaiting: approvals.length,
+    overdueTasks: projectsWithOverdue.reduce((s, p) => s + p.count, 0),
+    projectsWithOverdue,
+  };
 }

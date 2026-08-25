@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Markdown } from '../lib/markdown';
@@ -10,6 +10,7 @@ import { Markdown } from '../lib/markdown';
 interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
 interface NavRef { label: string; path: string }
 interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; error?: boolean }
+interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 
 const CHAT_KEY = 'anett-chat';
 
@@ -79,6 +80,11 @@ export default function AiAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // What the user is currently viewing → lets "proyek ini" resolve without naming it.
+  const location = useLocation();
+  const currentProjectId = /^\/projects\/([0-9a-f-]{36})/i.exec(location.pathname)?.[1] ?? null;
+  const currentTab = new URLSearchParams(location.search).get('tab');
+
   const availQ = useQuery({
     queryKey: ['assistant-available'],
     queryFn: () => api.get<{ aiAvailable: boolean; actionsAvailable: boolean }>(`/assistant/available`),
@@ -86,9 +92,20 @@ export default function AiAssistant() {
   });
   const canPropose = availQ.data?.actionsAvailable === true;
 
+  // Proactive open-state briefing (deterministic; refetched each open) — only when the panel is open.
+  const briefingQ = useQuery({
+    queryKey: ['assistant-briefing'],
+    queryFn: () => api.get<Briefing>(`/assistant/briefing`),
+    enabled: open && availQ.data?.aiAvailable === true,
+    staleTime: 60_000,
+  });
+
   const ask = useMutation({
     // Only real Q&A turns go to the model — error notices are dropped from the sent history.
-    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }>(`/assistant/ask`, { messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })) }),
+    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }>(`/assistant/ask`, {
+      messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
+      context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
+    }),
     onSuccess: (res) => setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined }]),
     onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : 'AI tidak dapat menjawab saat ini.', error: true }]),
   });
@@ -137,12 +154,25 @@ export default function AiAssistant() {
 
   const newChat = () => { setTurns([]); setInput(''); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
 
-  // Contextual starter chips — the action chip only when Stage C propose is available.
-  const chips = [
-    'Proyek mana yang paling di belakang jadwal?',
-    'Ringkas kesehatan portofolio saya',
-    ...(canPropose ? ['Usulkan mitigasi untuk proyek paling berisiko'] : ['Apa risiko tertinggi di proyek saya?']),
-  ];
+  // Contextual starter chips — project-aware when viewing a project; the action chip only when
+  // Stage C propose is available.
+  const chips = currentProjectId
+    ? [
+        'Ringkas kesehatan proyek ini',
+        'Tugas apa saja yang telat di sini?',
+        ...(canPropose ? ['Usulkan mitigasi untuk proyek ini'] : ['Apa risiko tertinggi di proyek ini?']),
+      ]
+    : [
+        'Proyek mana yang paling di belakang jadwal?',
+        'Ringkas kesehatan portofolio saya',
+        ...(canPropose ? ['Usulkan mitigasi untuk proyek paling berisiko'] : ['Apa risiko tertinggi di proyek saya?']),
+      ];
+
+  // Dynamic follow-up chips shown after the latest answer — nudge the next useful question.
+  const followups = currentProjectId
+    ? ['Forecast & EAC proyek ini?', 'Ada change request tertunda?', 'Apa langkah berikutnya?']
+    : ['Apa yang menunggu persetujuan saya?', 'Ringkas portofolio saya', 'Proyek mana paling berisiko?'];
+  const lastIsAnswer = turns.length > 0 && turns[turns.length - 1].role === 'assistant' && !turns[turns.length - 1].error;
 
   return (
     <>
@@ -188,6 +218,26 @@ export default function AiAssistant() {
                     Halo, saya <span className="font-semibold text-violet-600 dark:text-violet-300">Anett</span>. Saya bantu memantau proyek Anda{canPropose ? ' — dan bisa mengusulkan aksi (perlu persetujuan)' : ''}.
                   </div>
                 </div>
+
+                {/* Proactive briefing — what needs attention right now (deterministic, no AI cost) */}
+                {briefingQ.data && (briefingQ.data.approvalsWaiting > 0 || briefingQ.data.projectsWithOverdue.length > 0) && (
+                  <div className="ml-10 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 text-xs dark:border-amber-900/50 dark:bg-amber-900/15">
+                    <div className="mb-1 font-semibold text-amber-800 dark:text-amber-200">Perlu perhatian</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {briefingQ.data.approvalsWaiting > 0 && (
+                        <Link to="/approvals" onClick={() => setOpen(false)} className="rounded-full border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-200">
+                          📥 {briefingQ.data.approvalsWaiting} approval menunggu
+                        </Link>
+                      )}
+                      {briefingQ.data.projectsWithOverdue.map((p) => (
+                        <button key={p.code} onClick={() => sendText(`Tugas apa saja yang telat di ${p.code}?`)} className="rounded-full border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-200">
+                          ⏰ {p.code}: {p.count} telat
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-1.5">
                   {chips.map((c) => (
                     <button
@@ -249,6 +299,17 @@ export default function AiAssistant() {
                 )}
               </div>
             ))}
+
+            {/* Dynamic follow-up chips after the latest answer — nudge the next useful question */}
+            {lastIsAnswer && !ask.isPending && (
+              <div className="ml-10 flex flex-wrap gap-1.5">
+                {followups.map((c) => (
+                  <button key={c} onClick={() => sendText(c)} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {ask.isPending && (
               <div className="flex justify-start gap-2">
