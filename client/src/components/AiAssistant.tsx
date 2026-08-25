@@ -170,7 +170,7 @@ export default function AiAssistant() {
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Anett</div>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> Asisten PMO · {canPropose ? 'baca + usul aksi' : 'membaca data proyek'}
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> PM Assistant · {canPropose ? 'baca + usul aksi' : 'membaca data proyek'}
               </div>
             </div>
             {turns.length > 0 && (
