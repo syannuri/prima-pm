@@ -1,21 +1,43 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../../api/client';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { api, ApiError } from '../../api/client';
 import type { Forecast } from '../../api/types';
-import { Card, Input, SectionTitle, Spinner } from '../../components/ui';
+import { Button, Card, Input, SectionTitle, Spinner } from '../../components/ui';
+import { useToast } from '../../components/Toast';
 import { formatIdr, formatDate, formatDateInput, formatNum } from '../../lib/format';
 import ForecastChart from '../../components/ForecastChart';
 import InfoTip from '../../components/InfoTip';
 
 const money = (n: number) => formatIdr(n);
 
+// Advisory AI EVM explanation (ephemeral). Shape mirrors the server's EvmExplainSchema.
+interface EvmExplainDraft {
+  verdict: string;
+  scheduleDrivers: string[];
+  costDrivers: string[];
+  recovery: string[];
+}
+
 export default function ForecastPanel({ projectId }: { projectId: string }) {
   const today = formatDateInput(new Date());
+  const toast = useToast();
   const [statusDate, setStatusDate] = useState(today);
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['forecast', projectId, statusDate],
     queryFn: () => api.get<Forecast>(`/projects/${projectId}/forecast?statusDate=${statusDate}`),
   });
+
+  // AI EVM explainer (advisory) — only surfaced when AI is available (env + tenant opt-in).
+  const aiQ = useQuery({
+    queryKey: ['ai-available', projectId],
+    queryFn: () => api.get<{ aiAvailable: boolean }>(`/projects/${projectId}/ai-available`),
+    staleTime: 5 * 60_000,
+  });
+  const explain = useMutation({
+    mutationFn: () => api.post<EvmExplainDraft>(`/projects/${projectId}/report/evm-explain/ai-draft?asOf=${statusDate}`),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI tidak dapat membuat penjelasan EVM'),
+  });
+  const evmDraft = explain.data;
 
   if (isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
   if (!data) return <Card>No forecast available.</Card>;
@@ -73,6 +95,31 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
               )}
             </p>
           </Card>
+
+          {/* AI EVM explainer — advisory interpretation + recovery actions. */}
+          {aiQ.data?.aiAvailable && (
+            <Card className="!p-3 border-violet-200 bg-violet-50/60 dark:border-violet-900/50 dark:bg-violet-900/15">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">Penjelasan EVM (AI)</div>
+                <Button variant="secondary" className="!py-1 text-xs" disabled={explain.isPending} onClick={() => explain.mutate()}>
+                  {explain.isPending ? 'Menganalisa…' : evmDraft ? '↻ Analisa ulang' : '✨ Jelaskan dengan AI'}
+                </Button>
+              </div>
+              {evmDraft ? (
+                <div className="mt-3 space-y-3 text-sm">
+                  <p className="text-slate-700 dark:text-slate-200">{evmDraft.verdict}</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <EvmList title="Penyebab jadwal" items={evmDraft.scheduleDrivers} />
+                    <EvmList title="Penyebab biaya" items={evmDraft.costDrivers} />
+                  </div>
+                  <EvmList title="Langkah pemulihan" items={evmDraft.recovery} accent />
+                  <p className="text-[11px] italic text-slate-400 dark:text-slate-500">Hasil AI bersifat masukan — verifikasi sebelum ditindaklanjuti.</p>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Jelaskan kondisi SPI/CPI &amp; forecast saat ini dan saran langkah pemulihannya.</p>
+              )}
+            </Card>
+          )}
 
           {/* Baseline-staleness caveat: revenue moved on an approved change but the cost baseline
               may not reflect it yet, so the margin below is provisional. */}
@@ -145,6 +192,26 @@ function Scenario({ label, hint, value, bac, emphasise }: { label: string; hint:
       </div>
       <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{hint}</div>
     </Card>
+  );
+}
+
+function EvmList({ title, items, accent }: { title: string; items: string[]; accent?: boolean }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{title}</div>
+      {items.length > 0 ? (
+        <ul className="space-y-1">
+          {items.map((it, i) => (
+            <li key={i} className="flex gap-2 text-slate-600 dark:text-slate-300">
+              <span aria-hidden className={accent ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}>{accent ? '→' : '•'}</span>
+              <span>{it}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-slate-400 dark:text-slate-500">Tidak ada.</p>
+      )}
+    </div>
   );
 }
 
