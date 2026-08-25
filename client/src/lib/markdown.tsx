@@ -9,6 +9,7 @@ import { Fragment, type ReactNode } from 'react';
 //   - or *        bullet list
 //   1.            numbered list
 //   **bold**      bold        *italic* / _italic_   italic
+//   `code`        inline monospace (e.g. project codes like `AI-1`)
 //   [text](url)   link (http/https/mailto only — others render as plain text)
 //   blank line    paragraph break;  single newline inside a paragraph → <br/>
 //
@@ -22,8 +23,9 @@ export function safeUrl(url: string): string | null {
   return /^(https?:\/\/|mailto:)/i.test(u) ? u : null;
 }
 
-// --- inline: [text](url), **bold**, *italic*, _italic_ ---
-const INLINE_RE = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
+// --- inline: `code`, [text](url), **bold**, *italic*, _italic_ ---
+// `code` is FIRST so its contents are never re-parsed as bold/italic/link markers.
+const INLINE_RE = /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
 const LINK_RE = /^\[([^\]]+)\]\(([^)]+)\)$/;
 
 function renderInline(text: string): ReactNode {
@@ -37,6 +39,8 @@ function renderInline(text: string): ReactNode {
         ? <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline hover:text-brand-700 dark:text-brand-400">{link[1]}</a>
         : <Fragment key={i}>{tok}</Fragment>; // unsafe URL → show the raw markdown, never a live link
     }
+    if (tok.startsWith('`') && tok.endsWith('`') && tok.length > 2)
+      return <code key={i} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.85em] text-slate-700 dark:bg-slate-800 dark:text-slate-200">{tok.slice(1, -1)}</code>;
     if (tok.startsWith('**') && tok.endsWith('**') && tok.length > 4)
       return <strong key={i}>{tok.slice(2, -2)}</strong>;
     if (tok.startsWith('*') && tok.endsWith('*') && tok.length > 2)

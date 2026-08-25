@@ -9,9 +9,9 @@ interface RiskSignal { level: RiskLevel; score: number; drivers: string[] }
 interface Predictive { hasData: boolean; slip: RiskSignal | null; overrun: RiskSignal | null }
 
 const LEVEL = {
-  LOW: { label: 'Rendah', bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', ring: 'border-emerald-200 dark:border-emerald-900/50' },
-  MEDIUM: { label: 'Sedang', bar: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', ring: 'border-amber-200 dark:border-amber-900/50' },
-  HIGH: { label: 'Tinggi', bar: 'bg-red-500', text: 'text-red-600 dark:text-red-400', ring: 'border-red-200 dark:border-red-900/50' },
+  LOW: { label: 'Low', bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', ring: 'border-emerald-200 dark:border-emerald-900/50' },
+  MEDIUM: { label: 'Medium', bar: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', ring: 'border-amber-200 dark:border-amber-900/50' },
+  HIGH: { label: 'High', bar: 'bg-red-500', text: 'text-red-600 dark:text-red-400', ring: 'border-red-200 dark:border-red-900/50' },
 } as const;
 
 function Meter({ title, sig }: { title: string; sig: RiskSignal }) {
@@ -44,15 +44,15 @@ export default function PredictiveCard({ projectId }: { projectId: string }) {
   return (
     <Card className="!p-3">
       <div className="mb-2 flex items-center justify-between">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Prediksi</div>
-        <span className="text-[10px] text-slate-400 dark:text-slate-500">estimasi tren EVM (heuristik, bukan ML)</span>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Prediction</div>
+        <span className="text-[10px] text-slate-400 dark:text-slate-500">EVM trend estimate (heuristic, not ML)</span>
       </div>
       {!data.hasData || !data.slip || !data.overrun ? (
-        <p className="py-3 text-center text-xs text-slate-500 dark:text-slate-400">Belum cukup data (butuh progres tugas &amp; biaya aktual) untuk memprediksi.</p>
+        <p className="py-3 text-center text-xs text-slate-500 dark:text-slate-400">Not enough data yet (needs task progress &amp; actual cost) to predict.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Meter title="Risiko selesai-telat" sig={data.slip} />
-          <Meter title="Risiko over-budget" sig={data.overrun} />
+          <Meter title="Schedule-slip risk" sig={data.slip} />
+          <Meter title="Cost-overrun risk" sig={data.overrun} />
         </div>
       )}
     </Card>
