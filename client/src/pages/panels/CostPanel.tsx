@@ -3,9 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
 import { Button, Card, FormError, Input, MoneyInput, Select, PanelLoading } from '../../components/ui';
-import BaselineLock from '../../components/BaselineLock';
+import BaselineSetupBar from '../../components/BaselineSetupBar';
 import RebaselineReminder from '../../components/RebaselineReminder';
-import BaselineHistory from '../../components/BaselineHistory';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -133,11 +132,9 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
 
   return (
     <div className="space-y-5">
-      {/* Baseline lock control — freezes cost lines / WBS / schedule baseline (PMB/BAC). */}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <BaselineHistory projectId={projectId} />
-        <BaselineLock projectId={projectId} />
-      </div>
+      {/* Two-step baseline setup (① schedule → ② cost lock). Freezes cost lines / WBS / schedule
+          baseline (PMB/BAC). Shared bar rendered identically on the Schedule tab. */}
+      <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} />
       {/* Nudge to re-lock after a change opened the baseline (e.g. an approved CR). */}
       <RebaselineReminder projectId={projectId} />
       {/* Baseline summary */}
