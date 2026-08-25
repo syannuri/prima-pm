@@ -7,6 +7,7 @@ import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { formatIdr } from '../../lib/format';
 import Attachments from '../../components/Attachments';
+import AiRiskSuggest from '../../components/AiRiskSuggest';
 
 const SEV_COLOR: Record<string, string> = { LOW: 'green', MEDIUM: 'amber', HIGH: 'red', CRITICAL: 'red' };
 
@@ -206,6 +207,10 @@ export default function RiskPanel({ projectId, focusId, focusKey }: { projectId:
             <Attachments projectId={projectId} ownerType="RISK" ownerId={filesFor.id} />
           </div>
         )}
+
+        <div className="mt-3 flex justify-end">
+          <AiRiskSuggest base={base} projectId={projectId} existingTitles={(risksQ.data?.risks ?? []).map((r) => r.title)} onDone={invalidate} />
+        </div>
 
         <RiskForm base={base} onDone={invalidate} />
       </Card>
