@@ -142,7 +142,8 @@ function ApprovalRow({ a, focused = false }: { a: MyApproval; focused?: boolean 
             <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{cr?.title ?? a.actionLabel}</span>
             {cr?.magnitude === 'MAJOR' && <Badge color="amber">Major</Badge>}
             {cr?.chargeable && <Badge color="blue">Chargeable</Badge>}
-            {!cr && <Badge color="violet">{a.actionLabel}</Badge>}
+            {a.aiAction && <Badge color="violet">🤖 AI action</Badge>}
+            {!cr && !a.aiAction && <Badge color="violet">{a.actionLabel}</Badge>}
           </div>
           {a.project && (
             <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
@@ -158,7 +159,12 @@ function ApprovalRow({ a, focused = false }: { a: MyApproval; focused?: boolean 
       </div>
 
       {cr?.description && <p className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{cr.description}</p>}
-      {!cr && a.reason && <p className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">Reason: {a.reason}</p>}
+      {a.aiAction && (
+        <p className="whitespace-pre-wrap rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:bg-violet-500/10 dark:text-violet-200">
+          Proposed by AI — runs only if you approve.{a.aiAction.rationale ? <> Rationale: {a.aiAction.rationale}</> : null}
+        </p>
+      )}
+      {!cr && !a.aiAction && a.reason && <p className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">Reason: {a.reason}</p>}
       {cr?.chargeable && cr.amountIdr != null && (
         <p className="text-sm text-slate-600 dark:text-slate-300">Amount: <span className="font-medium">Rp {cr.amountIdr.toLocaleString('id-ID')}</span></p>
       )}

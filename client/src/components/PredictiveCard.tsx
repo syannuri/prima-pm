@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../api/client';
-import { Card } from './ui';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { api, ApiError } from '../api/client';
+import { Button, Card } from './ui';
+import { useToast } from './Toast';
 
 // Stage B — deterministic predictive slip/overrun signals from EVM/forecast. Not ML; the label makes
 // that honest. Shown on the project Overview.
@@ -34,12 +35,32 @@ function Meter({ title, sig }: { title: string; sig: RiskSignal }) {
   );
 }
 
+const SCORE_BY_LEVEL: Record<RiskLevel, number> = { LOW: 2, MEDIUM: 3, HIGH: 4 };
+
 export default function PredictiveCard({ projectId }: { projectId: string }) {
+  const toast = useToast();
   const { data } = useQuery({
     queryKey: ['predictive', projectId],
     queryFn: () => api.get<Predictive>(`/projects/${projectId}/predictive`),
   });
+  // Stage C — whether the AI may propose actions (env + tenant opt-in). Drives the propose footer.
+  const { data: avail } = useQuery({
+    queryKey: ['ai-actions-available', projectId],
+    queryFn: () => api.get<{ aiActionsAvailable: boolean }>(`/projects/${projectId}/ai-actions/available`),
+  });
+
+  const propose = useMutation({
+    mutationFn: (body: { actionType: string; params: unknown; rationale: string }) =>
+      api.post(`/projects/${projectId}/ai-actions/propose`, body),
+    onSuccess: () => toast.success('Usulan aksi diajukan untuk approval — berjalan hanya setelah disetujui.'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Gagal mengajukan usulan aksi.'),
+  });
+
   if (!data) return null;
+
+  const canPropose = avail?.aiActionsAvailable === true && data.hasData;
+  const slipHot = !!data.slip && data.slip.level !== 'LOW';
+  const overrunHot = !!data.overrun && data.overrun.level !== 'LOW';
 
   return (
     <Card className="!p-3">
@@ -53,6 +74,27 @@ export default function PredictiveCard({ projectId }: { projectId: string }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <Meter title="Schedule-slip risk" sig={data.slip} />
           <Meter title="Cost-overrun risk" sig={data.overrun} />
+        </div>
+      )}
+
+      {/* Stage C — turn a signal into an AI-proposed action; it only runs after human approval. */}
+      {canPropose && (slipHot || overrunHot) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5 dark:border-slate-800">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">🤖 Ajukan aksi:</span>
+          {slipHot && data.slip && (
+            <Button variant="secondary" className="!px-2 !py-1 !text-xs" disabled={propose.isPending}
+              onClick={() => propose.mutate({ actionType: 'TIDY_SCHEDULE', params: { mode: 'push' }, rationale: `Risiko slip ${LEVEL[data.slip!.level].label}: ${data.slip!.drivers.join('; ')}` })}>
+              Rapikan jadwal
+            </Button>
+          )}
+          {overrunHot && data.overrun && (
+            <Button variant="secondary" className="!px-2 !py-1 !text-xs" disabled={propose.isPending}
+              onClick={() => propose.mutate({ actionType: 'CREATE_RISK', rationale: `Risiko overrun ${LEVEL[data.overrun!.level].label}`,
+                params: { title: 'Potensi cost overrun (dari sinyal prediktif)', description: data.overrun!.drivers.join('; '), kind: 'THREAT', probabilityScore: SCORE_BY_LEVEL[data.overrun!.level], impactScore: SCORE_BY_LEVEL[data.overrun!.level] } })}>
+              Catat risiko overrun
+            </Button>
+          )}
+          <span className="text-[10px] text-slate-400 dark:text-slate-500">perlu persetujuan</span>
         </div>
       )}
     </Card>

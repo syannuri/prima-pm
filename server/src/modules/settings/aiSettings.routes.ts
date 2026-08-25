@@ -14,28 +14,37 @@ import { BadRequest } from '../../lib/errors.js';
 const router = Router();
 router.use(requireAuth, requireRole('ADMIN'));
 
-async function currentFlag(): Promise<boolean> {
+async function currentFlags(): Promise<{ enabled: boolean; actionsEnabled: boolean }> {
   const tid = getTenantStore()?.tenantId;
-  if (!tid) return false;
-  const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true } });
-  return t?.aiNarrativeEnabled ?? false;
+  if (!tid) return { enabled: false, actionsEnabled: false };
+  const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true, aiActionsEnabled: true } });
+  return { enabled: t?.aiNarrativeEnabled ?? false, actionsEnabled: t?.aiActionsEnabled ?? false };
 }
 
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
-    res.json({ configured: aiEnabled(), enabled: await currentFlag() });
+    res.json({ configured: aiEnabled(), ...(await currentFlags()) });
   }),
 );
 
+// `enabled` = narrative/advisory opt-in (aiNarrativeEnabled). `actionsEnabled` = Stage C AI-proposed
+// actions opt-in (aiActionsEnabled) — a SEPARATE, stronger consent. Either may be sent.
 router.patch(
   '/',
-  validateBody(z.object({ enabled: z.boolean() })),
+  validateBody(z.object({ enabled: z.boolean().optional(), actionsEnabled: z.boolean().optional() })
+    .refine((b) => b.enabled !== undefined || b.actionsEnabled !== undefined, { message: 'Nothing to update' })),
   asyncHandler(async (req, res) => {
     const tid = getTenantStore()?.tenantId;
     if (!tid) throw BadRequest('No active workspace to configure.');
-    await prisma.tenant.update({ where: { id: tid }, data: { aiNarrativeEnabled: req.body.enabled } });
-    res.json({ configured: aiEnabled(), enabled: req.body.enabled });
+    await prisma.tenant.update({
+      where: { id: tid },
+      data: {
+        ...(req.body.enabled !== undefined ? { aiNarrativeEnabled: req.body.enabled } : {}),
+        ...(req.body.actionsEnabled !== undefined ? { aiActionsEnabled: req.body.actionsEnabled } : {}),
+      },
+    });
+    res.json({ configured: aiEnabled(), ...(await currentFlags()) });
   }),
 );
 
