@@ -54,9 +54,30 @@ const NARRATIVE_JSON_SCHEMA = {
 // payload as `user`, and a raw JSON schema; get back parsed-but-unvalidated JSON (the caller
 // validates with its own zod schema). `draftNarrative` is a thin, typed wrapper kept for the
 // existing report service.
+// A read-only tool the assistant can call. `execute` runs on the server against existing services;
+// the model never touches the DB directly.
+export interface AiToolDef {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
 export interface AiPort {
   draftJson(input: { system: string; user: string; jsonSchema: Record<string, unknown>; maxTokens?: number }): Promise<unknown | null>;
   draftNarrative(input: { system: string; user: string }): Promise<NarrativeDraft | null>;
+  // Manual agentic tool loop for the project Q&A assistant (Phase 4). Optional so existing fake
+  // ports (narrative/CR/EVM/risk itests) don't need to implement it. `executeTool` is a server-side
+  // callback that runs the named read-only tool and returns a JSON string; the port drives the
+  // call → tool_use → tool_result loop, bounded by maxSteps, and returns the final answer text
+  // (null on refusal, empty output, or exceeding maxSteps).
+  runToolLoop?(input: {
+    system: string;
+    messages: { role: 'user' | 'assistant'; content: string }[];
+    tools: AiToolDef[];
+    executeTool: (name: string, input: unknown) => Promise<string>;
+    maxSteps?: number;
+    maxTokens?: number;
+  }): Promise<string | null>;
 }
 // Back-compat alias (report/narrative code imported this name).
 export type AiNarrativePort = AiPort;
@@ -98,6 +119,51 @@ function liveAiPort(): AiPort {
       if (raw == null) return null;
       const parsed = NarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
+    },
+    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500 }) {
+      const { apiKey, model } = aiConfig();
+      const client = new Anthropic({ apiKey });
+      const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
+      for (let step = 0; step < maxSteps; step++) {
+        const res = await client.messages.create({
+          model,
+          max_tokens: maxTokens,
+          thinking: { type: 'adaptive' },
+          output_config: { effort: 'medium' },
+          system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+          // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
+          // the SDK's Tool shape whose InputSchema requires the literal `type`.
+          tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[],
+          messages: msgs,
+        });
+        if (res.stop_reason === 'refusal') return null;
+        if (res.stop_reason === 'tool_use') {
+          // Echo the assistant turn (with its tool_use blocks) then run each tool and feed results back.
+          msgs.push({ role: 'assistant', content: res.content });
+          const toolResults: Anthropic.ToolResultBlockParam[] = [];
+          for (const block of res.content) {
+            if (block.type === 'tool_use') {
+              let out: string;
+              try {
+                out = await executeTool(block.name, block.input);
+              } catch {
+                out = JSON.stringify({ error: 'Tool gagal dijalankan.' });
+              }
+              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: out });
+            }
+          }
+          msgs.push({ role: 'user', content: toolResults });
+          continue;
+        }
+        // end_turn (or any non-tool stop) → return the concatenated text answer.
+        const text = res.content
+          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .map((b) => b.text)
+          .join('\n')
+          .trim();
+        return text || null;
+      }
+      return null; // exceeded maxSteps
     },
   };
 }
