@@ -917,6 +917,7 @@ export interface AiNarrativeDraft {
 export interface AiSettings {
   configured: boolean;
   enabled: boolean;
+  actionsEnabled: boolean;
 }
 
 // UAT (User Acceptance Test) — a structured, executable test-case template per project.
@@ -1101,7 +1102,7 @@ export interface ChatThread extends ChatConversationBase {
 export type ApprovalApproverKind = 'ROLE' | 'USER' | 'PROJECT_PM';
 // What kind of action a workflow gates. CHANGE_REQUEST, COST_BASELINE (lock), BASELINE_UNLOCK
 // (re-opening a locked baseline) and PROJECT_CLOSURE are all wired.
-export type ApprovalAppliesTo = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE';
+export type ApprovalAppliesTo = 'CHANGE_REQUEST' | 'COST_BASELINE' | 'BASELINE_UNLOCK' | 'PROJECT_CLOSURE' | 'AI_ACTION';
 export interface ApprovalApprover {
   id?: string;
   kind: ApprovalApproverKind;
@@ -1157,4 +1158,6 @@ export interface MyApproval {
     chargeable: boolean;
     amountIdr: number | null;
   } | null;
+  // Stage C — present only for AI_ACTION requests: the proposed action's kind + the AI's rationale.
+  aiAction?: { actionType: string | null; rationale: string | null } | null;
 }

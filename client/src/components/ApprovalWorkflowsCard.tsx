@@ -26,6 +26,7 @@ const APPLIES_TO: { value: ApprovalAppliesTo; label: string; hint: string }[] = 
   { value: 'COST_BASELINE', label: 'Cost baseline lock', hint: 'Locking the baseline (PMB/BAC) is routed for sign-off before it takes effect.' },
   { value: 'BASELINE_UNLOCK', label: 'Cost baseline unlock', hint: 'Re-opening a locked baseline is routed for sign-off before it unlocks — the baseline stays frozen until approved.' },
   { value: 'PROJECT_CLOSURE', label: 'Project closure', hint: 'Closing a project is routed for sign-off before it actually closes.' },
+  { value: 'AI_ACTION', label: 'AI-proposed action', hint: 'An action drafted by the AI (create risk, update progress, draft CR, tidy schedule) is routed for sign-off; it runs only when approved. If none is configured, a default PM+Admin approval is used.' },
 ];
 const appliesLabel = (v: ApprovalAppliesTo) => APPLIES_TO.find((a) => a.value === v)?.label ?? v;
 

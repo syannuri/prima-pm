@@ -332,6 +332,11 @@ model Tenant {
   // env unset ⇒ 503; tenant not opted in ⇒ 403. Default off so metrics are only sent to the LLM
   // provider when a tenant explicitly enables it.
   aiNarrativeEnabled Boolean   @default(false)
+  // Stage C — semi-autonomous AI actions. A SEPARATE, stronger opt-in than aiNarrativeEnabled:
+  // it lets the AI PROPOSE concrete writes (create risk, update task progress, draft CR, tidy
+  // schedule) that a human must approve before they execute. Default off even when narrative AI is
+  // on, so a tenant explicitly consents to AI-drafted change actions. Still env-gated too.
+  aiActionsEnabled Boolean   @default(false)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
@@ -389,6 +394,7 @@ model Tenant {
   approvalWorkflows  ApprovalWorkflow[]
   approvalRequests  ApprovalRequest[]
   approvalDelegations  ApprovalDelegation[]
+  aiActionProposals  AiActionProposal[]
 }
 
 // Append-only audit trail of Lemon Squeezy billing webhooks (what event flipped which plan).
@@ -689,6 +695,7 @@ model Project {
   requirements     Requirement[]
   commentaries     ProjectCommentary[]
   approvalRequests ApprovalRequest[]
+  aiActionProposals AiActionProposal[]
 
   @@index([status])
   @@index([pmUserId])
@@ -1540,6 +1547,7 @@ enum ApprovalAppliesTo {
   COST_BASELINE   // committing/locking the cost baseline (the PMB/BAC)
   BASELINE_UNLOCK // re-opening a locked baseline (the riskier, gated change-control action)
   PROJECT_CLOSURE // moving a project to CLOSED (wired in Phase 2b)
+  AI_ACTION       // Stage C: an AI-proposed write (risk/progress/CR/tidy) awaiting human approval
 }
 
 enum ApprovalStepMode {
@@ -1641,6 +1649,40 @@ model ApprovalRequest {
   @@index([entityType, entityId])
   @@index([projectId])
   @@index([status, dueAt])
+}
+
+// Stage C — a concrete, whitelisted action the AI has DRAFTED for a project, awaiting human
+// approval before it executes. The proposal is routed through the existing approval engine as an
+// AI_ACTION entity (ApprovalRequest.entityId = this row's id); on final APPROVE the executor runs
+// the real, audited write (createRisk / setTaskProgress / createChangeRequest / applyAutoSchedule)
+// with the APPROVER as actor — the AI never writes. Tenant-scoped (see scopedModels.ts).
+model AiActionProposal {
+  id           String            @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectId    String
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actionType   String            // registry key: CREATE_RISK | UPDATE_TASK_PROGRESS | CREATE_CHANGE_REQUEST | TIDY_SCHEDULE
+  params       Json              // validated action parameters, replayed verbatim by the executor
+  rationale    String?           // the AI's short justification (advisory, shown to the approver)
+  confidence   String?           // LOW | MEDIUM | HIGH (self-reported; advisory only)
+  status       AiActionStatus    @default(PENDING)
+  proposedById String?           // the user in whose session the AI staged this (FK-less id)
+  failureNote  String?           // set when execution threw on approval (status = FAILED)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  appliedAt    DateTime?
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([status])
+}
+
+enum AiActionStatus {
+  PENDING  // drafted, routed for approval
+  APPLIED  // approved and executed successfully
+  REJECTED // an approver declined it
+  FAILED   // approved but the executor threw (no effect applied)
 }
 
 model ApprovalDecision {

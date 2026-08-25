@@ -15,10 +15,11 @@ export default function AiNarrativeCard() {
     queryFn: () => api.get<AiSettings>('/ai-settings'),
   });
   const save = useMutation({
-    mutationFn: (enabled: boolean) => api.patch<AiSettings>('/ai-settings', { enabled }),
-    onSuccess: (s) => {
+    mutationFn: (patch: { enabled?: boolean; actionsEnabled?: boolean }) => api.patch<AiSettings>('/ai-settings', patch),
+    onSuccess: (s, patch) => {
       qc.setQueryData(['ai-settings'], s);
-      toast.success(s.enabled ? 'AI Status Narrative diaktifkan' : 'AI Status Narrative dimatikan');
+      if (patch.actionsEnabled !== undefined) toast.success(s.actionsEnabled ? 'Aksi AI diaktifkan' : 'Aksi AI dimatikan');
+      else toast.success(s.enabled ? 'AI Status Narrative diaktifkan' : 'AI Status Narrative dimatikan');
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Gagal menyimpan preferensi AI'),
   });
@@ -41,9 +42,27 @@ export default function AiNarrativeCard() {
             </div>
             <Toggle
               checked={data.enabled}
-              onChange={(v) => save.mutate(v)}
+              onChange={(v) => save.mutate({ enabled: v })}
               disabled={!data.configured || save.isPending}
               label="Aktifkan AI Status Narrative"
+            />
+          </div>
+
+          {/* Stage C — a SEPARATE, stronger opt-in: lets the AI PROPOSE concrete changes (create risk,
+              update progress, draft CR, tidy schedule) that a human must approve before they run. */}
+          <div className="mt-4 flex items-start justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
+            <div>
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Izinkan AI mengusulkan aksi (perlu persetujuan)</div>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                AI dapat mengusulkan perubahan (buat risiko, update progress, draft CR, rapikan jadwal). Usulan
+                <span className="font-medium"> tidak pernah berjalan otomatis</span> — selalu lewat approval dulu.
+              </p>
+            </div>
+            <Toggle
+              checked={data.actionsEnabled}
+              onChange={(v) => save.mutate({ actionsEnabled: v })}
+              disabled={!data.configured || save.isPending}
+              label="Izinkan aksi AI"
             />
           </div>
         </div>
