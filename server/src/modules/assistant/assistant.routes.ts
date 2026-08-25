@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { aiEnabled } from '../../lib/ai.js';
-import { askAssistant, assistantAvailable, assistantActionsAvailable, type AssistantTurn } from './assistant.service.js';
+import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -15,12 +15,22 @@ router.get('/available', asyncHandler(async (_req, res) => {
   res.json({ aiAvailable, actionsAvailable });
 }));
 
-// Recent conversation (last turns + the new question). Bounded to keep token cost + payload sane.
+// Proactive open-state briefing (deterministic, NO LLM cost): what needs the caller's attention now.
+router.get('/briefing', asyncHandler(async (req, res) => {
+  res.json(await assistantBriefing(req.user!.id, req.user!.role));
+}));
+
+// Recent conversation (last turns + the new question) + optional current-view context. Bounded to
+// keep token cost + payload sane.
 const askSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().min(1).max(4000),
   })).min(1).max(20),
+  context: z.object({
+    projectId: z.string().uuid().nullish(),
+    tab: z.string().max(40).nullish(),
+  }).optional(),
 });
 
 // Portfolio Q&A assistant (read-only, ephemeral). Any authenticated user; the service scopes every
@@ -35,8 +45,9 @@ router.post(
       return;
     }
     const messages = req.body.messages as AssistantTurn[];
-    // { answer, proposals } — proposals are any Stage C actions Anett staged this turn (for the card).
-    res.json(await askAssistant(req.user!.id, req.user!.role, messages));
+    // { answer, proposals, navigate } — proposals = Stage C actions staged this turn; navigate = how-to
+    // nav targets. `context` lets "proyek ini" resolve to the project the user is viewing.
+    res.json(await askAssistant(req.user!.id, req.user!.role, messages, req.body.context));
   }),
 );
 

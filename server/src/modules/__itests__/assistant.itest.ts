@@ -176,6 +176,44 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(res.body.navigate).toEqual([{ label: 'Buka Reports', path: '/reports' }]);
   });
 
+  it('CONTEXT + tools: resolves "proyek ini", scopes portfolio/tasks to accessible projects', async () => {
+    const [mine, other] = await runWithTenant(aico, () => Promise.all([
+      prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { id: true } }),
+      prisma.project.findFirst({ where: { code: 'OTHER-1' }, select: { id: true } }),
+    ]));
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system, executeTool }) {
+        const portfolio = await executeTool('get_portfolio_summary', {});
+        const tasks = await executeTool('list_project_tasks', { project_code: 'MINE-1' });
+        const foreign = await executeTool('list_project_tasks', { project_code: 'OTHER-1' });
+        return JSON.stringify({ system, portfolio, tasks, foreign });
+      },
+    });
+    // Viewing MINE-1 → "proyek ini" must resolve to it in the prompt.
+    const res = await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'x' }], context: { projectId: mine!.id, tab: 'Cost' } });
+    // A project OUTSIDE the caller's set must be ignored (never injected).
+    const resForeign = await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'x' }], context: { projectId: other!.id } });
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    expect(out.system).toContain('proyek MINE-1');
+    expect(out.system).toContain('proyek ini');
+    expect(JSON.parse(out.portfolio).totalProjects).toBe(1); // only MINE-1 — OTHER-1 excluded
+    expect(out.tasks).toContain('total');
+    expect(out.foreign).toContain('tidak dapat diakses'); // cross-PM task list refused
+    expect(JSON.parse(resForeign.body.answer).system).not.toContain('OTHER-1'); // foreign context ignored
+  });
+
+  it('GET /assistant/briefing returns the deterministic attention rollup', async () => {
+    const res = await request(app).get(api('/assistant/briefing')).set(bearer(pmToken));
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('approvalsWaiting');
+    expect(res.body).toHaveProperty('overdueTasks');
+    expect(Array.isArray(res.body.projectsWithOverdue)).toBe(true);
+  });
+
   it('502 when the model declines / returns nothing', async () => {
     __setAiPort({ async draftJson() { return null; }, async draftNarrative() { return null; }, async runToolLoop() { return null; } });
     const res = await ask(pmToken);
