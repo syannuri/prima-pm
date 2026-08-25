@@ -10,6 +10,8 @@ import { getClosureReadiness } from './closure.js';
 import { getActivationReadiness, getActivationReview, notifyActivationReady } from './activation.js';
 import { getNextSteps } from './nextsteps.js';
 import { aiAvailableForProject } from '../charter/crImpact.service.js';
+import { extractFromNotes } from '../dataextract/dataExtract.service.js';
+import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
@@ -279,6 +281,22 @@ router.get(
   requireProjectAccess(),
   asyncHandler(async (req, res) => {
     res.json({ aiAvailable: await aiAvailableForProject(req.params.projectId) });
+  }),
+);
+
+// Stage A — extract structured updates (task progress + issues) from free-text notes. Advisory,
+// ephemeral (returns a draft only; the client applies each item via the existing write endpoints).
+// Write access (PM/PMO/ADMIN). Gated globally by ANTHROPIC_API_KEY (503) + per-tenant opt-in (403).
+router.post(
+  '/:projectId/data-extract/ai-draft',
+  requireProjectAccess({ write: true }),
+  validateBody(z.object({ text: z.string().min(1).max(20000) })),
+  asyncHandler(async (req, res) => {
+    if (!aiEnabled()) {
+      res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+      return;
+    }
+    res.json(await extractFromNotes(req.params.projectId, req.body.text));
   }),
 );
 
