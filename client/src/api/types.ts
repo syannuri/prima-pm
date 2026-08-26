@@ -862,6 +862,32 @@ export interface Forecast {
   sCurve: { t: string; pv: number; ac: number | null; forecast: number | null }[];
 }
 
+export type CashflowGranularity = 'week' | 'month' | 'quarter';
+
+export interface CashflowPeriod {
+  key: string;
+  label: string;
+  start: string;
+  planned: number;          // BCWS increment this period
+  actual: number | null;    // AC increment (null once fully in the future)
+  forecast: number | null;  // projected cash need this period (null for fully-past periods)
+  committed: number;        // Σ obligated PO amounts bucketed into this period
+  cumPlanned: number;
+  cumActual: number | null;
+  cumForecast: number | null;
+}
+
+// Time-phased cash-flow / budget: per-period planned/actual/forecast/committed + cumulative
+// S-curves, over the project's planned window. Read-only view over cost/EVM/procurement data.
+export interface Cashflow {
+  hasData: boolean;
+  granularity: CashflowGranularity;
+  statusDate: string;
+  window: { start: string; end: string } | null;
+  summary: { bac: number; acToDate: number; eacLikely: number; remaining: number; totalCommitted: number };
+  periods: CashflowPeriod[];
+}
+
 // Curated single-project status report (Reports page, PM + ADMIN/PMO). Period drives the
 // S-curve granularity + the period label. Reuses the Forecast payload for the chart + EAC.
 export interface ProjectReportData {

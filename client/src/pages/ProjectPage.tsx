@@ -11,6 +11,7 @@ import { PROJECT_STATUS_BADGE } from '../lib/labels';
 import { useIsMobile } from '../hooks/useIsMobile';
 import CharterPanel from './panels/CharterPanel';
 import CostPanel from './panels/CostPanel';
+import CashflowPanel from './panels/CashflowPanel';
 import TimesheetPanel from './panels/TimesheetPanel';
 import ForecastPanel from './panels/ForecastPanel';
 import RiskPanel from './panels/RiskPanel';
@@ -41,7 +42,7 @@ import { canGovernProject } from '../lib/perms';
 import { useLang } from '../context/LanguageContext';
 import { DELIVERY_APPROACH_BADGE, DELIVERY_APPROACH_LABEL } from '../lib/labels';
 
-type Tab = 'Overview' | 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Procurement' | 'Timesheet' | 'Health' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
+type Tab = 'Overview' | 'Charter' | 'Kick-Off' | 'Stakeholders' | 'Requirements' | 'Agile' | 'Cost' | 'Cash-flow' | 'Procurement' | 'Timesheet' | 'Health' | 'Forecast' | 'EVM Trend' | 'Risk' | 'RAID' | 'Issues' | 'UAT' | 'Schedule' | 'Change Req' | 'Closeout' | 'Audit';
 
 // Tabs hidden on phones (kept on tablet/desktop). Data-entry / governance surfaces that don't suit
 // a small screen; excluded from the tab bar and never resolved as the active tab on mobile.
@@ -153,7 +154,7 @@ export default function ProjectPage() {
     ...(chartered ? (['Overview'] as Tab[]) : []),
     ...(showSchedule ? (['Schedule'] as Tab[]) : []),
     ...(isAgile ? (['Agile'] as Tab[]) : []),
-    'Cost', 'Procurement', 'Timesheet', 'Health', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
+    'Cost', 'Cash-flow', 'Procurement', 'Timesheet', 'Health', 'Forecast', 'EVM Trend', 'Risk', 'RAID', 'Issues', 'Change Req',
     'Charter', 'Stakeholders', 'Requirements', 'UAT', 'Closeout', 'Audit',
     // Timesheet & Change Req are data-entry/governance tabs kept to desktop/tablet — hidden on
     // phones to keep the two-level tab bar lean (they're still fully reachable on a wide screen).
@@ -267,6 +268,7 @@ export default function ProjectPage() {
       {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} costBaselineIdr={project.costBaselineIdr} personalOwnerId={project.personalOwnerId ?? null} assignedPmId={project.pmUserId} assignedPmName={project.pm?.name ?? null} />}
       {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
       {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} focusId={focus?.id ?? null} focusKey={focus?.key} />}
+      {activeTab === 'Cash-flow' && chartered && <CashflowPanel projectId={projectId} />}
       {activeTab === 'Procurement' && chartered && <ProcurementPanel projectId={projectId} />}
       {activeTab === 'Stakeholders' && <StakeholderPanel projectId={projectId} />}
       {activeTab === 'Requirements' && <RequirementsPanel projectId={projectId} />}
