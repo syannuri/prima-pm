@@ -105,9 +105,11 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
       tooltip={snaps.length ? ({ hoverTime }) => {
         const s = snaps[nearestIndex(snapTimes, hoverTime)];
         return <ChartTip heading={formatDate(s.statusDate)} rows={[
-          { label: progress ? 'Planned' : 'PV', value: fmtFull(s.pv), color: PV },
-          { label: progress ? 'Earned' : 'EV', value: fmtFull(s.ev), color: EV },
-          { label: progress ? 'Spent' : 'AC', value: fmtFull(s.ac), color: AC },
+          // V() maps to the axis unit: money mode = identity (IDR), progress mode = % of BAC. Must
+          // convert BEFORE formatting or the % formatter prints the raw rupiah magnitude with a "%".
+          { label: progress ? 'Planned' : 'PV', value: fmtFull(V(s.pv)), color: PV },
+          { label: progress ? 'Earned' : 'EV', value: fmtFull(V(s.ev)), color: EV },
+          { label: progress ? 'Spent' : 'AC', value: fmtFull(V(s.ac)), color: AC },
           { label: 'CPI · SPI', value: `${formatNum(s.cpi, 2)} · ${formatNum(s.spi, 2)}`, color: '#64748b' },
           { label: 'Complete', value: `${formatNum(s.weightedProgress * 100, 0)}%`, color: '#64748b' },
         ]} />;
