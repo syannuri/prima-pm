@@ -69,6 +69,29 @@ function TypingDots({ reduce }: { reduce: boolean }) {
   );
 }
 
+// Maximize / restore glyph for the enlarge toggle (Lucide-style stroke SVG).
+function ResizeIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {expanded ? (
+        <>
+          <polyline points="4 14 10 14 10 20" />
+          <polyline points="20 10 14 10 14 4" />
+          <line x1="14" y1="10" x2="21" y2="3" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </>
+      ) : (
+        <>
+          <polyline points="15 3 21 3 21 9" />
+          <polyline points="9 21 3 21 3 15" />
+          <line x1="21" y1="3" x2="14" y2="10" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export default function AiAssistant() {
   const reduce = usePrefersReducedMotion();
   const { lang } = useLang();
@@ -79,8 +102,13 @@ export default function AiAssistant() {
     try { return JSON.parse(sessionStorage.getItem(CHAT_KEY) || '[]') as Turn[]; } catch { return []; }
   });
   const [input, setInput] = useState('');
+  const [expanded, setExpanded] = useState(false); // larger panel (not fullscreen)
+  // Typewriter reveal for the freshest answer (Hostinger-style): which turn is animating + how far.
+  const [streamIdx, setStreamIdx] = useState<number | null>(null);
+  const [streamLen, setStreamLen] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const turnsRef = useRef<Turn[]>(turns); // always-current turns, so onSuccess can index the new answer
 
   // What the user is currently viewing → lets "proyek ini" resolve without naming it.
   const location = useLocation();
@@ -109,13 +137,28 @@ export default function AiAssistant() {
       context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
       lang,
     }),
-    onSuccess: (res) => setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined }]),
+    onSuccess: (res) => {
+      // The new answer lands at the current end of the list; start the typewriter there (unless reduced-motion).
+      if (!reduce && res.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
+      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined }]);
+    },
     onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : 'AI tidak dapat menjawab saat ini.', error: true }]),
   });
 
-  // Persist + keep the view pinned to the latest message.
+  // Persist + keep the view pinned to the latest message (also while the typewriter is revealing).
+  useEffect(() => { turnsRef.current = turns; }, [turns]);
   useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reduce ? 'auto' : 'smooth' }); }, [turns, ask.isPending, reduce]);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reduce ? 'auto' : 'smooth' }); }, [turns, ask.isPending, streamLen, reduce]);
+
+  // Typewriter: advance the revealed slice a few chars per frame until the full answer is shown.
+  useEffect(() => {
+    if (streamIdx === null) return;
+    const full = turns[streamIdx]?.content ?? '';
+    if (streamLen >= full.length) { setStreamIdx(null); return; }
+    const step = Math.max(2, Math.ceil(full.length / 140)); // scale so long answers still finish in ~2s
+    const id = setTimeout(() => setStreamLen((n) => Math.min(full.length, n + step)), 16);
+    return () => clearTimeout(id);
+  }, [streamIdx, streamLen, turns]);
 
   // Auto-grow the input up to a cap (mirrors max-h-24 = 6rem).
   useEffect(() => {
@@ -155,7 +198,7 @@ export default function AiAssistant() {
     ask.mutate(base);
   };
 
-  const newChat = () => { setTurns([]); setInput(''); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
+  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
 
   // Contextual starter chips — project-aware when viewing a project; the action chip only when
   // Stage C propose is available.
@@ -182,8 +225,8 @@ export default function AiAssistant() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Tanya Anett"
-          title="Tanya Anett"
+          aria-label="Tanya Anett AI Assistant"
+          title="Anett AI Assistant"
           className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'transition-all duration-300 hover:scale-105 active:scale-90'}`}
         >
           <AnettIcon className="h-6 w-6" />
@@ -194,21 +237,24 @@ export default function AiAssistant() {
         <div
           role="dialog"
           aria-label="Asisten Anett"
-          className={`fixed right-4 z-[70] flex w-[min(92vw,25rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
-          style={{ maxHeight: 'min(72vh, 34rem)' }}
+          className={`fixed right-4 z-[70] flex ${expanded ? 'w-[min(94vw,44rem)]' : 'w-[min(92vw,25rem)]'} origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
+          style={{ maxHeight: expanded ? 'min(88vh, 52rem)' : 'min(72vh, 34rem)' }}
         >
           {/* Header — gradient identity band with avatar + status */}
           <div className="flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10">
             <AnettAvatar className="h-9 w-9" icon="h-5 w-5" />
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Anett</div>
+              <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">Anett AI Assistant</div>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> PM Assistant · {canPropose ? 'baca + usul aksi' : 'membaca data proyek'}
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> {canPropose ? 'Baca data proyek & usulkan aksi' : 'Membaca data proyek'}
               </div>
             </div>
             {turns.length > 0 && (
               <button onClick={newChat} aria-label="Percakapan baru" title="Percakapan baru" className="rounded-lg px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-white/60 dark:text-violet-300 dark:hover:bg-slate-800">+ Baru</button>
             )}
+            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? 'Perkecil panel' : 'Perbesar panel'} title={expanded ? 'Perkecil' : 'Perbesar'} className="hidden h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 md:grid dark:hover:bg-slate-800">
+              <ResizeIcon expanded={expanded} />
+            </button>
             <button onClick={() => setOpen(false)} aria-label="Tutup" className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800">✕</button>
           </div>
 
@@ -267,7 +313,9 @@ export default function AiAssistant() {
                         : 'rounded-tl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
                   }`}>
                     {t.role === 'assistant' && !t.error ? (
-                      <Markdown text={t.content} className="text-sm" />
+                      <div className={i === streamIdx ? 'anett-streaming' : undefined}>
+                        <Markdown text={i === streamIdx ? t.content.slice(0, streamLen) : t.content} className="text-sm" />
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-1">
                         <span>{t.error ? `⚠️ ${t.content}` : t.content}</span>
@@ -278,8 +326,8 @@ export default function AiAssistant() {
                     )}
                   </div>
                 </div>
-                {/* Stage C — inline card when Anett staged action proposals this turn */}
-                {t.proposals && t.proposals.length > 0 && (
+                {/* Stage C — inline card when Anett staged action proposals this turn (after the typewriter finishes) */}
+                {i !== streamIdx && t.proposals && t.proposals.length > 0 && (
                   <div className="ml-10 mt-1.5 rounded-xl border border-violet-200 bg-violet-50/70 p-2.5 text-xs dark:border-violet-800/60 dark:bg-violet-900/20">
                     <div className="mb-1 flex items-center gap-1.5 font-semibold text-violet-700 dark:text-violet-300">🤖 Usulan aksi diajukan</div>
                     <ul className="space-y-0.5 text-slate-600 dark:text-slate-300">
@@ -291,7 +339,7 @@ export default function AiAssistant() {
                   </div>
                 )}
                 {/* Grounded "how-to" navigation — real in-app router links surfaced by the process guide */}
-                {t.navigate && t.navigate.length > 0 && (
+                {i !== streamIdx && t.navigate && t.navigate.length > 0 && (
                   <div className="ml-10 mt-1.5 flex flex-wrap gap-1.5">
                     {t.navigate.map((n, j) => (
                       <Link key={j} to={n.path} onClick={() => setOpen(false)} className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-white px-2.5 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-50 dark:border-violet-800/60 dark:bg-slate-900 dark:text-violet-300 dark:hover:bg-violet-900/30">
@@ -304,7 +352,7 @@ export default function AiAssistant() {
             ))}
 
             {/* Dynamic follow-up chips after the latest answer — nudge the next useful question */}
-            {lastIsAnswer && !ask.isPending && (
+            {lastIsAnswer && !ask.isPending && streamIdx === null && (
               <div className="ml-10 flex flex-wrap gap-1.5">
                 {followups.map((c) => (
                   <button key={c} onClick={() => sendText(c)} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
