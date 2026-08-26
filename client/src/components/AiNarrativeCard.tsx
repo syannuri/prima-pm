@@ -15,10 +15,11 @@ export default function AiNarrativeCard() {
     queryFn: () => api.get<AiSettings>('/ai-settings'),
   });
   const save = useMutation({
-    mutationFn: (patch: { enabled?: boolean; actionsEnabled?: boolean }) => api.patch<AiSettings>('/ai-settings', patch),
+    mutationFn: (patch: { enabled?: boolean; actionsEnabled?: boolean; proactiveEnabled?: boolean }) => api.patch<AiSettings>('/ai-settings', patch),
     onSuccess: (s, patch) => {
       qc.setQueryData(['ai-settings'], s);
-      if (patch.actionsEnabled !== undefined) toast.success(s.actionsEnabled ? 'Aksi AI diaktifkan' : 'Aksi AI dimatikan');
+      if (patch.proactiveEnabled !== undefined) toast.success(s.proactiveEnabled ? 'Draft mingguan otomatis diaktifkan' : 'Draft mingguan otomatis dimatikan');
+      else if (patch.actionsEnabled !== undefined) toast.success(s.actionsEnabled ? 'Aksi AI diaktifkan' : 'Aksi AI dimatikan');
       else toast.success(s.enabled ? 'AI Status Narrative diaktifkan' : 'AI Status Narrative dimatikan');
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Gagal menyimpan preferensi AI'),
@@ -63,6 +64,25 @@ export default function AiNarrativeCard() {
               onChange={(v) => save.mutate({ actionsEnabled: v })}
               disabled={!data.configured || save.isPending}
               label="Izinkan aksi AI"
+            />
+          </div>
+
+          {/* Proactive AI — a SEPARATE, stronger opt-in still: a weekly sweep auto-drafts a status
+              narrative + predictive flags for every active project (unattended AI spend), for the PM
+              to review. */}
+          <div className="mt-4 flex items-start justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
+            <div>
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Draft status mingguan otomatis (proaktif)</div>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                Setiap minggu AI menyusun draft narasi status + sinyal prediktif untuk tiap proyek aktif, muncul di
+                <span className="font-medium"> Reports</span> untuk ditinjau PM. <span className="font-medium">Tidak pernah terbit otomatis</span>.
+              </p>
+            </div>
+            <Toggle
+              checked={data.proactiveEnabled}
+              onChange={(v) => save.mutate({ proactiveEnabled: v })}
+              disabled={!data.configured || save.isPending}
+              label="Draft status mingguan otomatis"
             />
           </div>
         </div>

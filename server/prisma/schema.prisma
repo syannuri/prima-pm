@@ -337,10 +337,16 @@ model Tenant {
   // schedule) that a human must approve before they execute. Default off even when narrative AI is
   // on, so a tenant explicitly consents to AI-drafted change actions. Still env-gated too.
   aiActionsEnabled Boolean   @default(false)
+  // Proactive AI — a SEPARATE, stronger opt-in still: it lets a scheduled weekly sweep auto-DRAFT a
+  // status narrative + predictive flags for every active project (spending on the AI provider with
+  // no human click), landing them as PENDING briefings a PM reviews. Default off even when narrative
+  // AI is on, so a tenant explicitly consents to unattended AI spend. Env-gated too.
+  aiProactiveEnabled Boolean @default(false)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
   memberships Membership[]
+  aiBriefings AiBriefing[]
   billingEvents  BillingEvent[]
   apiKeys  ApiKey[]
   webhookSubscriptions  WebhookSubscription[]
@@ -694,6 +700,7 @@ model Project {
   bookmarks        ProjectBookmark[]
   requirements     Requirement[]
   commentaries     ProjectCommentary[]
+  aiBriefings      AiBriefing[]
   approvalRequests ApprovalRequest[]
   aiActionProposals AiActionProposal[]
 
@@ -1117,6 +1124,58 @@ model ProjectCommentary {
 
   @@unique([projectId, period, periodKey])
   @@index([tenantId])
+}
+
+// Proactive AI briefing — a PENDING, AI-DRAFTED status narrative (+ predictive slip/overrun flags)
+// produced by the scheduled weekly sweep. NOT published: a PM reviews it, then Apply (→ writes a
+// ProjectCommentary) or Dismiss. Kept separate from ProjectCommentary so the sweep never overwrites
+// a human's saved narrative. One row per project per reporting period.
+enum AiBriefingStatus {
+  PENDING
+  APPLIED
+  DISMISSED
+}
+
+model AiBriefing {
+  id        String  @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant? @relation(fields: [tenantId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Same reporting bucket as ProjectCommentary (period=weekly|…; periodKey normalized start).
+  period    String
+  periodKey String
+
+  status    AiBriefingStatus @default(PENDING)
+
+  // The AI draft (mirrors NarrativeDraft: executive summary + the three commentary fields).
+  execSummary String? @db.Text
+  highlights  String? @db.Text
+  lowlights   String? @db.Text
+  nextFocus   String? @db.Text
+
+  // Deterministic predictive snapshot captured at sweep time (slip/overrun level + score), so the
+  // briefing shows the risk picture without a re-compute. LOW/MED/HIGH + 0..100.
+  slipLevel     String?
+  slipScore     Int?
+  overrunLevel  String?
+  overrunScore  Int?
+
+  model       String? // which AI model drafted it (audit / cost visibility)
+  generatedAt DateTime @default(now())
+
+  // Review trail (denormalized, no FK — mirrors ProjectCommentary's author fields).
+  reviewedById   String?
+  reviewedByName String?
+  reviewedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, period, periodKey])
+  @@index([tenantId])
+  @@index([projectId, status])
 }
 
 enum IssueImpact {

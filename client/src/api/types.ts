@@ -888,6 +888,26 @@ export interface Cashflow {
   periods: CashflowPeriod[];
 }
 
+// Proactive AI briefing — a PENDING, AI-drafted status narrative + predictive flags awaiting PM
+// review. Drives the Reports banner + the "AI briefings" inbox. projectCode/Name only present in
+// the inbox list variant.
+export interface AiBriefing {
+  id: string;
+  projectId: string;
+  projectCode?: string;
+  projectName?: string;
+  period: string;
+  periodKey: string;
+  execSummary: string | null;
+  highlights: string | null;
+  lowlights: string | null;
+  nextFocus: string | null;
+  slip: { level: string; score: number } | null;
+  overrun: { level: string; score: number } | null;
+  model: string | null;
+  generatedAt: string;
+}
+
 // Curated single-project status report (Reports page, PM + ADMIN/PMO). Period drives the
 // S-curve granularity + the period label. Reuses the Forecast payload for the chart + EAC.
 export interface ProjectReportData {
@@ -944,6 +964,7 @@ export interface AiSettings {
   configured: boolean;
   enabled: boolean;
   actionsEnabled: boolean;
+  proactiveEnabled: boolean;
 }
 
 // UAT (User Acceptance Test) — a structured, executable test-case template per project.

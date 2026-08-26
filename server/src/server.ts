@@ -7,6 +7,7 @@ import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
 import { escalateOverdueApprovals } from './modules/approval/approval.service.js';
 import { runTrialReminderSweep } from './modules/billing/trialReminders.js';
 import { runDigestSweepIfDue } from './modules/notification/digest.service.js';
+import { runProactiveSweepIfDue } from './modules/report/proactive.service.js';
 import { logger, release, initSentry } from './lib/observability.js';
 
 // Initialise error tracking before anything else (no-op unless SENTRY_DSN is set).
@@ -129,6 +130,23 @@ async function main() {
   const digestTimer = setInterval(() => void sweepDigests(), DIGEST_SWEEP_MS);
   digestTimer.unref();
 
+  // Proactive-AI sweep: once a week (PROACTIVE_WEEKDAY/HOUR, falling back to the digest schedule)
+  // auto-draft a status narrative + predictive flags for each active project in an opted-in tenant.
+  // Checked hourly; a cheap no-op outside the window, when the AI key is unset, or with no opted-in
+  // tenant. Dormant-by-default like the rest of the AI stack.
+  const PROACTIVE_SWEEP_MS = 60 * 60 * 1000;
+  const sweepProactive = async () => {
+    try {
+      const r = await runProactiveSweepIfDue();
+      if (r.drafted > 0) console.log(`[prima-pm] drafted ${r.drafted} proactive AI briefing(s)`);
+    } catch (err) {
+      console.error('[prima-pm] proactive AI sweep failed', err);
+    }
+  };
+  void sweepProactive();
+  const proactiveTimer = setInterval(() => void sweepProactive(), PROACTIVE_SWEEP_MS);
+  proactiveTimer.unref();
+
   const shutdown = async (signal: string) => {
     console.log(`[prima-pm] ${signal} received, shutting down...`);
     clearInterval(pruneTimer);
@@ -137,6 +155,7 @@ async function main() {
     clearInterval(approvalSlaTimer);
     clearInterval(trialReminderTimer);
     clearInterval(digestTimer);
+    clearInterval(proactiveTimer);
     server.close();
     await prisma.$disconnect();
     process.exit(0);

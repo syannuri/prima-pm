@@ -10,6 +10,9 @@ export function aiConfig() {
     apiKey: process.env.ANTHROPIC_API_KEY ?? '',
     // Default to the most capable model; overridable for cost tuning without a code change.
     model: process.env.AI_MODEL || 'claude-opus-4-8',
+    // Cheaper model for BULK/proactive work (the weekly portfolio sweep drafts one narrative per
+    // active project — Haiku keeps that affordable). Overridable; falls back to Haiku.
+    proactiveModel: process.env.AI_MODEL_PROACTIVE || 'claude-haiku-4-5',
   };
 }
 
@@ -63,8 +66,8 @@ export interface AiToolDef {
 }
 
 export interface AiPort {
-  draftJson(input: { system: string; user: string; jsonSchema: Record<string, unknown>; maxTokens?: number }): Promise<unknown | null>;
-  draftNarrative(input: { system: string; user: string }): Promise<NarrativeDraft | null>;
+  draftJson(input: { system: string; user: string; jsonSchema: Record<string, unknown>; maxTokens?: number; model?: string }): Promise<unknown | null>;
+  draftNarrative(input: { system: string; user: string; model?: string }): Promise<NarrativeDraft | null>;
   // Manual agentic tool loop for the project Q&A assistant (Phase 4). Optional so existing fake
   // ports (narrative/CR/EVM/risk itests) don't need to implement it. `executeTool` is a server-side
   // callback that runs the named read-only tool and returns a JSON string; the port drives the
@@ -91,8 +94,9 @@ export const __setAiPort = __setAiNarrativePort;
 
 function liveAiPort(): AiPort {
   return {
-    async draftJson({ system, user, jsonSchema, maxTokens }) {
-      const { apiKey, model } = aiConfig();
+    async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride }) {
+      const { apiKey, model: defaultModel } = aiConfig();
+      const model = modelOverride || defaultModel;
       const client = new Anthropic({ apiKey });
       // Structured output (constrains to valid JSON) + adaptive thinking (light reasoning) + medium
       // effort (cost/quality balance). System prompt is stable per feature ⇒ prompt-cached.
@@ -114,8 +118,8 @@ function liveAiPort(): AiPort {
         return null; // non-JSON output (shouldn't happen with json_schema) → graceful null
       }
     },
-    async draftNarrative({ system, user }) {
-      const raw = await this.draftJson({ system, user, jsonSchema: NARRATIVE_JSON_SCHEMA });
+    async draftNarrative({ system, user, model }) {
+      const raw = await this.draftJson({ system, user, jsonSchema: NARRATIVE_JSON_SCHEMA, model });
       if (raw == null) return null;
       const parsed = NarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
