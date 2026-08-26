@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import type { AgileBoard, AiNarrativeDraft, Project, ProjectCommentary, ProjectReportData } from '../api/types';
+import type { AgileBoard, AiBriefing, AiNarrativeDraft, Project, ProjectCommentary, ProjectReportData } from '../api/types';
 import { Badge, Button, Card, EmptyState, Select, Spinner } from '../components/ui';
 import { formatIdrShort, formatDate } from '../lib/format';
 import DonutChart from '../components/DonutChart';
@@ -150,6 +150,9 @@ export default function ReportsPage() {
               {(view === 'executive' || view === 'portfolio' || view === 'raid') && <Button disabled={!projects.length} onClick={downloadBoardPack} title="Portfolio health + top risks, issues & decisions in one steering-committee PDF">📋 Board Pack</Button>}
             </div>
           </Card>
+
+          {/* Proactive AI briefings inbox — pending auto-drafts across the user's projects. */}
+          {canEditCommentary && <AiBriefingsInbox onOpen={(pid) => setProjectId(pid)} />}
 
           {/* Project Report — the built view */}
           {view === 'project' && (
@@ -355,6 +358,39 @@ const ACCENT_BAR: Record<string, string> = {
 
 // PM narrative for the reporting bucket — read view + inline editor (write access only). The story
 // the EVM KPIs can't tell, so a status report reads like a report, not a dashboard dump.
+// Portfolio inbox of PENDING proactive AI briefings (the weekly sweep's auto-drafts) across the
+// user's projects. "Review" jumps the Reports project selector to that project, where the commentary
+// section shows the full draft banner. Hidden when there's nothing pending.
+function AiBriefingsInbox({ onOpen }: { onOpen: (projectId: string) => void }) {
+  const q = useQuery({ queryKey: ['ai-briefings'], queryFn: () => api.get<{ briefings: AiBriefing[] }>('/ai-briefings') });
+  const briefings = q.data?.briefings ?? [];
+  if (briefings.length === 0) return null;
+  return (
+    <Card className="border-violet-200 dark:border-violet-900/50">
+      <div className="flex items-center gap-2 text-sm font-semibold text-violet-700 dark:text-violet-300">
+        ✨ AI briefings
+        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs dark:bg-violet-900/40">{briefings.length}</span>
+      </div>
+      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Weekly AI-drafted status updates awaiting your review.</p>
+      <ul className="mt-3 space-y-2">
+        {briefings.map((b) => (
+          <li key={b.id} className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-800">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                <span className="truncate">{b.projectCode} — {b.projectName}</span>
+                {b.slip && b.slip.level !== 'LOW' && <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Slip {b.slip.level}</span>}
+                {b.overrun && b.overrun.level !== 'LOW' && <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">Overrun {b.overrun.level}</span>}
+              </div>
+              {b.execSummary && <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{b.execSummary}</p>}
+            </div>
+            <Button variant="secondary" onClick={() => onOpen(b.projectId)} className="shrink-0">Review</Button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable }: {
   commentary: ProjectReportData['commentary']; projectId: string; period: Period; canEdit: boolean; aiAvailable: boolean;
 }) {
@@ -365,6 +401,18 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
   // Executive summary from the last AI draft — shown as a review banner above the editor (the three
   // editable fields fill the commentary). Cleared once the user saves or cancels.
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  // When editing was started from a proactive AI briefing, remember its id so saving the commentary
+  // also marks the briefing APPLIED (resolving it out of the banner + inbox).
+  const [applyBriefingId, setApplyBriefingId] = useState<string | null>(null);
+
+  // Proactive AI briefing pending review for this project (the weekly sweep's auto-draft). Drives the
+  // review banner. Only fetched for users who can edit the commentary.
+  const briefingQ = useQuery({
+    queryKey: ['ai-briefing', projectId],
+    queryFn: () => api.get<AiBriefing | null>(`/projects/${projectId}/ai-briefing`),
+    enabled: canEdit,
+  });
+  const briefing = briefingQ.data ?? null;
 
   const startEdit = () => {
     setDraft({
@@ -373,12 +421,31 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
       nextFocus: commentary.nextFocus ?? '',
     });
     setAiSummary(null);
+    setApplyBriefingId(null);
     setEditing(true);
   };
 
+  // Load a proactive briefing into the editor (still fully editable — human-in-the-loop). Saving
+  // then applies it.
+  const useBriefing = (b: AiBriefing) => {
+    setDraft({ highlights: b.highlights ?? '', lowlights: b.lowlights ?? '', nextFocus: b.nextFocus ?? '' });
+    setAiSummary(b.execSummary);
+    setApplyBriefingId(b.id);
+    setEditing(true);
+  };
+
+  const resolveBriefing = useMutation({
+    mutationFn: (v: { id: string; action: 'apply' | 'dismiss' }) => api.post(`/projects/${projectId}/ai-briefing/${v.id}/${v.action}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-briefing', projectId] }),
+  });
+
   const save = useMutation({
     mutationFn: () => api.put<ProjectCommentary>(`/projects/${projectId}/report/commentary?period=${period}`, draft),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['report', projectId, period] }); setEditing(false); setAiSummary(null); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report', projectId, period] });
+      if (applyBriefingId) resolveBriefing.mutate({ id: applyBriefingId, action: 'apply' });
+      setEditing(false); setAiSummary(null); setApplyBriefingId(null);
+    },
   });
 
   // Generate a DRAFT with Claude, then drop into edit mode with the fields pre-filled (still fully
@@ -417,6 +484,25 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
         )}
       </div>
       {aiError && !editing && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{aiError}</p>}
+
+      {/* Proactive AI briefing awaiting review — the weekly sweep auto-drafted this. Human-in-the-loop:
+          "Use draft" loads it into the editor; saving applies it. "Dismiss" discards it. */}
+      {briefing && !editing && canEdit && (
+        <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2.5 dark:border-violet-900/50 dark:bg-violet-950/20">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              ✨ AI drafted this week’s status
+              {briefing.slip && briefing.slip.level !== 'LOW' && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Slip: {briefing.slip.level}</span>}
+              {briefing.overrun && briefing.overrun.level !== 'LOW' && <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">Overrun: {briefing.overrun.level}</span>}
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button variant="secondary" onClick={() => useBriefing(briefing)}>Use draft</Button>
+              <Button variant="ghost" onClick={() => resolveBriefing.mutate({ id: briefing.id, action: 'dismiss' })} disabled={resolveBriefing.isPending}>Dismiss</Button>
+            </div>
+          </div>
+          {briefing.execSummary && <p className="mt-1.5 text-sm text-slate-700 dark:text-slate-200">{briefing.execSummary}</p>}
+        </div>
+      )}
 
       {editing ? (
         <div className="space-y-3">

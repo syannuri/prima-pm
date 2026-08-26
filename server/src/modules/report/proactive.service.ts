@@ -15,6 +15,9 @@ import { getProjectReport, periodKey } from './report.service.js';
 import { buildNarrativePrompt, type NarrativeLang } from './narrative.service.js';
 import { getProjectPredictive } from '../predictive/predictive.service.js';
 import { createNotification } from '../notification/notification.service.js';
+import { listProjects } from '../projects/projects.service.js';
+import { NotFound } from '../../lib/errors.js';
+import type { Role } from '@prisma/client';
 
 const PERIOD = 'weekly' as const;
 
@@ -125,4 +128,73 @@ export async function runProactiveSweepIfDue(now: Date = new Date()): Promise<{ 
     });
   }
   return { drafted };
+}
+
+// ---------------------------------------------------------------------------
+// Review queries (drive the Reports banner + the portfolio "AI briefings" inbox)
+// ---------------------------------------------------------------------------
+
+function briefingView(b: {
+  id: string; projectId: string; period: string; periodKey: string;
+  execSummary: string | null; highlights: string | null; lowlights: string | null; nextFocus: string | null;
+  slipLevel: string | null; slipScore: number | null; overrunLevel: string | null; overrunScore: number | null;
+  model: string | null; generatedAt: Date;
+}) {
+  return {
+    id: b.id,
+    projectId: b.projectId,
+    period: b.period,
+    periodKey: b.periodKey,
+    execSummary: b.execSummary,
+    highlights: b.highlights,
+    lowlights: b.lowlights,
+    nextFocus: b.nextFocus,
+    slip: b.slipLevel ? { level: b.slipLevel, score: b.slipScore ?? 0 } : null,
+    overrun: b.overrunLevel ? { level: b.overrunLevel, score: b.overrunScore ?? 0 } : null,
+    model: b.model,
+    generatedAt: b.generatedAt.toISOString(),
+  };
+}
+
+// Latest PENDING briefing for a project (drives the Reports banner). null when none.
+export async function getPendingBriefing(projectId: string) {
+  const b = await prisma.aiBriefing.findFirst({
+    where: { projectId, status: 'PENDING' },
+    orderBy: { generatedAt: 'desc' },
+  });
+  return b ? briefingView(b) : null;
+}
+
+// The caller's portfolio inbox: PENDING briefings across the projects they can access (same role
+// rule as the project list — a non-global role sees only projects they manage).
+export async function listMyBriefings(userId: string, role: Role) {
+  const projects = await listProjects(userId, role);
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  const ids = [...byId.keys()];
+  if (ids.length === 0) return [];
+  const briefings = await prisma.aiBriefing.findMany({
+    where: { projectId: { in: ids }, status: 'PENDING' },
+    orderBy: { generatedAt: 'desc' },
+  });
+  return briefings.map((b) => {
+    const p = byId.get(b.projectId)!;
+    return { ...briefingView(b), projectCode: p.code, projectName: p.name };
+  });
+}
+
+// Resolve a briefing (APPLIED after the PM saves the commentary, or DISMISSED). Stamps the reviewer.
+// Idempotent-ish: only a PENDING briefing transitions.
+export async function resolveBriefing(
+  projectId: string,
+  briefingId: string,
+  status: 'APPLIED' | 'DISMISSED',
+  reviewer: { id: string; name: string },
+) {
+  const b = await prisma.aiBriefing.findFirst({ where: { id: briefingId, projectId } });
+  if (!b) throw NotFound('Briefing not found');
+  await prisma.aiBriefing.update({
+    where: { id: briefingId },
+    data: { status, reviewedById: reviewer.id, reviewedByName: reviewer.name, reviewedAt: new Date() },
+  });
+  return { status };
 }
