@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Markdown } from '../lib/markdown';
+import { useLang } from '../context/LanguageContext';
 
 // Portfolio AI assistant — Q&A over the projects the user can access, and (Stage C) able to PROPOSE
 // actions that a human approves. Launcher sits bottom-RIGHT, stacked ABOVE the DM ChatWidget bubble.
@@ -70,6 +71,7 @@ function TypingDots({ reduce }: { reduce: boolean }) {
 
 export default function AiAssistant() {
   const reduce = usePrefersReducedMotion();
+  const { lang } = useLang();
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false); // drives the open transition (mount → next frame → in)
   // Conversation survives close/reopen and an accidental reload within the tab (sessionStorage).
@@ -105,6 +107,7 @@ export default function AiAssistant() {
     mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }>(`/assistant/ask`, {
       messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
       context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
+      lang,
     }),
     onSuccess: (res) => setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined }]),
     onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : 'AI tidak dapat menjawab saat ini.', error: true }]),

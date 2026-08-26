@@ -101,6 +101,24 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(res.body.answer).toContain('asisten');
   });
 
+  it('replies in English when the caller sends lang:"en" (else Indonesian)', async () => {
+    let captured = '';
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system }) { captured = system; return 'ok'; },
+    });
+
+    await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'How is my project?' }], lang: 'en' });
+    expect(captured).toContain('project-management English');
+    expect(captured).not.toContain('Bahasa Indonesia');
+
+    await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'Bagaimana proyek saya?' }] }); // no lang → id
+    expect(captured).toContain('Bahasa Indonesia');
+
+    __setAiPort(answerPort);
+  });
+
   it('SECURITY: a PM\'s tools only see their own projects, never another PM\'s', async () => {
     // A port that drives the real executeTool: probe list_projects + a foreign project by code.
     __setAiPort({

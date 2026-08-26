@@ -31,6 +31,8 @@ const askSchema = z.object({
     projectId: z.string().uuid().nullish(),
     tab: z.string().max(40).nullish(),
   }).optional(),
+  // Reply language — follows the caller's UI toggle. Defaults to Indonesian.
+  lang: z.enum(['id', 'en']).optional(),
 });
 
 // Portfolio Q&A assistant (read-only, ephemeral). Any authenticated user; the service scopes every
@@ -47,7 +49,7 @@ router.post(
     const messages = req.body.messages as AssistantTurn[];
     // { answer, proposals, navigate } — proposals = Stage C actions staged this turn; navigate = how-to
     // nav targets. `context` lets "proyek ini" resolve to the project the user is viewing.
-    res.json(await askAssistant(req.user!.id, req.user!.role, messages, req.body.context));
+    res.json(await askAssistant(req.user!.id, req.user!.role, messages, req.body.context, req.body.lang ?? 'id'));
   }),
 );
 

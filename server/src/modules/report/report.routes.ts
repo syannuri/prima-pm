@@ -60,7 +60,9 @@ router.post(
       return;
     }
     const { period, asOf } = reportQuerySchema.parse(req.query);
-    res.json(await generateNarrative(req.params.projectId, period, asOf ?? new Date()));
+    // Draft follows the caller's UI language (client sends ?lang=); Indonesian is the default.
+    const lang = req.query.lang === 'en' ? 'en' : 'id';
+    res.json(await generateNarrative(req.params.projectId, period, asOf ?? new Date(), lang));
   }),
 );
 
