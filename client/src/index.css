@@ -213,3 +213,24 @@ button, a, [role="button"], [role="switch"], label, select, summary {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
+
+/* Anett typewriter — a blinking caret at the end of the message currently being revealed.
+   Attached to the last rendered block so it sits inline with the final word (see AiAssistant). */
+.anett-streaming > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  opacity: 0.7;
+  animation: anett-caret 1s steps(1) infinite;
+}
+@keyframes anett-caret {
+  0%, 50% { opacity: 0.7; }
+  50.01%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anett-streaming > :last-child::after { animation: none; }
+}
