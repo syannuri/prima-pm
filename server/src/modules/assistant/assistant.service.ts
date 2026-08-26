@@ -16,7 +16,9 @@ import { findGuide, guideIndex } from './processGuide.js';
 // ONLY on the pre-computed set of projects the user is allowed to see (same rule as listProjects) —
 // a project outside that set is unknown to the assistant, so it cannot leak inaccessible data.
 
-const SYSTEM_PROMPT = [
+export type AssistantLang = 'id' | 'en';
+
+const SYSTEM_PROMPT_ID = [
   'Anda adalah "Anett", PM Assistant untuk aplikasi manajemen proyek Prismatix. Anda menjawab pertanyaan pengguna tentang proyek-proyek yang DAPAT DIAKSES olehnya.',
   'Jika pengguna menyapa atau menanyakan nama Anda, perkenalkan diri sebagai Anett secara singkat dan ramah. Jangan menyebut nama diri di setiap jawaban.',
   'Jawab dalam Bahasa Indonesia manajemen proyek yang natural dan ringkas.',
@@ -35,6 +37,28 @@ const SYSTEM_PROMPT = [
   '- Tulis kode/konteks proyek dalam inline code backtick, mis. `AI-1`, `CPI`, `SPI`, agar mudah dibaca.',
   '- Gunakan **tebal** untuk menyorot angka/kesimpulan penting. Jaga tetap ringkas.',
 ].join('\n');
+
+const SYSTEM_PROMPT_EN = [
+  'You are "Anett", the PM Assistant for the Prismatix project-management app. You answer the user\'s questions about the projects they CAN ACCESS.',
+  'If the user greets you or asks your name, introduce yourself as Anett briefly and warmly. Do not repeat your name in every answer.',
+  'Answer in natural, concise project-management English.',
+  '',
+  'RULES (MANDATORY):',
+  '- Use tools to fetch data before answering anything that needs numbers. Do not make up numbers, dates, or names.',
+  '- You can ONLY see projects returned by the tools. If the user names a project not in the list, say you cannot find it or do not have access.',
+  '- Interpret EVM correctly: SPI/CPI < 1 = behind schedule / over budget; > 1 = good.',
+  '- You are READ-ONLY: you cannot change data. If asked to perform an action, explain the steps briefly but never claim you have done it.',
+  '- If the data is not enough to answer, say so honestly.',
+  '- Answer concisely and directly; include key numbers when relevant.',
+  '- For HOW-TO / PROCESS questions ("how do I…", "what should I do to…", "where is the menu…"), USE the get_process_guide tool then give the brief steps + the EXACT MENU PATH (e.g. Project → Cost tab → Baseline → Lock). Do NOT invent menu/tab names; if the topic is not in the guide, say so and suggest the closest one.',
+  '',
+  'ANSWER FORMAT (Markdown):',
+  '- When listing several things (projects, risks, steps), use bullet points ("- "), one item per line — do not cram them into one long paragraph.',
+  '- Write project codes/context in inline code backticks, e.g. `AI-1`, `CPI`, `SPI`, for readability.',
+  '- Use **bold** to highlight key numbers/conclusions. Keep it concise.',
+].join('\n');
+
+const systemPromptFor = (lang: AssistantLang): string => (lang === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ID);
 
 // Tool schemas (raw JSON schema — the SDK zod helper targets a different zod major than the app).
 const TOOLS: AiToolDef[] = [
@@ -310,7 +334,8 @@ export interface AskContext { projectId?: string | null; tab?: string | null }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id'): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }> {
+  const en = lang === 'en';
   await assertCallerTenantOptedIn();
   const port = getAiPort();
   if (!port.runToolLoop) throw new AppError(502, 'Asisten AI tidak tersedia.', 'AI_UNAVAILABLE');
@@ -328,7 +353,9 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // resolves. A project outside the accessible set is ignored (never leaked).
   const current = context?.projectId ? projectsSummary.find((p) => p.id === context.projectId) : undefined;
   const contextNote = current
-    ? `\n\nKonteks: pengguna sedang membuka proyek ${current.code} ("${current.name}")${context?.tab ? ` di tab ${context.tab}` : ''}. Jika ia menyebut "proyek ini" / "di sini", maksudnya ${current.code}.`
+    ? (en
+        ? `\n\nContext: the user is viewing project ${current.code} ("${current.name}")${context?.tab ? ` on the ${context.tab} tab` : ''}. If they say "this project" / "here", they mean ${current.code}.`
+        : `\n\nKonteks: pengguna sedang membuka proyek ${current.code} ("${current.name}")${context?.tab ? ` di tab ${context.tab}` : ''}. Jika ia menyebut "proyek ini" / "di sini", maksudnya ${current.code}.`)
     : '';
 
   // Stage C — only expose the propose_action tool when the caller's tenant opted in AND the caller
@@ -336,14 +363,19 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const actionsEnabled = role !== 'VIEWER' && (await callerActionsEnabled());
   const tools = actionsEnabled ? [...TOOLS, PROPOSE_ACTION_TOOL] : TOOLS;
   const actionNote = actionsEnabled
-    ? '\n\nAnda DAPAT mengusulkan aksi (bukan mengeksekusi) via tool propose_action; aksi hanya berjalan setelah disetujui manusia. Konfirmasikan ke pengguna sebelum mengajukan.'
+    ? (en
+        ? '\n\nYou CAN propose actions (not execute them) via the propose_action tool; an action only runs after a human approves it. Confirm with the user before submitting.'
+        : '\n\nAnda DAPAT mengusulkan aksi (bukan mengeksekusi) via tool propose_action; aksi hanya berjalan setelah disetujui manusia. Konfirmasikan ke pengguna sebelum mengajukan.')
     : '';
 
   // Proposals + navigation targets Anett surfaces during this turn are collected here for the client.
   const proposals: ProposedRef[] = [];
   const navs: NavRef[] = [];
   // Seed the loop with a short, project-list-aware system prompt + the how-to topic index.
-  const system = `${SYSTEM_PROMPT}${actionNote}${contextNote}\n\nProyek yang dapat diakses pengguna (kode): ${[...byCode.keys()].join(', ') || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.`;
+  const accessibleCodes = [...byCode.keys()].join(', ');
+  const system = en
+    ? `${systemPromptFor('en')}${actionNote}${contextNote}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.`
+    : `${systemPromptFor('id')}${actionNote}${contextNote}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.`;
   const answer = await port.runToolLoop({
     system,
     messages,

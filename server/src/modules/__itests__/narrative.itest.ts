@@ -94,6 +94,20 @@ describe('AI status narrative — ai-draft', () => {
     expect(res.body).toEqual(DRAFT);
   });
 
+  it('drafts in English when the caller sends ?lang=en (else Indonesian)', async () => {
+    let captured = '';
+    __setAiNarrativePort({ async draftNarrative({ system }) { captured = system; return DRAFT; }, async draftJson() { return null; } });
+
+    await request(app).post(`${draftUrl()}&lang=en`).set(bearer(ownerToken));
+    expect(captured).toContain('senior PMO analyst');
+    expect(captured).not.toContain('Bahasa Indonesia');
+
+    await request(app).post(draftUrl()).set(bearer(ownerToken)); // no lang → Indonesian default
+    expect(captured).toContain('Bahasa Indonesia');
+
+    __setAiNarrativePort({ async draftNarrative() { return DRAFT; }, async draftJson() { return null; } });
+  });
+
   it('502 when the model declines / returns nothing', async () => {
     __setAiNarrativePort({ async draftNarrative() { return null; }, async draftJson() { return null; } });
     const res = await request(app).post(draftUrl()).set(bearer(ownerToken));
@@ -105,7 +119,7 @@ describe('AI status narrative — ai-draft', () => {
   it('tenant ADMIN self-serve /ai-settings round-trips the opt-in', async () => {
     const get1 = await request(app).get(api('/ai-settings')).set(bearer(ownerToken));
     expect(get1.status).toBe(200);
-    expect(get1.body).toEqual({ configured: true, enabled: true }); // enabled by test 3
+    expect(get1.body).toEqual({ configured: true, enabled: true, actionsEnabled: false }); // enabled by test 3; Stage C actions still off
 
     const off = await request(app).patch(api('/ai-settings')).set(bearer(ownerToken)).send({ enabled: false });
     expect(off.status).toBe(200);

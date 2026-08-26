@@ -12,6 +12,7 @@ import PortfolioRaidReport from '../components/PortfolioRaidReport';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import ForecastPanel from './panels/ForecastPanel';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 import AgileReports from './panels/AgileReports';
 
 // The Reporting Hub's two-axis model. All four cadences are now wired to the report engine
@@ -358,6 +359,7 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
   commentary: ProjectReportData['commentary']; projectId: string; period: Period; canEdit: boolean; aiAvailable: boolean;
 }) {
   const qc = useQueryClient();
+  const { lang } = useLang();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ highlights: '', lowlights: '', nextFocus: '' });
   // Executive summary from the last AI draft — shown as a review banner above the editor (the three
@@ -382,7 +384,7 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
   // Generate a DRAFT with Claude, then drop into edit mode with the fields pre-filled (still fully
   // editable — human-in-the-loop). Never auto-saves; the PM saves via the normal Save button.
   const aiDraft = useMutation({
-    mutationFn: () => api.post<AiNarrativeDraft>(`/projects/${projectId}/report/commentary/ai-draft?period=${period}`, {}),
+    mutationFn: () => api.post<AiNarrativeDraft>(`/projects/${projectId}/report/commentary/ai-draft?period=${period}&lang=${lang}`, {}),
     onSuccess: (d) => {
       setDraft({ highlights: d.highlights, lowlights: d.lowlights, nextFocus: d.nextFocus });
       setAiSummary(d.executiveSummary);

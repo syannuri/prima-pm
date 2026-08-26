@@ -7,10 +7,13 @@ import type { ReportPeriod } from './report.service.js';
 
 type Report = Awaited<ReturnType<typeof getProjectReport>>;
 
-// The system prompt is STABLE (no per-request data) so it prompt-caches. It sets the persona,
-// language, and — critically — the anti-hallucination grounding rule: the model may only assert
-// facts the payload's numbers support.
-const SYSTEM_PROMPT = [
+export type NarrativeLang = 'id' | 'en';
+
+// The system prompt is STABLE per language (no per-request data) so it prompt-caches. It sets the
+// persona, language, and — critically — the anti-hallucination grounding rule: the model may only
+// assert facts the payload's numbers support. Two variants so the draft follows the caller's UI
+// language (the client sends its language toggle); Indonesian is the default.
+const SYSTEM_PROMPT_ID = [
   'Anda adalah seorang analis PMO senior yang menulis narasi status proyek untuk laporan manajemen.',
   'Tulis dalam Bahasa Indonesia manajemen proyek yang natural dan ringkas (bukan terjemahan harfiah).',
   '',
@@ -26,6 +29,25 @@ const SYSTEM_PROMPT = [
   '- lowlights: hambatan, keterlambatan, tugas overdue, dan kekhawatiran biaya/jadwal.',
   '- nextFocus: prioritas yang direkomendasikan untuk periode berikutnya.',
 ].join('\n');
+
+const SYSTEM_PROMPT_EN = [
+  'You are a senior PMO analyst writing a project status narrative for a management report.',
+  'Write in natural, concise project-management English (not a literal translation).',
+  '',
+  'GROUNDING RULES (MANDATORY):',
+  '- State only facts SUPPORTED by the numbers in the data payload. Do not make things up.',
+  '- Do not cite numbers, dates, or names that are not in the payload.',
+  '- If a section has no relevant data, keep it brief or state "none".',
+  '- Interpret EVM correctly: SPI/CPI < 1 = behind schedule / over budget; > 1 = good.',
+  '',
+  'Produce four sections:',
+  '- executiveSummary: 2-3 sentence verdict on project health (schedule, cost, key risks).',
+  '- highlights: achievements & positive progress this period.',
+  '- lowlights: blockers, slippage, overdue tasks, and cost/schedule concerns.',
+  '- nextFocus: recommended priorities for the next period.',
+].join('\n');
+
+const systemPromptFor = (lang: NarrativeLang): string => (lang === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ID);
 
 // Compact the (large) getProjectReport payload down to the figures the narrative actually needs.
 // Smaller payload = fewer tokens + a sharper focus for the model.
@@ -77,8 +99,8 @@ function compactReport(r: Report) {
 }
 
 // PURE: builds the {system,user} pair from a report. Unit-testable without a DB or the LLM.
-export function buildNarrativePrompt(report: Report): { system: string; user: string } {
-  return { system: SYSTEM_PROMPT, user: JSON.stringify(compactReport(report)) };
+export function buildNarrativePrompt(report: Report, lang: NarrativeLang = 'id'): { system: string; user: string } {
+  return { system: systemPromptFor(lang), user: JSON.stringify(compactReport(report)) };
 }
 
 // Resolve the per-tenant opt-in. Tenant is a global (non-scoped) model. When there is no tenant at
@@ -103,10 +125,11 @@ export async function generateNarrative(
   projectId: string,
   period: ReportPeriod,
   asOf: Date,
+  lang: NarrativeLang = 'id',
 ): Promise<NarrativeDraft> {
   await assertTenantOptedIn(projectId);
   const report = await getProjectReport(projectId, period, asOf);
-  const { system, user } = buildNarrativePrompt(report);
+  const { system, user } = buildNarrativePrompt(report, lang);
   const draft = await getAiNarrativePort().draftNarrative({ system, user });
   if (!draft) {
     // Refusal or empty output — surface gracefully so the PM can fill the commentary manually.

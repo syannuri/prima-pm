@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { CashflowPeriod } from '../api/types';
+import { useLang } from '../context/LanguageContext';
 import { formatIdr, formatIdrShort } from '../lib/format';
 
 // Hand-rolled SVG cash-flow chart (no chart lib in this app). Two modes:
@@ -19,11 +20,13 @@ const plotH = H - padT - padB;
 type Mode = 'period' | 'cumulative';
 
 export default function CashflowChart({ periods, eacLikely }: { periods: CashflowPeriod[]; eacLikely: number }) {
+  const { lang } = useLang();
+  const id = lang === 'id';
   const [mode, setMode] = useState<Mode>('period');
   const [hover, setHover] = useState<number | null>(null);
 
   if (periods.length === 0) {
-    return <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No planned window to time-phase.</p>;
+    return <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Tak ada window rencana untuk dibagi per periode.' : 'No planned window to time-phase.'}</p>;
   }
 
   const n = periods.length;
@@ -56,20 +59,20 @@ export default function CashflowChart({ periods, eacLikely }: { periods: Cashflo
         <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
           {mode === 'period' ? (
             <>
-              <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-sm" style={{ background: PLAN }} />Planned</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-sm" style={{ background: ACT }} />Actual</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-sm opacity-60" style={{ background: FC }} />Forecast</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-sm" style={{ background: PLAN }} />{id ? 'Rencana' : 'Planned'}</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-sm" style={{ background: ACT }} />{id ? 'Aktual' : 'Actual'}</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-sm opacity-60" style={{ background: FC }} />{id ? 'Proyeksi' : 'Forecast'}</span>
               <span className="flex items-center gap-1"><span className="h-0.5 w-3" style={{ background: COMM }} />Committed</span>
             </>
           ) : (
             <>
-              <span className="flex items-center gap-1"><span className="h-0.5 w-4" style={{ background: PLAN }} />Cum. planned</span>
-              <span className="flex items-center gap-1"><span className="h-0.5 w-4" style={{ background: ACT }} />Cum. actual</span>
-              <span className="flex items-center gap-1"><span className="h-0.5 w-4 border-t border-dashed" style={{ borderColor: FC }} />Cum. forecast</span>
+              <span className="flex items-center gap-1"><span className="h-0.5 w-4" style={{ background: PLAN }} />{id ? 'Σ Rencana' : 'Cum. planned'}</span>
+              <span className="flex items-center gap-1"><span className="h-0.5 w-4" style={{ background: ACT }} />{id ? 'Σ Aktual' : 'Cum. actual'}</span>
+              <span className="flex items-center gap-1"><span className="h-0.5 w-4 border-t border-dashed" style={{ borderColor: FC }} />{id ? 'Σ Proyeksi' : 'Cum. forecast'}</span>
             </>
           )}
         </div>
-        <div className="flex gap-1">{btn('period', 'Per periode')}{btn('cumulative', 'Kumulatif')}</div>
+        <div className="flex gap-1">{btn('period', id ? 'Per periode' : 'Per period')}{btn('cumulative', id ? 'Kumulatif' : 'Cumulative')}</div>
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Cash-flow chart">
@@ -127,16 +130,16 @@ export default function CashflowChart({ periods, eacLikely }: { periods: Cashflo
           <span className="mx-2 text-slate-400">·</span>
           {mode === 'period' ? (
             <>
-              <span style={{ color: PLAN }}>Plan {formatIdr(periods[hover].planned)}</span>
-              {periods[hover].actual != null && <span className="ml-2" style={{ color: ACT }}>Aktual {formatIdr(periods[hover].actual as number)}</span>}
-              {periods[hover].forecast != null && <span className="ml-2" style={{ color: FC }}>Proyeksi {formatIdr(periods[hover].forecast as number)}</span>}
+              <span style={{ color: PLAN }}>{id ? 'Rencana' : 'Planned'} {formatIdr(periods[hover].planned)}</span>
+              {periods[hover].actual != null && <span className="ml-2" style={{ color: ACT }}>{id ? 'Aktual' : 'Actual'} {formatIdr(periods[hover].actual as number)}</span>}
+              {periods[hover].forecast != null && <span className="ml-2" style={{ color: FC }}>{id ? 'Proyeksi' : 'Forecast'} {formatIdr(periods[hover].forecast as number)}</span>}
               {periods[hover].committed > 0 && <span className="ml-2" style={{ color: COMM }}>Committed {formatIdr(periods[hover].committed)}</span>}
             </>
           ) : (
             <>
-              <span style={{ color: PLAN }}>Σ Plan {formatIdr(periods[hover].cumPlanned)}</span>
-              {periods[hover].cumActual != null && <span className="ml-2" style={{ color: ACT }}>Σ Aktual {formatIdr(periods[hover].cumActual as number)}</span>}
-              {periods[hover].cumForecast != null && <span className="ml-2" style={{ color: FC }}>Σ Proyeksi {formatIdr(periods[hover].cumForecast as number)}</span>}
+              <span style={{ color: PLAN }}>{id ? 'Σ Rencana' : 'Σ Planned'} {formatIdr(periods[hover].cumPlanned)}</span>
+              {periods[hover].cumActual != null && <span className="ml-2" style={{ color: ACT }}>{id ? 'Σ Aktual' : 'Σ Actual'} {formatIdr(periods[hover].cumActual as number)}</span>}
+              {periods[hover].cumForecast != null && <span className="ml-2" style={{ color: FC }}>{id ? 'Σ Proyeksi' : 'Σ Forecast'} {formatIdr(periods[hover].cumForecast as number)}</span>}
             </>
           )}
         </div>
