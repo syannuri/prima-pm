@@ -17,6 +17,7 @@ import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
 import charterRoutes from '../charter/charter.routes.js';
 import costRoutes from '../cost/cost.routes.js';
+import cashflowRoutes from '../cost/cashflow.routes.js';
 import riskRoutes from '../risk/risk.routes.js';
 import issueRoutes from '../issue/issue.routes.js';
 import stakeholderRoutes from '../stakeholder/stakeholder.routes.js';
@@ -356,6 +357,7 @@ router.post(
 
 router.use('/:projectId/charter', charterRoutes);
 router.use('/:projectId/cost', costRoutes);
+router.use('/:projectId/cashflow', cashflowRoutes);
 router.use('/:projectId/risk', riskRoutes);
 router.use('/:projectId/issues', issueRoutes);
 router.use('/:projectId/stakeholders', stakeholderRoutes);
