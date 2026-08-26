@@ -310,7 +310,7 @@ const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: 'Overview', tabs: ['Overview'] },
   { label: 'Initiating', tabs: ['Charter', 'Stakeholders', 'Requirements'] },
   { label: 'Schedule', tabs: ['Schedule', 'Agile'] },
-  { label: 'Cost', tabs: ['Cost', 'Procurement'] },
+  { label: 'Cost', tabs: ['Cost', 'Cash-flow', 'Procurement'] },
   { label: 'Risk', tabs: ['Risk', 'RAID', 'Issues'] },
   { label: 'Quality', tabs: ['UAT'] },
   // Change Req = Integrated Change Control, a Monitoring & Controlling activity → grouped
@@ -326,7 +326,7 @@ const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
 const TAB_ICONS: Record<Tab, string> = {
   Overview: '📊',
   Charter: '📋', 'Kick-Off': '🎯', Stakeholders: '👥', Requirements: '📑',
-  Schedule: '📆', Agile: '🏃', Cost: '💰', Procurement: '🛒', Risk: '⚠️',
+  Schedule: '📆', Agile: '🏃', Cost: '💰', 'Cash-flow': '💵', Procurement: '🛒', Risk: '⚠️',
   Timesheet: '⏱️', RAID: '🗂️', Issues: '🐞', UAT: '✅', 'Change Req': '🔁',
   Health: '🩺', Forecast: '📈', 'EVM Trend': '📊', Closeout: '🏁', Audit: '🔎',
 };
