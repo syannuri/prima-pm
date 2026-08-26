@@ -393,10 +393,10 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
   });
   const aiError = aiDraft.isError
     ? aiDraft.error instanceof ApiError && aiDraft.error.status === 503
-      ? 'Fitur AI belum dikonfigurasi pada deployment ini.'
+      ? 'The AI feature is not configured on this deployment.'
       : aiDraft.error instanceof ApiError && aiDraft.error.status === 403
-        ? 'AI belum diaktifkan untuk workspace ini (Settings → Governance).'
-        : 'AI tidak dapat membuat draft. Coba lagi atau isi manual.'
+        ? 'AI is not enabled for this workspace (Settings → Governance).'
+        : 'AI could not produce a draft. Try again or fill it in manually.'
     : null;
 
   const hasAny = !!(commentary.highlights || commentary.lowlights || commentary.nextFocus);
@@ -409,7 +409,7 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
           <div className="flex shrink-0 gap-2">
             {aiAvailable && (
               <Button variant="secondary" onClick={() => aiDraft.mutate()} disabled={aiDraft.isPending}>
-                {aiDraft.isPending ? 'Menyusun…' : '✨ Draft dengan AI'}
+                {aiDraft.isPending ? 'Drafting…' : '✨ Draft with AI'}
               </Button>
             )}
             <Button variant="secondary" onClick={startEdit}>{hasAny ? '✎ Edit' : '+ Add commentary'}</Button>
@@ -422,9 +422,9 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
         <div className="space-y-3">
           {aiSummary && (
             <div className="rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2 dark:border-violet-900/50 dark:bg-violet-950/20">
-              <div className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">✨ Ringkasan AI (draft)</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">✨ AI summary (draft)</div>
               <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{aiSummary}</p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Tinjau &amp; sunting sebelum menyimpan — ini draft AI, bukan final.</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Review &amp; edit before saving — this is an AI draft, not final.</p>
             </div>
           )}
           {COMMENTARY_FIELDS.map((f) => (
@@ -445,7 +445,7 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
           <div className="flex flex-wrap justify-end gap-2">
             {aiAvailable && (
               <Button variant="secondary" onClick={() => aiDraft.mutate()} disabled={aiDraft.isPending || save.isPending} className="mr-auto">
-                {aiDraft.isPending ? 'Menyusun…' : '✨ Draft dengan AI'}
+                {aiDraft.isPending ? 'Drafting…' : '✨ Draft with AI'}
               </Button>
             )}
             <Button variant="secondary" onClick={() => { setEditing(false); setAiSummary(null); }} disabled={save.isPending}>Cancel</Button>
