@@ -342,11 +342,16 @@ model Tenant {
   // no human click), landing them as PENDING briefings a PM reviews. Default off even when narrative
   // AI is on, so a tenant explicitly consents to unattended AI spend. Env-gated too.
   aiProactiveEnabled Boolean @default(false)
+  // Cross-session AI memory — lets Anett remember durable facts/preferences (per-user) and
+  // org-shared facts/glossary/feedback-corrections (per-tenant) across sessions, injected into its
+  // prompt. A SEPARATE opt-in: default off even when narrative AI is on. See docs/AI-MEMORY-FEEDBACK-PLAN.md.
+  aiMemoryEnabled Boolean @default(false)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
   memberships Membership[]
   aiBriefings AiBriefing[]
+  aiMemories AiMemory[]
   billingEvents  BillingEvent[]
   apiKeys  ApiKey[]
   webhookSubscriptions  WebhookSubscription[]
@@ -1176,6 +1181,54 @@ model AiBriefing {
   @@unique([projectId, period, periodKey])
   @@index([tenantId])
   @@index([projectId, status])
+}
+
+enum AiMemoryScope {
+  USER   // personal to one user (userId set)
+  TENANT // shared org-wide
+}
+
+enum AiMemoryKind {
+  PREFERENCE // how the user likes answers (tone, length, format)
+  FACT       // a durable fact about the user/org
+  GLOSSARY   // a term → meaning mapping
+  GUIDANCE   // a correction/rule distilled from 👎 feedback
+}
+
+enum AiMemorySource {
+  EXPLICIT // user told Anett to remember (remember tool / Settings)
+  FEEDBACK // spawned from a 👎 feedback note
+  AUTO     // auto-distilled at conversation end (reserved — Fase 4)
+}
+
+/// Durable cross-session memory Anett injects into its prompt (dormant unless Tenant.aiMemoryEnabled).
+/// scope=USER → personal (userId set); scope=TENANT → shared org-wide. GUIDANCE items come from 👎
+/// feedback corrections. Tenant-scoped (register in scopedModels) so tenant hard-delete cascades.
+model AiMemory {
+  id       String  @id @default(uuid())
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  scope   AiMemoryScope
+  userId  String?        // set when scope=USER (denormalized, no FK — mirrors other AI author fields)
+  kind    AiMemoryKind   @default(FACT)
+  content String         @db.Text
+  source  AiMemorySource @default(EXPLICIT)
+  sourceRef String?      // audit — e.g. the AiFeedback id that spawned a GUIDANCE memory
+
+  pinned Boolean @default(false) // user-pinned → sorted first, always kept in the prompt window
+  active Boolean @default(true)  // soft-delete / "forget"
+
+  createdById   String?
+  createdByName String?
+  useCount   Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, scope, userId, active])
 }
 
 enum IssueImpact {

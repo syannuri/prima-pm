@@ -4,6 +4,7 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
+import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, type MemScope } from './memory.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -52,5 +53,40 @@ router.post(
     res.json(await askAssistant(req.user!.id, req.user!.role, messages, req.body.context, req.body.lang ?? 'id'));
   }),
 );
+
+// ── Cross-session memory (Settings surface) ───────────────────────────────────────────────────────
+// List the memories the caller can see (own USER + all TENANT). Any authenticated user.
+router.get('/memory', asyncHandler(async (req, res) => {
+  res.json({ memories: await listMemories(req.user!.id) });
+}));
+
+const memoryCreateSchema = z.object({
+  content: z.string().min(3).max(280),
+  scope: z.enum(['USER', 'TENANT']),
+  kind: z.enum(['PREFERENCE', 'FACT', 'GLOSSARY']).optional(),
+});
+// Add a memory. TENANT scope is governance-gated (ADMIN/PMO/GUEST) inside the service.
+router.post('/memory', validateBody(memoryCreateSchema), asyncHandler(async (req, res) => {
+  const m = await addMemory(
+    { content: req.body.content, scope: req.body.scope as MemScope, kind: normalizeKind(req.body.kind), source: 'EXPLICIT' },
+    { userId: req.user!.id, role: req.user!.role, name: req.user!.email ?? null },
+  );
+  res.status(201).json(m);
+}));
+
+const memoryPatchSchema = z.object({
+  content: z.string().min(3).max(280).optional(),
+  pinned: z.boolean().optional(),
+}).refine((b) => b.content !== undefined || b.pinned !== undefined, { message: 'Tidak ada perubahan.' });
+// Edit / pin a memory the caller manages.
+router.patch('/memory/:id', validateBody(memoryPatchSchema), asyncHandler(async (req, res) => {
+  res.json(await updateMemory(req.params.id, req.body, { userId: req.user!.id, role: req.user!.role }));
+}));
+
+// Forget (soft-delete) a memory the caller manages.
+router.delete('/memory/:id', asyncHandler(async (req, res) => {
+  await deleteMemory(req.params.id, { userId: req.user!.id, role: req.user!.role });
+  res.status(204).end();
+}));
 
 export default router;
