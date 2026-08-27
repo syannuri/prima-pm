@@ -32,6 +32,7 @@ interface AnettStrings {
   likeTitle: string; likeAria: string; dislikeTitle: string; dislikeAria: string;
   retry: string; thinking: string; composing: string; inputPlaceholder: string;
   voiceStart: string; voiceStop: string; listening: string; ttsOnAria: string; ttsOffAria: string;
+  voiceErrSecure: string; voiceErrDenied: string; voiceErrGeneric: string;
   exportCsv: string; rowsShown: (n: number, total: number) => string;
   footerPropose: string; footerRead: string; footerTail: string; errorGeneric: string;
   actionLabels: Record<string, string>;
@@ -51,6 +52,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     likeTitle: 'Jawaban ini membantu', likeAria: 'Suka', dislikeTitle: 'Jawaban ini kurang tepat', dislikeAria: 'Tidak suka',
     retry: 'Coba lagi', thinking: 'Berpikir…', composing: 'Menyusun jawaban…', inputPlaceholder: 'Tulis pertanyaan…',
     voiceStart: 'Bicara', voiceStop: 'Berhenti merekam', listening: 'Mendengarkan…', ttsOnAria: 'Matikan suara', ttsOffAria: 'Bacakan jawaban',
+    voiceErrSecure: 'Mikrofon butuh HTTPS — buka lewat alamat https:// (bukan http/LAN).', voiceErrDenied: 'Izin mikrofon ditolak. Aktifkan di pengaturan situs (ikon gembok di address bar), lalu coba lagi.', voiceErrGeneric: 'Mikrofon tidak dapat diakses. Cek koneksi & izin mikrofon.',
     exportCsv: 'Ekspor CSV', rowsShown: (n, total) => `${n} dari ${total} baris`,
     footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
     actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal' },
@@ -72,6 +74,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     likeTitle: 'This answer helped', likeAria: 'Like', dislikeTitle: 'This answer was off', dislikeAria: 'Dislike',
     retry: 'Try again', thinking: 'Thinking…', composing: 'Composing an answer…', inputPlaceholder: 'Type a question…',
     voiceStart: 'Speak', voiceStop: 'Stop recording', listening: 'Listening…', ttsOnAria: 'Turn off voice', ttsOffAria: 'Read answers aloud',
+    voiceErrSecure: 'The mic needs HTTPS — open the https:// address (not http/LAN).', voiceErrDenied: 'Microphone permission denied. Enable it in site settings (padlock icon in the address bar), then try again.', voiceErrGeneric: 'Microphone unavailable. Check your connection & mic permission.',
     exportCsv: 'Export CSV', rowsShown: (n, total) => `${n} of ${total} rows`,
     footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
     actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule' },
@@ -156,7 +159,7 @@ function ResizeIcon({ expanded }: { expanded: boolean }) {
 // ── Voice (Web Speech API) — client-only STT + TTS; absent gracefully where unsupported ──────────────
 interface SpeechRec {
   lang: string; interimResults: boolean; continuous: boolean; maxAlternatives: number;
-  onresult: ((e: SpeechRecEvent) => void) | null; onerror: (() => void) | null; onend: (() => void) | null;
+  onresult: ((e: SpeechRecEvent) => void) | null; onerror: ((e: { error?: string }) => void) | null; onend: (() => void) | null;
   start: () => void; stop: () => void; abort: () => void;
 }
 interface SpeechRecEvent { resultIndex: number; results: { length: number; [i: number]: { isFinal: boolean; 0: { transcript: string } } } }
@@ -204,6 +207,7 @@ export default function AiAssistant() {
   // Voice: mic (speech→text, auto-send) + optional spoken answers (text→speech).
   const sttCtor = getSpeechRecognitionCtor();
   const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [ttsOn, setTtsOn] = useState(() => { try { return localStorage.getItem('anett-tts') === '1'; } catch { return false; } });
   const recogRef = useRef<SpeechRec | null>(null);
   const spokenRef = useRef(-1); // index of the last answer read aloud (avoids re-speaking restored turns)
@@ -396,6 +400,10 @@ export default function AiAssistant() {
   const stopListening = () => recogRef.current?.stop();
   const startListening = () => {
     if (!sttCtor || listening || busy) return;
+    setVoiceError(null);
+    // The mic API only works in a secure context (HTTPS / localhost); on plain http it fails silently
+    // with no permission prompt — tell the user why instead of doing nothing.
+    if (typeof window !== 'undefined' && window.isSecureContext === false) { setVoiceError(L.voiceErrSecure); return; }
     if (TTS_SUPPORTED) window.speechSynthesis.cancel();
     let finalText = '';
     const rec = new sttCtor();
@@ -409,7 +417,12 @@ export default function AiAssistant() {
       }
       setInput((finalText + interim).trim());
     };
-    rec.onerror = () => { setListening(false); recogRef.current = null; };
+    rec.onerror = (e) => {
+      const code = e?.error;
+      if (code === 'not-allowed' || code === 'service-not-allowed') setVoiceError(L.voiceErrDenied);
+      else if (code && code !== 'no-speech' && code !== 'aborted') setVoiceError(L.voiceErrGeneric);
+      setListening(false); recogRef.current = null;
+    };
     rec.onend = () => { setListening(false); recogRef.current = null; const q = finalText.trim(); if (q) sendText(q); };
     recogRef.current = rec; setListening(true);
     try { rec.start(); } catch { setListening(false); recogRef.current = null; }
@@ -673,9 +686,13 @@ export default function AiAssistant() {
               )}
               <button onClick={() => sendText(input)} disabled={!input.trim() || busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label={L.send}>➤</button>
             </div>
-            <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-slate-400 dark:text-slate-500">
-              {canPropose ? L.footerPropose : L.footerRead}{L.footerTail}
-            </p>
+            {voiceError ? (
+              <p className="mt-1 px-1 text-[10px] text-rose-600 dark:text-rose-400">🎤 {voiceError}</p>
+            ) : (
+              <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-slate-400 dark:text-slate-500">
+                {canPropose ? L.footerPropose : L.footerRead}{L.footerTail}
+              </p>
+            )}
           </div>
         </div>
       )}
