@@ -10,6 +10,7 @@ import { listMyApprovals } from '../approval/approval.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { findGuide, guideIndex } from './processGuide.js';
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
+import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
 
 // Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
 // projects the CALLER can access, via a server-side manual tool loop. The API key and all data
@@ -125,6 +126,27 @@ const TOOLS: AiToolDef[] = [
       type: 'object',
       properties: { topic: { type: 'string', description: 'Apa yang ingin dilakukan pengguna, mis. "lock baseline" / "buat CR"' } },
       required: ['topic'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'query_data',
+    description: [
+      'JAWAB pertanyaan "list/filter/urutkan/peringkat" dengan sebuah TABEL. Bangun spec terstruktur (BUKAN SQL); server memvalidasi & menjalankannya, dibatasi ke data yang dapat diakses pengguna. Hasil ditampilkan sebagai tabel + ekspor CSV ke pengguna — jadi ringkas saja temuannya, jangan salin seluruh baris.',
+      'entity + field yang tersedia: ' + queryCatalog() + '.',
+      'op: eq, ne, gt, gte, lt, lte, contains, in. Contoh: {entity:"projects", filters:[{field:"spi",op:"lt",value:0.9},{field:"pendingCRs",op:"gt",value:0}], sort:{field:"spi",dir:"asc"}, limit:20}.',
+      'Tanggal ISO (YYYY-MM-DD). Gunakan untuk "proyek dengan …", "tugas telat …", "5 teratas menurut …".',
+    ].join('\n'),
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: { type: 'string', enum: ['projects', 'tasks'] },
+        filters: { type: 'array', items: { type: 'object', properties: { field: { type: 'string' }, op: { type: 'string', enum: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains', 'in'] }, value: {} }, required: ['field', 'op', 'value'], additionalProperties: false } },
+        sort: { type: 'object', properties: { field: { type: 'string' }, dir: { type: 'string', enum: ['asc', 'desc'] } }, required: ['field'], additionalProperties: false },
+        limit: { type: 'number' },
+        columns: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['entity'],
       additionalProperties: false,
     },
   },
@@ -269,6 +291,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'list_my_approvals': return en ? 'Checking your approvals' : 'Memeriksa persetujuan Anda';
     case 'list_project_tasks': return en ? `Checking${c} tasks` : `Memeriksa tugas${c}`;
     case 'list_change_requests': return en ? `Reviewing${c} change requests` : `Meninjau change request${c}`;
+    case 'query_data': return en ? 'Querying your data' : 'Menjalankan query data';
     case 'get_process_guide': return en ? 'Looking up the how-to guide' : 'Mencari panduan cara-pakai';
     case 'propose_action': return en ? 'Preparing an action proposal' : 'Menyiapkan usulan aksi';
     case 'remember': return en ? 'Saving a memory' : 'Menyimpan ingatan';
@@ -277,7 +300,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
   }
 }
 
-function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; memoryEnabled: boolean; en: boolean; emitStep?: (label: string) => void; projectsSummary: ProjectSummary[] }) {
+function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; memoryEnabled: boolean; en: boolean; emitStep?: (label: string) => void; projectsSummary: ProjectSummary[] }) {
   return async (name: string, input: unknown): Promise<string> => {
     const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string };
     // Stream a live "thinking" step for this tool call (best-effort; SSE only).
@@ -382,6 +405,17 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
           return JSON.stringify({ error: msg });
         }
       }
+      case 'query_data': {
+        try {
+          const table = await runQuery((input ?? {}) as QuerySpec, ctx.userId, ctx.role);
+          ctx.tables.push(table);
+          // The model gets a compact preview (headers + first rows + total) to summarize; the client
+          // renders the full table from ctx.tables.
+          return JSON.stringify({ ok: true, entity: table.entity, total: table.total, columns: table.columns.map((c) => c.key), rows: table.rows.slice(0, 10), note: table.total > table.rows.length ? `Menampilkan ${table.rows.length} dari ${table.total} baris ke pengguna.` : undefined });
+        } catch (err) {
+          return JSON.stringify({ error: err instanceof AppError ? err.message : 'Query gagal dijalankan.' });
+        }
+      }
       case 'remember': {
         if (!ctx.memoryEnabled) return JSON.stringify({ error: 'Memori AI tidak aktif untuk workspace ini.' });
         const content = typeof args.content === 'string' ? args.content : '';
@@ -414,7 +448,7 @@ export interface AskContext { projectId?: string | null; tab?: string | null }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[] }> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[] }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
   const port = getAiPort();
@@ -464,6 +498,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const proposals: ProposedRef[] = [];
   const navs: NavRef[] = [];
   const memories: MemoryRef[] = [];
+  const tables: QueryTable[] = [];
   // Seed the loop with a short, project-list-aware system prompt + the how-to topic index.
   const accessibleCodes = [...byCode.keys()].join(', ');
   const system = en
@@ -473,12 +508,12 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     system,
     messages,
     tools: [...tools, ...memoryTools],
-    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, memories, memoryEnabled, en, emitStep, projectsSummary }),
+    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, memories, tables, memoryEnabled, en, emitStep, projectsSummary }),
     maxSteps: 6,
     maxTokens: 1500,
   });
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
-  return { answer, proposals, navigate: navs, memories };
+  return { answer, proposals, navigate: navs, memories, tables };
 }
 
 // Deterministic (NO LLM, NO cost) briefing for the assistant's proactive open-state: what needs the
