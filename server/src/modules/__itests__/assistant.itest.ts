@@ -84,7 +84,7 @@ describe('AI portfolio assistant — /assistant', () => {
   it('/available reflects the gates (false before opt-in)', async () => {
     const res = await request(app).get(availUrl()).set(bearer(pmToken));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ aiAvailable: false, actionsAvailable: false });
+    expect(res.body).toEqual({ aiAvailable: false, actionsAvailable: false, voiceServer: false });
   });
 
   it('400 on an empty message list', async () => {
@@ -95,7 +95,7 @@ describe('AI portfolio assistant — /assistant', () => {
 
   it('200 returns an answer once the tenant opts in', async () => {
     const avail = await request(app).get(availUrl()).set(bearer(pmToken));
-    expect(avail.body).toEqual({ aiAvailable: true, actionsAvailable: false }); // narrative on, actions not yet
+    expect(avail.body).toEqual({ aiAvailable: true, actionsAvailable: false, voiceServer: false }); // narrative on, actions/voice not yet
     const res = await ask(pmToken);
     expect(res.status).toBe(200);
     expect(res.body.answer).toContain('asisten');

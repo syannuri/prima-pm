@@ -119,7 +119,7 @@ describe('AI status narrative — ai-draft', () => {
   it('tenant ADMIN self-serve /ai-settings round-trips the opt-in', async () => {
     const get1 = await request(app).get(api('/ai-settings')).set(bearer(ownerToken));
     expect(get1.status).toBe(200);
-    expect(get1.body).toEqual({ configured: true, enabled: true, actionsEnabled: false, proactiveEnabled: false, memoryEnabled: false }); // enabled by test 3; actions + proactive + memory still off
+    expect(get1.body).toEqual({ configured: true, enabled: true, actionsEnabled: false, proactiveEnabled: false, memoryEnabled: false, voiceEnabled: false }); // enabled by test 3; actions + proactive + memory + voice still off
 
     const off = await request(app).patch(api('/ai-settings')).set(bearer(ownerToken)).send({ enabled: false });
     expect(off.status).toBe(200);
