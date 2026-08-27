@@ -15,5 +15,5 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   'ProjectDependency', 'Task', 'TaskStep', 'TaskDependency', 'ChangeRequest', 'Attachment', 'Sprint',
   'SprintSnapshot', 'EvmSnapshot', 'BacklogItem', 'LessonLearned', 'AcceptanceSignoff',
   'UatTestCase', 'KickoffMeeting', 'KickoffAttendee', 'KickoffActionItem', 'Requirement',
-  'RequirementTaskLink', 'ProjectCommentary', 'AiBriefing', 'AiMemory',
+  'RequirementTaskLink', 'ProjectCommentary', 'AiBriefing', 'AiMemory', 'AiFeedback',
 ]);
