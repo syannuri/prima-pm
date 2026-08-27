@@ -352,6 +352,7 @@ model Tenant {
   memberships Membership[]
   aiBriefings AiBriefing[]
   aiMemories AiMemory[]
+  aiFeedbacks AiFeedback[]
   billingEvents  BillingEvent[]
   apiKeys  ApiKey[]
   webhookSubscriptions  WebhookSubscription[]
@@ -1229,6 +1230,32 @@ model AiMemory {
 
   @@index([tenantId])
   @@index([tenantId, scope, userId, active])
+}
+
+enum AiFeedbackRating {
+  UP
+  DOWN
+}
+
+/// A 👍/👎 on an Anett answer. Deterministic learning: a 👎 with a note spawns a GUIDANCE AiMemory
+/// (TENANT if the rater may write org-scope, else USER) that later prompts honor. Tenant-scoped.
+model AiFeedback {
+  id       String  @id @default(uuid())
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  userId    String
+  rating    AiFeedbackRating
+  question  String? @db.Text // the user's question that produced the answer (bounded)
+  answer    String  @db.Text // the assistant answer being rated (bounded)
+  note      String? @db.Text // 👎 correction / what should have happened
+  projectId String?          // context if the turn was about a project (denormalized, no FK)
+  memoryId  String?          // the GUIDANCE memory spawned from this 👎, if any
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, rating, createdAt])
 }
 
 enum IssueImpact {

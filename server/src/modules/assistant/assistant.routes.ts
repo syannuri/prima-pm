@@ -5,6 +5,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
 import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, type MemScope } from './memory.service.js';
+import { recordFeedback } from './feedback.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -53,6 +54,24 @@ router.post(
     res.json(await askAssistant(req.user!.id, req.user!.role, messages, req.body.context, req.body.lang ?? 'id'));
   }),
 );
+
+// ── Feedback on an answer (👍/👎) ─────────────────────────────────────────────────────────────────
+const feedbackSchema = z.object({
+  rating: z.enum(['UP', 'DOWN']),
+  answer: z.string().min(1).max(4000),
+  question: z.string().max(2000).nullish(),
+  note: z.string().max(2000).nullish(),
+  projectId: z.string().uuid().nullish(),
+});
+// Any authenticated user may rate an answer. A 👎 with a note becomes a GUIDANCE memory (when the
+// tenant opted into memory) that later prompts honor — the deterministic learning loop.
+router.post('/feedback', validateBody(feedbackSchema), asyncHandler(async (req, res) => {
+  const out = await recordFeedback(
+    { userId: req.user!.id, role: req.user!.role, name: req.user!.email ?? null },
+    { rating: req.body.rating, answer: req.body.answer, question: req.body.question ?? null, note: req.body.note ?? null, projectId: req.body.projectId ?? null },
+  );
+  res.status(201).json(out);
+}));
 
 // ── Cross-session memory (Settings surface) ───────────────────────────────────────────────────────
 // List the memories the caller can see (own USER + all TENANT). Any authenticated user.

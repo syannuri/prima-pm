@@ -18,7 +18,7 @@ export type MemSource = 'EXPLICIT' | 'FEEDBACK' | 'AUTO';
 
 // Org-wide (TENANT) writes are governance: admin/PMO only. GUEST governs their own personal sandbox
 // tenant, so they may write tenant-scope there too.
-function canWriteTenantScope(role: Role): boolean {
+export function canWriteTenantScope(role: Role): boolean {
   return role === 'ADMIN' || role === 'PMO' || role === 'GUEST';
 }
 
@@ -129,6 +129,22 @@ export async function addMemory(
 // Convert a client-supplied kind string ("fact" | "preference" | …) to the enum, defaulting to FACT.
 export function normalizeKind(v: unknown): MemKind {
   return (typeof v === 'string' && KIND_IN[v.toLowerCase()]) || 'FACT';
+}
+
+// Turn a 👎 feedback note into a durable GUIDANCE memory Anett will honor. Scope depends on the
+// rater: org-writers (admin/PMO/guest) shape TENANT-wide guidance; everyone else shapes only their
+// own (USER) future answers. No-op (returns null) when memory is off or the note is too short.
+export async function addFeedbackGuidance(
+  note: string,
+  caller: { userId: string; role: Role; name?: string | null },
+  sourceRef: string,
+): Promise<{ id: string; scope: MemScope } | null> {
+  if (!(await callerMemoryEnabled())) return null;
+  const content = note.trim().slice(0, MAX_MEMORY_CHARS);
+  if (content.length < 3) return null;
+  const scope: MemScope = canWriteTenantScope(caller.role) ? 'TENANT' : 'USER';
+  const m = await addMemory({ content, scope, kind: 'GUIDANCE', source: 'FEEDBACK', sourceRef }, caller);
+  return { id: m.id, scope: m.scope };
 }
 
 // Forget (soft-delete) a memory the caller may manage, matched by a text fragment. 0 or >1 matches →
