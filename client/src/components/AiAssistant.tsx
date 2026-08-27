@@ -31,6 +31,7 @@ interface AnettStrings {
   thanksUp: string; thanksDown: string; notePlaceholder: string; send: string; skip: string;
   likeTitle: string; likeAria: string; dislikeTitle: string; dislikeAria: string;
   retry: string; thinking: string; composing: string; inputPlaceholder: string;
+  voiceStart: string; voiceStop: string; listening: string; ttsOnAria: string; ttsOffAria: string;
   exportCsv: string; rowsShown: (n: number, total: number) => string;
   footerPropose: string; footerRead: string; footerTail: string; errorGeneric: string;
   actionLabels: Record<string, string>;
@@ -49,6 +50,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     thanksUp: '👍 Terima kasih atas masukannya.', thanksDown: '👎 Terima kasih — Anett akan mengingatnya.', notePlaceholder: 'Apa yang kurang tepat? / seharusnya bagaimana?', send: 'Kirim', skip: 'Lewati',
     likeTitle: 'Jawaban ini membantu', likeAria: 'Suka', dislikeTitle: 'Jawaban ini kurang tepat', dislikeAria: 'Tidak suka',
     retry: 'Coba lagi', thinking: 'Berpikir…', composing: 'Menyusun jawaban…', inputPlaceholder: 'Tulis pertanyaan…',
+    voiceStart: 'Bicara', voiceStop: 'Berhenti merekam', listening: 'Mendengarkan…', ttsOnAria: 'Matikan suara', ttsOffAria: 'Bacakan jawaban',
     exportCsv: 'Ekspor CSV', rowsShown: (n, total) => `${n} dari ${total} baris`,
     footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
     actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal' },
@@ -69,6 +71,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     thanksUp: '👍 Thanks for the feedback.', thanksDown: "👎 Thanks — Anett will remember this.", notePlaceholder: 'What was off? / what should it be?', send: 'Send', skip: 'Skip',
     likeTitle: 'This answer helped', likeAria: 'Like', dislikeTitle: 'This answer was off', dislikeAria: 'Dislike',
     retry: 'Try again', thinking: 'Thinking…', composing: 'Composing an answer…', inputPlaceholder: 'Type a question…',
+    voiceStart: 'Speak', voiceStop: 'Stop recording', listening: 'Listening…', ttsOnAria: 'Turn off voice', ttsOffAria: 'Read answers aloud',
     exportCsv: 'Export CSV', rowsShown: (n, total) => `${n} of ${total} rows`,
     footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
     actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule' },
@@ -150,6 +153,30 @@ function ResizeIcon({ expanded }: { expanded: boolean }) {
   );
 }
 
+// ── Voice (Web Speech API) — client-only STT + TTS; absent gracefully where unsupported ──────────────
+interface SpeechRec {
+  lang: string; interimResults: boolean; continuous: boolean; maxAlternatives: number;
+  onresult: ((e: SpeechRecEvent) => void) | null; onerror: (() => void) | null; onend: (() => void) | null;
+  start: () => void; stop: () => void; abort: () => void;
+}
+interface SpeechRecEvent { resultIndex: number; results: { length: number; [i: number]: { isFinal: boolean; 0: { transcript: string } } } }
+function getSpeechRecognitionCtor(): (new () => SpeechRec) | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+const TTS_SUPPORTED = typeof window !== 'undefined' && 'speechSynthesis' in window;
+// Strip common markdown so the spoken answer sounds natural (not "asterisk asterisk …").
+function stripMarkdown(s: string): string {
+  return s
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`#>]/g, '')
+    .replace(/^\s*[-•]\s*/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export default function AiAssistant() {
   const reduce = usePrefersReducedMotion();
   const { lang } = useLang();
@@ -174,6 +201,12 @@ export default function AiAssistant() {
   const [streaming, setStreaming] = useState(false);
   const [streamSteps, setStreamSteps] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  // Voice: mic (speech→text, auto-send) + optional spoken answers (text→speech).
+  const sttCtor = getSpeechRecognitionCtor();
+  const [listening, setListening] = useState(false);
+  const [ttsOn, setTtsOn] = useState(() => { try { return localStorage.getItem('anett-tts') === '1'; } catch { return false; } });
+  const recogRef = useRef<SpeechRec | null>(null);
+  const spokenRef = useRef(-1); // index of the last answer read aloud (avoids re-speaking restored turns)
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const turnsRef = useRef<Turn[]>(turns); // always-current turns, so onSuccess can index the new answer
@@ -259,13 +292,28 @@ export default function AiAssistant() {
 
   // Open transition + focus the input; Escape closes.
   useEffect(() => {
-    if (!open) { setShown(false); abortRef.current?.abort(); return; }
+    if (!open) { setShown(false); abortRef.current?.abort(); recogRef.current?.abort(); if (TTS_SUPPORTED) window.speechSynthesis.cancel(); return; }
     const raf = requestAnimationFrame(() => setShown(true));
     const t = setTimeout(() => inputRef.current?.focus(), 120);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('keydown', onKey);
     return () => { cancelAnimationFrame(raf); clearTimeout(t); window.removeEventListener('keydown', onKey); };
   }, [open]);
+
+  // Spoken answers (text→speech): read each new assistant answer aloud when enabled. MUST stay above
+  // the early return below (Rules of Hooks — a hook after an early return crashes with React #310).
+  useEffect(() => {
+    if (!ttsOn || !TTS_SUPPORTED) return;
+    const idx = turns.length - 1;
+    const last = turns[idx];
+    if (last && last.role === 'assistant' && !last.error && spokenRef.current !== idx) {
+      spokenRef.current = idx;
+      const u = new SpeechSynthesisUtterance(stripMarkdown(last.content));
+      u.lang = lang === 'en' ? 'en-US' : 'id-ID';
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }
+  }, [turns, ttsOn, lang]);
 
   if (!availQ.data?.aiAvailable) return null;
 
@@ -325,6 +373,7 @@ export default function AiAssistant() {
   const sendText = (text: string) => {
     const q = text.trim();
     if (!q || busy) return;
+    if (TTS_SUPPORTED) window.speechSynthesis.cancel(); // stop any prior spoken answer
     const next: Turn[] = [...turns, { role: 'user', content: q }];
     setTurns(next);
     setInput('');
@@ -341,7 +390,33 @@ export default function AiAssistant() {
     void runAskStream(base);
   };
 
-  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
+  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); spokenRef.current = -1; if (TTS_SUPPORTED) window.speechSynthesis.cancel(); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
+
+  // Voice input (speech→text): start recognition in the UI language; on the final transcript, auto-send.
+  const stopListening = () => recogRef.current?.stop();
+  const startListening = () => {
+    if (!sttCtor || listening || busy) return;
+    if (TTS_SUPPORTED) window.speechSynthesis.cancel();
+    let finalText = '';
+    const rec = new sttCtor();
+    rec.lang = lang === 'en' ? 'en-US' : 'id-ID';
+    rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript;
+      }
+      setInput((finalText + interim).trim());
+    };
+    rec.onerror = () => { setListening(false); recogRef.current = null; };
+    rec.onend = () => { setListening(false); recogRef.current = null; const q = finalText.trim(); if (q) sendText(q); };
+    recogRef.current = rec; setListening(true);
+    try { rec.start(); } catch { setListening(false); recogRef.current = null; }
+  };
+
+  // Spoken answers (text→speech): read each new assistant answer aloud when enabled.
+  const toggleTts = () => setTtsOn((v) => { const nv = !v; try { localStorage.setItem('anett-tts', nv ? '1' : '0'); } catch { /* quota */ } if (!nv && TTS_SUPPORTED) window.speechSynthesis.cancel(); return nv; });
 
   // Render a query-result cell + export the whole table to CSV (reuses lib/csv).
   const fmtCell = (v: string | number | boolean | null) => (v == null ? '—' : typeof v === 'boolean' ? (v ? '✓' : '–') : String(v));
@@ -387,6 +462,11 @@ export default function AiAssistant() {
             </div>
             {turns.length > 0 && (
               <button onClick={newChat} aria-label={L.newChatTitle} title={L.newChatTitle} className="rounded-lg px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-white/60 dark:text-violet-300 dark:hover:bg-slate-800">{L.newChat}</button>
+            )}
+            {TTS_SUPPORTED && (
+              <button onClick={toggleTts} aria-label={ttsOn ? L.ttsOnAria : L.ttsOffAria} title={ttsOn ? L.ttsOnAria : L.ttsOffAria} className={`grid h-7 w-7 place-items-center rounded-lg hover:bg-white/60 dark:hover:bg-slate-800 ${ttsOn ? 'text-violet-600 dark:text-violet-300' : 'text-slate-400'}`}>
+                {ttsOn ? '🔊' : '🔇'}
+              </button>
             )}
             <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? L.shrink : L.enlarge} title={expanded ? L.shrink : L.enlarge} className="hidden h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 md:grid dark:hover:bg-slate-800">
               <ResizeIcon expanded={expanded} />
@@ -585,9 +665,12 @@ export default function AiAssistant() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(input); } }}
-                placeholder={L.inputPlaceholder}
+                placeholder={listening ? L.listening : L.inputPlaceholder}
                 className="max-h-24 min-h-[2.25rem] flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
+              {sttCtor && (
+                <button onClick={() => (listening ? stopListening() : startListening())} disabled={busy && !listening} aria-label={listening ? L.voiceStop : L.voiceStart} title={listening ? L.voiceStop : L.voiceStart} className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition disabled:opacity-40 ${listening ? `bg-rose-500 text-white ${reduce ? '' : 'animate-pulse'}` : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>🎤</button>
+              )}
               <button onClick={() => sendText(input)} disabled={!input.trim() || busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label={L.send}>➤</button>
             </div>
             <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-slate-400 dark:text-slate-500">
