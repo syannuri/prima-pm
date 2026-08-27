@@ -16,12 +16,64 @@ interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWit
 
 const CHAT_KEY = 'anett-chat';
 
-// Human labels for the whitelisted Stage C actions (used on the inline "proposed" card).
-const ACTION_LABELS: Record<string, string> = {
-  CREATE_RISK: 'Tambah risiko',
-  UPDATE_TASK_PROGRESS: 'Update progress tugas',
-  CREATE_CHANGE_REQUEST: 'Draft change request',
-  TIDY_SCHEDULE: 'Rapikan jadwal',
+// All of Anett's UI copy, bilingual — follows the app's language toggle (useLang) like the rest of
+// the app. `en` is the default for non-Indonesian locales, so every visible string has both.
+interface AnettStrings {
+  launcher: string; subtitlePropose: string; subtitleRead: string;
+  newChat: string; newChatTitle: string; close: string;
+  enlarge: string; shrink: string;
+  greetPre: string; greetPost: string; greetPropose: string;
+  needAttention: string; approvalsWaiting: (n: number) => string; overdue: (code: string, n: number) => string; overduePrompt: (code: string) => string;
+  proposalsTitle: string; waitingApprover: string; reviewInApprovals: string;
+  remembering: string; teamSuffix: string;
+  thanksUp: string; thanksDown: string; notePlaceholder: string; send: string; skip: string;
+  likeTitle: string; likeAria: string; dislikeTitle: string; dislikeAria: string;
+  retry: string; thinking: string; composing: string; inputPlaceholder: string;
+  footerPropose: string; footerRead: string; footerTail: string; errorGeneric: string;
+  actionLabels: Record<string, string>;
+  chips: (proj: boolean, propose: boolean) => string[];
+  followups: (proj: boolean) => string[];
+}
+
+const STRINGS: Record<'id' | 'en', AnettStrings> = {
+  id: {
+    launcher: 'Tanya Anett AI Assistant', subtitlePropose: 'Baca data proyek & usulkan aksi', subtitleRead: 'Membaca data proyek',
+    newChat: '+ Baru', newChatTitle: 'Percakapan baru', close: 'Tutup', enlarge: 'Perbesar', shrink: 'Perkecil',
+    greetPre: 'Halo, saya ', greetPost: '. Saya bantu memantau proyek Anda', greetPropose: ' — dan bisa mengusulkan aksi (perlu persetujuan)',
+    needAttention: 'Perlu perhatian', approvalsWaiting: (n) => `${n} approval menunggu`, overdue: (c, n) => `${c}: ${n} telat`, overduePrompt: (c) => `Tugas apa saja yang telat di ${c}?`,
+    proposalsTitle: '🤖 Usulan aksi diajukan', waitingApprover: ' (menunggu approver)', reviewInApprovals: 'Tinjau di Approvals →',
+    remembering: 'Mengingat', teamSuffix: ' (tim)',
+    thanksUp: '👍 Terima kasih atas masukannya.', thanksDown: '👎 Terima kasih — Anett akan mengingatnya.', notePlaceholder: 'Apa yang kurang tepat? / seharusnya bagaimana?', send: 'Kirim', skip: 'Lewati',
+    likeTitle: 'Jawaban ini membantu', likeAria: 'Suka', dislikeTitle: 'Jawaban ini kurang tepat', dislikeAria: 'Tidak suka',
+    retry: 'Coba lagi', thinking: 'Berpikir…', composing: 'Menyusun jawaban…', inputPlaceholder: 'Tulis pertanyaan…',
+    footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
+    actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal' },
+    chips: (proj, propose) => proj
+      ? ['Ringkas kesehatan proyek ini', 'Tugas apa saja yang telat di sini?', propose ? 'Usulkan mitigasi untuk proyek ini' : 'Apa risiko tertinggi di proyek ini?']
+      : ['Proyek mana yang paling di belakang jadwal?', 'Ringkas kesehatan portofolio saya', propose ? 'Usulkan mitigasi untuk proyek paling berisiko' : 'Apa risiko tertinggi di proyek saya?'],
+    followups: (proj) => proj
+      ? ['Forecast & EAC proyek ini?', 'Ada change request tertunda?', 'Apa langkah berikutnya?']
+      : ['Apa yang menunggu persetujuan saya?', 'Ringkas portofolio saya', 'Proyek mana paling berisiko?'],
+  },
+  en: {
+    launcher: 'Ask Anett AI Assistant', subtitlePropose: 'Reads project data & proposes actions', subtitleRead: 'Reads project data',
+    newChat: '+ New', newChatTitle: 'New conversation', close: 'Close', enlarge: 'Enlarge', shrink: 'Shrink',
+    greetPre: "Hi, I'm ", greetPost: '. I help you monitor your projects', greetPropose: ' — and can propose actions (needs approval)',
+    needAttention: 'Needs attention', approvalsWaiting: (n) => `${n} approval${n === 1 ? '' : 's'} waiting`, overdue: (c, n) => `${c}: ${n} overdue`, overduePrompt: (c) => `Which tasks are overdue in ${c}?`,
+    proposalsTitle: '🤖 Action proposals submitted', waitingApprover: ' (awaiting approver)', reviewInApprovals: 'Review in Approvals →',
+    remembering: 'Remembering', teamSuffix: ' (team)',
+    thanksUp: '👍 Thanks for the feedback.', thanksDown: "👎 Thanks — Anett will remember this.", notePlaceholder: 'What was off? / what should it be?', send: 'Send', skip: 'Skip',
+    likeTitle: 'This answer helped', likeAria: 'Like', dislikeTitle: 'This answer was off', dislikeAria: 'Dislike',
+    retry: 'Try again', thinking: 'Thinking…', composing: 'Composing an answer…', inputPlaceholder: 'Type a question…',
+    footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
+    actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule' },
+    chips: (proj, propose) => proj
+      ? ['Summarize this project’s health', 'Which tasks are overdue here?', propose ? 'Propose mitigations for this project' : "What's the top risk in this project?"]
+      : ['Which project is most behind schedule?', 'Summarize my portfolio health', propose ? 'Propose mitigations for the riskiest project' : "What's the top risk across my projects?"],
+    followups: (proj) => proj
+      ? ["This project’s forecast & EAC?", 'Any pending change requests?', "What's the next step?"]
+      : ['What is waiting for my approval?', 'Summarize my portfolio', 'Which project is riskiest?'],
+  },
 };
 
 // Respect the user's reduced-motion preference (matches the app's motion convention).
@@ -62,7 +114,7 @@ function AnettAvatar({ className = 'h-8 w-8', icon = 'h-4 w-4', thinking = false
 // Three-dot "typing" bubble; static when the user prefers reduced motion.
 function TypingDots({ reduce }: { reduce: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1" aria-label="Anett sedang mengetik">
+    <span className="inline-flex items-center gap-1" aria-label="Anett is typing">
       {[0, 150, 300].map((d) => (
         <span key={d} className={`h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-500 ${reduce ? '' : 'animate-bounce'}`} style={reduce ? undefined : { animationDelay: `${d}ms` }} />
       ))}
@@ -96,6 +148,8 @@ function ResizeIcon({ expanded }: { expanded: boolean }) {
 export default function AiAssistant() {
   const reduce = usePrefersReducedMotion();
   const { lang } = useLang();
+  const L = STRINGS[lang];
+  const ACTION_LABELS = L.actionLabels;
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false); // drives the open transition (mount → next frame → in)
   // Conversation survives close/reopen and an accidental reload within the tab (sessionStorage).
@@ -151,7 +205,7 @@ export default function AiAssistant() {
       if (!reduce && res.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
       setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined }]);
     },
-    onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : 'AI tidak dapat menjawab saat ini.', error: true }]),
+    onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : L.errorGeneric, error: true }]),
   });
 
   // Feedback on an answer (👍/👎). A 👎 may carry a short correction note that becomes a memory Anett
@@ -249,14 +303,14 @@ export default function AiAssistant() {
             if (!reduce && ev.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
             setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined }]);
           } else if (ev.type === 'error') {
-            setTurns((t) => [...t, { role: 'assistant', content: ev.message || 'AI tidak dapat menjawab saat ini.', error: true }]);
+            setTurns((t) => [...t, { role: 'assistant', content: ev.message || L.errorGeneric, error: true }]);
           }
         }
       }
     } catch (e) {
       if ((e as { name?: string })?.name === 'AbortError') return; // user cancelled — leave the chat as-is
       if (!started) { setStreaming(false); setStreamSteps([]); ask.mutate(history); return; } // fall back
-      setTurns((t) => [...t, { role: 'assistant', content: 'AI tidak dapat menjawab saat ini.', error: true }]);
+      setTurns((t) => [...t, { role: 'assistant', content: L.errorGeneric, error: true }]);
     } finally {
       abortRef.current = null;
       setStreaming(false); setStreamSteps([]);
@@ -285,23 +339,9 @@ export default function AiAssistant() {
   const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
 
   // Contextual starter chips — project-aware when viewing a project; the action chip only when
-  // Stage C propose is available.
-  const chips = currentProjectId
-    ? [
-        'Ringkas kesehatan proyek ini',
-        'Tugas apa saja yang telat di sini?',
-        ...(canPropose ? ['Usulkan mitigasi untuk proyek ini'] : ['Apa risiko tertinggi di proyek ini?']),
-      ]
-    : [
-        'Proyek mana yang paling di belakang jadwal?',
-        'Ringkas kesehatan portofolio saya',
-        ...(canPropose ? ['Usulkan mitigasi untuk proyek paling berisiko'] : ['Apa risiko tertinggi di proyek saya?']),
-      ];
-
-  // Dynamic follow-up chips shown after the latest answer — nudge the next useful question.
-  const followups = currentProjectId
-    ? ['Forecast & EAC proyek ini?', 'Ada change request tertunda?', 'Apa langkah berikutnya?']
-    : ['Apa yang menunggu persetujuan saya?', 'Ringkas portofolio saya', 'Proyek mana paling berisiko?'];
+  // Stage C propose is available. Follow-up chips nudge the next useful question. Both bilingual.
+  const chips = L.chips(!!currentProjectId, canPropose);
+  const followups = L.followups(!!currentProjectId);
   const lastIsAnswer = turns.length > 0 && turns[turns.length - 1].role === 'assistant' && !turns[turns.length - 1].error;
 
   return (
@@ -309,7 +349,7 @@ export default function AiAssistant() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Tanya Anett AI Assistant"
+          aria-label={L.launcher}
           title="Anett AI Assistant"
           className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'anett-breathe transition-all duration-300 hover:scale-105 active:scale-90'}`}
         >
@@ -320,7 +360,7 @@ export default function AiAssistant() {
       {open && (
         <div
           role="dialog"
-          aria-label="Asisten Anett"
+          aria-label="Anett AI Assistant"
           className={`fixed right-4 z-[70] flex w-[min(92vw,25rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
           style={{ maxHeight: expanded ? 'min(85vh, 46rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(80vh, 40rem)' : undefined }}
         >
@@ -330,16 +370,16 @@ export default function AiAssistant() {
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">Anett AI Assistant</div>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> {canPropose ? 'Baca data proyek & usulkan aksi' : 'Membaca data proyek'}
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> {canPropose ? L.subtitlePropose : L.subtitleRead}
               </div>
             </div>
             {turns.length > 0 && (
-              <button onClick={newChat} aria-label="Percakapan baru" title="Percakapan baru" className="rounded-lg px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-white/60 dark:text-violet-300 dark:hover:bg-slate-800">+ Baru</button>
+              <button onClick={newChat} aria-label={L.newChatTitle} title={L.newChatTitle} className="rounded-lg px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-white/60 dark:text-violet-300 dark:hover:bg-slate-800">{L.newChat}</button>
             )}
-            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? 'Perkecil panel' : 'Perbesar panel'} title={expanded ? 'Perkecil' : 'Perbesar'} className="hidden h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 md:grid dark:hover:bg-slate-800">
+            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? L.shrink : L.enlarge} title={expanded ? L.shrink : L.enlarge} className="hidden h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 md:grid dark:hover:bg-slate-800">
               <ResizeIcon expanded={expanded} />
             </button>
-            <button onClick={() => setOpen(false)} aria-label="Tutup" className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800">✕</button>
+            <button onClick={() => setOpen(false)} aria-label={L.close} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800">✕</button>
           </div>
 
           <div ref={scrollRef} aria-live="polite" className="flex-1 space-y-2.5 overflow-y-auto p-3">
@@ -348,23 +388,23 @@ export default function AiAssistant() {
                 <div className="flex gap-2">
                   <AnettAvatar />
                   <div className="rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                    Halo, saya <span className="font-semibold text-violet-600 dark:text-violet-300">Anett</span>. Saya bantu memantau proyek Anda{canPropose ? ' — dan bisa mengusulkan aksi (perlu persetujuan)' : ''}.
+                    {L.greetPre}<span className="font-semibold text-violet-600 dark:text-violet-300">Anett</span>{L.greetPost}{canPropose ? L.greetPropose : ''}.
                   </div>
                 </div>
 
                 {/* Proactive briefing — what needs attention right now (deterministic, no AI cost) */}
                 {briefingQ.data && (briefingQ.data.approvalsWaiting > 0 || briefingQ.data.projectsWithOverdue.length > 0) && (
                   <div className="ml-10 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 text-xs dark:border-amber-900/50 dark:bg-amber-900/15">
-                    <div className="mb-1 font-semibold text-amber-800 dark:text-amber-200">Perlu perhatian</div>
+                    <div className="mb-1 font-semibold text-amber-800 dark:text-amber-200">{L.needAttention}</div>
                     <div className="flex flex-wrap gap-1.5">
                       {briefingQ.data.approvalsWaiting > 0 && (
                         <Link to="/approvals" onClick={() => setOpen(false)} className="rounded-full border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-200">
-                          📥 {briefingQ.data.approvalsWaiting} approval menunggu
+                          📥 {L.approvalsWaiting(briefingQ.data.approvalsWaiting)}
                         </Link>
                       )}
                       {briefingQ.data.projectsWithOverdue.map((p) => (
-                        <button key={p.code} onClick={() => sendText(`Tugas apa saja yang telat di ${p.code}?`)} className="rounded-full border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-200">
-                          ⏰ {p.code}: {p.count} telat
+                        <button key={p.code} onClick={() => sendText(L.overduePrompt(p.code))} className="rounded-full border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-200">
+                          ⏰ {L.overdue(p.code, p.count)}
                         </button>
                       ))}
                     </div>
@@ -404,7 +444,7 @@ export default function AiAssistant() {
                       <div className="flex flex-col gap-1">
                         <span>{t.error ? `⚠️ ${t.content}` : t.content}</span>
                         {t.error && i === turns.length - 1 && (
-                          <button onClick={retry} disabled={busy} className="self-start rounded-md bg-amber-600/90 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">Coba lagi</button>
+                          <button onClick={retry} disabled={busy} className="self-start rounded-md bg-amber-600/90 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">{L.retry}</button>
                         )}
                       </div>
                     )}
@@ -413,13 +453,13 @@ export default function AiAssistant() {
                 {/* Stage C — inline card when Anett staged action proposals this turn (after the typewriter finishes) */}
                 {i !== streamIdx && t.proposals && t.proposals.length > 0 && (
                   <div className="ml-10 mt-1.5 rounded-xl border border-violet-200 bg-violet-50/70 p-2.5 text-xs dark:border-violet-800/60 dark:bg-violet-900/20">
-                    <div className="mb-1 flex items-center gap-1.5 font-semibold text-violet-700 dark:text-violet-300">🤖 Usulan aksi diajukan</div>
+                    <div className="mb-1 flex items-center gap-1.5 font-semibold text-violet-700 dark:text-violet-300">{L.proposalsTitle}</div>
                     <ul className="space-y-0.5 text-slate-600 dark:text-slate-300">
                       {t.proposals.map((p, j) => (
-                        <li key={j}>• {ACTION_LABELS[p.actionType] ?? p.actionType} · <span className="font-mono">{p.projectCode}</span>{p.routed ? '' : ' (menunggu approver)'}</li>
+                        <li key={j}>• {ACTION_LABELS[p.actionType] ?? p.actionType} · <span className="font-mono">{p.projectCode}</span>{p.routed ? '' : L.waitingApprover}</li>
                       ))}
                     </ul>
-                    <Link to="/approvals" onClick={() => setOpen(false)} className="mt-1.5 inline-block font-medium text-violet-700 hover:underline dark:text-violet-300">Tinjau di Approvals →</Link>
+                    <Link to="/approvals" onClick={() => setOpen(false)} className="mt-1.5 inline-block font-medium text-violet-700 hover:underline dark:text-violet-300">{L.reviewInApprovals}</Link>
                   </div>
                 )}
                 {/* Grounded "how-to" navigation — real in-app router links surfaced by the process guide */}
@@ -437,7 +477,7 @@ export default function AiAssistant() {
                   <div className="ml-10 mt-1.5 flex flex-wrap gap-1.5">
                     {t.memories.map((m, j) => (
                       <span key={j} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/20 dark:text-emerald-300">
-                        🧠 Mengingat{m.scope === 'TENANT' ? ' (tim)' : ''}: {m.content}
+                        🧠 {L.remembering}{m.scope === 'TENANT' ? L.teamSuffix : ''}: {m.content}
                       </span>
                     ))}
                   </div>
@@ -445,7 +485,7 @@ export default function AiAssistant() {
                 {/* Feedback — rate the answer; a 👎 can carry a correction that becomes a memory Anett honors */}
                 {t.role === 'assistant' && !t.error && i !== streamIdx && (
                   rated[i] ? (
-                    <div className="ml-10 mt-1 text-[11px] text-slate-400 dark:text-slate-500">{rated[i] === 'up' ? '👍 Terima kasih atas masukannya.' : '👎 Terima kasih — Anett akan mengingatnya.'}</div>
+                    <div className="ml-10 mt-1 text-[11px] text-slate-400 dark:text-slate-500">{rated[i] === 'up' ? L.thanksUp : L.thanksDown}</div>
                   ) : noteFor === i ? (
                     <div className="ml-10 mt-1.5 space-y-1.5">
                       <textarea
@@ -453,18 +493,18 @@ export default function AiAssistant() {
                         onChange={(e) => setNoteText(e.target.value)}
                         rows={2}
                         maxLength={2000}
-                        placeholder="Apa yang kurang tepat? / seharusnya bagaimana?"
+                        placeholder={L.notePlaceholder}
                         className="w-full resize-none rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                       />
                       <div className="flex gap-1.5">
-                        <button onClick={() => rate(i, 'DOWN', noteText.trim())} className="rounded-md bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-700">Kirim</button>
-                        <button onClick={() => rate(i, 'DOWN')} className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Lewati</button>
+                        <button onClick={() => rate(i, 'DOWN', noteText.trim())} className="rounded-md bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-700">{L.send}</button>
+                        <button onClick={() => rate(i, 'DOWN')} className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">{L.skip}</button>
                       </div>
                     </div>
                   ) : (
                     <div className="ml-10 mt-1 flex items-center gap-1 text-slate-400 dark:text-slate-500">
-                      <button onClick={() => rate(i, 'UP')} title="Jawaban ini membantu" aria-label="Suka" className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-slate-800">👍</button>
-                      <button onClick={() => { setNoteFor(i); setNoteText(''); }} title="Jawaban ini kurang tepat" aria-label="Tidak suka" className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-800">👎</button>
+                      <button onClick={() => rate(i, 'UP')} title={L.likeTitle} aria-label={L.likeAria} className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-slate-800">👍</button>
+                      <button onClick={() => { setNoteFor(i); setNoteText(''); }} title={L.dislikeTitle} aria-label={L.dislikeAria} className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-800">👎</button>
                     </div>
                   )
                 )}
@@ -488,13 +528,13 @@ export default function AiAssistant() {
                 <AnettAvatar thinking />
                 <div className="min-w-0 rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2.5 dark:bg-slate-800">
                   {streamSteps.length === 0 ? (
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><TypingDots reduce={reduce} /><span>Berpikir…</span></div>
+                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><TypingDots reduce={reduce} /><span>{L.thinking}</span></div>
                   ) : (
                     <div className="space-y-1 text-xs">
                       {streamSteps.map((s, k) => (
                         <div key={k} className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><span className="text-emerald-500">✓</span> {s}</div>
                       ))}
-                      <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300"><TypingDots reduce={reduce} /><span>Menyusun jawaban…</span></div>
+                      <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300"><TypingDots reduce={reduce} /><span>{L.composing}</span></div>
                     </div>
                   )}
                 </div>
@@ -510,13 +550,13 @@ export default function AiAssistant() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(input); } }}
-                placeholder="Tulis pertanyaan…"
+                placeholder={L.inputPlaceholder}
                 className="max-h-24 min-h-[2.25rem] flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
-              <button onClick={() => sendText(input)} disabled={!input.trim() || busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label="Kirim">➤</button>
+              <button onClick={() => sendText(input)} disabled={!input.trim() || busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label={L.send}>➤</button>
             </div>
             <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-slate-400 dark:text-slate-500">
-              {canPropose ? '🤖 Bisa mengusulkan aksi · perlu persetujuan' : 'Read-only'} · hasil AI bisa keliru — verifikasi angka penting.
+              {canPropose ? L.footerPropose : L.footerRead}{L.footerTail}
             </p>
           </div>
         </div>
