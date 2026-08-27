@@ -965,7 +965,26 @@ export interface AiSettings {
   enabled: boolean;
   actionsEnabled: boolean;
   proactiveEnabled: boolean;
+  memoryEnabled: boolean;
 }
+
+// Anett cross-session memory (GET/POST/PATCH/DELETE /assistant/memory).
+export type AiMemoryScope = 'USER' | 'TENANT';
+export type AiMemoryKind = 'PREFERENCE' | 'FACT' | 'GLOSSARY' | 'GUIDANCE';
+export interface AiMemory {
+  id: string;
+  scope: AiMemoryScope;
+  kind: AiMemoryKind;
+  content: string;
+  source: 'EXPLICIT' | 'FEEDBACK' | 'AUTO';
+  pinned: boolean;
+  userId: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+// A memory Anett stored during a turn (surfaced as a "🧠 mengingat" chip).
+export interface AiMemoryRef { scope: AiMemoryScope; content: string }
 
 // UAT (User Acceptance Test) — a structured, executable test-case template per project.
 export type UatStatus = 'NOT_RUN' | 'PASS' | 'FAIL' | 'BLOCKED';

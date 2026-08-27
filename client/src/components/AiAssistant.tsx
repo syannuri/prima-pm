@@ -10,7 +10,8 @@ import { useLang } from '../context/LanguageContext';
 // Dormant unless AI is available (env + tenant). Persona: "Anett".
 interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
 interface NavRef { label: string; path: string }
-interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; error?: boolean }
+interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
+interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; error?: boolean }
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 
 const CHAT_KEY = 'anett-chat';
@@ -106,6 +107,10 @@ export default function AiAssistant() {
   // Typewriter reveal for the freshest answer (Hostinger-style): which turn is animating + how far.
   const [streamIdx, setStreamIdx] = useState<number | null>(null);
   const [streamLen, setStreamLen] = useState(0);
+  // Feedback per answer: which turns were rated (so the buttons collapse) + the open 👎-note editor.
+  const [rated, setRated] = useState<Record<number, 'up' | 'down'>>({});
+  const [noteFor, setNoteFor] = useState<number | null>(null);
+  const [noteText, setNoteText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const turnsRef = useRef<Turn[]>(turns); // always-current turns, so onSuccess can index the new answer
@@ -132,7 +137,7 @@ export default function AiAssistant() {
 
   const ask = useMutation({
     // Only real Q&A turns go to the model — error notices are dropped from the sent history.
-    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }>(`/assistant/ask`, {
+    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[] }>(`/assistant/ask`, {
       messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
       context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
       lang,
@@ -140,10 +145,32 @@ export default function AiAssistant() {
     onSuccess: (res) => {
       // The new answer lands at the current end of the list; start the typewriter there (unless reduced-motion).
       if (!reduce && res.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
-      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined }]);
+      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined }]);
     },
     onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : 'AI tidak dapat menjawab saat ini.', error: true }]),
   });
+
+  // Feedback on an answer (👍/👎). A 👎 may carry a short correction note that becomes a memory Anett
+  // will honor. Fire-and-forget: the rating collapses the buttons immediately.
+  const feedback = useMutation({
+    mutationFn: (body: { idx: number; rating: 'UP' | 'DOWN'; note?: string }) => {
+      const t = turns[body.idx];
+      const question = body.idx > 0 && turns[body.idx - 1]?.role === 'user' ? turns[body.idx - 1].content : undefined;
+      return api.post<{ id: string; guidanceStored: boolean }>(`/assistant/feedback`, {
+        rating: body.rating,
+        answer: t?.content ?? '',
+        question,
+        note: body.note || undefined,
+        projectId: currentProjectId || undefined,
+      });
+    },
+  });
+
+  const rate = (idx: number, rating: 'UP' | 'DOWN', note?: string) => {
+    setRated((r) => ({ ...r, [idx]: rating === 'UP' ? 'up' : 'down' }));
+    setNoteFor(null); setNoteText('');
+    feedback.mutate({ idx, rating, note });
+  };
 
   // Persist + keep the view pinned to the latest message (also while the typewriter is revealing).
   useEffect(() => { turnsRef.current = turns; }, [turns]);
@@ -347,6 +374,42 @@ export default function AiAssistant() {
                       </Link>
                     ))}
                   </div>
+                )}
+                {/* 🧠 Anett stored a durable memory this turn */}
+                {i !== streamIdx && t.memories && t.memories.length > 0 && (
+                  <div className="ml-10 mt-1.5 flex flex-wrap gap-1.5">
+                    {t.memories.map((m, j) => (
+                      <span key={j} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/20 dark:text-emerald-300">
+                        🧠 Mengingat{m.scope === 'TENANT' ? ' (tim)' : ''}: {m.content}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Feedback — rate the answer; a 👎 can carry a correction that becomes a memory Anett honors */}
+                {t.role === 'assistant' && !t.error && i !== streamIdx && (
+                  rated[i] ? (
+                    <div className="ml-10 mt-1 text-[11px] text-slate-400 dark:text-slate-500">{rated[i] === 'up' ? '👍 Terima kasih atas masukannya.' : '👎 Terima kasih — Anett akan mengingatnya.'}</div>
+                  ) : noteFor === i ? (
+                    <div className="ml-10 mt-1.5 space-y-1.5">
+                      <textarea
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        rows={2}
+                        maxLength={2000}
+                        placeholder="Apa yang kurang tepat? / seharusnya bagaimana?"
+                        className="w-full resize-none rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      />
+                      <div className="flex gap-1.5">
+                        <button onClick={() => rate(i, 'DOWN', noteText.trim())} className="rounded-md bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-700">Kirim</button>
+                        <button onClick={() => rate(i, 'DOWN')} className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Lewati</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="ml-10 mt-1 flex items-center gap-1 text-slate-400 dark:text-slate-500">
+                      <button onClick={() => rate(i, 'UP')} title="Jawaban ini membantu" aria-label="Suka" className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-slate-800">👍</button>
+                      <button onClick={() => { setNoteFor(i); setNoteText(''); }} title="Jawaban ini kurang tepat" aria-label="Tidak suka" className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-800">👎</button>
+                    </div>
+                  )
                 )}
               </div>
             ))}

@@ -11,6 +11,7 @@ import WebhooksCard from '../components/WebhooksCard';
 import AutomationsCard from '../components/AutomationsCard';
 import ApprovalWorkflowsCard from '../components/ApprovalWorkflowsCard';
 import AiNarrativeCard from '../components/AiNarrativeCard';
+import AiMemoryCard from '../components/AiMemoryCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
@@ -61,6 +62,7 @@ export default function SettingsPage() {
             <SettingsSection title="Governance" sub="Workspace-wide — approval routing for change requests and AI features.">
               <ApprovalWorkflowsCard />
               <AiNarrativeCard />
+              <AiMemoryCard />
             </SettingsSection>
           )}
         </div>
