@@ -14,11 +14,11 @@ import { BadRequest } from '../../lib/errors.js';
 const router = Router();
 router.use(requireAuth, requireRole('ADMIN'));
 
-async function currentFlags(): Promise<{ enabled: boolean; actionsEnabled: boolean; proactiveEnabled: boolean }> {
+async function currentFlags(): Promise<{ enabled: boolean; actionsEnabled: boolean; proactiveEnabled: boolean; memoryEnabled: boolean }> {
   const tid = getTenantStore()?.tenantId;
-  if (!tid) return { enabled: false, actionsEnabled: false, proactiveEnabled: false };
-  const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true, aiActionsEnabled: true, aiProactiveEnabled: true } });
-  return { enabled: t?.aiNarrativeEnabled ?? false, actionsEnabled: t?.aiActionsEnabled ?? false, proactiveEnabled: t?.aiProactiveEnabled ?? false };
+  if (!tid) return { enabled: false, actionsEnabled: false, proactiveEnabled: false, memoryEnabled: false };
+  const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true, aiActionsEnabled: true, aiProactiveEnabled: true, aiMemoryEnabled: true } });
+  return { enabled: t?.aiNarrativeEnabled ?? false, actionsEnabled: t?.aiActionsEnabled ?? false, proactiveEnabled: t?.aiProactiveEnabled ?? false, memoryEnabled: t?.aiMemoryEnabled ?? false };
 }
 
 router.get(
@@ -32,8 +32,8 @@ router.get(
 // actions opt-in (aiActionsEnabled) — a SEPARATE, stronger consent. Either may be sent.
 router.patch(
   '/',
-  validateBody(z.object({ enabled: z.boolean().optional(), actionsEnabled: z.boolean().optional(), proactiveEnabled: z.boolean().optional() })
-    .refine((b) => b.enabled !== undefined || b.actionsEnabled !== undefined || b.proactiveEnabled !== undefined, { message: 'Nothing to update' })),
+  validateBody(z.object({ enabled: z.boolean().optional(), actionsEnabled: z.boolean().optional(), proactiveEnabled: z.boolean().optional(), memoryEnabled: z.boolean().optional() })
+    .refine((b) => b.enabled !== undefined || b.actionsEnabled !== undefined || b.proactiveEnabled !== undefined || b.memoryEnabled !== undefined, { message: 'Nothing to update' })),
   asyncHandler(async (req, res) => {
     const tid = getTenantStore()?.tenantId;
     if (!tid) throw BadRequest('No active workspace to configure.');
@@ -43,6 +43,7 @@ router.patch(
         ...(req.body.enabled !== undefined ? { aiNarrativeEnabled: req.body.enabled } : {}),
         ...(req.body.actionsEnabled !== undefined ? { aiActionsEnabled: req.body.actionsEnabled } : {}),
         ...(req.body.proactiveEnabled !== undefined ? { aiProactiveEnabled: req.body.proactiveEnabled } : {}),
+        ...(req.body.memoryEnabled !== undefined ? { aiMemoryEnabled: req.body.memoryEnabled } : {}),
       },
     });
     res.json({ configured: aiEnabled(), ...(await currentFlags()) });

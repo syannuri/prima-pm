@@ -9,6 +9,7 @@ import { listRisks } from '../risk/risk.service.js';
 import { listMyApprovals } from '../approval/approval.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { findGuide, guideIndex } from './processGuide.js';
+import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 
 // Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
 // projects the CALLER can access, via a server-side manual tool loop. The API key and all data
@@ -157,6 +158,39 @@ const PROPOSE_ACTION_TOOL: AiToolDef = {
   },
 };
 
+// Cross-session memory tools — exposed only when the caller's tenant opted into AI memory. They let
+// Anett persist durable facts/preferences (remember) or drop them (forget). Deterministic, no cost.
+const REMEMBER_TOOL: AiToolDef = {
+  name: 'remember',
+  description: [
+    'SIMPAN sebuah ingatan jangka panjang agar diingat lintas sesi.',
+    'Gunakan HANYA bila pengguna memintanya ("ingat bahwa…", "mulai sekarang…") atau jelas menyatakan preferensi/fakta durable. Konfirmasi ke pengguna sebelum memanggil.',
+    'Ringkas jadi SATU kalimat padat (maks 280 karakter).',
+    'scope: "user" = preferensi/fakta pribadi pengguna ini (default); "tenant" = fakta/istilah berlaku untuk seluruh organisasi (hanya admin/PMO).',
+    'kind: "preference" | "fact" | "glossary".',
+  ].join('\n'),
+  input_schema: {
+    type: 'object',
+    properties: {
+      content: { type: 'string', description: 'Kalimat ingatan yang padat.' },
+      scope: { type: 'string', enum: ['user', 'tenant'] },
+      kind: { type: 'string', enum: ['preference', 'fact', 'glossary'] },
+    },
+    required: ['content'],
+    additionalProperties: false,
+  },
+};
+const FORGET_TOOL: AiToolDef = {
+  name: 'forget',
+  description: 'LUPAKAN (hapus) sebuah ingatan yang cocok dengan deskripsi. Berikan kutipan/deskripsi ingatan yang ingin dilupakan. Jika tidak ada atau ambigu, minta pengguna memperjelas.',
+  input_schema: {
+    type: 'object',
+    properties: { query: { type: 'string', description: 'Kutipan/deskripsi ingatan yang ingin dilupakan.' } },
+    required: ['query'],
+    additionalProperties: false,
+  },
+};
+
 // Per-tenant opt-in for the CALLER's tenant (no single project here). Applies only when a tenant
 // exists (single-tenant deploy with no tenant → env gate alone governs).
 async function assertCallerTenantOptedIn(): Promise<void> {
@@ -202,6 +236,9 @@ export interface ProposedRef { actionType: string; projectCode: string; routed: 
 // client renders it as a real router-Link button so "buka Reports" actually navigates.
 export interface NavRef { label: string; path: string }
 
+// A memory Anett stored during a turn (surfaced to the client as a "🧠 mengingat …" chip).
+export interface MemoryRef { scope: MemScope; content: string }
+
 function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
   const overdue = r.tasks.remaining.filter((t) => t.overdue).slice(0, 15)
     .map((t) => ({ name: t.name, pct: t.pct, due: t.planEnd }));
@@ -218,9 +255,9 @@ function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
 // per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
 // the model can tell the user rather than crash the loop.
 interface ProjectSummary { id: string; code: string; name: string; status: string; bac: number }
-function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; projectsSummary: ProjectSummary[] }) {
+function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; memoryEnabled: boolean; projectsSummary: ProjectSummary[] }) {
   return async (name: string, input: unknown): Promise<string> => {
-    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string };
+    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string };
     const resolveId = (): string | null => {
       const code = typeof args.project_code === 'string' ? args.project_code.trim() : '';
       return accessibleByCode.get(code) ?? null;
@@ -321,6 +358,25 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
           return JSON.stringify({ error: msg });
         }
       }
+      case 'remember': {
+        if (!ctx.memoryEnabled) return JSON.stringify({ error: 'Memori AI tidak aktif untuk workspace ini.' });
+        const content = typeof args.content === 'string' ? args.content : '';
+        const scope: MemScope = args.scope === 'tenant' ? 'TENANT' : 'USER';
+        try {
+          const m = await addMemory({ content, scope, kind: normalizeKind(args.kind), source: 'EXPLICIT' }, { userId: ctx.userId, role: ctx.role });
+          ctx.memories.push({ scope: m.scope, content: m.content });
+          return JSON.stringify({ ok: true, remembered: m.content, scope: m.scope.toLowerCase() });
+        } catch (err) {
+          return JSON.stringify({ error: err instanceof AppError ? err.message : 'Gagal menyimpan memori.' });
+        }
+      }
+      case 'forget': {
+        if (!ctx.memoryEnabled) return JSON.stringify({ error: 'Memori AI tidak aktif untuk workspace ini.' });
+        const res = await forgetMemory(typeof args.query === 'string' ? args.query : '', { userId: ctx.userId, role: ctx.role });
+        if (res.status === 'forgotten') return JSON.stringify({ ok: true, forgotten: res.content });
+        if (res.status === 'ambiguous') return JSON.stringify({ error: 'Beberapa ingatan cocok — minta pengguna memperjelas yang mana.', candidates: res.candidates });
+        return JSON.stringify({ error: 'Tidak ada ingatan yang cocok untuk dilupakan.' });
+      }
       default:
         return JSON.stringify({ error: `Tool tidak dikenal: ${name}` });
     }
@@ -334,7 +390,7 @@ export interface AskContext { projectId?: string | null; tab?: string | null }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id'): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[] }> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id'): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[] }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
   const port = getAiPort();
@@ -368,24 +424,37 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
         : '\n\nAnda DAPAT mengusulkan aksi (bukan mengeksekusi) via tool propose_action; aksi hanya berjalan setelah disetujui manusia. Konfirmasikan ke pengguna sebelum mengajukan.')
     : '';
 
-  // Proposals + navigation targets Anett surfaces during this turn are collected here for the client.
+  // Cross-session memory — inject what Anett remembers (bounded), and expose remember/forget, only
+  // when the caller's tenant opted in. Deterministic; no extra LLM cost beyond the longer prompt.
+  const memoryEnabled = await callerMemoryEnabled();
+  const memoryItems = memoryEnabled ? await loadMemoriesForPrompt(userId) : [];
+  const memoryBlock = buildMemoryBlock(memoryItems, lang);
+  const memoryNote = memoryEnabled
+    ? (en
+        ? '\n\nYou have long-term memory: use the remember tool to store a durable fact/preference (confirm with the user first) and the forget tool to drop one.'
+        : '\n\nAnda punya memori jangka panjang: pakai tool remember untuk menyimpan fakta/preferensi durable (konfirmasi ke pengguna dulu) dan tool forget untuk menghapusnya.')
+    : '';
+  const memoryTools = memoryEnabled ? [REMEMBER_TOOL, FORGET_TOOL] : [];
+
+  // Proposals + navigation targets + stored memories Anett surfaces during this turn, for the client.
   const proposals: ProposedRef[] = [];
   const navs: NavRef[] = [];
+  const memories: MemoryRef[] = [];
   // Seed the loop with a short, project-list-aware system prompt + the how-to topic index.
   const accessibleCodes = [...byCode.keys()].join(', ');
   const system = en
-    ? `${systemPromptFor('en')}${actionNote}${contextNote}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.`
-    : `${systemPromptFor('id')}${actionNote}${contextNote}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.`;
+    ? `${systemPromptFor('en')}${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.`
+    : `${systemPromptFor('id')}${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.`;
   const answer = await port.runToolLoop({
     system,
     messages,
-    tools,
-    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, projectsSummary }),
+    tools: [...tools, ...memoryTools],
+    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, memories, memoryEnabled, projectsSummary }),
     maxSteps: 6,
     maxTokens: 1500,
   });
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
-  return { answer, proposals, navigate: navs };
+  return { answer, proposals, navigate: navs, memories };
 }
 
 // Deterministic (NO LLM, NO cost) briefing for the assistant's proactive open-state: what needs the
