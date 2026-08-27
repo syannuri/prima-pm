@@ -966,6 +966,7 @@ export interface AiSettings {
   actionsEnabled: boolean;
   proactiveEnabled: boolean;
   memoryEnabled: boolean;
+  voiceEnabled: boolean;
 }
 
 // Anett cross-session memory (GET/POST/PATCH/DELETE /assistant/memory).

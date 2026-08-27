@@ -346,6 +346,9 @@ model Tenant {
   // org-shared facts/glossary/feedback-corrections (per-tenant) across sessions, injected into its
   // prompt. A SEPARATE opt-in: default off even when narrative AI is on. See docs/AI-MEMORY-FEEDBACK-PLAN.md.
   aiMemoryEnabled Boolean @default(false)
+  // Server-side voice (OpenAI Whisper STT + ElevenLabs TTS) — a SEPARATE opt-in; when off (or the
+  // provider keys aren't set) Anett falls back to the browser Web Speech API. See docs/AI-VOICE-SERVER-PLAN.md.
+  aiVoiceEnabled Boolean @default(false)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 

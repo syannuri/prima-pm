@@ -1,9 +1,10 @@
-import { Router } from 'express';
+import { Router, raw } from 'express';
 import { z } from 'zod';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { AppError } from '../../lib/errors.js';
+import { transcribeAudio, synthesizeSpeech, voiceServerAvailable, MAX_STT_BYTES } from './voice.service.js';
 import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
 import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { recordFeedback } from './feedback.service.js';
@@ -14,8 +15,27 @@ router.use(requireAuth);
 // Availability probe: `aiAvailable` = launcher on (env + narrative opt-in); `actionsAvailable` = Stage C
 // propose enabled (env + the separate aiActionsEnabled opt-in) → drives Anett's capability-aware UI.
 router.get('/available', asyncHandler(async (_req, res) => {
-  const [aiAvailable, actionsAvailable] = await Promise.all([assistantAvailable(), assistantActionsAvailable()]);
-  res.json({ aiAvailable, actionsAvailable });
+  const [aiAvailable, actionsAvailable, voiceServer] = await Promise.all([assistantAvailable(), assistantActionsAvailable(), voiceServerAvailable()]);
+  res.json({ aiAvailable, actionsAvailable, voiceServer });
+}));
+
+// ── Server-side voice (Whisper STT + ElevenLabs TTS) — dormant unless keys set + tenant opt-in ──────
+const langOf = (v: unknown): 'id' | 'en' => (v === 'en' ? 'en' : 'id');
+
+// Speech→text: raw audio body (audio/*) → transcript. Route-level raw parser (global express.json
+// ignores non-JSON, so it doesn't consume the audio body).
+router.post('/stt', raw({ type: ['audio/*', 'application/octet-stream'], limit: MAX_STT_BYTES }), asyncHandler(async (req, res) => {
+  const audio = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  const text = await transcribeAudio(audio, req.headers['content-type'] || 'audio/webm', langOf(req.query.lang));
+  res.json({ text });
+}));
+
+// Text→speech: JSON { text, lang } → audio/mpeg bytes.
+router.post('/tts', validateBody(z.object({ text: z.string().min(1).max(4000), lang: z.enum(['id', 'en']).optional() })), asyncHandler(async (req, res) => {
+  const { audio, contentType } = await synthesizeSpeech(req.body.text, langOf(req.body.lang));
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(audio);
 }));
 
 // Proactive open-state briefing (deterministic, NO LLM cost): what needs the caller's attention now.

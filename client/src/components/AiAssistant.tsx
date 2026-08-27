@@ -286,10 +286,17 @@ export default function AiAssistant() {
 
   const availQ = useQuery({
     queryKey: ['assistant-available'],
-    queryFn: () => api.get<{ aiAvailable: boolean; actionsAvailable: boolean }>(`/assistant/available`),
+    queryFn: () => api.get<{ aiAvailable: boolean; actionsAvailable: boolean; voiceServer: boolean }>(`/assistant/available`),
     staleTime: 5 * 60_000,
   });
   const canPropose = availQ.data?.actionsAvailable === true;
+  // Server-side voice (Whisper/ElevenLabs) when available; else the browser Web Speech API (Voice v2).
+  const voiceServer = availQ.data?.voiceServer === true;
+  const sttAvailable = voiceServer || !!sttCtor;
+  const ttsAvailable = voiceServer || TTS_SUPPORTED;
+  const voiceServerRef = useRef(voiceServer); voiceServerRef.current = voiceServer;
+  const recorderRef = useRef<MediaRecorder | null>(null); // server-STT recording
+  const audioRef = useRef<HTMLAudioElement | null>(null);  // server-TTS playback
 
   // Proactive open-state briefing (deterministic; refetched each open) — only when the panel is open.
   const briefingQ = useQuery({
@@ -360,7 +367,7 @@ export default function AiAssistant() {
 
   // Open transition + focus the input; Escape closes.
   useEffect(() => {
-    if (!open) { setShown(false); abortRef.current?.abort(); recogRef.current?.abort(); if (TTS_SUPPORTED) window.speechSynthesis.cancel(); return; }
+    if (!open) { setShown(false); abortRef.current?.abort(); recogRef.current?.abort(); recorderRef.current?.stop(); if (TTS_SUPPORTED) window.speechSynthesis.cancel(); audioRef.current?.pause(); return; }
     const raf = requestAnimationFrame(() => setShown(true));
     const t = setTimeout(() => inputRef.current?.focus(), 120);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -377,13 +384,37 @@ export default function AiAssistant() {
     return () => window.speechSynthesis.removeEventListener?.('voiceschanged', load);
   }, []);
 
-  // Read one answer aloud (used by the auto-speak effect + the per-answer speaker button). Picks the
-  // best voice for the language; in hands-free mode, re-opens the mic when it finishes.
+  // Stop any in-progress spoken answer (browser or server path).
+  const cancelSpeak = () => {
+    if (TTS_SUPPORTED) window.speechSynthesis.cancel();
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.onended = null; }
+    setSpeakingIdx(null);
+  };
+
+  // Play an answer as audio via the server (ElevenLabs). Re-listens after it ends in hands-free mode.
+  const speakServer = async (idx: number, text: string) => {
+    setSpeakingIdx(idx);
+    try {
+      const res = await fetch(`${API_BASE}/assistant/tts`, { method: 'POST', credentials: 'include', headers: streamHeaders('POST'), body: JSON.stringify({ text: stripMarkdown(text).slice(0, 1200), lang }) });
+      if (!res.ok) throw new Error('tts');
+      const url = URL.createObjectURL(await res.blob());
+      const audio = audioRef.current ?? new Audio();
+      audioRef.current = audio;
+      audio.src = url;
+      audio.onended = () => { setSpeakingIdx(null); URL.revokeObjectURL(url); if (convoRef.current && openRef.current) startListeningRef.current(); };
+      audio.onerror = () => setSpeakingIdx(null);
+      await audio.play();
+    } catch { setSpeakingIdx(null); }
+  };
+
+  // Read one answer aloud (auto-speak effect + per-answer button). Server voice when available, else
+  // the browser voice; in hands-free mode, re-opens the mic when it finishes.
   const speakTurn = (idx: number) => {
-    if (!TTS_SUPPORTED) return;
     const turn = turnsRef.current[idx];
     if (!turn || turn.role !== 'assistant' || turn.error) return;
-    window.speechSynthesis.cancel();
+    cancelSpeak();
+    if (voiceServerRef.current) { void speakServer(idx, turn.content); return; }
+    if (!TTS_SUPPORTED) return;
     const u = new SpeechSynthesisUtterance(stripMarkdown(turn.content));
     u.lang = lang === 'en' ? 'en-US' : 'id-ID';
     const v = pickVoice(voices, lang, voiceURI); if (v) u.voice = v;
@@ -396,7 +427,7 @@ export default function AiAssistant() {
   // Auto-read each new assistant answer when the speaker is on. MUST stay above the early return
   // (Rules of Hooks — a hook after an early return crashes with React #310).
   useEffect(() => {
-    if (!ttsOn || !TTS_SUPPORTED) return;
+    if (!ttsOn || (!voiceServerRef.current && !TTS_SUPPORTED)) return;
     const idx = turns.length - 1;
     const last = turns[idx];
     if (last && last.role === 'assistant' && !last.error && spokenRef.current !== idx) {
@@ -464,7 +495,7 @@ export default function AiAssistant() {
   const sendText = (text: string) => {
     const q = text.trim();
     if (!q || busy) return;
-    if (TTS_SUPPORTED) window.speechSynthesis.cancel(); // stop any prior spoken answer
+    cancelSpeak(); // stop any prior spoken answer
     const next: Turn[] = [...turns, { role: 'user', content: q }];
     setTurns(next);
     setInput('');
@@ -481,20 +512,46 @@ export default function AiAssistant() {
     void runAskStream(base);
   };
 
-  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); spokenRef.current = -1; if (TTS_SUPPORTED) window.speechSynthesis.cancel(); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
+  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); spokenRef.current = -1; cancelSpeak(); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
 
   // Stop + release the waveform mic stream.
   const stopMic = () => setMicStream((s) => { s?.getTracks().forEach((t) => t.stop()); return null; });
 
-  // Voice input (speech→text): start recognition in the UI language; on the final transcript, auto-send.
-  const stopListening = () => recogRef.current?.stop();
+  // Server-STT (Whisper): record audio → POST /assistant/stt → auto-send the transcript.
+  const startServerRecording = async () => {
+    let stream: MediaStream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { setVoiceError(L.voiceErrDenied); return; }
+    setMicStream(stream); setListening(true);
+    const chunks: BlobPart[] = [];
+    let rec: MediaRecorder;
+    try { rec = new MediaRecorder(stream); } catch { stream.getTracks().forEach((t) => t.stop()); setMicStream(null); setListening(false); setVoiceError(L.voiceErrGeneric); return; }
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      setListening(false); recorderRef.current = null;
+      stream.getTracks().forEach((t) => t.stop()); setMicStream(null);
+      const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+      if (!blob.size) return;
+      try {
+        const res = await fetch(`${API_BASE}/assistant/stt?lang=${lang}`, { method: 'POST', credentials: 'include', headers: { ...streamHeaders('POST'), 'Content-Type': blob.type || 'audio/webm' }, body: blob });
+        if (!res.ok) throw new Error('stt');
+        const q = ((await res.json() as { text?: string }).text ?? '').trim();
+        if (q) sendText(q);
+      } catch { setVoiceError(L.voiceErrGeneric); }
+    };
+    recorderRef.current = rec; rec.start();
+  };
+
+  // Voice input (speech→text): server (Whisper) when available, else browser recognition; auto-sends.
+  const stopListening = () => { if (recorderRef.current) recorderRef.current.stop(); else recogRef.current?.stop(); };
   const startListening = () => {
-    if (!sttCtor || listening || busy) return;
+    if (!sttAvailable || listening || busy) return;
     setVoiceError(null);
     // The mic API only works in a secure context (HTTPS / localhost); on plain http it fails silently
     // with no permission prompt — tell the user why instead of doing nothing.
     if (typeof window !== 'undefined' && window.isSecureContext === false) { setVoiceError(L.voiceErrSecure); return; }
-    if (TTS_SUPPORTED) window.speechSynthesis.cancel(); // barge-in: stop any answer being read
+    cancelSpeak(); // barge-in: stop any answer being read
+    if (voiceServerRef.current) { void startServerRecording(); return; }
+    if (!sttCtor) return;
     // Open a parallel stream just for the live level meter (best-effort; STT works without it).
     navigator.mediaDevices?.getUserMedia({ audio: true }).then((s) => setMicStream(s)).catch(() => {});
     let finalText = '';
@@ -522,15 +579,15 @@ export default function AiAssistant() {
   startListeningRef.current = startListening;
 
   // Spoken answers (text→speech). Toggling the header speaker on/off; hands-free conversation loop.
-  const toggleTts = () => setTtsOn((v) => { const nv = !v; try { localStorage.setItem('anett-tts', nv ? '1' : '0'); } catch { /* quota */ } if (!nv && TTS_SUPPORTED) window.speechSynthesis.cancel(); return nv; });
+  const toggleTts = () => setTtsOn((v) => { const nv = !v; try { localStorage.setItem('anett-tts', nv ? '1' : '0'); } catch { /* quota */ } if (!nv) cancelSpeak(); return nv; });
   const toggleConvo = () => setConvoMode((v) => {
     const nv = !v; try { localStorage.setItem('anett-convo', nv ? '1' : '0'); } catch { /* quota */ }
     if (nv && !ttsOn) toggleTts(); // hands-free needs answers read aloud to know when to re-listen
-    if (!nv && TTS_SUPPORTED) window.speechSynthesis.cancel();
+    if (!nv) cancelSpeak();
     return nv;
   });
   // Per-answer speaker button: read this answer, or stop if it's the one already speaking.
-  const toggleSpeak = (idx: number) => { if (speakingIdx === idx) { window.speechSynthesis.cancel(); setSpeakingIdx(null); } else speakTurn(idx); };
+  const toggleSpeak = (idx: number) => { if (speakingIdx === idx) cancelSpeak(); else speakTurn(idx); };
 
   // Render a query-result cell + export the whole table to CSV (reuses lib/csv).
   const fmtCell = (v: string | number | boolean | null) => (v == null ? '—' : typeof v === 'boolean' ? (v ? '✓' : '–') : String(v));
@@ -577,12 +634,12 @@ export default function AiAssistant() {
             {turns.length > 0 && (
               <button onClick={newChat} aria-label={L.newChatTitle} title={L.newChatTitle} className="rounded-lg px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-white/60 dark:text-violet-300 dark:hover:bg-slate-800">{L.newChat}</button>
             )}
-            {sttCtor && TTS_SUPPORTED && (
+            {sttAvailable && ttsAvailable && (
               <button onClick={toggleConvo} aria-label={convoMode ? L.convoOnAria : L.convoOffAria} title={convoMode ? L.convoOnAria : L.convoOffAria} className={`grid h-7 w-7 place-items-center rounded-lg text-base hover:bg-white/60 dark:hover:bg-slate-800 ${convoMode ? 'text-violet-600 dark:text-violet-300' : 'text-slate-400'}`}>
                 🗣️
               </button>
             )}
-            {TTS_SUPPORTED && (
+            {ttsAvailable && (
               <button onClick={toggleTts} aria-label={ttsOn ? L.ttsOnAria : L.ttsOffAria} title={ttsOn ? L.ttsOnAria : L.ttsOffAria} className={`grid h-7 w-7 place-items-center rounded-lg hover:bg-white/60 dark:hover:bg-slate-800 ${ttsOn ? 'text-violet-600 dark:text-violet-300' : 'text-slate-400'}`}>
                 {ttsOn ? '🔊' : '🔇'}
               </button>
@@ -594,7 +651,7 @@ export default function AiAssistant() {
           </div>
 
           {/* Voice picker — pick the natural voice for spoken answers (shown when the speaker is on) */}
-          {TTS_SUPPORTED && ttsOn && voices.some((v) => v.lang?.toLowerCase().startsWith(lang === 'en' ? 'en' : 'id')) && (
+          {TTS_SUPPORTED && !voiceServer && ttsOn && voices.some((v) => v.lang?.toLowerCase().startsWith(lang === 'en' ? 'en' : 'id')) && (
             <div className="flex items-center gap-1.5 border-b border-slate-100 px-3 py-1 dark:border-slate-800">
               <span className="text-[10px] uppercase tracking-wide text-slate-400">{L.voiceLabel}</span>
               <select
@@ -754,7 +811,7 @@ export default function AiAssistant() {
                     <div className="ml-10 mt-1 flex items-center gap-1 text-slate-400 dark:text-slate-500">
                       <button onClick={() => rate(i, 'UP')} title={L.likeTitle} aria-label={L.likeAria} className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-slate-800">👍</button>
                       <button onClick={() => { setNoteFor(i); setNoteText(''); }} title={L.dislikeTitle} aria-label={L.dislikeAria} className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-800">👎</button>
-                      {TTS_SUPPORTED && (
+                      {ttsAvailable && (
                         <button onClick={() => toggleSpeak(i)} title={speakingIdx === i ? L.stopReading : L.readAloud} aria-label={speakingIdx === i ? L.stopReading : L.readAloud} className={`rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 dark:hover:bg-slate-800 ${speakingIdx === i ? 'text-violet-600 dark:text-violet-300' : 'hover:text-violet-600'}`}>{speakingIdx === i ? '⏹' : '🔊'}</button>
                       )}
                     </div>
@@ -811,7 +868,7 @@ export default function AiAssistant() {
                   className="max-h-24 min-h-[2.25rem] flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               )}
-              {sttCtor && (
+              {sttAvailable && (
                 <button onClick={() => (listening ? stopListening() : startListening())} disabled={busy && !listening} aria-label={listening ? L.voiceStop : L.voiceStart} title={listening ? L.voiceStop : L.voiceStart} className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition disabled:opacity-40 ${listening ? `bg-rose-500 text-white ${reduce ? '' : 'animate-pulse'}` : 'text-slate-500 hover:bg-slate-100 hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800'}`}><MicIcon className="h-5 w-5" /></button>
               )}
               <button onClick={() => sendText(input)} disabled={!input.trim() || busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label={L.send}>➤</button>
