@@ -141,6 +141,13 @@ function authHeader(base: Record<string, string> = {}): Record<string, string> {
   return token ? { ...base, Authorization: `Bearer ${token}` } : base;
 }
 
+// Exposed for streaming fetches (SSE) that can't go through request<T>(): same auth as a normal
+// mutating POST — cookie session (credentials:'include') + CSRF header + legacy Bearer fallback.
+export const API_BASE = API_URL;
+export function streamHeaders(method = 'POST'): Record<string, string> {
+  return { ...authHeader({ 'Content-Type': 'application/json' }), ...csrfHeader(method) };
+}
+
 async function request<T>(method: string, path: string, body?: unknown, retried = false): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method,

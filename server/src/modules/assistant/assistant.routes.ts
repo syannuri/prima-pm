@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { aiEnabled } from '../../lib/ai.js';
+import { AppError } from '../../lib/errors.js';
 import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
 import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { recordFeedback } from './feedback.service.js';
@@ -54,6 +55,34 @@ router.post(
     res.json(await askAssistant(req.user!.id, req.user!.role, messages, req.body.context, req.body.lang ?? 'id'));
   }),
 );
+
+// Streaming variant of /ask — Server-Sent Events. Emits live "thinking" steps (the real tool-loop
+// activity, e.g. "Menganalisis EVM PRJ-7…") then a final `answer` event, so the client can show
+// Anett's reasoning process in real time. The client falls back to /ask if streaming is unavailable.
+router.post('/ask/stream', validateBody(askSchema), asyncHandler(async (req, res) => {
+  if (!aiEnabled()) {
+    res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+    return;
+  }
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no', // don't let a reverse proxy buffer the stream
+  });
+  res.flushHeaders();
+  const send = (obj: unknown) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+  let aborted = false;
+  req.on('close', () => { aborted = true; });
+  try {
+    const messages = req.body.messages as AssistantTurn[];
+    const result = await askAssistant(req.user!.id, req.user!.role, messages, req.body.context, req.body.lang ?? 'id', (label) => send({ type: 'step', label }));
+    if (!aborted) send({ type: 'answer', ...result });
+  } catch (e) {
+    send({ type: 'error', message: e instanceof AppError ? e.message : 'AI tidak dapat menjawab saat ini.' });
+  }
+  if (!res.writableEnded) { send({ type: 'done' }); res.end(); }
+}));
 
 // ── Feedback on an answer (👍/👎) ─────────────────────────────────────────────────────────────────
 const feedbackSchema = z.object({
