@@ -34,6 +34,7 @@ interface AnettStrings {
   voiceStart: string; voiceStop: string; listening: string; ttsOnAria: string; ttsOffAria: string;
   voiceErrSecure: string; voiceErrDenied: string; voiceErrGeneric: string;
   convoOnAria: string; convoOffAria: string; readAloud: string; stopReading: string; voiceLabel: string; voiceAuto: string;
+  menuAria: string; menuHandsFree: string; menuReadAloud: string;
   exportCsv: string; rowsShown: (n: number, total: number) => string;
   footerPropose: string; footerRead: string; footerTail: string; errorGeneric: string;
   actionLabels: Record<string, string>;
@@ -44,7 +45,7 @@ interface AnettStrings {
 const STRINGS: Record<'id' | 'en', AnettStrings> = {
   id: {
     launcher: 'Tanya Anett AI Assistant', subtitlePropose: 'Baca data proyek & usulkan aksi', subtitleRead: 'Membaca data proyek',
-    newChat: '+ Baru', newChatTitle: 'Percakapan baru', close: 'Tutup', enlarge: 'Perbesar', shrink: 'Perkecil',
+    newChat: 'New Chat', newChatTitle: 'Percakapan baru', close: 'Tutup', enlarge: 'Perbesar', shrink: 'Perkecil',
     greetPre: 'Halo, saya ', greetPost: '. Saya bantu memantau proyek Anda', greetPropose: ' — dan bisa mengusulkan aksi (perlu persetujuan)',
     needAttention: 'Perlu perhatian', approvalsWaiting: (n) => `${n} approval menunggu`, overdue: (c, n) => `${c}: ${n} telat`, overduePrompt: (c) => `Tugas apa saja yang telat di ${c}?`,
     proposalsTitle: '🤖 Usulan aksi diajukan', waitingApprover: ' (menunggu approver)', reviewInApprovals: 'Tinjau di Approvals →',
@@ -55,6 +56,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     voiceStart: 'Bicara', voiceStop: 'Berhenti merekam', listening: 'Mendengarkan…', ttsOnAria: 'Matikan suara', ttsOffAria: 'Bacakan jawaban',
     voiceErrSecure: 'Mikrofon butuh HTTPS — buka lewat alamat https:// (bukan http/LAN).', voiceErrDenied: 'Izin mikrofon ditolak. Aktifkan di pengaturan situs (ikon gembok di address bar), lalu coba lagi.', voiceErrGeneric: 'Mikrofon tidak dapat diakses. Cek koneksi & izin mikrofon.',
     convoOnAria: 'Matikan mode ngobrol', convoOffAria: 'Mode ngobrol (hands-free)', readAloud: 'Bacakan', stopReading: 'Stop', voiceLabel: 'Suara', voiceAuto: 'Otomatis',
+    menuAria: 'Menu lainnya', menuHandsFree: 'Mode ngobrol', menuReadAloud: 'Bacakan jawaban',
     exportCsv: 'Ekspor CSV', rowsShown: (n, total) => `${n} dari ${total} baris`,
     footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
     actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal' },
@@ -67,7 +69,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
   },
   en: {
     launcher: 'Ask Anett AI Assistant', subtitlePropose: 'Reads project data & proposes actions', subtitleRead: 'Reads project data',
-    newChat: '+ New', newChatTitle: 'New conversation', close: 'Close', enlarge: 'Enlarge', shrink: 'Shrink',
+    newChat: 'New Chat', newChatTitle: 'New conversation', close: 'Close', enlarge: 'Enlarge', shrink: 'Shrink',
     greetPre: "Hi, I'm ", greetPost: '. I help you monitor your projects', greetPropose: ' — and can propose actions (needs approval)',
     needAttention: 'Needs attention', approvalsWaiting: (n) => `${n} approval${n === 1 ? '' : 's'} waiting`, overdue: (c, n) => `${c}: ${n} overdue`, overduePrompt: (c) => `Which tasks are overdue in ${c}?`,
     proposalsTitle: '🤖 Action proposals submitted', waitingApprover: ' (awaiting approver)', reviewInApprovals: 'Review in Approvals →',
@@ -78,6 +80,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     voiceStart: 'Speak', voiceStop: 'Stop recording', listening: 'Listening…', ttsOnAria: 'Turn off voice', ttsOffAria: 'Read answers aloud',
     voiceErrSecure: 'The mic needs HTTPS — open the https:// address (not http/LAN).', voiceErrDenied: 'Microphone permission denied. Enable it in site settings (padlock icon in the address bar), then try again.', voiceErrGeneric: 'Microphone unavailable. Check your connection & mic permission.',
     convoOnAria: 'Turn off conversation mode', convoOffAria: 'Conversation mode (hands-free)', readAloud: 'Read aloud', stopReading: 'Stop', voiceLabel: 'Voice', voiceAuto: 'Auto',
+    menuAria: 'More options', menuHandsFree: 'Hands-free', menuReadAloud: 'Read answers',
     exportCsv: 'Export CSV', rowsShown: (n, total) => `${n} of ${total} rows`,
     footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
     actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule' },
@@ -131,6 +134,29 @@ function MicIcon({ className }: { className: string }) {
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
       <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
       <path d="M18 11a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V19H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.09A6 6 0 0 0 18 11Z" />
+    </svg>
+  );
+}
+
+// Speaker glyph (filled, same visual language as MicIcon) — muted variant crosses out the waves.
+function SpeakerIcon({ className, muted = false }: { className: string; muted?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M11 5 6.5 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3.5L11 19a1 1 0 0 0 1.6-.8V5.8A1 1 0 0 0 11 5Z" />
+      {muted ? (
+        <path d="M16 9.5 20.5 14M20.5 9.5 16 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+      ) : (
+        <path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
+// Vertical 3-dot "more options" glyph for the header overflow menu.
+function KebabIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
     </svg>
   );
 }
@@ -248,6 +274,7 @@ export default function AiAssistant() {
   });
   const [input, setInput] = useState('');
   const [expanded, setExpanded] = useState(false); // larger panel (not fullscreen)
+  const [menuOpen, setMenuOpen] = useState(false);  // header ⋮ overflow menu (New Chat / voice toggles)
   // Typewriter reveal for the freshest answer (Hostinger-style): which turn is animating + how far.
   const [streamIdx, setStreamIdx] = useState<number | null>(null);
   const [streamLen, setStreamLen] = useState(0);
@@ -367,7 +394,7 @@ export default function AiAssistant() {
 
   // Open transition + focus the input; Escape closes.
   useEffect(() => {
-    if (!open) { setShown(false); abortRef.current?.abort(); recogRef.current?.abort(); recorderRef.current?.stop(); if (TTS_SUPPORTED) window.speechSynthesis.cancel(); audioRef.current?.pause(); return; }
+    if (!open) { setShown(false); setMenuOpen(false); abortRef.current?.abort(); recogRef.current?.abort(); recorderRef.current?.stop(); if (TTS_SUPPORTED) window.speechSynthesis.cancel(); audioRef.current?.pause(); return; }
     const raf = requestAnimationFrame(() => setShown(true));
     const t = setTimeout(() => inputRef.current?.focus(), 120);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -631,22 +658,39 @@ export default function AiAssistant() {
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> {canPropose ? L.subtitlePropose : L.subtitleRead}
               </div>
             </div>
-            {turns.length > 0 && (
-              <button onClick={newChat} aria-label={L.newChatTitle} title={L.newChatTitle} className="rounded-lg px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-white/60 dark:text-violet-300 dark:hover:bg-slate-800">{L.newChat}</button>
-            )}
-            {sttAvailable && ttsAvailable && (
-              <button onClick={toggleConvo} aria-label={convoMode ? L.convoOnAria : L.convoOffAria} title={convoMode ? L.convoOnAria : L.convoOffAria} className={`grid h-7 w-7 place-items-center rounded-lg text-base hover:bg-white/60 dark:hover:bg-slate-800 ${convoMode ? 'text-violet-600 dark:text-violet-300' : 'text-slate-400'}`}>
-                🗣️
-              </button>
-            )}
-            {ttsAvailable && (
-              <button onClick={toggleTts} aria-label={ttsOn ? L.ttsOnAria : L.ttsOffAria} title={ttsOn ? L.ttsOnAria : L.ttsOffAria} className={`grid h-7 w-7 place-items-center rounded-lg hover:bg-white/60 dark:hover:bg-slate-800 ${ttsOn ? 'text-violet-600 dark:text-violet-300' : 'text-slate-400'}`}>
-                {ttsOn ? '🔊' : '🔇'}
-              </button>
-            )}
-            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? L.shrink : L.enlarge} title={expanded ? L.shrink : L.enlarge} className="hidden h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 md:grid dark:hover:bg-slate-800">
+            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? L.shrink : L.enlarge} title={expanded ? L.shrink : L.enlarge} className="hidden h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-white/60 hover:text-violet-600 md:grid dark:text-slate-400 dark:hover:bg-slate-800">
               <ResizeIcon expanded={expanded} />
             </button>
+            {/* ⋮ overflow menu — New Chat + voice toggles (kept out of the header row) */}
+            {(turns.length > 0 || ttsAvailable) && (
+              <div className="relative">
+                <button onClick={() => setMenuOpen((v) => !v)} aria-label={L.menuAria} title={L.menuAria} aria-haspopup="menu" aria-expanded={menuOpen} className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-white/60 hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800">
+                  <KebabIcon className="h-5 w-5" />
+                </button>
+                {menuOpen && (
+                  <>
+                    <button className="fixed inset-0 z-30 cursor-default" aria-hidden tabIndex={-1} onClick={() => setMenuOpen(false)} />
+                    <div role="menu" className="absolute right-0 top-9 z-40 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                      {turns.length > 0 && (
+                        <button role="menuitem" onClick={() => { newChat(); setMenuOpen(false); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
+                          <span className="w-4 text-center text-base leading-none text-violet-500">＋</span> {L.newChat}
+                        </button>
+                      )}
+                      {sttAvailable && ttsAvailable && (
+                        <button role="menuitemcheckbox" aria-checked={convoMode} onClick={() => { toggleConvo(); setMenuOpen(false); }} className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${convoMode ? 'text-violet-600 dark:text-violet-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                          <span className="w-4 text-center text-base leading-none">🗣️</span><span className="flex-1">{L.menuHandsFree}</span>{convoMode && <span className="text-violet-500">✓</span>}
+                        </button>
+                      )}
+                      {ttsAvailable && (
+                        <button role="menuitemcheckbox" aria-checked={ttsOn} onClick={() => { toggleTts(); setMenuOpen(false); }} className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${ttsOn ? 'text-violet-600 dark:text-violet-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                          <SpeakerIcon className="h-4 w-4 shrink-0" muted={!ttsOn} /><span className="flex-1">{L.menuReadAloud}</span>{ttsOn && <span className="text-violet-500">✓</span>}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <button onClick={() => setOpen(false)} aria-label={L.close} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800">✕</button>
           </div>
 
@@ -812,7 +856,7 @@ export default function AiAssistant() {
                       <button onClick={() => rate(i, 'UP')} title={L.likeTitle} aria-label={L.likeAria} className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-slate-800">👍</button>
                       <button onClick={() => { setNoteFor(i); setNoteText(''); }} title={L.dislikeTitle} aria-label={L.dislikeAria} className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-800">👎</button>
                       {ttsAvailable && (
-                        <button onClick={() => toggleSpeak(i)} title={speakingIdx === i ? L.stopReading : L.readAloud} aria-label={speakingIdx === i ? L.stopReading : L.readAloud} className={`rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 dark:hover:bg-slate-800 ${speakingIdx === i ? 'text-violet-600 dark:text-violet-300' : 'hover:text-violet-600'}`}>{speakingIdx === i ? '⏹' : '🔊'}</button>
+                        <button onClick={() => toggleSpeak(i)} title={speakingIdx === i ? L.stopReading : L.readAloud} aria-label={speakingIdx === i ? L.stopReading : L.readAloud} className={`grid h-6 w-6 place-items-center rounded-md transition hover:bg-slate-100 dark:hover:bg-slate-800 ${speakingIdx === i ? `text-violet-600 dark:text-violet-300 ${reduce ? '' : 'animate-pulse'}` : 'text-slate-400 hover:text-violet-600'}`}><SpeakerIcon className="h-4 w-4" /></button>
                       )}
                     </div>
                   )
