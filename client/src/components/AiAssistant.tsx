@@ -237,8 +237,8 @@ export default function AiAssistant() {
         <div
           role="dialog"
           aria-label="Asisten Anett"
-          className={`fixed right-4 z-[70] flex ${expanded ? 'w-[min(94vw,44rem)]' : 'w-[min(92vw,25rem)]'} origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
-          style={{ maxHeight: expanded ? 'min(88vh, 52rem)' : 'min(72vh, 34rem)' }}
+          className={`fixed right-4 z-[70] flex w-[min(92vw,25rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
+          style={{ maxHeight: expanded ? 'min(85vh, 46rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(80vh, 40rem)' : undefined }}
         >
           {/* Header — gradient identity band with avatar + status */}
           <div className="flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10">
