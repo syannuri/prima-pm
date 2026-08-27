@@ -255,9 +255,33 @@ function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
 // per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
 // the model can tell the user rather than crash the loop.
 interface ProjectSummary { id: string; code: string; name: string; status: string; bac: number }
-function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; memoryEnabled: boolean; projectsSummary: ProjectSummary[] }) {
+
+// A friendly, lang-aware "what Anett is doing" label for a tool call — streamed live to the client so
+// it can show the reasoning process ("Menganalisis EVM PRJ-7…"). Kept here (domain-aware) rather than
+// in the generic AI port.
+function stepLabel(name: string, code: string, en: boolean): string {
+  const c = code ? ` ${code}` : '';
+  switch (name) {
+    case 'list_projects': return en ? 'Reading your project list' : 'Membaca daftar proyek';
+    case 'get_project_details': return en ? `Analyzing${c} health` : `Menganalisis kesehatan${c}`;
+    case 'list_project_risks': return en ? `Reviewing${c} risks` : `Meninjau risiko${c}`;
+    case 'get_portfolio_summary': return en ? 'Summarizing your portfolio' : 'Merangkum portofolio Anda';
+    case 'list_my_approvals': return en ? 'Checking your approvals' : 'Memeriksa persetujuan Anda';
+    case 'list_project_tasks': return en ? `Checking${c} tasks` : `Memeriksa tugas${c}`;
+    case 'list_change_requests': return en ? `Reviewing${c} change requests` : `Meninjau change request${c}`;
+    case 'get_process_guide': return en ? 'Looking up the how-to guide' : 'Mencari panduan cara-pakai';
+    case 'propose_action': return en ? 'Preparing an action proposal' : 'Menyiapkan usulan aksi';
+    case 'remember': return en ? 'Saving a memory' : 'Menyimpan ingatan';
+    case 'forget': return en ? 'Removing a memory' : 'Menghapus ingatan';
+    default: return en ? 'Working' : 'Memproses';
+  }
+}
+
+function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; memoryEnabled: boolean; en: boolean; emitStep?: (label: string) => void; projectsSummary: ProjectSummary[] }) {
   return async (name: string, input: unknown): Promise<string> => {
     const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string };
+    // Stream a live "thinking" step for this tool call (best-effort; SSE only).
+    ctx.emitStep?.(stepLabel(name, typeof args.project_code === 'string' ? args.project_code.trim() : '', ctx.en));
     const resolveId = (): string | null => {
       const code = typeof args.project_code === 'string' ? args.project_code.trim() : '';
       return accessibleByCode.get(code) ?? null;
@@ -390,7 +414,7 @@ export interface AskContext { projectId?: string | null; tab?: string | null }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id'): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[] }> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[] }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
   const port = getAiPort();
@@ -449,7 +473,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     system,
     messages,
     tools: [...tools, ...memoryTools],
-    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, memories, memoryEnabled, projectsSummary }),
+    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, memories, memoryEnabled, en, emitStep, projectsSummary }),
     maxSteps: 6,
     maxTokens: 1500,
   });

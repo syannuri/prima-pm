@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, API_BASE, streamHeaders } from '../api/client';
 import { Markdown } from '../lib/markdown';
 import { useLang } from '../context/LanguageContext';
 
@@ -44,16 +44,16 @@ function AnettIcon({ className }: { className: string }) {
       <rect width="16" height="12" x="4" y="8" rx="2" />
       <path d="M2 14h2" />
       <path d="M20 14h2" />
-      <path d="M15 13v2" />
-      <path d="M9 13v2" />
+      <path className="anett-eye" d="M15 13v2" />
+      <path className="anett-eye" d="M9 13v2" />
     </svg>
   );
 }
 
 // A gradient amethyst avatar disc — Anett's face, reused by launcher, header and message rows.
-function AnettAvatar({ className = 'h-8 w-8', icon = 'h-4 w-4' }: { className?: string; icon?: string }) {
+function AnettAvatar({ className = 'h-8 w-8', icon = 'h-4 w-4', thinking = false }: { className?: string; icon?: string; thinking?: boolean }) {
   return (
-    <span className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-sm ${className}`}>
+    <span className={`relative grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-sm ${thinking ? 'anett-halo anett-thinking' : ''} ${className}`}>
       <AnettIcon className={icon} />
     </span>
   );
@@ -111,6 +111,10 @@ export default function AiAssistant() {
   const [rated, setRated] = useState<Record<number, 'up' | 'down'>>({});
   const [noteFor, setNoteFor] = useState<number | null>(null);
   const [noteText, setNoteText] = useState('');
+  // Live "thinking process": the tool-loop steps streamed from the server while Anett reasons.
+  const [streaming, setStreaming] = useState(false);
+  const [streamSteps, setStreamSteps] = useState<string[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const turnsRef = useRef<Turn[]>(turns); // always-current turns, so onSuccess can index the new answer
@@ -175,7 +179,7 @@ export default function AiAssistant() {
   // Persist + keep the view pinned to the latest message (also while the typewriter is revealing).
   useEffect(() => { turnsRef.current = turns; }, [turns]);
   useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reduce ? 'auto' : 'smooth' }); }, [turns, ask.isPending, streamLen, reduce]);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reduce ? 'auto' : 'smooth' }); }, [turns, ask.isPending, streaming, streamSteps.length, streamLen, reduce]);
 
   // Typewriter: advance the revealed slice a few chars per frame until the full answer is shown.
   useEffect(() => {
@@ -196,7 +200,7 @@ export default function AiAssistant() {
 
   // Open transition + focus the input; Escape closes.
   useEffect(() => {
-    if (!open) { setShown(false); return; }
+    if (!open) { setShown(false); abortRef.current?.abort(); return; }
     const raf = requestAnimationFrame(() => setShown(true));
     const t = setTimeout(() => inputRef.current?.focus(), 120);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -206,23 +210,76 @@ export default function AiAssistant() {
 
   if (!availQ.data?.aiAvailable) return null;
 
+  const busy = ask.isPending || streaming;
+
+  // Stream the answer via SSE so Anett's reasoning steps appear live. Falls back to the plain /ask
+  // mutation if streaming isn't available (old server, proxy that buffers, or a network hiccup).
+  const runAskStream = async (history: Turn[]) => {
+    setStreaming(true); setStreamSteps([]);
+    const ctrl = new AbortController(); abortRef.current = ctrl;
+    let started = false; // did we receive any well-formed event? (else fall back)
+    try {
+      const res = await fetch(`${API_BASE}/assistant/ask/stream`, {
+        method: 'POST', credentials: 'include', headers: streamHeaders('POST'), signal: ctrl.signal,
+        body: JSON.stringify({
+          messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
+          context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
+          lang,
+        }),
+      });
+      if (!res.ok || !res.body) throw new Error('stream-unavailable');
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() ?? '';
+        for (const part of parts) {
+          const line = part.split('\n').find((l) => l.startsWith('data: '));
+          if (!line) continue;
+          let ev: { type: string; label?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; message?: string };
+          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+          started = true;
+          if (ev.type === 'step' && ev.label) {
+            setStreamSteps((s) => [...s, ev.label!]);
+          } else if (ev.type === 'answer') {
+            if (!reduce && ev.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
+            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined }]);
+          } else if (ev.type === 'error') {
+            setTurns((t) => [...t, { role: 'assistant', content: ev.message || 'AI tidak dapat menjawab saat ini.', error: true }]);
+          }
+        }
+      }
+    } catch (e) {
+      if ((e as { name?: string })?.name === 'AbortError') return; // user cancelled — leave the chat as-is
+      if (!started) { setStreaming(false); setStreamSteps([]); ask.mutate(history); return; } // fall back
+      setTurns((t) => [...t, { role: 'assistant', content: 'AI tidak dapat menjawab saat ini.', error: true }]);
+    } finally {
+      abortRef.current = null;
+      setStreaming(false); setStreamSteps([]);
+    }
+  };
+
   const sendText = (text: string) => {
     const q = text.trim();
-    if (!q || ask.isPending) return;
+    if (!q || busy) return;
     const next: Turn[] = [...turns, { role: 'user', content: q }];
     setTurns(next);
     setInput('');
-    ask.mutate(next);
+    void runAskStream(next);
   };
 
   // Retry after a failure: drop the trailing error notice and re-ask with the same question intact
   // (the user's message bubble stays put — no duplicate).
   const retry = () => {
-    if (ask.isPending) return;
+    if (busy) return;
     const base = turns.filter((t) => !t.error);
     if (!base.length) return;
     setTurns(base);
-    ask.mutate(base);
+    void runAskStream(base);
   };
 
   const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
@@ -254,7 +311,7 @@ export default function AiAssistant() {
           onClick={() => setOpen(true)}
           aria-label="Tanya Anett AI Assistant"
           title="Anett AI Assistant"
-          className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'transition-all duration-300 hover:scale-105 active:scale-90'}`}
+          className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'anett-breathe transition-all duration-300 hover:scale-105 active:scale-90'}`}
         >
           <AnettIcon className="h-6 w-6" />
         </button>
@@ -347,7 +404,7 @@ export default function AiAssistant() {
                       <div className="flex flex-col gap-1">
                         <span>{t.error ? `⚠️ ${t.content}` : t.content}</span>
                         {t.error && i === turns.length - 1 && (
-                          <button onClick={retry} disabled={ask.isPending} className="self-start rounded-md bg-amber-600/90 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">Coba lagi</button>
+                          <button onClick={retry} disabled={busy} className="self-start rounded-md bg-amber-600/90 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">Coba lagi</button>
                         )}
                       </div>
                     )}
@@ -415,7 +472,7 @@ export default function AiAssistant() {
             ))}
 
             {/* Dynamic follow-up chips after the latest answer — nudge the next useful question */}
-            {lastIsAnswer && !ask.isPending && streamIdx === null && (
+            {lastIsAnswer && !busy && streamIdx === null && (
               <div className="ml-10 flex flex-wrap gap-1.5">
                 {followups.map((c) => (
                   <button key={c} onClick={() => sendText(c)} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
@@ -425,10 +482,22 @@ export default function AiAssistant() {
               </div>
             )}
 
-            {ask.isPending && (
+            {/* Thinking — live reasoning steps stream in (✓ done), with an active "composing" line */}
+            {busy && (
               <div className="flex justify-start gap-2">
-                <AnettAvatar />
-                <div className="rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2.5 dark:bg-slate-800"><TypingDots reduce={reduce} /></div>
+                <AnettAvatar thinking />
+                <div className="min-w-0 rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2.5 dark:bg-slate-800">
+                  {streamSteps.length === 0 ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><TypingDots reduce={reduce} /><span>Berpikir…</span></div>
+                  ) : (
+                    <div className="space-y-1 text-xs">
+                      {streamSteps.map((s, k) => (
+                        <div key={k} className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><span className="text-emerald-500">✓</span> {s}</div>
+                      ))}
+                      <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300"><TypingDots reduce={reduce} /><span>Menyusun jawaban…</span></div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -444,7 +513,7 @@ export default function AiAssistant() {
                 placeholder="Tulis pertanyaan…"
                 className="max-h-24 min-h-[2.25rem] flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
-              <button onClick={() => sendText(input)} disabled={!input.trim() || ask.isPending} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label="Kirim">➤</button>
+              <button onClick={() => sendText(input)} disabled={!input.trim() || busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label="Kirim">➤</button>
             </div>
             <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-slate-400 dark:text-slate-500">
               {canPropose ? '🤖 Bisa mengusulkan aksi · perlu persetujuan' : 'Read-only'} · hasil AI bisa keliru — verifikasi angka penting.

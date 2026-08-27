@@ -232,6 +232,29 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(Array.isArray(res.body.projectsWithOverdue)).toBe(true);
   });
 
+  it('STREAM: /ask/stream emits live step events then the final answer', async () => {
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ executeTool }) {
+        await executeTool('list_projects', {});
+        await executeTool('get_project_details', { project_code: 'MINE-1' });
+        return 'Ini jawaban final.';
+      },
+    });
+    const res = await request(app).post(api('/assistant/ask/stream')).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'x' }] });
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    const frames = res.text.split('\n\n').filter(Boolean).map((l) => JSON.parse(l.replace(/^data: /, '')));
+    const steps = frames.filter((f) => f.type === 'step').map((f) => f.label);
+    expect(steps).toContain('Membaca daftar proyek');
+    expect(steps.some((s: string) => s.startsWith('Menganalisis kesehatan'))).toBe(true);
+    const answer = frames.find((f) => f.type === 'answer');
+    expect(answer?.answer).toBe('Ini jawaban final.');
+    expect(frames.some((f) => f.type === 'done')).toBe(true);
+  });
+
   it('502 when the model declines / returns nothing', async () => {
     __setAiPort({ async draftJson() { return null; }, async draftNarrative() { return null; }, async runToolLoop() { return null; } });
     const res = await ask(pmToken);
