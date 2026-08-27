@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, API_BASE, streamHeaders } from '../api/client';
 import { Markdown } from '../lib/markdown';
 import { toCsv, downloadCsv } from '../lib/csv';
@@ -15,6 +15,7 @@ interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
 interface QueryTable { entity: string; columns: { key: string; label: string }[]; rows: Record<string, string | number | boolean | null>[]; total: number; limit: number }
 interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; error?: boolean }
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
+interface ApprovalItem { id: string; actionLabel: string; stepName: string; project: { code: string; name: string } | null }
 
 const CHAT_KEY = 'anett-chat';
 
@@ -35,6 +36,7 @@ interface AnettStrings {
   voiceErrSecure: string; voiceErrDenied: string; voiceErrGeneric: string;
   convoOnAria: string; convoOffAria: string; readAloud: string; stopReading: string; voiceLabel: string; voiceAuto: string;
   menuAria: string; menuHandsFree: string; menuReadAloud: string;
+  needsApproval: (n: number) => string; approve: string; reject: string; viewAllApprovals: (n: number) => string; approvedToast: string; rejectedToast: string;
   exportCsv: string; rowsShown: (n: number, total: number) => string;
   footerPropose: string; footerRead: string; footerTail: string; errorGeneric: string;
   actionLabels: Record<string, string>;
@@ -57,6 +59,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     voiceErrSecure: 'Mikrofon butuh HTTPS — buka lewat alamat https:// (bukan http/LAN).', voiceErrDenied: 'Izin mikrofon ditolak. Aktifkan di pengaturan situs (ikon gembok di address bar), lalu coba lagi.', voiceErrGeneric: 'Mikrofon tidak dapat diakses. Cek koneksi & izin mikrofon.',
     convoOnAria: 'Matikan mode ngobrol', convoOffAria: 'Mode ngobrol (hands-free)', readAloud: 'Bacakan', stopReading: 'Stop', voiceLabel: 'Suara', voiceAuto: 'Otomatis',
     menuAria: 'Menu lainnya', menuHandsFree: 'Mode ngobrol', menuReadAloud: 'Bacakan jawaban',
+    needsApproval: (n) => `Menunggu persetujuan Anda (${n})`, approve: 'Setujui', reject: 'Tolak', viewAllApprovals: (n) => `+${n} lainnya di Approvals →`, approvedToast: 'Disetujui', rejectedToast: 'Ditolak',
     exportCsv: 'Ekspor CSV', rowsShown: (n, total) => `${n} dari ${total} baris`,
     footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
     actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal' },
@@ -81,6 +84,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     voiceErrSecure: 'The mic needs HTTPS — open the https:// address (not http/LAN).', voiceErrDenied: 'Microphone permission denied. Enable it in site settings (padlock icon in the address bar), then try again.', voiceErrGeneric: 'Microphone unavailable. Check your connection & mic permission.',
     convoOnAria: 'Turn off conversation mode', convoOffAria: 'Conversation mode (hands-free)', readAloud: 'Read aloud', stopReading: 'Stop', voiceLabel: 'Voice', voiceAuto: 'Auto',
     menuAria: 'More options', menuHandsFree: 'Hands-free', menuReadAloud: 'Read answers',
+    needsApproval: (n) => `Awaiting your approval (${n})`, approve: 'Approve', reject: 'Reject', viewAllApprovals: (n) => `+${n} more in Approvals →`, approvedToast: 'Approved', rejectedToast: 'Rejected',
     exportCsv: 'Export CSV', rowsShown: (n, total) => `${n} of ${total} rows`,
     footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
     actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule' },
@@ -333,6 +337,19 @@ export default function AiAssistant() {
     staleTime: 60_000,
   });
 
+  // Approvals routed to the user — surfaced in-chat so they can Approve/Reject without leaving Anett.
+  const qc = useQueryClient();
+  const approvalsQ = useQuery({
+    queryKey: ['assistant-approvals'],
+    queryFn: () => api.get<{ approvals: ApprovalItem[] }>(`/approvals/mine`),
+    enabled: open && availQ.data?.aiAvailable === true,
+    staleTime: 15_000,
+  });
+  const decide = useMutation({
+    mutationFn: (v: { id: string; decision: 'APPROVED' | 'REJECTED' }) => api.post(`/approvals/${v.id}/decide`, { decision: v.decision }),
+    onSuccess: () => { void approvalsQ.refetch(); void briefingQ.refetch(); qc.invalidateQueries({ queryKey: ['approvals'] }); },
+  });
+
   const ask = useMutation({
     // Only real Q&A turns go to the model — error notices are dropped from the sent history.
     mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[] }>(`/assistant/ask`, {
@@ -373,7 +390,9 @@ export default function AiAssistant() {
   // Persist + keep the view pinned to the latest message (also while the typewriter is revealing).
   useEffect(() => { turnsRef.current = turns; }, [turns]);
   useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reduce ? 'auto' : 'smooth' }); }, [turns, ask.isPending, streaming, streamSteps.length, streamLen, reduce]);
+  // Pin to the latest message on every new turn/stream tick AND whenever the panel (re)opens — so
+  // reopening an existing conversation always lands on the last message (jump instantly on open).
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: open && !streaming && !ask.isPending ? 'auto' : reduce ? 'auto' : 'smooth' }); }, [open, shown, turns, ask.isPending, streaming, streamSteps.length, streamLen, reduce]);
 
   // Typewriter: advance the revealed slice a few chars per frame until the full answer is shown.
   useEffect(() => {
@@ -709,6 +728,25 @@ export default function AiAssistant() {
             </div>
           )}
 
+          {/* Pending approvals — act on them right here, no need to open the Approvals page */}
+          {approvalsQ.data?.approvals && approvalsQ.data.approvals.length > 0 && (
+            <div className="border-b border-amber-200 bg-amber-50/70 px-3 py-2 dark:border-amber-900/40 dark:bg-amber-900/15">
+              <div className="mb-1 text-[11px] font-semibold text-amber-800 dark:text-amber-200">📥 {L.needsApproval(approvalsQ.data.approvals.length)}</div>
+              <div className="space-y-1">
+                {approvalsQ.data.approvals.slice(0, 3).map((a) => (
+                  <div key={a.id} className="flex items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200" title={a.actionLabel}>{a.actionLabel}{a.project?.code ? <span className="font-mono text-slate-500 dark:text-slate-400"> · {a.project.code}</span> : null}</span>
+                    <button onClick={() => decide.mutate({ id: a.id, decision: 'APPROVED' })} disabled={decide.isPending} aria-label={L.approve} className="shrink-0 rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50">✓ {L.approve}</button>
+                    <button onClick={() => decide.mutate({ id: a.id, decision: 'REJECTED' })} disabled={decide.isPending} aria-label={L.reject} className="shrink-0 rounded-md border border-rose-300 px-2 py-0.5 text-[11px] font-medium text-rose-600 transition hover:bg-rose-50 disabled:opacity-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-900/20">{L.reject}</button>
+                  </div>
+                ))}
+              </div>
+              {approvalsQ.data.approvals.length > 3 && (
+                <Link to="/approvals" onClick={() => setOpen(false)} className="mt-1 inline-block text-[11px] font-medium text-amber-700 hover:underline dark:text-amber-300">{L.viewAllApprovals(approvalsQ.data.approvals.length - 3)}</Link>
+              )}
+            </div>
+          )}
+
           <div ref={scrollRef} aria-live="polite" className="flex-1 space-y-2.5 overflow-y-auto p-3">
             {turns.length === 0 && (
               <div className="space-y-3">
@@ -719,16 +757,11 @@ export default function AiAssistant() {
                   </div>
                 </div>
 
-                {/* Proactive briefing — what needs attention right now (deterministic, no AI cost) */}
-                {briefingQ.data && (briefingQ.data.approvalsWaiting > 0 || briefingQ.data.projectsWithOverdue.length > 0) && (
+                {/* Proactive briefing — overdue tasks needing attention (approvals live in the banner above) */}
+                {briefingQ.data && briefingQ.data.projectsWithOverdue.length > 0 && (
                   <div className="ml-10 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 text-xs dark:border-amber-900/50 dark:bg-amber-900/15">
                     <div className="mb-1 font-semibold text-amber-800 dark:text-amber-200">{L.needAttention}</div>
                     <div className="flex flex-wrap gap-1.5">
-                      {briefingQ.data.approvalsWaiting > 0 && (
-                        <Link to="/approvals" onClick={() => setOpen(false)} className="rounded-full border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-200">
-                          📥 {L.approvalsWaiting(briefingQ.data.approvalsWaiting)}
-                        </Link>
-                      )}
                       {briefingQ.data.projectsWithOverdue.map((p) => (
                         <button key={p.code} onClick={() => sendText(L.overduePrompt(p.code))} className="rounded-full border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-200">
                           ⏰ {L.overdue(p.code, p.count)}
