@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api, ApiError, API_BASE, streamHeaders } from '../api/client';
 import { Markdown } from '../lib/markdown';
+import { toCsv, downloadCsv } from '../lib/csv';
 import { useLang } from '../context/LanguageContext';
 
 // Portfolio AI assistant — Q&A over the projects the user can access, and (Stage C) able to PROPOSE
@@ -11,7 +12,8 @@ import { useLang } from '../context/LanguageContext';
 interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
 interface NavRef { label: string; path: string }
 interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
-interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; error?: boolean }
+interface QueryTable { entity: string; columns: { key: string; label: string }[]; rows: Record<string, string | number | boolean | null>[]; total: number; limit: number }
+interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; error?: boolean }
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 
 const CHAT_KEY = 'anett-chat';
@@ -29,6 +31,7 @@ interface AnettStrings {
   thanksUp: string; thanksDown: string; notePlaceholder: string; send: string; skip: string;
   likeTitle: string; likeAria: string; dislikeTitle: string; dislikeAria: string;
   retry: string; thinking: string; composing: string; inputPlaceholder: string;
+  exportCsv: string; rowsShown: (n: number, total: number) => string;
   footerPropose: string; footerRead: string; footerTail: string; errorGeneric: string;
   actionLabels: Record<string, string>;
   chips: (proj: boolean, propose: boolean) => string[];
@@ -46,6 +49,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     thanksUp: '👍 Terima kasih atas masukannya.', thanksDown: '👎 Terima kasih — Anett akan mengingatnya.', notePlaceholder: 'Apa yang kurang tepat? / seharusnya bagaimana?', send: 'Kirim', skip: 'Lewati',
     likeTitle: 'Jawaban ini membantu', likeAria: 'Suka', dislikeTitle: 'Jawaban ini kurang tepat', dislikeAria: 'Tidak suka',
     retry: 'Coba lagi', thinking: 'Berpikir…', composing: 'Menyusun jawaban…', inputPlaceholder: 'Tulis pertanyaan…',
+    exportCsv: 'Ekspor CSV', rowsShown: (n, total) => `${n} dari ${total} baris`,
     footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
     actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal' },
     chips: (proj, propose) => proj
@@ -65,6 +69,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     thanksUp: '👍 Thanks for the feedback.', thanksDown: "👎 Thanks — Anett will remember this.", notePlaceholder: 'What was off? / what should it be?', send: 'Send', skip: 'Skip',
     likeTitle: 'This answer helped', likeAria: 'Like', dislikeTitle: 'This answer was off', dislikeAria: 'Dislike',
     retry: 'Try again', thinking: 'Thinking…', composing: 'Composing an answer…', inputPlaceholder: 'Type a question…',
+    exportCsv: 'Export CSV', rowsShown: (n, total) => `${n} of ${total} rows`,
     footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
     actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule' },
     chips: (proj, propose) => proj
@@ -195,7 +200,7 @@ export default function AiAssistant() {
 
   const ask = useMutation({
     // Only real Q&A turns go to the model — error notices are dropped from the sent history.
-    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[] }>(`/assistant/ask`, {
+    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[] }>(`/assistant/ask`, {
       messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
       context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
       lang,
@@ -203,7 +208,7 @@ export default function AiAssistant() {
     onSuccess: (res) => {
       // The new answer lands at the current end of the list; start the typewriter there (unless reduced-motion).
       if (!reduce && res.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
-      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined }]);
+      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined, tables: res.tables?.length ? res.tables : undefined }]);
     },
     onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : L.errorGeneric, error: true }]),
   });
@@ -294,14 +299,14 @@ export default function AiAssistant() {
         for (const part of parts) {
           const line = part.split('\n').find((l) => l.startsWith('data: '));
           if (!line) continue;
-          let ev: { type: string; label?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; message?: string };
+          let ev: { type: string; label?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; message?: string };
           try { ev = JSON.parse(line.slice(6)); } catch { continue; }
           started = true;
           if (ev.type === 'step' && ev.label) {
             setStreamSteps((s) => [...s, ev.label!]);
           } else if (ev.type === 'answer') {
             if (!reduce && ev.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
-            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined }]);
+            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined }]);
           } else if (ev.type === 'error') {
             setTurns((t) => [...t, { role: 'assistant', content: ev.message || L.errorGeneric, error: true }]);
           }
@@ -337,6 +342,13 @@ export default function AiAssistant() {
   };
 
   const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
+
+  // Render a query-result cell + export the whole table to CSV (reuses lib/csv).
+  const fmtCell = (v: string | number | boolean | null) => (v == null ? '—' : typeof v === 'boolean' ? (v ? '✓' : '–') : String(v));
+  const exportTable = (tbl: QueryTable) => {
+    const rows = tbl.rows.map((r) => tbl.columns.map((c) => { const v = r[c.key]; return typeof v === 'boolean' ? (v ? 'yes' : 'no') : v; }));
+    downloadCsv(`anett-${tbl.entity}.csv`, toCsv(tbl.columns.map((c) => c.label), rows));
+  };
 
   // Contextual starter chips — project-aware when viewing a project; the action chip only when
   // Stage C propose is available. Follow-up chips nudge the next useful question. Both bilingual.
@@ -482,6 +494,29 @@ export default function AiAssistant() {
                     ))}
                   </div>
                 )}
+                {/* Data query result — a table Anett built from a natural-language question + CSV export */}
+                {i !== streamIdx && t.tables && t.tables.map((tbl, k) => (
+                  <div key={k} className="ml-10 mt-1.5 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div className="max-h-64 overflow-auto">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800">
+                          <tr>{tbl.columns.map((c) => <th key={c.key} className="whitespace-nowrap px-2 py-1 text-left font-semibold text-slate-600 dark:text-slate-300">{c.label}</th>)}</tr>
+                        </thead>
+                        <tbody>
+                          {tbl.rows.map((r, ri) => (
+                            <tr key={ri} className="border-t border-slate-100 dark:border-slate-800">
+                              {tbl.columns.map((c) => <td key={c.key} className="whitespace-nowrap px-2 py-1 text-slate-700 dark:text-slate-200">{fmtCell(r[c.key])}</td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
+                      <span>{L.rowsShown(tbl.rows.length, tbl.total)}</span>
+                      <button onClick={() => exportTable(tbl)} className="font-medium text-violet-600 hover:underline dark:text-violet-300">⬇ {L.exportCsv}</button>
+                    </div>
+                  </div>
+                ))}
                 {/* Feedback — rate the answer; a 👎 can carry a correction that becomes a memory Anett honors */}
                 {t.role === 'assistant' && !t.error && i !== streamIdx && (
                   rated[i] ? (
