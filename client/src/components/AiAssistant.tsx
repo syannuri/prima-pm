@@ -33,6 +33,7 @@ interface AnettStrings {
   retry: string; thinking: string; composing: string; inputPlaceholder: string;
   voiceStart: string; voiceStop: string; listening: string; ttsOnAria: string; ttsOffAria: string;
   voiceErrSecure: string; voiceErrDenied: string; voiceErrGeneric: string;
+  convoOnAria: string; convoOffAria: string; readAloud: string; stopReading: string; voiceLabel: string; voiceAuto: string;
   exportCsv: string; rowsShown: (n: number, total: number) => string;
   footerPropose: string; footerRead: string; footerTail: string; errorGeneric: string;
   actionLabels: Record<string, string>;
@@ -53,6 +54,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     retry: 'Coba lagi', thinking: 'Berpikir…', composing: 'Menyusun jawaban…', inputPlaceholder: 'Tulis pertanyaan…',
     voiceStart: 'Bicara', voiceStop: 'Berhenti merekam', listening: 'Mendengarkan…', ttsOnAria: 'Matikan suara', ttsOffAria: 'Bacakan jawaban',
     voiceErrSecure: 'Mikrofon butuh HTTPS — buka lewat alamat https:// (bukan http/LAN).', voiceErrDenied: 'Izin mikrofon ditolak. Aktifkan di pengaturan situs (ikon gembok di address bar), lalu coba lagi.', voiceErrGeneric: 'Mikrofon tidak dapat diakses. Cek koneksi & izin mikrofon.',
+    convoOnAria: 'Matikan mode ngobrol', convoOffAria: 'Mode ngobrol (hands-free)', readAloud: 'Bacakan', stopReading: 'Stop', voiceLabel: 'Suara', voiceAuto: 'Otomatis',
     exportCsv: 'Ekspor CSV', rowsShown: (n, total) => `${n} dari ${total} baris`,
     footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
     actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal' },
@@ -75,6 +77,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     retry: 'Try again', thinking: 'Thinking…', composing: 'Composing an answer…', inputPlaceholder: 'Type a question…',
     voiceStart: 'Speak', voiceStop: 'Stop recording', listening: 'Listening…', ttsOnAria: 'Turn off voice', ttsOffAria: 'Read answers aloud',
     voiceErrSecure: 'The mic needs HTTPS — open the https:// address (not http/LAN).', voiceErrDenied: 'Microphone permission denied. Enable it in site settings (padlock icon in the address bar), then try again.', voiceErrGeneric: 'Microphone unavailable. Check your connection & mic permission.',
+    convoOnAria: 'Turn off conversation mode', convoOffAria: 'Conversation mode (hands-free)', readAloud: 'Read aloud', stopReading: 'Stop', voiceLabel: 'Voice', voiceAuto: 'Auto',
     exportCsv: 'Export CSV', rowsShown: (n, total) => `${n} of ${total} rows`,
     footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
     actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule' },
@@ -179,6 +182,48 @@ function getSpeechRecognitionCtor(): (new () => SpeechRec) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 const TTS_SUPPORTED = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+// Pick the nicest voice for a language: an explicit choice if still available, else a local
+// (on-device, usually more natural) voice matching the language, else any matching, else the first.
+function pickVoice(voices: SpeechSynthesisVoice[], lang: 'id' | 'en', preferredURI?: string): SpeechSynthesisVoice | undefined {
+  if (!voices.length) return undefined;
+  if (preferredURI) { const m = voices.find((v) => v.voiceURI === preferredURI); if (m) return m; }
+  const prefix = lang === 'en' ? 'en' : 'id';
+  const matching = voices.filter((v) => v.lang?.toLowerCase().startsWith(prefix));
+  return matching.find((v) => v.localService) ?? matching[0] ?? voices[0];
+}
+
+// Live audio-level bars while the mic listens (Gemini/Siri-style) — driven by a real MediaStream via
+// the Web Audio analyser. Isolated so its ~30fps updates don't re-render the whole assistant.
+function VoiceListeningBar({ stream }: { stream: MediaStream }) {
+  const N = 9;
+  const [bars, setBars] = useState<number[]>(() => Array(N).fill(0.15));
+  useEffect(() => {
+    let raf = 0; let ctx: AudioContext | null = null;
+    try {
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      ctx = new AC();
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 64; analyser.smoothingTimeConstant = 0.7;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const step = Math.max(1, Math.floor(data.length / N));
+      const loop = () => {
+        analyser.getByteFrequencyData(data);
+        const next: number[] = [];
+        for (let i = 0; i < N; i++) { let s = 0; for (let j = 0; j < step; j++) s += data[i * step + j] ?? 0; next.push(Math.min(1, s / step / 170 + 0.12)); }
+        setBars(next);
+        raf = requestAnimationFrame(loop);
+      };
+      loop();
+    } catch { /* Web Audio unavailable → bars stay at rest */ }
+    return () => { cancelAnimationFrame(raf); ctx?.close().catch(() => {}); };
+  }, [stream]);
+  return (
+    <div className="flex h-9 flex-1 items-center gap-[3px] px-2" aria-hidden>
+      {bars.map((h, i) => <span key={i} className="w-1 rounded-full bg-rose-500" style={{ height: `${Math.round(h * 100)}%` }} />)}
+    </div>
+  );
+}
 // Strip common markdown so the spoken answer sounds natural (not "asterisk asterisk …").
 function stripMarkdown(s: string): string {
   return s
@@ -219,8 +264,17 @@ export default function AiAssistant() {
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [ttsOn, setTtsOn] = useState(() => { try { return localStorage.getItem('anett-tts') === '1'; } catch { return false; } });
+  const [convoMode, setConvoMode] = useState(() => { try { return localStorage.getItem('anett-convo') === '1'; } catch { return false; } }); // hands-free loop
+  const [micStream, setMicStream] = useState<MediaStream | null>(null); // for the live listening waveform
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);  // which answer is being read aloud
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceURI, setVoiceURI] = useState(() => { try { return localStorage.getItem('anett-voice') || ''; } catch { return ''; } });
   const recogRef = useRef<SpeechRec | null>(null);
   const spokenRef = useRef(-1); // index of the last answer read aloud (avoids re-speaking restored turns)
+  // Refs so the speech callbacks (which outlive a render) always see current values.
+  const convoRef = useRef(convoMode); convoRef.current = convoMode;
+  const openRef = useRef(false); openRef.current = open;
+  const startListeningRef = useRef<() => void>(() => {});
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const turnsRef = useRef<Turn[]>(turns); // always-current turns, so onSuccess can index the new answer
@@ -314,20 +368,43 @@ export default function AiAssistant() {
     return () => { cancelAnimationFrame(raf); clearTimeout(t); window.removeEventListener('keydown', onKey); };
   }, [open]);
 
-  // Spoken answers (text→speech): read each new assistant answer aloud when enabled. MUST stay above
-  // the early return below (Rules of Hooks — a hook after an early return crashes with React #310).
+  // Load & track available TTS voices (getVoices is async — populated on 'voiceschanged').
+  useEffect(() => {
+    if (!TTS_SUPPORTED) return;
+    const load = () => setVoices(window.speechSynthesis.getVoices());
+    load();
+    window.speechSynthesis.addEventListener?.('voiceschanged', load);
+    return () => window.speechSynthesis.removeEventListener?.('voiceschanged', load);
+  }, []);
+
+  // Read one answer aloud (used by the auto-speak effect + the per-answer speaker button). Picks the
+  // best voice for the language; in hands-free mode, re-opens the mic when it finishes.
+  const speakTurn = (idx: number) => {
+    if (!TTS_SUPPORTED) return;
+    const turn = turnsRef.current[idx];
+    if (!turn || turn.role !== 'assistant' || turn.error) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(stripMarkdown(turn.content));
+    u.lang = lang === 'en' ? 'en-US' : 'id-ID';
+    const v = pickVoice(voices, lang, voiceURI); if (v) u.voice = v;
+    u.onstart = () => setSpeakingIdx(idx);
+    u.onend = () => { setSpeakingIdx(null); if (convoRef.current && openRef.current) startListeningRef.current(); };
+    u.onerror = () => setSpeakingIdx(null);
+    window.speechSynthesis.speak(u);
+  };
+
+  // Auto-read each new assistant answer when the speaker is on. MUST stay above the early return
+  // (Rules of Hooks — a hook after an early return crashes with React #310).
   useEffect(() => {
     if (!ttsOn || !TTS_SUPPORTED) return;
     const idx = turns.length - 1;
     const last = turns[idx];
     if (last && last.role === 'assistant' && !last.error && spokenRef.current !== idx) {
       spokenRef.current = idx;
-      const u = new SpeechSynthesisUtterance(stripMarkdown(last.content));
-      u.lang = lang === 'en' ? 'en-US' : 'id-ID';
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
+      speakTurn(idx);
     }
-  }, [turns, ttsOn, lang]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turns, ttsOn]);
 
   if (!availQ.data?.aiAvailable) return null;
 
@@ -406,6 +483,9 @@ export default function AiAssistant() {
 
   const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); spokenRef.current = -1; if (TTS_SUPPORTED) window.speechSynthesis.cancel(); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
 
+  // Stop + release the waveform mic stream.
+  const stopMic = () => setMicStream((s) => { s?.getTracks().forEach((t) => t.stop()); return null; });
+
   // Voice input (speech→text): start recognition in the UI language; on the final transcript, auto-send.
   const stopListening = () => recogRef.current?.stop();
   const startListening = () => {
@@ -414,7 +494,9 @@ export default function AiAssistant() {
     // The mic API only works in a secure context (HTTPS / localhost); on plain http it fails silently
     // with no permission prompt — tell the user why instead of doing nothing.
     if (typeof window !== 'undefined' && window.isSecureContext === false) { setVoiceError(L.voiceErrSecure); return; }
-    if (TTS_SUPPORTED) window.speechSynthesis.cancel();
+    if (TTS_SUPPORTED) window.speechSynthesis.cancel(); // barge-in: stop any answer being read
+    // Open a parallel stream just for the live level meter (best-effort; STT works without it).
+    navigator.mediaDevices?.getUserMedia({ audio: true }).then((s) => setMicStream(s)).catch(() => {});
     let finalText = '';
     const rec = new sttCtor();
     rec.lang = lang === 'en' ? 'en-US' : 'id-ID';
@@ -431,15 +513,24 @@ export default function AiAssistant() {
       const code = e?.error;
       if (code === 'not-allowed' || code === 'service-not-allowed') setVoiceError(L.voiceErrDenied);
       else if (code && code !== 'no-speech' && code !== 'aborted') setVoiceError(L.voiceErrGeneric);
-      setListening(false); recogRef.current = null;
+      setListening(false); recogRef.current = null; stopMic();
     };
-    rec.onend = () => { setListening(false); recogRef.current = null; const q = finalText.trim(); if (q) sendText(q); };
+    rec.onend = () => { setListening(false); recogRef.current = null; stopMic(); const q = finalText.trim(); if (q) sendText(q); };
     recogRef.current = rec; setListening(true);
-    try { rec.start(); } catch { setListening(false); recogRef.current = null; }
+    try { rec.start(); } catch { setListening(false); recogRef.current = null; stopMic(); }
   };
+  startListeningRef.current = startListening;
 
-  // Spoken answers (text→speech): read each new assistant answer aloud when enabled.
+  // Spoken answers (text→speech). Toggling the header speaker on/off; hands-free conversation loop.
   const toggleTts = () => setTtsOn((v) => { const nv = !v; try { localStorage.setItem('anett-tts', nv ? '1' : '0'); } catch { /* quota */ } if (!nv && TTS_SUPPORTED) window.speechSynthesis.cancel(); return nv; });
+  const toggleConvo = () => setConvoMode((v) => {
+    const nv = !v; try { localStorage.setItem('anett-convo', nv ? '1' : '0'); } catch { /* quota */ }
+    if (nv && !ttsOn) toggleTts(); // hands-free needs answers read aloud to know when to re-listen
+    if (!nv && TTS_SUPPORTED) window.speechSynthesis.cancel();
+    return nv;
+  });
+  // Per-answer speaker button: read this answer, or stop if it's the one already speaking.
+  const toggleSpeak = (idx: number) => { if (speakingIdx === idx) { window.speechSynthesis.cancel(); setSpeakingIdx(null); } else speakTurn(idx); };
 
   // Render a query-result cell + export the whole table to CSV (reuses lib/csv).
   const fmtCell = (v: string | number | boolean | null) => (v == null ? '—' : typeof v === 'boolean' ? (v ? '✓' : '–') : String(v));
@@ -486,6 +577,11 @@ export default function AiAssistant() {
             {turns.length > 0 && (
               <button onClick={newChat} aria-label={L.newChatTitle} title={L.newChatTitle} className="rounded-lg px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-white/60 dark:text-violet-300 dark:hover:bg-slate-800">{L.newChat}</button>
             )}
+            {sttCtor && TTS_SUPPORTED && (
+              <button onClick={toggleConvo} aria-label={convoMode ? L.convoOnAria : L.convoOffAria} title={convoMode ? L.convoOnAria : L.convoOffAria} className={`grid h-7 w-7 place-items-center rounded-lg text-base hover:bg-white/60 dark:hover:bg-slate-800 ${convoMode ? 'text-violet-600 dark:text-violet-300' : 'text-slate-400'}`}>
+                🗣️
+              </button>
+            )}
             {TTS_SUPPORTED && (
               <button onClick={toggleTts} aria-label={ttsOn ? L.ttsOnAria : L.ttsOffAria} title={ttsOn ? L.ttsOnAria : L.ttsOffAria} className={`grid h-7 w-7 place-items-center rounded-lg hover:bg-white/60 dark:hover:bg-slate-800 ${ttsOn ? 'text-violet-600 dark:text-violet-300' : 'text-slate-400'}`}>
                 {ttsOn ? '🔊' : '🔇'}
@@ -496,6 +592,21 @@ export default function AiAssistant() {
             </button>
             <button onClick={() => setOpen(false)} aria-label={L.close} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800">✕</button>
           </div>
+
+          {/* Voice picker — pick the natural voice for spoken answers (shown when the speaker is on) */}
+          {TTS_SUPPORTED && ttsOn && voices.some((v) => v.lang?.toLowerCase().startsWith(lang === 'en' ? 'en' : 'id')) && (
+            <div className="flex items-center gap-1.5 border-b border-slate-100 px-3 py-1 dark:border-slate-800">
+              <span className="text-[10px] uppercase tracking-wide text-slate-400">{L.voiceLabel}</span>
+              <select
+                value={voiceURI}
+                onChange={(e) => { setVoiceURI(e.target.value); try { localStorage.setItem('anett-voice', e.target.value); } catch { /* quota */ } }}
+                className="flex-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              >
+                <option value="">{L.voiceAuto}</option>
+                {voices.filter((v) => v.lang?.toLowerCase().startsWith(lang === 'en' ? 'en' : 'id')).map((v) => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
+              </select>
+            </div>
+          )}
 
           <div ref={scrollRef} aria-live="polite" className="flex-1 space-y-2.5 overflow-y-auto p-3">
             {turns.length === 0 && (
@@ -643,6 +754,9 @@ export default function AiAssistant() {
                     <div className="ml-10 mt-1 flex items-center gap-1 text-slate-400 dark:text-slate-500">
                       <button onClick={() => rate(i, 'UP')} title={L.likeTitle} aria-label={L.likeAria} className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-slate-800">👍</button>
                       <button onClick={() => { setNoteFor(i); setNoteText(''); }} title={L.dislikeTitle} aria-label={L.dislikeAria} className="rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-800">👎</button>
+                      {TTS_SUPPORTED && (
+                        <button onClick={() => toggleSpeak(i)} title={speakingIdx === i ? L.stopReading : L.readAloud} aria-label={speakingIdx === i ? L.stopReading : L.readAloud} className={`rounded-md px-1.5 py-0.5 text-sm transition hover:bg-slate-100 dark:hover:bg-slate-800 ${speakingIdx === i ? 'text-violet-600 dark:text-violet-300' : 'hover:text-violet-600'}`}>{speakingIdx === i ? '⏹' : '🔊'}</button>
+                      )}
                     </div>
                   )
                 )}
@@ -682,15 +796,21 @@ export default function AiAssistant() {
 
           <div className="border-t border-slate-200 p-2 dark:border-slate-800">
             <div className="flex items-end gap-2">
-              <textarea
-                ref={inputRef}
-                rows={1}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(input); } }}
-                placeholder={listening ? L.listening : L.inputPlaceholder}
-                className="max-h-24 min-h-[2.25rem] flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
+              {listening ? (
+                <div className="flex min-h-[2.25rem] flex-1 items-center overflow-hidden rounded-lg border border-rose-300 bg-rose-50/40 dark:border-rose-800/60 dark:bg-rose-900/10">
+                  {micStream ? <VoiceListeningBar stream={micStream} /> : <span className={`flex-1 px-3 text-sm text-rose-600 dark:text-rose-400 ${reduce ? '' : 'animate-pulse'}`}>{L.listening}</span>}
+                </div>
+              ) : (
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(input); } }}
+                  placeholder={L.inputPlaceholder}
+                  className="max-h-24 min-h-[2.25rem] flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                />
+              )}
               {sttCtor && (
                 <button onClick={() => (listening ? stopListening() : startListening())} disabled={busy && !listening} aria-label={listening ? L.voiceStop : L.voiceStart} title={listening ? L.voiceStop : L.voiceStart} className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition disabled:opacity-40 ${listening ? `bg-rose-500 text-white ${reduce ? '' : 'animate-pulse'}` : 'text-slate-500 hover:bg-slate-100 hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800'}`}><MicIcon className="h-5 w-5" /></button>
               )}
