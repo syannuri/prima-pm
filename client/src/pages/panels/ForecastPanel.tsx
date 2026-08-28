@@ -35,7 +35,7 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
   });
   const explain = useMutation({
     mutationFn: () => api.post<EvmExplainDraft>(`/projects/${projectId}/report/evm-explain/ai-draft?asOf=${statusDate}`),
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI tidak dapat membuat penjelasan EVM'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI could not generate the EVM explanation'),
   });
   const evmDraft = explain.data;
 
@@ -100,23 +100,23 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
           {aiQ.data?.aiAvailable && (
             <Card className="!p-3 border-violet-200 bg-violet-50/60 dark:border-violet-900/50 dark:bg-violet-900/15">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">Penjelasan EVM (AI)</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">EVM explanation (AI)</div>
                 <Button variant="secondary" className="!py-1 text-xs" disabled={explain.isPending} onClick={() => explain.mutate()}>
-                  {explain.isPending ? 'Menganalisa…' : evmDraft ? '↻ Analisa ulang' : '✨ Jelaskan dengan AI'}
+                  {explain.isPending ? 'Analyzing…' : evmDraft ? '↻ Re-analyze' : '✨ Explain with AI'}
                 </Button>
               </div>
               {evmDraft ? (
                 <div className="mt-3 space-y-3 text-sm">
                   <p className="text-slate-700 dark:text-slate-200">{evmDraft.verdict}</p>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <EvmList title="Penyebab jadwal" items={evmDraft.scheduleDrivers} />
-                    <EvmList title="Penyebab biaya" items={evmDraft.costDrivers} />
+                    <EvmList title="Schedule drivers" items={evmDraft.scheduleDrivers} />
+                    <EvmList title="Cost drivers" items={evmDraft.costDrivers} />
                   </div>
-                  <EvmList title="Langkah pemulihan" items={evmDraft.recovery} accent />
-                  <p className="text-[11px] italic text-slate-400 dark:text-slate-500">Hasil AI bersifat masukan — verifikasi sebelum ditindaklanjuti.</p>
+                  <EvmList title="Recovery actions" items={evmDraft.recovery} accent />
+                  <p className="text-[11px] italic text-slate-400 dark:text-slate-500">AI output is advisory — verify before acting on it.</p>
                 </div>
               ) : (
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Jelaskan kondisi SPI/CPI &amp; forecast saat ini dan saran langkah pemulihannya.</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Explain the current SPI/CPI &amp; forecast and suggest recovery actions.</p>
               )}
             </Card>
           )}
