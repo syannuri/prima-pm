@@ -5,6 +5,7 @@ import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../.
 import { Button, Card, FormError, Input, MoneyInput, Select, PanelLoading } from '../../components/ui';
 import BaselineSetupBar from '../../components/BaselineSetupBar';
 import RebaselineReminder from '../../components/RebaselineReminder';
+import { KpiIcon, type Accent, type IconName } from '../../components/KpiIcon';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -67,11 +68,12 @@ function flattenLeaves(nodes: GanttNode[]): GanttNode[] {
 
 // Accordion section header: chevron + title + line count on the left, total on the right.
 // Always visible; clicking it expands/collapses the section body.
-function AccordionHeader({ title, count, total, open, onToggle }: { title: string; count: number; total: string; open: boolean; onToggle: () => void }) {
+function AccordionHeader({ title, count, total, open, onToggle, icon, accent }: { title: string; count: number; total: string; open: boolean; onToggle: () => void; icon?: IconName; accent?: Accent }) {
   return (
     <button onClick={onToggle} aria-expanded={open} className="-m-1 flex w-full items-center justify-between gap-3 rounded-lg p-1 text-left">
       <span className="flex min-w-0 items-center gap-2">
         <svg viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+        {icon && accent && <KpiIcon name={icon} accent={accent} className="h-6 w-6" />}
         <span className="font-semibold text-slate-800 dark:text-slate-100">{title}</span>
         <span className="text-xs text-slate-400">{count} {count === 1 ? 'line' : 'lines'}</span>
       </span>
@@ -139,20 +141,20 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
       <RebaselineReminder projectId={projectId} />
       {/* Baseline summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Direct" value={formatIdr(b?.directTotal)} />
-        <Stat label="Indirect" value={formatIdr(b?.indirectTotal)} />
-        <Stat label="Contingency" value={formatIdr(b?.contingencyReserve)} hint="from Risk EMV" />
-        <Stat label="Mgmt Reserve" value={formatIdr(b?.managementReserve)} />
-        <Stat label="BAC (PMB)" value={formatIdr(b?.costBaseline)} hint="Budget at Completion = direct + indirect + contingency (excl. mgmt reserve)" strong />
-        <Stat label="Total Budget" value={formatIdr(b?.budgetAtCompletion)} hint="BAC + management reserve" />
+        <Stat label="Direct" value={formatIdr(b?.directTotal)} icon="box" accent="blue" />
+        <Stat label="Indirect" value={formatIdr(b?.indirectTotal)} icon="layers" accent="violet" />
+        <Stat label="Contingency" value={formatIdr(b?.contingencyReserve)} hint="from Risk EMV" icon="shield" accent="amber" />
+        <Stat label="Mgmt Reserve" value={formatIdr(b?.managementReserve)} icon="lock" accent="slate" />
+        <Stat label="BAC (PMB)" value={formatIdr(b?.costBaseline)} hint="Budget at Completion = direct + indirect + contingency (excl. mgmt reserve)" strong icon="target" accent="emerald" />
+        <Stat label="Total Budget" value={formatIdr(b?.budgetAtCompletion)} hint="BAC + management reserve" icon="wallet" accent="sky" />
       </div>
       {/* Overall drawdown across Direct + Indirect: committed, spent, remaining (budget − spent),
           and available (budget − spent − committed = truly free to commit). */}
       <div data-cost-focus="spent" className={`grid grid-cols-2 gap-3 rounded-xl transition-all sm:grid-cols-4 ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
-        <Stat label="Committed" value={formatIdr(data?.committedTotal ?? 0)} hint="Awarded→delivered contracts charged to budget lines (Procurement). Obligated, not necessarily paid." />
-        <Stat label="Spent to date" value={formatIdr(totalSpent)} hint="Direct + Indirect actuals (manpower from timesheet)" />
-        <Stat label="Remaining budget" value={formatIdr(totalRemaining)} hint="Direct + Indirect budget − spent (does not net open commitments)" valueClass={totalRemaining < 0 ? 'text-red-600 dark:text-red-400' : undefined} />
-        <Stat label="Available" value={formatIdr(data?.availableTotal ?? 0)} hint="Budget − spent − committed: what's still free to commit after open contracts/POs." strong valueClass={(data?.availableTotal ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} />
+        <Stat label="Committed" value={formatIdr(data?.committedTotal ?? 0)} hint="Awarded→delivered contracts charged to budget lines (Procurement). Obligated, not necessarily paid." icon="link" accent="indigo" />
+        <Stat label="Spent to date" value={formatIdr(totalSpent)} hint="Direct + Indirect actuals (manpower from timesheet)" icon="outflow" accent="orange" />
+        <Stat label="Remaining budget" value={formatIdr(totalRemaining)} hint="Direct + Indirect budget − spent (does not net open commitments)" valueClass={totalRemaining < 0 ? 'text-red-600 dark:text-red-400' : undefined} icon="coins" accent={totalRemaining < 0 ? 'rose' : 'emerald'} />
+        <Stat label="Available" value={formatIdr(data?.availableTotal ?? 0)} hint="Budget − spent − committed: what's still free to commit after open contracts/POs." strong valueClass={(data?.availableTotal ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} icon="check" accent={(data?.availableTotal ?? 0) < 0 ? 'rose' : 'teal'} />
       </div>
       {data?.highLevelCharterCost != null && b && (
         <div data-cost-focus="baseline" className={`rounded-xl transition-all ${flash === 'baseline' ? 'ring-2 ring-amber-400' : ''}`}><CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} /></div>
@@ -244,7 +246,7 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle, target, 
 
   return (
     <Card>
-      <AccordionHeader title="Actual cost (AC)" count={data.actualCosts.length} total={formatIdr(data.actualCostTotal)} open={open} onToggle={onToggle} />
+      <AccordionHeader title="Actual cost (AC)" count={data.actualCosts.length} total={formatIdr(data.actualCostTotal)} open={open} onToggle={onToggle} icon="outflow" accent="orange" />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Real money spent — recorded here manually. It is NOT taken from % progress (that drives Earned Value). CPI = EV ÷ AC.</p>
 
@@ -419,14 +421,17 @@ function UntouchedNote({ count, total, remaining, names }: { count: number; tota
   );
 }
 
-function Stat({ label, value, hint, strong, valueClass }: { label: string; value: string; hint?: string; strong?: boolean; valueClass?: string }) {
+function Stat({ label, value, hint, strong, valueClass, icon, accent }: { label: string; value: string; hint?: string; strong?: boolean; valueClass?: string; icon?: IconName; accent?: Accent }) {
   return (
     <Card className="!p-3">
-      <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-1 ${strong ? 'text-base font-bold' : 'text-sm font-semibold'} ${valueClass ?? (strong ? 'text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-100')}`}>
+      <div className="flex items-center gap-2">
+        {icon && accent && <KpiIcon name={icon} accent={accent} />}
+        <div className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
+      </div>
+      <div className={`mt-1.5 ${strong ? 'text-base font-bold' : 'text-sm font-semibold'} ${valueClass ?? (strong ? 'text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-100')}`}>
         {value}
       </div>
-      {hint && <div className="text-[10px] text-slate-500 dark:text-slate-400">{hint}</div>}
+      {hint && <div className="mt-0.5 text-[10px] leading-tight text-slate-500 dark:text-slate-400">{hint}</div>}
     </Card>
   );
 }
@@ -619,7 +624,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
 
   return (
     <Card>
-      <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} />
+      <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} icon="box" accent="blue" />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Material (qty × unit cost) and Manpower (rate × mandays)</p>
       {/* Always-visible "add line" toolbar — one chip per family, so ANY family (incl. empty ones
@@ -1035,7 +1040,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
 
   return (
     <Card>
-      <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} />
+      <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} icon="layers" accent="violet" />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Overhead: transport, accommodation, meals, communication, supplies, venue…</p>
       {data.indirectCosts.length > 0 && (
