@@ -8,6 +8,7 @@ import { escalateOverdueApprovals } from './modules/approval/approval.service.js
 import { runTrialReminderSweep } from './modules/billing/trialReminders.js';
 import { runDigestSweepIfDue } from './modules/notification/digest.service.js';
 import { runProactiveSweepIfDue } from './modules/report/proactive.service.js';
+import { measureDueOutcomes } from './modules/aiActions/aiActionOutcomes.service.js';
 import { logger, release, initSentry } from './lib/observability.js';
 
 // Initialise error tracking before anything else (no-op unless SENTRY_DSN is set).
@@ -147,6 +148,22 @@ async function main() {
   const proactiveTimer = setInterval(() => void sweepProactive(), PROACTIVE_SWEEP_MS);
   proactiveTimer.unref();
 
+  // AI outcome-learning sweep: resolve applied Stage-C action proposals whose measurement horizon
+  // has elapsed (baseline SPI vs SPI now → IMPROVED/UNCHANGED/WORSENED). Deterministic, no LLM/spend;
+  // a cheap indexed no-op when nothing is due. Every 6h.
+  const OUTCOME_SWEEP_MS = Number(process.env.AI_OUTCOME_SWEEP_MS ?? 6 * 60 * 60 * 1000);
+  const sweepOutcomes = async () => {
+    try {
+      const r = await measureDueOutcomes(new Date());
+      if (r.measured > 0) console.log(`[prima-pm] measured ${r.measured} AI action outcome(s)`);
+    } catch (err) {
+      console.error('[prima-pm] AI outcome sweep failed', err);
+    }
+  };
+  void sweepOutcomes();
+  const outcomeTimer = setInterval(() => void sweepOutcomes(), OUTCOME_SWEEP_MS);
+  outcomeTimer.unref();
+
   const shutdown = async (signal: string) => {
     console.log(`[prima-pm] ${signal} received, shutting down...`);
     clearInterval(pruneTimer);
@@ -156,6 +173,7 @@ async function main() {
     clearInterval(trialReminderTimer);
     clearInterval(digestTimer);
     clearInterval(proactiveTimer);
+    clearInterval(outcomeTimer);
     server.close();
     await prisma.$disconnect();
     process.exit(0);

@@ -410,6 +410,7 @@ model Tenant {
   approvalRequests  ApprovalRequest[]
   approvalDelegations  ApprovalDelegation[]
   aiActionProposals  AiActionProposal[]
+  aiActionOutcomes   AiActionOutcome[]
 }
 
 // Append-only audit trail of Lemon Squeezy billing webhooks (what event flipped which plan).
@@ -712,6 +713,7 @@ model Project {
   aiBriefings      AiBriefing[]
   approvalRequests ApprovalRequest[]
   aiActionProposals AiActionProposal[]
+  aiActionOutcomes AiActionOutcome[]
 
   @@index([status])
   @@index([pmUserId])
@@ -1814,6 +1816,7 @@ model AiActionProposal {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   appliedAt    DateTime?
+  outcome      AiActionOutcome?
 
   @@index([tenantId])
   @@index([projectId])
@@ -1825,6 +1828,52 @@ enum AiActionStatus {
   APPLIED  // approved and executed successfully
   REJECTED // an approver declined it
   FAILED   // approved but the executor threw (no effect applied)
+}
+
+// Outcome learning — closes the Stage C loop. When an AiActionProposal is APPLIED we stamp a
+// baseline (SPI/CPI/progress at apply time), wait a fixed horizon (AI_OUTCOME_HORIZON_DAYS, ~21d),
+// re-measure, and classify whether the action's target metric moved. Aggregated per actionType this
+// becomes an evidence-backed track record Anett can cite ("helped 3 of the last 4 times").
+// Deterministic (no LLM); correlational, NOT causal — labelled as such wherever it surfaces.
+// Only metric-moving actions are scored (TIDY_SCHEDULE, UPDATE_TASK_PROGRESS → SPI); risk/CR are
+// recorded as ADVISORY context only.
+model AiActionOutcome {
+  id             String           @id @default(uuid())
+  tenantId       String?
+  tenant         Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  proposalId     String           @unique
+  proposal       AiActionProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  actionType     String
+  scored         Boolean          @default(false) // false = ADVISORY (not metric-scored)
+  appliedAt      DateTime
+  evalDueAt      DateTime         // appliedAt + horizon; measurement is due once this passes
+  spiBefore      Float?
+  cpiBefore      Float?
+  progressBefore Float?
+  spiAfter       Float?
+  cpiAfter       Float?
+  progressAfter  Float?
+  spiDelta       Float?           // spiAfter - spiBefore (denormalized for cheap aggregation)
+  measuredAt     DateTime?
+  verdict        AiOutcomeVerdict @default(PENDING)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([actionType])
+  @@index([verdict])
+}
+
+enum AiOutcomeVerdict {
+  PENDING      // horizon not yet elapsed — awaiting measurement
+  IMPROVED     // target metric rose beyond the threshold
+  UNCHANGED    // within the noise threshold
+  WORSENED     // target metric fell beyond the threshold
+  INCONCLUSIVE // insufficient data to measure (e.g. no schedule/PV signal)
+  ADVISORY     // action type not metric-scored (risk/CR) — context recorded only
 }
 
 model ApprovalDecision {

@@ -9,6 +9,7 @@ import { setTaskProgress, applyAutoSchedule } from '../schedule/schedule.service
 import { createChangeRequest } from '../charter/charter.service.js';
 import { startApproval, resolveWorkflow, createWorkflow } from '../approval/approval.service.js';
 import { RISK_KINDS, RESPONSE_STRATEGIES } from '../risk/risk.schemas.js';
+import { recordBaseline } from './aiActionOutcomes.service.js';
 
 // =====================================================================
 // Stage C — semi-autonomous AI actions.
@@ -256,7 +257,10 @@ export async function finalizeProposal(
   }
   try {
     await def.execute(projectId, parsed.data, actorId);
-    await prisma.aiActionProposal.update({ where: { id: proposalId }, data: { status: 'APPLIED', appliedAt: new Date() } });
+    const appliedAt = new Date();
+    await prisma.aiActionProposal.update({ where: { id: proposalId }, data: { status: 'APPLIED', appliedAt } });
+    // Outcome learning — stamp a baseline + schedule measurement. Best-effort; never breaks finalize.
+    await recordBaseline({ id: proposalId, actionType: proposal.actionType, projectId }, appliedAt);
   } catch (err) {
     const note = err instanceof Error ? err.message : 'execution failed';
     await prisma.aiActionProposal.update({ where: { id: proposalId }, data: { status: 'FAILED', failureNote: note.slice(0, 500) } });
