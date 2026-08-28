@@ -593,8 +593,12 @@ export default function HomePage() {
                   {t.hero.explore} ↓
                 </button>
               </div>
-              {/* trust / credential strip */}
+              {/* trust / credential strip — led by the highlighted AI Agent pill */}
               <div className="mt-7 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+                <a href="#ai" className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-brand-500 to-indigo-500 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-brand-500/30 ring-1 ring-brand-600/20 transition hover:-translate-y-0.5">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1" /></svg>
+                  AI Agent
+                </a>
                 {['PMBOK-aligned', 'Earned-Value core', 'Predictive', 'Agile', 'Hybrid'].map((c) => (
                   <span key={c} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/70 px-2.5 py-1 text-xs font-medium text-slate-600 backdrop-blur">
                     <svg viewBox="0 0 20 20" className="h-3 w-3 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 10 3.5 3.5L15 6" /></svg>
