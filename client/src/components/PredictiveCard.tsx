@@ -66,7 +66,7 @@ export default function PredictiveCard({ projectId }: { projectId: string }) {
   return (
     <Card className="!p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100"><KpiIcon name="activity" accent="indigo" className="h-6 w-6" />Prediction</h3>
+        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><KpiIcon name="activity" accent="indigo" className="h-6 w-6" />Prediction</h3>
         <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">EVM trend estimate (heuristic, not ML)</span>
       </div>
       {!data.hasData || !data.slip || !data.overrun ? (
