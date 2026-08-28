@@ -29,16 +29,16 @@ const CHIP: Record<Accent, string> = {
 // without hurting text contrast. Pass to a `Card`/`Panel` via className. `!border-*` beats the
 // Card's default slate border; the gradient is a background-image layered over the base colour.
 const SURFACE: Record<Accent, string> = {
-  blue: 'bg-gradient-to-b from-blue-50 to-white !border-blue-200/70 dark:from-blue-950/40 dark:to-slate-900 dark:!border-blue-900/50',
-  violet: 'bg-gradient-to-b from-violet-50 to-white !border-violet-200/70 dark:from-violet-950/40 dark:to-slate-900 dark:!border-violet-900/50',
-  amber: 'bg-gradient-to-b from-amber-50 to-white !border-amber-200/70 dark:from-amber-950/40 dark:to-slate-900 dark:!border-amber-900/50',
+  blue: 'bg-gradient-to-b from-blue-50 to-white !border-blue-300/70 dark:from-blue-950/40 dark:to-slate-900 dark:!border-blue-900/50',
+  violet: 'bg-gradient-to-b from-violet-50 to-white !border-violet-300/70 dark:from-violet-950/40 dark:to-slate-900 dark:!border-violet-900/50',
+  amber: 'bg-gradient-to-b from-amber-50 to-white !border-amber-300/70 dark:from-amber-950/40 dark:to-slate-900 dark:!border-amber-900/50',
   slate: 'bg-gradient-to-b from-slate-100 to-white !border-slate-300/70 dark:from-slate-800/50 dark:to-slate-900 dark:!border-slate-700/60',
-  emerald: 'bg-gradient-to-b from-emerald-50 to-white !border-emerald-200/70 dark:from-emerald-950/40 dark:to-slate-900 dark:!border-emerald-900/50',
-  teal: 'bg-gradient-to-b from-teal-50 to-white !border-teal-200/70 dark:from-teal-950/40 dark:to-slate-900 dark:!border-teal-900/50',
-  indigo: 'bg-gradient-to-b from-indigo-50 to-white !border-indigo-200/70 dark:from-indigo-950/40 dark:to-slate-900 dark:!border-indigo-900/50',
-  orange: 'bg-gradient-to-b from-orange-50 to-white !border-orange-200/70 dark:from-orange-950/40 dark:to-slate-900 dark:!border-orange-900/50',
-  sky: 'bg-gradient-to-b from-sky-50 to-white !border-sky-200/70 dark:from-sky-950/40 dark:to-slate-900 dark:!border-sky-900/50',
-  rose: 'bg-gradient-to-b from-rose-50 to-white !border-rose-200/70 dark:from-rose-950/40 dark:to-slate-900 dark:!border-rose-900/50',
+  emerald: 'bg-gradient-to-b from-emerald-50 to-white !border-emerald-300/70 dark:from-emerald-950/40 dark:to-slate-900 dark:!border-emerald-900/50',
+  teal: 'bg-gradient-to-b from-teal-50 to-white !border-teal-300/70 dark:from-teal-950/40 dark:to-slate-900 dark:!border-teal-900/50',
+  indigo: 'bg-gradient-to-b from-indigo-50 to-white !border-indigo-300/70 dark:from-indigo-950/40 dark:to-slate-900 dark:!border-indigo-900/50',
+  orange: 'bg-gradient-to-b from-orange-50 to-white !border-orange-300/70 dark:from-orange-950/40 dark:to-slate-900 dark:!border-orange-900/50',
+  sky: 'bg-gradient-to-b from-sky-50 to-white !border-sky-300/70 dark:from-sky-950/40 dark:to-slate-900 dark:!border-sky-900/50',
+  rose: 'bg-gradient-to-b from-rose-50 to-white !border-rose-300/70 dark:from-rose-950/40 dark:to-slate-900 dark:!border-rose-900/50',
 };
 
 // The themed card-surface classes for an accent (see SURFACE).

@@ -74,7 +74,7 @@ function AccordionHeader({ title, count, total, open, onToggle, icon, accent }: 
       <span className="flex min-w-0 items-center gap-2">
         <svg viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
         {icon && accent && <KpiIcon name={icon} accent={accent} className="h-6 w-6" />}
-        <span className="font-semibold text-slate-800 dark:text-slate-100">{title}</span>
+        <span className="font-bold text-slate-800 dark:text-slate-100">{title}</span>
         <span className="text-xs text-slate-400">{count} {count === 1 ? 'line' : 'lines'}</span>
       </span>
       <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900 dark:text-white">{total}</span>
@@ -426,7 +426,7 @@ function Stat({ label, value, hint, strong, valueClass, icon, accent }: { label:
     <Card className={`!p-3 ${accent ? accentSurface(accent) : ''}`}>
       <div className="flex items-center gap-2">
         {icon && accent && <KpiIcon name={icon} accent={accent} />}
-        <div className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
+        <div className="min-w-0 text-xs font-bold text-slate-600 dark:text-slate-300">{label}</div>
       </div>
       <div className={`mt-1.5 ${strong ? 'text-base font-bold' : 'text-sm font-semibold'} ${valueClass ?? (strong ? 'text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-100')}`}>
         {value}

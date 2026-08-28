@@ -239,7 +239,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
         {/* EVM cost bars — always shown */}
         <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><KpiIcon name="coins" accent="blue" className="h-6 w-6" />{id ? 'Biaya (EVM)' : 'Cost (EVM)'}</h3>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100"><KpiIcon name="coins" accent="blue" className="h-6 w-6" />{id ? 'Biaya (EVM)' : 'Cost (EVM)'}</h3>
             <span className={`text-xs font-medium ${overBudget ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
               CPI {e.ac > 0 ? formatNum(e.cpi, 2) : '—'}
             </span>
@@ -260,7 +260,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Margin & profit — plan vs actual */}
       {hasMargin && (
         <Panel onClick={onJump ? () => onJump('Forecast') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('emerald')}>
-          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><KpiIcon name="trendingUp" accent="emerald" className="h-6 w-6" />{id ? 'Margin & Laba — Rencana vs Proyeksi' : 'Margin & profit — plan vs projected'}</h3>
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100"><KpiIcon name="trendingUp" accent="emerald" className="h-6 w-6" />{id ? 'Margin & Laba — Rencana vs Proyeksi' : 'Margin & profit — plan vs projected'}</h3>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
               <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{id ? 'Laba rencana' : 'Plan profit'}</div>
@@ -280,7 +280,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Completed vs remaining tasks */}
       {hasTasks && (
         <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('blue')}>
-          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><KpiIcon name="listChecks" accent="blue" className="h-6 w-6" />{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}<InfoTip text={taskTip} /></h3>
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100"><KpiIcon name="listChecks" accent="blue" className="h-6 w-6" />{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}<InfoTip text={taskTip} /></h3>
           <div className="flex items-center gap-4">
             <TaskDonut completed={tasks.completed} remaining={tasks.remaining} label={id ? 'tugas' : 'tasks'} />
             <div className="min-w-0 flex-1 space-y-1.5 text-sm">
@@ -304,7 +304,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {hasUpcoming && (
         <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('amber')}>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><KpiIcon name="clock" accent="amber" className="h-6 w-6" />{id ? 'Tenggat terdekat' : 'Upcoming deadlines'}</h3>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100"><KpiIcon name="clock" accent="amber" className="h-6 w-6" />{id ? 'Tenggat terdekat' : 'Upcoming deadlines'}</h3>
             <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{id ? '7 hari' : 'next 7 days'}</span>
           </div>
           <ul className="space-y-1.5">
@@ -338,7 +338,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {(hasTrend || trendQ.isLoading) && (
         <Panel className="lg:col-span-8 lg:order-2">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
               <KpiIcon name="lineChart" accent="teal" className="h-6 w-6" />
               {sCurveTab === 'progress' ? (id ? 'Kurva-S — Progres' : 'S-curve — Progress') : (id ? 'Kurva-S — Biaya' : 'S-curve — Cost')}
             </h3>
