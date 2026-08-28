@@ -59,7 +59,7 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
   const fmtShort = progress ? (v: number) => `${formatNum(v, 0)}%` : formatIdrShort;
   const fmtFull = progress ? (v: number) => `${formatNum(v, 1)}%` : formatIdr;
 
-  const H = compact ? 210 : 240;
+  const H = compact ? 256 : 240;
   const y = (v: number) => padT + (1 - V(v) / (progress ? 105 : maxRaw)) * (H - padT - padB);
 
   // Forecast (cost) trajectory — server gives it only in money terms (AC → likely EAC).
