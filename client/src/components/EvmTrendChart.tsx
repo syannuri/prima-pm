@@ -198,7 +198,9 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
               const gx = tickX(tk.ms, d0, d1);
               return <line key={tk.ms} x1={gx} x2={gx} y1={H - padB} y2={H - padB + (tk.major ? 5 : 3)} stroke="currentColor" className={tk.major ? 'text-slate-400 dark:text-slate-500' : 'text-slate-300 dark:text-slate-600'} strokeWidth="1" vectorEffect="non-scaling-stroke" />;
             })}
-            <text x={W - padR} y={targetY - 3} textAnchor="end" className="fill-slate-400 text-[10px]">{progress ? '100% · BAC' : `BAC ${formatIdrShort(data.bac)}`}</text>
+            {/* BAC / 100% reference label — left-anchored so it lines up with the other value labels
+                and never collides with the right-edge finish markers (which sit at the same top y). */}
+            <text x={padL + 1} y={targetY - 3} className="fill-slate-400 text-[10px]">{progress ? '100% · BAC' : `BAC ${formatIdrShort(data.bac)}`}</text>
           </svg>
         );
       }}
