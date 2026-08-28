@@ -49,7 +49,7 @@ export function accentSurface(accent: Accent) {
 export type IconName =
   | 'box' | 'layers' | 'shield' | 'lock' | 'target' | 'wallet'
   | 'link' | 'outflow' | 'coins' | 'check' | 'trendingUp'
-  | 'listChecks' | 'clock' | 'lineChart';
+  | 'listChecks' | 'clock' | 'lineChart' | 'activity';
 
 const PATHS: Record<IconName, ReactNode> = {
   box: (<><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" /></>),
@@ -66,6 +66,7 @@ const PATHS: Record<IconName, ReactNode> = {
   listChecks: (<><path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><path d="M13 6h8" /><path d="M13 12h8" /><path d="M13 18h8" /></>),
   clock: (<><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>),
   lineChart: (<><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="m19 9-5 5-4-4-3 3" /></>),
+  activity: (<path d="M22 12h-4l-3 9L9 3l-3 9H2" />),
 };
 
 // A rounded, tinted chip carrying a themed icon. Default box is 7×7 with a 4×4 glyph — the
