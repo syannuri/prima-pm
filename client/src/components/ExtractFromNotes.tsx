@@ -37,7 +37,7 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
       setPickTasks(new Set(d.progressUpdates.map((u) => u.taskId)));
       setPickIssues(new Set(d.issues.map((_, i) => i)));
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI tidak dapat mengekstrak data'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI could not extract data'),
   });
 
   const apply = useMutation({
@@ -60,10 +60,10 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
     },
     onSuccess: ({ tasks, issues }) => {
       ['gantt', 'issues', 'evm', 'forecast', 'project', 'risks'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-      toast.success(`Diterapkan: ${tasks} update progres, ${issues} issue.`);
+      toast.success(`Applied: ${tasks} progress updates, ${issues} issues.`);
       close();
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Gagal menerapkan sebagian item'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to apply some items'),
   });
 
   const close = () => { setOpen(false); setText(''); setDraft(null); };
@@ -77,39 +77,39 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
   return (
     <>
       <div className="flex justify-end">
-        <Button variant="secondary" className="!py-1 text-xs" onClick={() => setOpen(true)}>✨ Ekstrak dari catatan</Button>
+        <Button variant="secondary" className="!py-1 text-xs" onClick={() => setOpen(true)}>✨ Extract from notes</Button>
       </div>
 
       {open && (
-        <Modal onClose={close} title="Ekstrak dari catatan (AI)" size="lg">
+        <Modal onClose={close} title="Extract from notes (AI)" size="lg">
           <div className="space-y-3">
             {!draft ? (
               <>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Tempel notulen rapat atau laporan status. AI akan mengekstrak update progres task (dipetakan ke WBS proyek) dan issue baru. Anda meninjau &amp; menyetujui sebelum diterapkan.
+                  Paste meeting minutes or a status report. The AI will extract task progress updates (mapped to the project WBS) and new issues. You review &amp; approve before anything is applied.
                 </p>
                 <textarea
                   rows={8}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="Tempel catatan di sini…"
+                  placeholder="Paste notes here…"
                   className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
                 <div className="flex justify-end gap-2">
-                  <Button variant="secondary" onClick={close}>Batal</Button>
+                  <Button variant="secondary" onClick={close}>Cancel</Button>
                   <Button disabled={text.trim().length < 5 || extract.isPending} onClick={() => extract.mutate()}>
-                    {extract.isPending ? 'Mengekstrak…' : 'Ekstrak'}
+                    {extract.isPending ? 'Extracting…' : 'Extract'}
                   </Button>
                 </div>
               </>
             ) : (
               <>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Centang yang ingin diterapkan. Hasil AI bisa keliru — periksa sebelum menyetujui.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Check the items you want to apply. AI results can be wrong — review before approving.</p>
 
                 <div>
-                  <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Update progres task</div>
+                  <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Task progress updates</div>
                   {draft.progressUpdates.length === 0 ? (
-                    <p className="text-xs text-slate-400 dark:text-slate-500">Tidak ada.</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">None.</p>
                   ) : (
                     <ul className="space-y-1.5">
                       {draft.progressUpdates.map((u) => (
@@ -130,9 +130,9 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
                 </div>
 
                 <div>
-                  <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Issue baru</div>
+                  <div className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">New issues</div>
                   {draft.issues.length === 0 ? (
-                    <p className="text-xs text-slate-400 dark:text-slate-500">Tidak ada.</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">None.</p>
                   ) : (
                     <ul className="space-y-1.5">
                       {draft.issues.map((it, i) => (
@@ -154,9 +154,9 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
                 </div>
 
                 <div className="flex justify-end gap-2 border-t border-slate-200/70 pt-3 dark:border-slate-800/70">
-                  <Button variant="secondary" onClick={() => setDraft(null)}>← Ubah teks</Button>
+                  <Button variant="secondary" onClick={() => setDraft(null)}>← Edit text</Button>
                   <Button disabled={chosenCount === 0 || apply.isPending} onClick={() => apply.mutate()}>
-                    {apply.isPending ? 'Menerapkan…' : `Terapkan terpilih (${chosenCount})`}
+                    {apply.isPending ? 'Applying…' : `Apply selected (${chosenCount})`}
                   </Button>
                 </div>
               </>

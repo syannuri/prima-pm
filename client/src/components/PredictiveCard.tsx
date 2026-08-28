@@ -74,8 +74,8 @@ export default function PredictiveCard({ projectId }: { projectId: string }) {
   const propose = useMutation({
     mutationFn: (body: { actionType: string; params: unknown; rationale: string }) =>
       api.post(`/projects/${projectId}/ai-actions/propose`, body),
-    onSuccess: () => toast.success('Usulan aksi diajukan untuk approval — berjalan hanya setelah disetujui.'),
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Gagal mengajukan usulan aksi.'),
+    onSuccess: () => toast.success('Action proposed for approval — runs only after it is approved.'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to propose action.'),
   });
 
   if (!data) return null;
@@ -102,24 +102,24 @@ export default function PredictiveCard({ projectId }: { projectId: string }) {
       {/* Stage C — turn a signal into an AI-proposed action; it only runs after human approval. */}
       {canPropose && (slipHot || overrunHot) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5 dark:border-slate-800">
-          <span className="text-[11px] text-slate-500 dark:text-slate-400">🤖 Ajukan aksi:</span>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">🤖 Propose action:</span>
           {slipHot && data.slip && (
             <span className="inline-flex items-center gap-1.5">
               <Button variant="secondary" className="!px-2 !py-1 !text-xs" disabled={propose.isPending}
-                onClick={() => propose.mutate({ actionType: 'TIDY_SCHEDULE', params: { mode: 'push' }, rationale: `Risiko slip ${LEVEL[data.slip!.level].label}: ${data.slip!.drivers.join('; ')}` })}>
-                Rapikan jadwal
+                onClick={() => propose.mutate({ actionType: 'TIDY_SCHEDULE', params: { mode: 'push' }, rationale: `Slip risk ${LEVEL[data.slip!.level].label}: ${data.slip!.drivers.join('; ')}` })}>
+                Tidy schedule
               </Button>
               <EvidenceChip stat={eff?.stats.find((s) => s.actionType === 'TIDY_SCHEDULE')} />
             </span>
           )}
           {overrunHot && data.overrun && (
             <Button variant="secondary" className="!px-2 !py-1 !text-xs" disabled={propose.isPending}
-              onClick={() => propose.mutate({ actionType: 'CREATE_RISK', rationale: `Risiko overrun ${LEVEL[data.overrun!.level].label}`,
-                params: { title: 'Potensi cost overrun (dari sinyal prediktif)', description: data.overrun!.drivers.join('; '), kind: 'THREAT', probabilityScore: SCORE_BY_LEVEL[data.overrun!.level], impactScore: SCORE_BY_LEVEL[data.overrun!.level] } })}>
-              Catat risiko overrun
+              onClick={() => propose.mutate({ actionType: 'CREATE_RISK', rationale: `Overrun risk ${LEVEL[data.overrun!.level].label}`,
+                params: { title: 'Potential cost overrun (from predictive signal)', description: data.overrun!.drivers.join('; '), kind: 'THREAT', probabilityScore: SCORE_BY_LEVEL[data.overrun!.level], impactScore: SCORE_BY_LEVEL[data.overrun!.level] } })}>
+              Log overrun risk
             </Button>
           )}
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">perlu persetujuan</span>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500">needs approval</span>
         </div>
       )}
     </Card>
