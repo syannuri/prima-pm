@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../../middleware/validate.js';
 import { requireProjectAccess } from '../../middleware/rbac.js';
 import * as svc from './forecast.service.js';
+import { WhatIfSpecSchema, simulateScenario } from './whatif.service.js';
 
 const router = Router({ mergeParams: true });
 
@@ -19,6 +20,16 @@ router.get(
   asyncHandler(async (req, res) => {
     const { statusDate } = forecastQuerySchema.parse(req.query);
     res.json(await svc.getProjectForecast(req.params.projectId, statusDate ?? new Date()));
+  }),
+);
+
+// What-if simulation — deterministic, read-only, no DB writes. Structured spec in, before/after out.
+router.post(
+  '/whatif',
+  requireProjectAccess({ allowRoles: ['FINANCE', 'RISK_OFFICER'] }),
+  asyncHandler(async (req, res) => {
+    const spec = WhatIfSpecSchema.parse(req.body);
+    res.json(await simulateScenario(req.params.projectId, spec));
   }),
 );
 
