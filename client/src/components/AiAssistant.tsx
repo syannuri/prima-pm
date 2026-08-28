@@ -42,6 +42,7 @@ interface AnettStrings {
   actionLabels: Record<string, string>;
   chips: (proj: boolean, propose: boolean) => string[];
   followups: (proj: boolean) => string[];
+  tryAsking: string; kbdHint: string;
 }
 
 const STRINGS: Record<'id' | 'en', AnettStrings> = {
@@ -69,6 +70,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     followups: (proj) => proj
       ? ['Forecast & EAC proyek ini?', 'Ada change request tertunda?', 'Apa langkah berikutnya?']
       : ['Apa yang menunggu persetujuan saya?', 'Ringkas portofolio saya', 'Proyek mana paling berisiko?'],
+    tryAsking: 'Coba tanyakan', kbdHint: 'Enter kirim · Shift+Enter baris baru',
   },
   en: {
     launcher: 'Ask Anett AI Assistant', subtitlePropose: 'Reads project data & proposes actions', subtitleRead: 'Reads project data',
@@ -94,6 +96,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     followups: (proj) => proj
       ? ["This project’s forecast & EAC?", 'Any pending change requests?', "What's the next step?"]
       : ['What is waiting for my approval?', 'Summarize my portfolio', 'Which project is riskiest?'],
+    tryAsking: 'Try asking', kbdHint: 'Enter to send · Shift+Enter for newline',
   },
 };
 
@@ -212,6 +215,9 @@ function getSpeechRecognitionCtor(): (new () => SpeechRec) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 const TTS_SUPPORTED = typeof window !== 'undefined' && 'speechSynthesis' in window;
+// TEMP: hide all voice UI (mic / speaker / hands-free). Flip back to true to restore. The voice
+// backend + logic stay intact — this only suppresses the controls so they can't be triggered.
+const VOICE_UI_ENABLED = false;
 
 // Pick the nicest voice for a language: an explicit choice if still available, else a local
 // (on-device, usually more natural) voice matching the language, else any matching, else the first.
@@ -323,8 +329,8 @@ export default function AiAssistant() {
   const canPropose = availQ.data?.actionsAvailable === true;
   // Server-side voice (Whisper/ElevenLabs) when available; else the browser Web Speech API (Voice v2).
   const voiceServer = availQ.data?.voiceServer === true;
-  const sttAvailable = voiceServer || !!sttCtor;
-  const ttsAvailable = voiceServer || TTS_SUPPORTED;
+  const sttAvailable = VOICE_UI_ENABLED && (voiceServer || !!sttCtor);
+  const ttsAvailable = VOICE_UI_ENABLED && (voiceServer || TTS_SUPPORTED);
   const voiceServerRef = useRef(voiceServer); voiceServerRef.current = voiceServer;
   const recorderRef = useRef<MediaRecorder | null>(null); // server-STT recording
   const audioRef = useRef<HTMLAudioElement | null>(null);  // server-TTS playback
@@ -473,7 +479,7 @@ export default function AiAssistant() {
   // Auto-read each new assistant answer when the speaker is on. MUST stay above the early return
   // (Rules of Hooks — a hook after an early return crashes with React #310).
   useEffect(() => {
-    if (!ttsOn || (!voiceServerRef.current && !TTS_SUPPORTED)) return;
+    if (!VOICE_UI_ENABLED || !ttsOn || (!voiceServerRef.current && !TTS_SUPPORTED)) return;
     const idx = turns.length - 1;
     const last = turns[idx];
     if (last && last.role === 'assistant' && !last.error && spokenRef.current !== idx) {
@@ -482,6 +488,15 @@ export default function AiAssistant() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turns, ttsOn]);
+
+  // Auto-grow the composer up to ~5 lines as the user types, and shrink back after send/clear.
+  // Above the early return (Rules of Hooks); no-ops when the textarea isn't mounted.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [input, open]);
 
   if (!availQ.data?.aiAvailable) return null;
 
@@ -714,7 +729,7 @@ export default function AiAssistant() {
           </div>
 
           {/* Voice picker — pick the natural voice for spoken answers (shown when the speaker is on) */}
-          {TTS_SUPPORTED && !voiceServer && ttsOn && voices.some((v) => v.lang?.toLowerCase().startsWith(lang === 'en' ? 'en' : 'id')) && (
+          {ttsAvailable && TTS_SUPPORTED && !voiceServer && ttsOn && voices.some((v) => v.lang?.toLowerCase().startsWith(lang === 'en' ? 'en' : 'id')) && (
             <div className="flex items-center gap-1.5 border-b border-slate-100 px-3 py-1 dark:border-slate-800">
               <span className="text-[10px] uppercase tracking-wide text-slate-400">{L.voiceLabel}</span>
               <select
@@ -771,6 +786,7 @@ export default function AiAssistant() {
                   </div>
                 )}
 
+                <div className="ml-10 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{L.tryAsking}</div>
                 <div className="flex flex-wrap gap-1.5">
                   {chips.map((c) => (
                     <button
@@ -942,7 +958,7 @@ export default function AiAssistant() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(input); } }}
                   placeholder={L.inputPlaceholder}
-                  className="max-h-24 min-h-[2.25rem] flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="min-h-[2.25rem] flex-1 resize-none overflow-y-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               )}
               {sttAvailable && (
@@ -954,7 +970,7 @@ export default function AiAssistant() {
               <p className="mt-1 px-1 text-[10px] text-rose-600 dark:text-rose-400">🎤 {voiceError}</p>
             ) : (
               <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-slate-400 dark:text-slate-500">
-                {canPropose ? L.footerPropose : L.footerRead}{L.footerTail}
+                {input.trim() ? <span>⏎ {L.kbdHint}</span> : <>{canPropose ? L.footerPropose : L.footerRead}{L.footerTail}</>}
               </p>
             )}
           </div>
