@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import HeroMockup from './HeroMockup';
+import MockAssistant from './mocks/MockAssistant';
 import MockGantt from './mocks/MockGantt';
 import MockSCurve from './mocks/MockSCurve';
 import MockCharts from './mocks/MockCharts';
@@ -9,6 +10,7 @@ import MockCharts from './mocks/MockCharts';
 // Honours prefers-reduced-motion (no autoplay, manual dots), and pauses when scrolled off-screen.
 type Scene = { Comp: (p: { className?: string }) => JSX.Element; label: string; hint: string };
 const SCENES: Scene[] = [
+  { Comp: MockAssistant, label: 'AI Agent', hint: 'Ask your data in plain language' },
   { Comp: HeroMockup, label: 'Portfolio dashboard', hint: 'Health, cost & schedule at a glance' },
   { Comp: MockGantt, label: 'WBS & Gantt', hint: 'Plan the schedule, track progress' },
   { Comp: MockSCurve, label: 'Earned-Value S-curve', hint: 'PV · EV · AC with SPI & CPI' },
