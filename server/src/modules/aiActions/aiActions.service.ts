@@ -10,6 +10,7 @@ import { createChangeRequest } from '../charter/charter.service.js';
 import { startApproval, resolveWorkflow, createWorkflow } from '../approval/approval.service.js';
 import { RISK_KINDS, RESPONSE_STRATEGIES } from '../risk/risk.schemas.js';
 import { recordBaseline } from './aiActionOutcomes.service.js';
+import { updateDirectLine } from '../cost/cost.service.js';
 
 // =====================================================================
 // Stage C — semi-autonomous AI actions.
@@ -25,7 +26,7 @@ import { recordBaseline } from './aiActionOutcomes.service.js';
 // change actions, distinct from enabling the narrative/advisory features (aiNarrativeEnabled).
 // =====================================================================
 
-export const AI_ACTION_TYPES = ['CREATE_RISK', 'UPDATE_TASK_PROGRESS', 'CREATE_CHANGE_REQUEST', 'TIDY_SCHEDULE'] as const;
+export const AI_ACTION_TYPES = ['CREATE_RISK', 'UPDATE_TASK_PROGRESS', 'CREATE_CHANGE_REQUEST', 'TIDY_SCHEDULE', 'REASSIGN_MANPOWER'] as const;
 export type AiActionType = (typeof AI_ACTION_TYPES)[number];
 
 // Qualitative score (1-5) → probability fraction, mirroring the risk-suggest bulk-create mapping.
@@ -62,6 +63,14 @@ const createChangeRequestParams = z.object({
 
 const tidyScheduleParams = z.object({
   mode: z.enum(['push', 'asap']).default('push'),
+});
+
+// Reassign a task's manpower line from an over-allocated resource to a lighter-loaded one. Moves the
+// capacity load AND recomputes cost from the new resource's rate (a budget edit → requires an
+// unlocked baseline; on a locked project the executor fails cleanly with that message).
+const reassignManpowerParams = z.object({
+  costItemId: z.string().uuid(),
+  toResourceId: z.string().uuid(),
 });
 
 // ---- The action registry: schema + human describe + audited executor -----------------------------
@@ -127,6 +136,27 @@ const REGISTRY: Record<AiActionType, ActionDef<any>> = {
       `an AI-proposed action (tidy the schedule, ${p.mode === 'asap' ? 'compact/ASAP' : 'push-only'})`,
     execute: async (projectId, p: z.infer<typeof tidyScheduleParams>, actorId) => {
       await applyAutoSchedule(projectId, { dryRun: false, actorId, mode: p.mode });
+    },
+  },
+  REASSIGN_MANPOWER: {
+    schema: reassignManpowerParams,
+    describe: async (p: z.infer<typeof reassignManpowerParams>) => {
+      const line = await prisma.costItemDirect.findFirst({ where: { id: p.costItemId }, select: { label: true, task: { select: { name: true } } } });
+      const res = await prisma.resource.findFirst({ where: { id: p.toResourceId }, select: { name: true } });
+      return `an AI-proposed action (reassign "${line?.task?.name ?? line?.label ?? 'manpower'}" to ${res?.name ?? 'a resource'})`;
+    },
+    execute: async (projectId, p: z.infer<typeof reassignManpowerParams>, actorId) => {
+      const line = await prisma.costItemDirect.findFirst({
+        where: { id: p.costItemId, projectId, type: 'MANPOWER' },
+        select: { id: true, planMandays: true, taskId: true },
+      });
+      if (!line) throw BadRequest('Manpower line not found on this project');
+      const res = await prisma.resource.findFirst({ where: { id: p.toResourceId }, select: { id: true } });
+      if (!res) throw BadRequest('Target resource not found');
+      // resourceId given → the server fills role/rate/label; preserve mandays + task link.
+      await updateDirectLine(projectId, line.id, {
+        type: 'MANPOWER', resourceId: p.toResourceId, planMandays: Number(line.planMandays), taskId: line.taskId ?? undefined,
+      }, actorId);
     },
   },
 };

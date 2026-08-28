@@ -9,6 +9,7 @@ import { listRisks } from '../risk/risk.service.js';
 import { listMyApprovals } from '../approval/approval.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { getActionEffectiveness } from '../aiActions/aiActionOutcomes.service.js';
+import { detectConflicts } from '../resource/resourceConflicts.service.js';
 import { findGuide, guideIndex } from './processGuide.js';
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
@@ -103,6 +104,11 @@ const TOOLS: AiToolDef[] = [
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'get_resource_conflicts',
+    description: 'Resource yang KELEBIHAN BEBAN (over-allocated) lintas proyek per periode: siapa, kapan, berapa over, tugas/proyek penyebab, dan kandidat penerima yang lebih longgar. Panggil untuk "siapa yang overload minggu/bulan ini?". Untuk MENGUSULKAN pemindahan, pakai propose_action REASSIGN_MANPOWER (butuh persetujuan).',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'list_project_tasks',
     description: 'Daftar tugas sebuah proyek (kode WBS, nama, % progress, tenggat, status telat/overdue). Fokus ke yang belum selesai & telat. Argumen: project_code dari list_projects.',
     input_schema: {
@@ -168,6 +174,7 @@ const PROPOSE_ACTION_TOOL: AiToolDef = {
     '- CREATE_RISK: { title (>=3 char), probabilityScore 1-5, impactScore 1-5, kind "THREAT"|"OPPORTUNITY"?, description? }',
     '- CREATE_CHANGE_REQUEST: { title, description (>=5 char), impactAreas: ["SCOPE"?...] salah satu dari CHARTER/COST/SCHEDULE/RESOURCE/QUALITY/RISK, magnitude "MINOR"|"MAJOR"?, chargeable? , amountIdr? }',
     '- TIDY_SCHEDULE: { mode "push"|"asap"? } — rapikan jadwal mengikuti dependensi.',
+    '- REASSIGN_MANPOWER: { costItemId, toResourceId } — pindahkan alokasi manpower sebuah task ke resource lain (redakan over-allocation). Ambil costItemId & toResourceId dari get_resource_conflicts.',
     'project_code dari list_projects. rationale = alasan singkat mengapa aksi ini diusulkan.',
   ].join('\n'),
   input_schema: {
@@ -309,6 +316,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'list_project_risks': return en ? `Reviewing${c} risks` : `Meninjau risiko${c}`;
     case 'get_portfolio_summary': return en ? 'Summarizing your portfolio' : 'Merangkum portofolio Anda';
     case 'list_my_approvals': return en ? 'Checking your approvals' : 'Memeriksa persetujuan Anda';
+    case 'get_resource_conflicts': return en ? 'Checking resource over-allocation' : 'Memeriksa kelebihan beban resource';
     case 'list_project_tasks': return en ? `Checking${c} tasks` : `Memeriksa tugas${c}`;
     case 'list_change_requests': return en ? `Reviewing${c} change requests` : `Meninjau change request${c}`;
     case 'query_data': return en ? 'Querying your data' : 'Menjalankan query data';
@@ -370,6 +378,16 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
       case 'list_my_approvals': {
         const items = await listMyApprovals(ctx.userId);
         return JSON.stringify(items.map((a) => ({ item: a.actionLabel, project: a.project?.code ?? null, step: a.stepName, since: a.createdAt })));
+      }
+      case 'get_resource_conflicts': {
+        const conflicts = await detectConflicts(ctx.userId, ctx.role, {});
+        // Compact form (keep tokens low); include costItemId/toResourceId so a follow-up propose_action
+        // REASSIGN_MANPOWER can be grounded to a real line + target.
+        return JSON.stringify(conflicts.slice(0, 12).map((c) => ({
+          resource: c.resourceName, period: c.period, overByMandays: c.overBy, utilizationPct: Math.round(c.utilization * 100),
+          causes: c.contributions.map((x) => ({ project: x.projectCode, task: x.taskName, mandays: x.planMandaysInPeriod, costItemId: x.costItemId })),
+          candidates: c.candidates.map((x) => ({ name: x.name, toResourceId: x.resourceId, spareMandays: x.spareCapacity })),
+        })));
       }
       case 'list_project_tasks': {
         const id = resolveId();

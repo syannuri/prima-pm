@@ -123,6 +123,35 @@ describe('Stage C — AI-proposed actions', () => {
     expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
   });
 
+  it('proposes REASSIGN_MANPOWER and moves the manpower line to the new resource on approval', async () => {
+    const rFrom = await prisma.resource.create({ data: { name: 'From Res', capacityPerDay: 1, unitCostPerManday: 100, personnelRole: 'PROJECT_PERSONNEL' } });
+    const rTo = await prisma.resource.create({ data: { name: 'To Res', capacityPerDay: 1, unitCostPerManday: 100, personnelRole: 'PROJECT_PERSONNEL' } });
+    const line = await prisma.costItemDirect.create({ data: {
+      projectId, type: 'MANPOWER', label: 'work', taskId, resourceId: rFrom.id,
+      personnelRole: 'PROJECT_PERSONNEL', planMandays: 5, unitCostPerManday: 100, manpowerCost: 500,
+    } });
+
+    const { id } = await proposeAction({ projectId, actionType: 'REASSIGN_MANPOWER', params: { costItemId: line.id, toResourceId: rTo.id } }, pmId);
+    // Nothing moved yet.
+    expect((await prisma.costItemDirect.findUnique({ where: { id: line.id } }))?.resourceId).toBe(rFrom.id);
+
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
+    expect((await prisma.costItemDirect.findUnique({ where: { id: line.id } }))?.resourceId).toBe(rTo.id);
+    // Outcome-learning baseline recorded, scored on SPI.
+    const outcome = await prisma.aiActionOutcome.findUnique({ where: { proposalId: id } });
+    expect(outcome?.scored).toBe(true);
+  });
+
+  it('REASSIGN_MANPOWER with a bad line is rejected on approval (FAILED, nothing moved)', async () => {
+    const rTo = await prisma.resource.create({ data: { name: 'To Res 2', capacityPerDay: 1, unitCostPerManday: 100, personnelRole: 'PROJECT_PERSONNEL' } });
+    const { id } = await proposeAction({ projectId, actionType: 'REASSIGN_MANPOWER', params: { costItemId: '00000000-0000-0000-0000-000000000000', toResourceId: rTo.id } }, pmId);
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('FAILED');
+  });
+
   it('rejecting a proposal marks it REJECTED and applies nothing', async () => {
     const { id } = await proposeAction({ projectId, actionType: 'CREATE_RISK', params: { title: 'Should not exist', probabilityScore: 2, impactScore: 2 } }, pmId);
     const req = await reqFor(id);

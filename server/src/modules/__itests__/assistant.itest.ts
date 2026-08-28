@@ -205,6 +205,28 @@ describe('AI portfolio assistant — /assistant', () => {
     await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
   });
 
+  it('RESOURCE: get_resource_conflicts surfaces over-allocation for the caller', async () => {
+    await runWithTenant(aico, async () => {
+      const proj = await prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { id: true } });
+      const r = await prisma.resource.create({ data: { name: 'Overloaded', capacityPerDay: 1, unitCostPerManday: 0, personnelRole: 'PROJECT_PERSONNEL' } });
+      // ~40 man-days into a ~22-business-day month → over-allocated.
+      for (const nm of ['Task A', 'Task B']) {
+        const t = await prisma.task.create({ data: { projectId: proj!.id, wbsCode: '1', name: nm, planStart: new Date('2026-04-01T00:00:00Z'), planEnd: new Date('2026-04-30T00:00:00Z'), progressPct: 0 } });
+        await prisma.costItemDirect.create({ data: { projectId: proj!.id, type: 'MANPOWER', label: nm, taskId: t.id, resourceId: r.id, personnelRole: 'PROJECT_PERSONNEL', planMandays: 20, unitCostPerManday: 0, manpowerCost: 0 } });
+      }
+    });
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ executeTool }) { return await executeTool('get_resource_conflicts', {}); },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const conflicts = JSON.parse(res.body.answer);
+    expect(conflicts.some((c: { resource: string }) => c.resource === 'Overloaded')).toBe(true);
+  });
+
   it('admin action-outcomes endpoint: 401 unauth, 200 for an ADMIN', async () => {
     const unauth = await request(app).get(api('/ai-settings/action-outcomes'));
     expect(unauth.status).toBe(401);

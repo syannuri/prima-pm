@@ -34,6 +34,7 @@ export const EFFECTIVENESS_MIN_SAMPLE = 3;
 const SCORED_METRIC: Record<AiActionType, 'SPI' | null> = {
   TIDY_SCHEDULE: 'SPI',
   UPDATE_TASK_PROGRESS: 'SPI',
+  REASSIGN_MANPOWER: 'SPI', // relieving a resource bottleneck should help the schedule
   CREATE_RISK: null,
   CREATE_CHANGE_REQUEST: null,
 };
