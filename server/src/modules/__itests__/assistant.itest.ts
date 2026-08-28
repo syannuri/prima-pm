@@ -251,6 +251,25 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(out.foreign).toContain('tidak dapat diakses'); // foreign project refused
   });
 
+  it('PORTFOLIO: get_portfolio_attention ranks projects that need attention', async () => {
+    await runWithTenant(aico, async () => {
+      const proj = await prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { id: true } });
+      const past = new Date(Date.now() - 5 * 24 * 3600 * 1000);
+      await prisma.task.create({ data: { projectId: proj!.id, wbsCode: '9', name: 'Overdue X', planStart: past, planEnd: past, progressPct: 0 } });
+    });
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ executeTool }) { return await executeTool('get_portfolio_attention', {}); },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    expect(Array.isArray(out.items)).toBe(true);
+    expect(out.items.some((i: { code: string }) => i.code === 'MINE-1')).toBe(true);
+  });
+
   it('admin action-outcomes endpoint: 401 unauth, 200 for an ADMIN', async () => {
     const unauth = await request(app).get(api('/ai-settings/action-outcomes'));
     expect(unauth.status).toBe(401);

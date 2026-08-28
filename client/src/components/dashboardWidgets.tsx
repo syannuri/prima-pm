@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import ActionCenter from './ActionCenter';
+import AttentionWidget from './AttentionWidget';
 import PlanningReminders from './PlanningReminders';
 import AwaitingActivation from './AwaitingActivation';
 import AwaitingClosure from './AwaitingClosure';
@@ -21,6 +22,7 @@ export interface DashWidget {
 
 export const DASHBOARD_WIDGETS: DashWidget[] = [
   { key: 'actionCenter', en: 'Action center', id: 'Pusat aksi', Component: ActionCenter },
+  { key: 'attention', en: 'Needs attention', id: 'Perlu perhatian', Component: AttentionWidget },
   { key: 'planningReminders', en: 'Planning reminders', id: 'Pengingat perencanaan', Component: PlanningReminders },
   { key: 'awaitingActivation', en: 'Awaiting activation', id: 'Menunggu aktivasi', Component: AwaitingActivation },
   { key: 'awaitingClosure', en: 'Awaiting closure', id: 'Menunggu penutupan', Component: AwaitingClosure },

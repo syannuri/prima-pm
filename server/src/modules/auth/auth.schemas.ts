@@ -66,7 +66,7 @@ export const switchTenantSchema = z.object({
 
 // The customizable desktop dashboard widgets (keys the client renders + the layout stores).
 export const DASHBOARD_WIDGET_KEYS = [
-  'actionCenter', 'planningReminders', 'awaitingActivation', 'awaitingClosure',
+  'actionCenter', 'attention', 'planningReminders', 'awaitingActivation', 'awaitingClosure',
   'pendingApprovals', 'portfolioSummary', 'portfolioEvmTrend',
 ] as const;
 

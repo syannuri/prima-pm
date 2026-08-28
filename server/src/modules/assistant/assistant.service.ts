@@ -11,6 +11,7 @@ import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.j
 import { getActionEffectiveness } from '../aiActions/aiActionOutcomes.service.js';
 import { detectConflicts } from '../resource/resourceConflicts.service.js';
 import { runWhatIfAi } from '../forecast/whatif.service.js';
+import { getPortfolioAttention } from '../portfolio/portfolioAttention.service.js';
 import { findGuide, guideIndex } from './processGuide.js';
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
@@ -107,6 +108,11 @@ const TOOLS: AiToolDef[] = [
   {
     name: 'get_resource_conflicts',
     description: 'Resource yang KELEBIHAN BEBAN (over-allocated) lintas proyek per periode: siapa, kapan, berapa over, tugas/proyek penyebab, dan kandidat penerima yang lebih longgar. Panggil untuk "siapa yang overload minggu/bulan ini?". Untuk MENGUSULKAN pemindahan, pakai propose_action REASSIGN_MANPOWER (butuh persetujuan).',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'get_portfolio_attention',
+    description: 'Ranking proyek yang PALING BUTUH PERHATIAN minggu ini lintas portofolio (heuristik: kesehatan jadwal/biaya, tugas telat & jatuh tempo, risiko tinggi, CR terbuka, konflik resource) + alasannya. Panggil untuk "di mana saya harus fokus?" / "proyek mana yang paling berisiko minggu ini?".',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -329,6 +335,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'list_my_approvals': return en ? 'Checking your approvals' : 'Memeriksa persetujuan Anda';
     case 'get_resource_conflicts': return en ? 'Checking resource over-allocation' : 'Memeriksa kelebihan beban resource';
     case 'run_what_if': return en ? 'Running a what-if simulation' : 'Menjalankan simulasi bagaimana-jika';
+    case 'get_portfolio_attention': return en ? 'Ranking where attention is needed' : 'Menyusun prioritas portofolio';
     case 'list_project_tasks': return en ? `Checking${c} tasks` : `Memeriksa tugas${c}`;
     case 'list_change_requests': return en ? `Reviewing${c} change requests` : `Meninjau change request${c}`;
     case 'query_data': return en ? 'Querying your data' : 'Menjalankan query data';
@@ -455,6 +462,10 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
           const msg = err instanceof AppError ? err.message : 'Gagal mengajukan usulan aksi.';
           return JSON.stringify({ error: msg });
         }
+      }
+      case 'get_portfolio_attention': {
+        const { items } = await getPortfolioAttention(ctx.userId, ctx.role);
+        return JSON.stringify({ items: items.map((i) => ({ code: i.code, name: i.name, score: i.score, health: i.health, reasons: i.reasons })) });
       }
       case 'run_what_if': {
         const id = resolveId();

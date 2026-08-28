@@ -4,6 +4,8 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
 import { getPortfolioSummary } from './portfolio.service.js';
+import { getPortfolioAttention, draftAttentionNarrative } from './portfolioAttention.service.js';
+import { aiEnabled } from '../../lib/ai.js';
 import { getPortfolioRaid } from './portfolio.raid.js';
 import { getPortfolioEvmTrend, captureAllSnapshots } from '../evm/evm.portfolio.js';
 import { getAwaitingActivation, getPlanningReminders } from '../projects/activation.js';
@@ -27,6 +29,27 @@ router.get(
     const { statusDate } = querySchema.parse(req.query);
     const summary = await getPortfolioSummary(req.user!.id, req.user!.role, statusDate ?? new Date());
     res.json(summary);
+  }),
+);
+
+// "One thing" attention digest — deterministic ranking of where attention matters most this week
+// + whether the AI focus narrative is usable. Scoped to the caller's visible projects.
+router.get(
+  '/attention',
+  asyncHandler(async (req, res) => {
+    res.json(await getPortfolioAttention(req.user!.id, req.user!.role));
+  }),
+);
+
+// AI "focus this week" narrative over the ranked digest. Env-gated (503) + tenant opt-in (403).
+router.post(
+  '/attention/ai-draft',
+  asyncHandler(async (req, res) => {
+    if (!aiEnabled()) {
+      res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+      return;
+    }
+    res.json(await draftAttentionNarrative(req.user!.id, req.user!.role));
   }),
 );
 
