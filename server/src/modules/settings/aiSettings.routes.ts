@@ -7,6 +7,7 @@ import { prisma } from '../../lib/prisma.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
+import { getActionEffectiveness, listRecentOutcomes } from '../aiActions/aiActionOutcomes.service.js';
 
 // Per-tenant AI Status Narrative opt-in — self-serve for the tenant's own ADMIN (distinct from the
 // deployment-global /settings, which is super-admin only). `configured` reflects the global env gate
@@ -48,6 +49,23 @@ router.patch(
       },
     });
     res.json({ configured: aiEnabled(), ...(await currentFlags()) });
+  }),
+);
+
+// Outcome learning — workspace-wide track record for the Settings → Governance "AI action outcomes"
+// card. Tenant-scoped (auto via the Prisma extension). Correlational, not causal.
+router.get(
+  '/action-outcomes',
+  asyncHandler(async (_req, res) => {
+    res.json({ stats: await getActionEffectiveness() });
+  }),
+);
+
+router.get(
+  '/action-outcomes/recent',
+  asyncHandler(async (req, res) => {
+    const take = Math.min(Math.max(Number(req.query.take) || 20, 1), 100);
+    res.json({ outcomes: await listRecentOutcomes({ take }) });
   }),
 );
 

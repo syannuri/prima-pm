@@ -8,6 +8,7 @@ import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
 import { listMyApprovals } from '../approval/approval.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
+import { getActionEffectiveness } from '../aiActions/aiActionOutcomes.service.js';
 import { findGuide, guideIndex } from './processGuide.js';
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
@@ -33,6 +34,7 @@ const SYSTEM_PROMPT_ID = [
   '- Jika data tidak cukup untuk menjawab, katakan dengan jujur.',
   '- Jawab ringkas dan langsung; sertakan angka kunci bila relevan.',
   '- Untuk pertanyaan CARA/PROSES ("bagaimana cara…", "apa yang harus saya lakukan untuk…", "di mana menu…"), GUNAKAN tool get_process_guide lalu sampaikan langkah ringkas + JALUR MENU persis (mis. Proyek → tab Cost → Baseline → Lock). JANGAN mengarang nama menu/tab; jika topik tak ada di panduan, katakan dan sarankan yang terdekat.',
+  '- Sebelum mengusulkan aksi (propose_action), panggil get_action_effectiveness dan sebutkan rekam jejaknya secara jujur — korelasional, bukan sebab-akibat; jangan berlebihan bila sampelnya sedikit.',
   '',
   'FORMAT JAWABAN (Markdown):',
   '- Bila menyebut beberapa hal (daftar proyek, risiko, langkah), gunakan bullet point ("- ") satu item per baris — jangan menumpuk dalam satu paragraf panjang.',
@@ -53,6 +55,7 @@ const SYSTEM_PROMPT_EN = [
   '- If the data is not enough to answer, say so honestly.',
   '- Answer concisely and directly; include key numbers when relevant.',
   '- For HOW-TO / PROCESS questions ("how do I…", "what should I do to…", "where is the menu…"), USE the get_process_guide tool then give the brief steps + the EXACT MENU PATH (e.g. Project → Cost tab → Baseline → Lock). Do NOT invent menu/tab names; if the topic is not in the guide, say so and suggest the closest one.',
+  '- Before proposing an action (propose_action), call get_action_effectiveness and cite the track record honestly — it is correlational, not causal; do not over-claim on a small sample.',
   '',
   'ANSWER FORMAT (Markdown):',
   '- When listing several things (projects, risks, steps), use bullet points ("- "), one item per line — do not cram them into one long paragraph.',
@@ -180,6 +183,23 @@ const PROPOSE_ACTION_TOOL: AiToolDef = {
   },
 };
 
+// Outcome learning — read-only track record of how APPLIED AI actions moved SPI. Exposed alongside
+// propose_action (same Stage-C gate) so Anett can cite evidence before proposing. Correlational, not
+// causal — the tool result says so and the model must relay that honestly.
+const ACTION_EFFECTIVENESS_TOOL: AiToolDef = {
+  name: 'get_action_effectiveness',
+  description: [
+    'TRACK RECORD dari aksi AI yang PERNAH diterapkan: per action_type, berapa kali SPI membaik/tetap/memburuk sesudahnya (horizon ~21 hari).',
+    'Gunakan SEBELUM propose_action untuk menimbang & menyebutkan buktinya secara jujur. Ini KORELASIONAL, bukan sebab-akibat — sampaikan apa adanya, dan jangan berlebihan bila sampel sedikit.',
+    'project_code opsional untuk mempersempit ke satu proyek; tanpa itu = seluruh workspace.',
+  ].join('\n'),
+  input_schema: {
+    type: 'object',
+    properties: { project_code: { type: 'string', description: 'Opsional — batasi ke satu proyek.' } },
+    additionalProperties: false,
+  },
+};
+
 // Cross-session memory tools — exposed only when the caller's tenant opted into AI memory. They let
 // Anett persist durable facts/preferences (remember) or drop them (forget). Deterministic, no cost.
 const REMEMBER_TOOL: AiToolDef = {
@@ -294,6 +314,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'query_data': return en ? 'Querying your data' : 'Menjalankan query data';
     case 'get_process_guide': return en ? 'Looking up the how-to guide' : 'Mencari panduan cara-pakai';
     case 'propose_action': return en ? 'Preparing an action proposal' : 'Menyiapkan usulan aksi';
+    case 'get_action_effectiveness': return en ? 'Checking the action track record' : 'Memeriksa rekam jejak aksi';
     case 'remember': return en ? 'Saving a memory' : 'Menyimpan ingatan';
     case 'forget': return en ? 'Removing a memory' : 'Menghapus ingatan';
     default: return en ? 'Working' : 'Memproses';
@@ -405,6 +426,16 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
           return JSON.stringify({ error: msg });
         }
       }
+      case 'get_action_effectiveness': {
+        const code = typeof args.project_code === 'string' ? args.project_code.trim() : '';
+        const projectId = code ? accessibleByCode.get(code) : undefined;
+        if (code && !projectId) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const stats = await getActionEffectiveness(projectId ? { projectId } : {});
+        return JSON.stringify({
+          note: 'Correlational, not causal — many factors move SPI. Do not over-claim, especially with a small sample. improvedRate is null below the sample floor.',
+          stats,
+        });
+      }
       case 'query_data': {
         try {
           const table = await runQuery((input ?? {}) as QuerySpec, ctx.userId, ctx.role);
@@ -475,7 +506,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // Stage C — only expose the propose_action tool when the caller's tenant opted in AND the caller
   // is not a read-only role (Anett can then STAGE actions for approval, never execute them).
   const actionsEnabled = role !== 'VIEWER' && (await callerActionsEnabled());
-  const tools = actionsEnabled ? [...TOOLS, PROPOSE_ACTION_TOOL] : TOOLS;
+  const tools = actionsEnabled ? [...TOOLS, PROPOSE_ACTION_TOOL, ACTION_EFFECTIVENESS_TOOL] : TOOLS;
   const actionNote = actionsEnabled
     ? (en
         ? '\n\nYou CAN propose actions (not execute them) via the propose_action tool; an action only runs after a human approves it. Confirm with the user before submitting.'

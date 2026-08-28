@@ -13,6 +13,7 @@ import { aiAvailableForProject } from '../charter/crImpact.service.js';
 import { extractFromNotes } from '../dataextract/dataExtract.service.js';
 import { getProjectPredictive } from '../predictive/predictive.service.js';
 import { aiActionsAvailableForProject, proposeAction, listProjectProposals, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
+import { getActionEffectiveness } from '../aiActions/aiActionOutcomes.service.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
 import charterRoutes from '../charter/charter.routes.js';
@@ -330,6 +331,16 @@ router.get(
   requireProjectAccess(),
   asyncHandler(async (req, res) => {
     res.json({ proposals: await listProjectProposals(req.params.projectId) });
+  }),
+);
+
+// Outcome learning — per-action effectiveness for THIS project (drives the propose-button evidence
+// chip). Correlational, not causal; the client hides stats below the sample floor.
+router.get(
+  '/:projectId/ai-actions/effectiveness',
+  requireProjectAccess(),
+  asyncHandler(async (req, res) => {
+    res.json({ stats: await getActionEffectiveness({ projectId: req.params.projectId }) });
   }),
 );
 

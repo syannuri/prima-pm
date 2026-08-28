@@ -170,6 +170,52 @@ describe('AI portfolio assistant — /assistant', () => {
     await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
   });
 
+  it('OUTCOME LEARNING: get_action_effectiveness cites the tenant track record; foreign project refused', async () => {
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: true } });
+    // Seed measured TIDY_SCHEDULE outcomes on the PM's own project (2 improved, 1 worsened).
+    await runWithTenant(aico, async () => {
+      const proj = await prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { id: true } });
+      for (const v of ['IMPROVED', 'IMPROVED', 'WORSENED']) {
+        const p = await prisma.aiActionProposal.create({ data: { projectId: proj!.id, actionType: 'TIDY_SCHEDULE', params: {}, status: 'APPLIED', appliedAt: new Date() } });
+        await prisma.aiActionOutcome.create({ data: {
+          projectId: proj!.id, proposalId: p.id, actionType: 'TIDY_SCHEDULE', scored: true,
+          appliedAt: new Date(), evalDueAt: new Date(), spiBefore: 0.8, spiAfter: v === 'WORSENED' ? 0.7 : 0.9,
+          spiDelta: v === 'WORSENED' ? -0.1 : 0.1, measuredAt: new Date(), verdict: v as never,
+        } });
+      }
+    });
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ executeTool }) {
+        const all = await executeTool('get_action_effectiveness', {});
+        const foreign = await executeTool('get_action_effectiveness', { project_code: 'OTHER-1' });
+        return JSON.stringify({ all, foreign });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    expect(out.all).toContain('Correlational'); // honesty note is always attached
+    const tidy = JSON.parse(out.all).stats.find((s: { actionType: string }) => s.actionType === 'TIDY_SCHEDULE');
+    expect(tidy.measured).toBe(3);
+    expect(tidy.improved).toBe(2);
+    expect(out.foreign).toContain('tidak dapat diakses'); // a non-owned project is refused
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
+  });
+
+  it('admin action-outcomes endpoint: 401 unauth, 200 for an ADMIN', async () => {
+    const unauth = await request(app).get(api('/ai-settings/action-outcomes'));
+    expect(unauth.status).toBe(401);
+    const ok = await request(app).get(api('/ai-settings/action-outcomes')).set(bearer(platformToken));
+    expect(ok.status).toBe(200);
+    expect(Array.isArray(ok.body.stats)).toBe(true);
+    const recent = await request(app).get(api('/ai-settings/action-outcomes/recent?take=5')).set(bearer(platformToken));
+    expect(recent.status).toBe(200);
+    expect(Array.isArray(recent.body.outcomes)).toBe(true);
+  });
+
   it('HOW-TO: get_process_guide returns grounded steps + surfaces an id-less route as a nav target', async () => {
     __setAiPort({
       async draftJson() { return null; },

@@ -152,6 +152,12 @@ describe('Stage C — AI-proposed actions', () => {
     expect(res.status).toBe(403);
   });
 
+  it('GET /ai-actions/effectiveness returns per-action stats (200)', async () => {
+    const res = await request(app).get(api(`/projects/${projectId}/ai-actions/effectiveness`)).set(bearer(pmToken));
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.stats)).toBe(true);
+  });
+
   it('GET /ai-actions/available reflects the env gate; GET /ai-actions lists proposals', async () => {
     await proposeAction({ projectId, actionType: 'CREATE_RISK', params: { title: 'Listed risk', probabilityScore: 3, impactScore: 3 } }, pmId);
     const avail = await request(app).get(api(`/projects/${projectId}/ai-actions/available`)).set(bearer(pmToken));
