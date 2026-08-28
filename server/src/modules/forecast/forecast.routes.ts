@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { asyncHandler } from '../../middleware/validate.js';
 import { requireProjectAccess } from '../../middleware/rbac.js';
 import * as svc from './forecast.service.js';
-import { WhatIfSpecSchema, simulateScenario } from './whatif.service.js';
+import { WhatIfSpecSchema, simulateScenario, runWhatIfAi } from './whatif.service.js';
+import { aiEnabled } from '../../lib/ai.js';
 
 const router = Router({ mergeParams: true });
 
@@ -30,6 +31,22 @@ router.post(
   asyncHandler(async (req, res) => {
     const spec = WhatIfSpecSchema.parse(req.body);
     res.json(await simulateScenario(req.params.projectId, spec));
+  }),
+);
+
+// AI what-if: natural-language question → spec → deterministic sim → narrated trade-off.
+// Env-gated (503) + tenant opt-in (403 in the service).
+const aiWhatIfBody = z.object({ question: z.string().min(3).max(500) });
+router.post(
+  '/whatif/ai',
+  requireProjectAccess({ allowRoles: ['FINANCE', 'RISK_OFFICER'] }),
+  asyncHandler(async (req, res) => {
+    if (!aiEnabled()) {
+      res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+      return;
+    }
+    const { question } = aiWhatIfBody.parse(req.body);
+    res.json(await runWhatIfAi(req.params.projectId, question));
   }),
 );
 

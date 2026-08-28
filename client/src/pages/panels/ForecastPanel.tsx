@@ -174,9 +174,100 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
           </div>
 
           <ForecastChart data={f} />
+
+          <WhatIfCard projectId={projectId} aiAvailable={aiQ.data?.aiAvailable === true} />
         </>
       )}
     </div>
+  );
+}
+
+// AI what-if simulator (ephemeral): ask a scenario in plain language → the server re-runs the
+// deterministic engines and the AI narrates the before/after. Nothing is saved. Hidden when AI is off.
+interface WhatIfResult {
+  baseline: { finish: string; forecastFinish: string; eac: number; vac: number };
+  scenario: { finish: string; forecastFinish: string; eac: number; vac: number; movedTaskCount: number; criticalTaskCount: number };
+  deltas: { finishDays: number; forecastFinishDays: number; eacIdr: number; vacIdr: number };
+  notes: string[];
+}
+interface WhatIfResponse { result: WhatIfResult; narrative: { summary: string; tradeoffs: string[]; recommendation: string } }
+
+const fmtDays = (d: number) => (d === 0 ? '—' : `${d > 0 ? '+' : ''}${d}d`);
+const fmtIdrDelta = (d: number) => (d === 0 ? '—' : `${d > 0 ? '+' : ''}${formatIdr(d)}`);
+
+function WhatIfCard({ projectId, aiAvailable }: { projectId: string; aiAvailable: boolean }) {
+  const toast = useToast();
+  const [q, setQ] = useState('');
+  const run = useMutation({
+    mutationFn: (question: string) => api.post<WhatIfResponse>(`/projects/${projectId}/forecast/whatif/ai`, { question }),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI could not run the simulation'),
+  });
+  if (!aiAvailable) return null;
+  const r = run.data;
+  const submit = () => { if (q.trim().length >= 3) run.mutate(q.trim()); };
+
+  return (
+    <Card>
+      <SectionTitle sub="Ask a scenario in plain language — the engines recompute the impact. Nothing is saved.">✨ What-if simulator</SectionTitle>
+      <div className="mt-2 flex gap-2">
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          placeholder="e.g. what if Phase 3 slips 2 weeks · CPI drops to 0.9 · add 50m budget"
+          className="flex-1"
+        />
+        <Button disabled={q.trim().length < 3 || run.isPending} onClick={submit}>{run.isPending ? 'Simulating…' : 'Simulate'}</Button>
+      </div>
+
+      {r && (
+        <div className="mt-3 space-y-3">
+          <div className="rounded-md bg-violet-50 p-3 dark:bg-violet-900/20">
+            <p className="text-sm text-slate-700 dark:text-slate-200">{r.narrative.summary}</p>
+            {r.narrative.tradeoffs.length > 0 && (
+              <ul className="mt-1.5 space-y-0.5">
+                {r.narrative.tradeoffs.map((t, i) => (
+                  <li key={i} className="flex gap-1.5 text-xs text-slate-600 dark:text-slate-300"><span aria-hidden className="text-slate-400">•</span><span>{t}</span></li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-1.5 text-xs font-medium text-violet-700 dark:text-violet-300">→ {r.narrative.recommendation}</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase text-slate-400 dark:text-slate-500">
+                  <th className="py-1">Metric</th><th className="py-1 text-right">Baseline</th><th className="py-1 text-right">Scenario</th><th className="py-1 text-right">Δ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <WiRow label="Finish" base={formatDate(r.result.baseline.finish)} scen={formatDate(r.result.scenario.finish)} delta={fmtDays(r.result.deltas.finishDays)} warn={r.result.deltas.finishDays > 0} />
+                <WiRow label="Forecast finish" base={formatDate(r.result.baseline.forecastFinish)} scen={formatDate(r.result.scenario.forecastFinish)} delta={fmtDays(r.result.deltas.forecastFinishDays)} warn={r.result.deltas.forecastFinishDays > 0} />
+                <WiRow label="EAC" base={formatIdr(r.result.baseline.eac)} scen={formatIdr(r.result.scenario.eac)} delta={fmtIdrDelta(r.result.deltas.eacIdr)} warn={r.result.deltas.eacIdr > 0} />
+                <WiRow label="VAC" base={formatIdr(r.result.baseline.vac)} scen={formatIdr(r.result.scenario.vac)} delta={fmtIdrDelta(r.result.deltas.vacIdr)} warn={r.result.deltas.vacIdr < 0} />
+              </tbody>
+            </table>
+          </div>
+
+          {r.result.notes.length > 0 && (
+            <div className="space-y-0.5">{r.result.notes.map((n, i) => <p key={i} className="text-[11px] text-amber-600 dark:text-amber-400">⚠ {n}</p>)}</div>
+          )}
+          <p className="text-[10px] text-slate-400 dark:text-slate-500">Simulation only — nothing is saved. AI can be wrong; verify key numbers.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function WiRow({ label, base, scen, delta, warn }: { label: string; base: string; scen: string; delta: string; warn?: boolean }) {
+  return (
+    <tr className="border-t border-slate-100 dark:border-slate-800">
+      <td className="py-1.5 text-slate-600 dark:text-slate-300">{label}</td>
+      <td className="py-1.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{base}</td>
+      <td className="py-1.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100">{scen}</td>
+      <td className={`py-1.5 text-right tabular-nums ${warn ? 'text-red-600 dark:text-red-400' : 'text-slate-400'}`}>{delta}</td>
+    </tr>
   );
 }
 

@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
+import { AppError, Forbidden, NotFound } from '../../lib/errors.js';
+import { getTenantStore } from '../../lib/tenant/context.js';
+import { getAiPort } from '../../lib/ai.js';
 import { getProjectForecast, eacScenarios } from './forecast.service.js';
 import {
   autoSchedule, computeCpm, workingDaysBetween, addWorkingDays,
@@ -54,8 +57,9 @@ export function applyScenario(leaves: Leaf[], edges: CpmEdgeInput[], m: Metrics,
   const byId = new Map(leaves.map((l) => [l.id, l]));
   const changes = (spec.taskChanges ?? []).filter((c) => byId.has(c.taskId));
 
-  const baseStart = Math.min(...leaves.map((l) => +l.planStart));
-  const baseFinish = Math.max(...leaves.map((l) => +l.planEnd));
+  // No scheduled tasks → only the cost levers apply; anchor dates to today so date math stays finite.
+  const baseStart = leaves.length ? Math.min(...leaves.map((l) => +l.planStart)) : floorDayMs(Date.now());
+  const baseFinish = leaves.length ? Math.max(...leaves.map((l) => +l.planEnd)) : baseStart;
   const baseFF = forecastFinishMs(baseStart, baseFinish, m.spi || 1);
   const baseEac = eacScenarios(m.bac, m.ev, m.ac, m.cpi, m.spi).likely;
   const baseVac = m.bac - baseEac;
@@ -138,4 +142,89 @@ export async function whatIfContext(projectId: string) {
     start: t.planStart.toISOString().slice(0, 10), end: t.planEnd.toISOString().slice(0, 10),
     durationWorkingDays: workingDaysBetween(+t.planStart, +t.planEnd),
   }));
+}
+
+// =====================================================================
+// AI layer — translate a natural-language question into a bounded spec, run the deterministic
+// simulation, then narrate the computed trade-off. Advisory + gated (env + Tenant.aiNarrativeEnabled),
+// mirrors evmExplain.service. Two draftJson calls: NL→spec, then narrate the real numbers.
+// =====================================================================
+
+const WHATIF_SPEC_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    taskChanges: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { taskId: { type: 'string' }, shiftDays: { type: 'number' }, durationScale: { type: 'number' }, newDurationDays: { type: 'number' } },
+        required: ['taskId'], additionalProperties: false,
+      },
+    },
+    assumeSpi: { type: 'number' }, assumeCpi: { type: 'number' }, bacDeltaIdr: { type: 'number' },
+    mode: { type: 'string', enum: ['push', 'asap'] },
+  },
+  additionalProperties: false,
+} as const;
+
+const SPEC_SYSTEM = [
+  'Anda menerjemahkan pertanyaan "bagaimana jika" seorang Project Manager menjadi SPEC skenario terstruktur untuk sebuah simulator deterministik.',
+  'Keluaran HARUS memakai HANYA taskId yang ada di daftar tugas pada payload. Jangan mengarang id.',
+  'Pemetaan:',
+  '- "mundur/geser tugas X N hari" → taskChanges[{taskId, shiftDays:N}] (negatif = maju).',
+  '- "percepat/tambah orang di fase/tugas X" → taskChanges[{taskId, durationScale}] pada tugas fase itu (mis. 30% lebih cepat = durationScale 0.7). Jadwal bersifat berbasis-tanggal, jadi headcount HARUS dinyatakan sebagai perubahan durasi.',
+  '- "durasi X jadi N hari kerja" → {taskId, newDurationDays:N}.',
+  '- "kalau SPI/CPI jadi X ke depan" → assumeSpi / assumeCpi.',
+  '- "tambah/kurangi anggaran N" → bacDeltaIdr.',
+  'Batasan: shiftDays ±3650, durationScale 0.1–5, assumeSpi/assumeCpi 0.1–3. Kembalikan spec kosong bila pertanyaan tak dapat dipetakan.',
+].join('\n');
+
+const NARRATE_SYSTEM = [
+  'Anda seorang analis PMO yang menjelaskan hasil simulasi "bagaimana jika" kepada Project Manager, secara ringkas & jujur, dalam Bahasa Indonesia manajemen proyek.',
+  'HANYA gunakan angka pada payload (baseline vs scenario + deltas). Jangan mengarang.',
+  'summary: 1-2 kalimat dampak utama (finish, forecast finish, EAC/VAC). tradeoffs: poin-poin trade-off. recommendation: 1 kalimat saran.',
+  'Bila ada catatan (notes), sampaikan caveat-nya (mis. jadwal berbasis tanggal, bukan kapasitas).',
+].join('\n');
+
+const NARRATE_JSON_SCHEMA = {
+  type: 'object',
+  properties: { summary: { type: 'string' }, tradeoffs: { type: 'array', items: { type: 'string' } }, recommendation: { type: 'string' } },
+  required: ['summary', 'tradeoffs', 'recommendation'], additionalProperties: false,
+} as const;
+
+export interface WhatIfNarrative { summary: string; tradeoffs: string[]; recommendation: string }
+
+// Per-tenant advisory opt-in (reuses Tenant.aiNarrativeEnabled), like evmExplain.assertTenantOptedIn.
+async function assertTenantOptedIn(projectId: string): Promise<void> {
+  const proj = await prisma.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { tenantId: true, tenant: { select: { aiNarrativeEnabled: true } } } });
+  if (!proj) throw NotFound('Project not found');
+  const hasTenant = Boolean(getTenantStore()?.tenantId || proj.tenantId);
+  if (hasTenant && proj.tenant?.aiNarrativeEnabled !== true) throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+}
+
+// NL question → bounded WhatIfSpec (grounded to real task ids; unknown ids are dropped at simulate).
+async function draftScenarioSpec(projectId: string, question: string): Promise<WhatIfSpec> {
+  const [tasks, forecast] = await Promise.all([whatIfContext(projectId), getProjectForecast(projectId, new Date())]);
+  const user = JSON.stringify({ question, tasks, forecast: { bac: forecast.bac, spi: forecast.spi, cpi: forecast.cpi, plannedFinish: forecast.schedule.plannedFinish } });
+  const raw = await getAiPort().draftJson({ system: SPEC_SYSTEM, user, jsonSchema: WHATIF_SPEC_JSON_SCHEMA, maxTokens: 900 });
+  const parsed = raw == null ? null : WhatIfSpecSchema.safeParse(raw);
+  if (!parsed || !parsed.success) throw new AppError(502, 'AI tidak dapat menerjemahkan pertanyaan menjadi skenario. Coba lebih spesifik.', 'AI_UNAVAILABLE');
+  return parsed.data;
+}
+
+async function narrateScenario(question: string, result: WhatIfResult): Promise<WhatIfNarrative> {
+  const raw = await getAiPort().draftJson({ system: NARRATE_SYSTEM, user: JSON.stringify({ question, ...result }), jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 900 });
+  const parsed = raw == null ? null : z.object({ summary: z.string(), tradeoffs: z.array(z.string()), recommendation: z.string() }).safeParse(raw);
+  if (!parsed || !parsed.success) throw new AppError(502, 'AI tidak dapat menarasikan hasil simulasi.', 'AI_UNAVAILABLE');
+  return parsed.data;
+}
+
+// Full AI what-if: translate → simulate (deterministic) → narrate. Assumes the route checked the env
+// gate (503). Read-only.
+export async function runWhatIfAi(projectId: string, question: string): Promise<{ spec: WhatIfSpec; result: WhatIfResult; narrative: WhatIfNarrative }> {
+  await assertTenantOptedIn(projectId);
+  const spec = await draftScenarioSpec(projectId, question);
+  const result = await simulateScenario(projectId, spec);
+  const narrative = await narrateScenario(question, result);
+  return { spec, result, narrative };
 }

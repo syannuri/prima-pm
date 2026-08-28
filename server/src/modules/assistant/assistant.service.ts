@@ -10,6 +10,7 @@ import { listMyApprovals } from '../approval/approval.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { getActionEffectiveness } from '../aiActions/aiActionOutcomes.service.js';
 import { detectConflicts } from '../resource/resourceConflicts.service.js';
+import { runWhatIfAi } from '../forecast/whatif.service.js';
 import { findGuide, guideIndex } from './processGuide.js';
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
@@ -107,6 +108,16 @@ const TOOLS: AiToolDef[] = [
     name: 'get_resource_conflicts',
     description: 'Resource yang KELEBIHAN BEBAN (over-allocated) lintas proyek per periode: siapa, kapan, berapa over, tugas/proyek penyebab, dan kandidat penerima yang lebih longgar. Panggil untuk "siapa yang overload minggu/bulan ini?". Untuk MENGUSULKAN pemindahan, pakai propose_action REASSIGN_MANPOWER (butuh persetujuan).',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'run_what_if',
+    description: 'Simulasikan skenario "bagaimana jika" pada sebuah proyek — dampak DETERMINISTIK ke finish date, forecast finish, EAC/VAC. Contoh: "kalau Fase 3 mundur 2 minggu", "kalau desain dipercepat 30%", "kalau CPI turun ke 0.9", "kalau anggaran ditambah 50jt". Argumen: project_code (dari list_projects) + question (pertanyaan bahasa alami apa adanya).',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string' }, question: { type: 'string' } },
+      required: ['project_code', 'question'],
+      additionalProperties: false,
+    },
   },
   {
     name: 'list_project_tasks',
@@ -317,6 +328,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'get_portfolio_summary': return en ? 'Summarizing your portfolio' : 'Merangkum portofolio Anda';
     case 'list_my_approvals': return en ? 'Checking your approvals' : 'Memeriksa persetujuan Anda';
     case 'get_resource_conflicts': return en ? 'Checking resource over-allocation' : 'Memeriksa kelebihan beban resource';
+    case 'run_what_if': return en ? 'Running a what-if simulation' : 'Menjalankan simulasi bagaimana-jika';
     case 'list_project_tasks': return en ? `Checking${c} tasks` : `Memeriksa tugas${c}`;
     case 'list_change_requests': return en ? `Reviewing${c} change requests` : `Meninjau change request${c}`;
     case 'query_data': return en ? 'Querying your data' : 'Menjalankan query data';
@@ -331,7 +343,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
 
 function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; memoryEnabled: boolean; en: boolean; emitStep?: (label: string) => void; projectsSummary: ProjectSummary[] }) {
   return async (name: string, input: unknown): Promise<string> => {
-    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string };
+    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string; question?: string };
     // Stream a live "thinking" step for this tool call (best-effort; SSE only).
     ctx.emitStep?.(stepLabel(name, typeof args.project_code === 'string' ? args.project_code.trim() : '', ctx.en));
     const resolveId = (): string | null => {
@@ -442,6 +454,23 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
         } catch (err) {
           const msg = err instanceof AppError ? err.message : 'Gagal mengajukan usulan aksi.';
           return JSON.stringify({ error: msg });
+        }
+      }
+      case 'run_what_if': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const question = typeof args.question === 'string' ? args.question.trim() : '';
+        if (question.length < 3) return JSON.stringify({ error: 'Sebutkan pertanyaan skenario yang jelas.' });
+        try {
+          const { result, narrative } = await runWhatIfAi(id, question);
+          return JSON.stringify({
+            narrative,
+            baseline: { finish: result.baseline.finish, forecastFinish: result.baseline.forecastFinish, eac: result.baseline.eac, vac: result.baseline.vac },
+            scenario: { finish: result.scenario.finish, forecastFinish: result.scenario.forecastFinish, eac: result.scenario.eac, vac: result.scenario.vac },
+            deltas: result.deltas, notes: result.notes,
+          });
+        } catch (err) {
+          return JSON.stringify({ error: err instanceof AppError ? err.message : 'Simulasi bagaimana-jika gagal.' });
         }
       }
       case 'get_action_effectiveness': {

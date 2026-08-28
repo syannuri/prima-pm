@@ -227,6 +227,30 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(conflicts.some((c: { resource: string }) => c.resource === 'Overloaded')).toBe(true);
   });
 
+  it('WHAT-IF: run_what_if simulates + narrates for an owned project, refuses a foreign one', async () => {
+    // draftJson is called twice inside runWhatIfAi (spec then narrate); return an empty spec so the
+    // sim is deterministic regardless of MINE-1's schedule.
+    __setAiPort({
+      async draftJson({ jsonSchema }) {
+        const props = (jsonSchema as { properties: Record<string, unknown> }).properties;
+        if ('summary' in props) return { summary: 'Tidak ada dampak berarti.', tradeoffs: [], recommendation: 'Aman.' };
+        return {};
+      },
+      async draftNarrative() { return null; },
+      async runToolLoop({ executeTool }) {
+        const mine = await executeTool('run_what_if', { project_code: 'MINE-1', question: 'kalau desain mundur 2 minggu' });
+        const foreign = await executeTool('run_what_if', { project_code: 'OTHER-1', question: 'apa saja' });
+        return JSON.stringify({ mine, foreign });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    expect(out.mine).toContain('narrative');       // owned project simulated
+    expect(out.foreign).toContain('tidak dapat diakses'); // foreign project refused
+  });
+
   it('admin action-outcomes endpoint: 401 unauth, 200 for an ADMIN', async () => {
     const unauth = await request(app).get(api('/ai-settings/action-outcomes'));
     expect(unauth.status).toBe(401);

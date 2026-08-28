@@ -4,6 +4,7 @@ import { createApp } from '../../app.js';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { signAccessToken } from '../../lib/jwt.js';
+import { __setAiPort, type AiPort } from '../../lib/ai.js';
 
 // Deterministic what-if route: real DB load → pure engines → before/after. No AI, no key needed.
 const app = createApp();
@@ -28,7 +29,7 @@ beforeAll(async () => {
   await prisma.taskDependency.create({ data: { predecessorId: a.id, successorId: b.id, type: 'FS', lagDays: 0 } });
 });
 
-const whatif = (body: unknown, token = adminToken) => request(app).post(api(`/projects/${projectId}/forecast/whatif`)).set(bearer(token)).send(body);
+const whatif = (body: Record<string, unknown>, token = adminToken) => request(app).post(api(`/projects/${projectId}/forecast/whatif`)).set(bearer(token)).send(body);
 
 describe('what-if — POST /projects/:id/forecast/whatif', () => {
   it('401 without auth', async () => {
@@ -58,5 +59,36 @@ describe('what-if — POST /projects/:id/forecast/whatif', () => {
   it('rejects out-of-bounds input (400)', async () => {
     expect((await whatif({ assumeSpi: 99 })).status).toBe(400);
     expect((await whatif({ taskChanges: [{ taskId: taskAId, durationScale: 50 }] })).status).toBe(400);
+  });
+});
+
+describe('AI what-if — POST /projects/:id/forecast/whatif/ai', () => {
+  const aiUrl = () => api(`/projects/${projectId}/forecast/whatif/ai`);
+
+  it('503 without an AI key', async () => {
+    const res = await request(app).post(aiUrl()).set(bearer(adminToken)).send({ question: 'kalau task A mundur seminggu' });
+    expect(res.status).toBe(503);
+  });
+
+  it('translates the question → simulates → narrates the trade-off', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    // draftJson is called twice: NL→spec (taskChanges schema) then narrate (summary schema).
+    __setAiPort({
+      async draftJson({ jsonSchema }) {
+        const props = (jsonSchema as { properties: Record<string, unknown> }).properties;
+        if ('summary' in props) return { summary: 'Finish mundur ~7 hari.', tradeoffs: ['Jalur kritis bergeser'], recommendation: 'Tinjau dependensi.' };
+        return { taskChanges: [{ taskId: taskAId, shiftDays: 7 }] };
+      },
+      async draftNarrative() { return null; },
+    } as AiPort);
+
+    const res = await request(app).post(aiUrl()).set(bearer(adminToken)).send({ question: 'kalau task A mundur seminggu' });
+    __setAiPort(null);
+    delete process.env.ANTHROPIC_API_KEY;
+
+    expect(res.status).toBe(200);
+    expect(res.body.narrative.summary).toContain('Finish');
+    expect(res.body.result.deltas.finishDays).toBeGreaterThanOrEqual(5);
+    expect(res.body.spec.taskChanges[0].taskId).toBe(taskAId);
   });
 });
