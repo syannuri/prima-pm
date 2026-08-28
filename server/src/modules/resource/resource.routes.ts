@@ -4,6 +4,8 @@ import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
 import { getResourceCapacity } from './resource.service.js';
+import { detectConflicts, draftReallocation, reallocationAiAvailable, type Conflict } from './resourceConflicts.service.js';
+import { aiEnabled } from '../../lib/ai.js';
 import {
   listResources,
   createResource,
@@ -32,6 +34,40 @@ router.get(
     const q = querySchema.parse(req.query);
     const report = await getResourceCapacity(req.user!.id, req.user!.role, q);
     res.json(report);
+  }),
+);
+
+// Resource over-allocation conflicts (deterministic) + whether the advisory AI is usable. Scoped
+// like /capacity. `aiAvailable` drives the "Suggest fix with AI" button's visibility.
+router.get(
+  '/conflicts',
+  asyncHandler(async (req, res) => {
+    const q = querySchema.parse(req.query);
+    const [conflicts, aiAvailable] = await Promise.all([
+      detectConflicts(req.user!.id, req.user!.role, q),
+      reallocationAiAvailable(),
+    ]);
+    res.json({ conflicts, aiAvailable });
+  }),
+);
+
+// AI reallocation DRAFT for one conflict (env-gated 503 + tenant opt-in 403 in the service). The
+// body is a conflict as returned by GET /conflicts; the service grounds moves against it.
+const conflictBody = z.object({
+  resourceKey: z.string(), resourceName: z.string(), personnelRole: z.string().nullable(),
+  period: z.string(), allocated: z.number(), capacity: z.number(), utilization: z.number(), overBy: z.number(),
+  contributions: z.array(z.object({ costItemId: z.string(), taskName: z.string(), projectId: z.string(), projectCode: z.string(), planMandaysInPeriod: z.number() })),
+  candidates: z.array(z.object({ resourceId: z.string(), name: z.string(), personnelRole: z.string().nullable(), utilization: z.number(), spareCapacity: z.number() })),
+});
+router.post(
+  '/conflicts/ai-draft',
+  validateBody(conflictBody),
+  asyncHandler(async (req, res) => {
+    if (!aiEnabled()) {
+      res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+      return;
+    }
+    res.json(await draftReallocation(req.body as Conflict));
   }),
 );
 

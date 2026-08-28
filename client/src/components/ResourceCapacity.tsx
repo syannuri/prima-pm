@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../api/client';
-import { Card, Spinner, Badge, SectionTitle } from './ui';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { api, ApiError } from '../api/client';
+import { Button, Card, Spinner, Badge, SectionTitle } from './ui';
+import { useToast } from './Toast';
 import { formatNum } from '../lib/format';
 
 type Granularity = 'month' | 'week';
@@ -204,7 +205,103 @@ export default function ResourceCapacity() {
           <span className="ml-auto text-slate-500 dark:text-slate-400">% = allocated man-days ÷ available business days in the period</span>
         </div>
       </Card>
+
+      <ResourceConflicts granularity={granularity} />
     </div>
+  );
+}
+
+// ---- Over-allocation conflicts + AI reallocation ------------------------------------------------
+interface Contribution { costItemId: string; taskName: string; projectId: string; projectCode: string; planMandaysInPeriod: number }
+interface Conflict {
+  resourceKey: string; resourceName: string; personnelRole: string | null; period: string;
+  allocated: number; capacity: number; utilization: number; overBy: number;
+  contributions: Contribution[]; candidates: { resourceId: string; name: string }[];
+}
+interface Move { costItemId: string; toResourceId: string; toResourceName: string; taskName: string; fromResourceName: string; projectId: string; rationale: string }
+interface ReallocDraft { summary: string; moves: Move[]; confidence?: string }
+
+const conflictId = (c: Conflict) => `${c.resourceKey}|${c.period}`;
+
+// Deterministic over-allocation list + an AI-drafted reallocation per conflict; each suggested move
+// can be PROPOSED (Stage C → approval → REASSIGN_MANPOWER). Nothing changes without approval.
+function ResourceConflicts({ granularity }: { granularity: Granularity }) {
+  const toast = useToast();
+  const [drafts, setDrafts] = useState<Record<string, ReallocDraft>>({});
+
+  const { data } = useQuery({
+    queryKey: ['resource-conflicts', granularity],
+    queryFn: () => api.get<{ conflicts: Conflict[]; aiAvailable: boolean }>(`/resources/conflicts?granularity=${granularity}`),
+  });
+  const draft = useMutation({
+    mutationFn: (c: Conflict) => api.post<ReallocDraft>('/resources/conflicts/ai-draft', c),
+    onSuccess: (d, c) => setDrafts((p) => ({ ...p, [conflictId(c)]: d })),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI could not draft a reallocation.'),
+  });
+  const propose = useMutation({
+    mutationFn: (m: Move) => api.post(`/projects/${m.projectId}/ai-actions/propose`, {
+      actionType: 'REASSIGN_MANPOWER', params: { costItemId: m.costItemId, toResourceId: m.toResourceId }, rationale: m.rationale,
+    }),
+    onSuccess: () => toast.success('Reallocation proposed — runs only after approval.'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to propose the reallocation.'),
+  });
+
+  if (!data || data.conflicts.length === 0) return null;
+
+  return (
+    <Card className="border-red-200 dark:border-red-900/40">
+      <SectionTitle sub="A resource booked beyond capacity in a period. Reassign work to a lighter-loaded peer — proposals need approval before anything changes.">Over-allocation conflicts</SectionTitle>
+      <div className="mt-3 space-y-3">
+        {data.conflicts.map((c) => {
+          const id = conflictId(c);
+          const d = drafts[id];
+          return (
+            <div key={id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm">
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">{c.resourceName}</span>
+                  <span className="text-slate-500 dark:text-slate-400"> · {periodLabel(c.period, granularity)} · </span>
+                  <span className="font-medium text-red-600">{formatNum(c.allocated, 1)}/{c.capacity} md ({formatNum(c.utilization * 100, 0)}%)</span>
+                </div>
+                {data.aiAvailable && (
+                  <Button variant="secondary" className="!py-1 text-xs" disabled={draft.isPending && draft.variables === c} onClick={() => draft.mutate(c)}>
+                    {draft.isPending && draft.variables === c ? 'Drafting…' : '✨ Suggest fix with AI'}
+                  </Button>
+                )}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {c.contributions.map((x) => (
+                  <span key={x.costItemId} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    {x.projectCode} · {x.taskName} · {formatNum(x.planMandaysInPeriod, 1)}md
+                  </span>
+                ))}
+              </div>
+              {d && (
+                <div className="mt-2 rounded-md bg-violet-50 p-2 dark:bg-violet-900/20">
+                  <p className="text-xs text-slate-600 dark:text-slate-300">{d.summary}</p>
+                  {d.moves.length === 0 ? (
+                    <p className="mt-1 text-[11px] text-slate-400">No safe reassignment found — consider shifting dates or adding capacity.</p>
+                  ) : (
+                    <ul className="mt-2 space-y-1.5">
+                      {d.moves.map((m, i) => (
+                        <li key={i} className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="min-w-0 text-xs text-slate-700 dark:text-slate-200">
+                            Move <span className="font-medium">{m.taskName}</span> → <span className="font-medium">{m.toResourceName}</span>
+                            <span className="text-slate-400"> — {m.rationale}</span>
+                          </span>
+                          <Button variant="secondary" className="!px-2 !py-0.5 !text-xs shrink-0" disabled={propose.isPending} onClick={() => propose.mutate(m)}>Propose</Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-1.5 text-[10px] text-slate-400">Proposals run only after approval.</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
