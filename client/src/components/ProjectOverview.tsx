@@ -11,7 +11,7 @@ import EvmTrendChart from './EvmTrendChart';
 import ExtractFromNotes from './ExtractFromNotes';
 import PredictiveCard from './PredictiveCard';
 import InfoTip from './InfoTip';
-import { KpiIcon } from './KpiIcon';
+import { KpiIcon, accentSurface } from './KpiIcon';
 import { useLang } from '../context/LanguageContext';
 
 // Graphic-first, mobile-friendly project summary — the default landing on phones.
@@ -104,8 +104,10 @@ function Bar({ label, value, max, color, sub }: { label: string; value: number; 
 // Card that becomes a tappable drill-down when `onClick` is set (Card itself takes no onClick).
 // `className` lands on the outer grid-item element so the caller can place it in the bento grid;
 // with onClick the inner Card gets `h-full` so it fills a stretched grid cell (no click dead-zone).
-function Panel({ onClick, className, children }: { onClick?: () => void; className?: string; children: ReactNode }) {
-  if (!onClick) return <Card className={className}>{children}</Card>;
+// `surface` (themed tint classes) always lands on the inner Card so the visible tile is tinted,
+// not the invisible grid wrapper.
+function Panel({ onClick, className, surface, children }: { onClick?: () => void; className?: string; surface?: string; children: ReactNode }) {
+  if (!onClick) return <Card className={`${surface ?? ''} ${className ?? ''}`}>{children}</Card>;
   return (
     <div
       role="button"
@@ -114,7 +116,7 @@ function Panel({ onClick, className, children }: { onClick?: () => void; classNa
       onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onClick(); } }}
       className={`cursor-pointer ${className ?? ''}`}
     >
-      <Card className="h-full transition hover:border-brand-300 dark:hover:border-brand-700">{children}</Card>
+      <Card className={`h-full transition hover:border-brand-300 dark:hover:border-brand-700 ${surface ?? ''}`}>{children}</Card>
     </div>
   );
 }
@@ -257,7 +259,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       <div className="space-y-3 lg:col-span-12 lg:order-3 lg:flex lg:items-stretch lg:gap-3 lg:space-y-0">
       {/* Margin & profit — plan vs actual */}
       {hasMargin && (
-        <Panel onClick={onJump ? () => onJump('Forecast') : undefined} className="lg:min-w-0 lg:flex-1">
+        <Panel onClick={onJump ? () => onJump('Forecast') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('emerald')}>
           <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><KpiIcon name="trendingUp" accent="emerald" className="h-6 w-6" />{id ? 'Margin & Laba — Rencana vs Proyeksi' : 'Margin & profit — plan vs projected'}</h3>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
@@ -277,7 +279,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
       {/* Completed vs remaining tasks */}
       {hasTasks && (
-        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1">
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('blue')}>
           <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><KpiIcon name="listChecks" accent="blue" className="h-6 w-6" />{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}<InfoTip text={taskTip} /></h3>
           <div className="flex items-center gap-4">
             <TaskDonut completed={tasks.completed} remaining={tasks.remaining} label={id ? 'tugas' : 'tasks'} />
@@ -300,7 +302,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Upcoming deadlines — leaf tasks/milestones due within 7 days or overdue, so a PM catches
           them before they slip. Derived from the already-loaded WBS tree (no extra request). */}
       {hasUpcoming && (
-        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1">
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('amber')}>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"><KpiIcon name="clock" accent="amber" className="h-6 w-6" />{id ? 'Tenggat terdekat' : 'Upcoming deadlines'}</h3>
             <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{id ? '7 hari' : 'next 7 days'}</span>

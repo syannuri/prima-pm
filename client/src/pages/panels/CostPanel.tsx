@@ -5,7 +5,7 @@ import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../.
 import { Button, Card, FormError, Input, MoneyInput, Select, PanelLoading } from '../../components/ui';
 import BaselineSetupBar from '../../components/BaselineSetupBar';
 import RebaselineReminder from '../../components/RebaselineReminder';
-import { KpiIcon, type Accent, type IconName } from '../../components/KpiIcon';
+import { KpiIcon, accentSurface, type Accent, type IconName } from '../../components/KpiIcon';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
@@ -245,7 +245,7 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle, target, 
   };
 
   return (
-    <Card>
+    <Card className={accentSurface('orange')}>
       <AccordionHeader title="Actual cost (AC)" count={data.actualCosts.length} total={formatIdr(data.actualCostTotal)} open={open} onToggle={onToggle} icon="outflow" accent="orange" />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Real money spent — recorded here manually. It is NOT taken from % progress (that drives Earned Value). CPI = EV ÷ AC.</p>
@@ -423,7 +423,7 @@ function UntouchedNote({ count, total, remaining, names }: { count: number; tota
 
 function Stat({ label, value, hint, strong, valueClass, icon, accent }: { label: string; value: string; hint?: string; strong?: boolean; valueClass?: string; icon?: IconName; accent?: Accent }) {
   return (
-    <Card className="!p-3">
+    <Card className={`!p-3 ${accent ? accentSurface(accent) : ''}`}>
       <div className="flex items-center gap-2">
         {icon && accent && <KpiIcon name={icon} accent={accent} />}
         <div className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
@@ -623,7 +623,7 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
   };
 
   return (
-    <Card>
+    <Card className={accentSurface('blue')}>
       <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} icon="box" accent="blue" />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Material (qty × unit cost) and Manpower (rate × mandays)</p>
@@ -1039,7 +1039,7 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
   const addAmount = Number(amount || 0);
 
   return (
-    <Card>
+    <Card className={accentSurface('violet')}>
       <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} icon="layers" accent="violet" />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Overhead: transport, accommodation, meals, communication, supplies, venue…</p>
