@@ -11,6 +11,7 @@ import WebhooksCard from '../components/WebhooksCard';
 import AutomationsCard from '../components/AutomationsCard';
 import ApprovalWorkflowsCard from '../components/ApprovalWorkflowsCard';
 import AiNarrativeCard from '../components/AiNarrativeCard';
+import AiActionOutcomesCard from '../components/AiActionOutcomesCard';
 import AiMemoryCard from '../components/AiMemoryCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
@@ -62,6 +63,7 @@ export default function SettingsPage() {
             <SettingsSection title="Governance" sub="Workspace-wide — approval routing for change requests and AI features.">
               <ApprovalWorkflowsCard />
               <AiNarrativeCard />
+              <AiActionOutcomesCard />
               <AiMemoryCard />
             </SettingsSection>
           )}

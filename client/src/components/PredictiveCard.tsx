@@ -9,6 +9,21 @@ import { useToast } from './Toast';
 type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 interface RiskSignal { level: RiskLevel; score: number; drivers: string[] }
 interface Predictive { hasData: boolean; slip: RiskSignal | null; overrun: RiskSignal | null }
+interface ActionStat { actionType: string; measured: number; improved: number; improvedRate: number | null }
+
+// A muted "track record" chip shown beside a propose button when enough measured outcomes exist.
+// Correlational, not causal — the tooltip says so.
+function EvidenceChip({ stat }: { stat?: ActionStat }) {
+  if (!stat || stat.improvedRate == null) return null; // hidden below the sample floor
+  return (
+    <span
+      title={`Correlational, not causal · SPI improved after ${stat.improved} of ${stat.measured} applied actions`}
+      className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+    >
+      ↑SPI {stat.improved}/{stat.measured}
+    </span>
+  );
+}
 
 const LEVEL = {
   LOW: { label: 'Low', bar: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300', ring: 'border-emerald-200 dark:border-emerald-900/50' },
@@ -49,6 +64,12 @@ export default function PredictiveCard({ projectId }: { projectId: string }) {
     queryKey: ['ai-actions-available', projectId],
     queryFn: () => api.get<{ aiActionsAvailable: boolean }>(`/projects/${projectId}/ai-actions/available`),
   });
+  // Outcome learning — the track record of applied actions on this project, for the evidence chip.
+  const { data: eff } = useQuery({
+    queryKey: ['ai-actions-effectiveness', projectId],
+    queryFn: () => api.get<{ stats: ActionStat[] }>(`/projects/${projectId}/ai-actions/effectiveness`),
+    enabled: avail?.aiActionsAvailable === true,
+  });
 
   const propose = useMutation({
     mutationFn: (body: { actionType: string; params: unknown; rationale: string }) =>
@@ -83,10 +104,13 @@ export default function PredictiveCard({ projectId }: { projectId: string }) {
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5 dark:border-slate-800">
           <span className="text-[11px] text-slate-500 dark:text-slate-400">🤖 Ajukan aksi:</span>
           {slipHot && data.slip && (
-            <Button variant="secondary" className="!px-2 !py-1 !text-xs" disabled={propose.isPending}
-              onClick={() => propose.mutate({ actionType: 'TIDY_SCHEDULE', params: { mode: 'push' }, rationale: `Risiko slip ${LEVEL[data.slip!.level].label}: ${data.slip!.drivers.join('; ')}` })}>
-              Rapikan jadwal
-            </Button>
+            <span className="inline-flex items-center gap-1.5">
+              <Button variant="secondary" className="!px-2 !py-1 !text-xs" disabled={propose.isPending}
+                onClick={() => propose.mutate({ actionType: 'TIDY_SCHEDULE', params: { mode: 'push' }, rationale: `Risiko slip ${LEVEL[data.slip!.level].label}: ${data.slip!.drivers.join('; ')}` })}>
+                Rapikan jadwal
+              </Button>
+              <EvidenceChip stat={eff?.stats.find((s) => s.actionType === 'TIDY_SCHEDULE')} />
+            </span>
           )}
           {overrunHot && data.overrun && (
             <Button variant="secondary" className="!px-2 !py-1 !text-xs" disabled={propose.isPending}
