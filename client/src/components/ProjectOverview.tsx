@@ -11,7 +11,7 @@ import EvmTrendChart from './EvmTrendChart';
 import ExtractFromNotes from './ExtractFromNotes';
 import PredictiveCard from './PredictiveCard';
 import InfoTip from './InfoTip';
-import { KpiIcon, accentSurface } from './KpiIcon';
+import { KpiIcon, accentSurface, type Accent } from './KpiIcon';
 import { useLang } from '../context/LanguageContext';
 
 // Graphic-first, mobile-friendly project summary — the default landing on phones.
@@ -173,6 +173,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     : 'Count of 100%-done tasks ÷ total tasks — every task counts equally, and partial progress (e.g. 90%) is not yet counted as done.';
   const costMax = Math.max(e.bac, e.ac, e.ev, e.pv, 1);
   const overBudget = e.ac > 0 && e.cpi < 1;
+  // Health-aware surface tone for the Cost (EVM) mini-card: rose when over budget, emerald when
+  // there's spend and it's on/under budget, slate before any actual cost is booked.
+  const evmTone: Accent = overBudget ? 'rose' : e.ac > 0 ? 'emerald' : 'slate';
 
   // Projected margin (updated for current performance) + its % of revenue, shown inside the gauge.
   const m = fcQ.data?.margin;
@@ -236,10 +239,12 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           <p className={`mt-2 text-xs font-semibold ${marginLine.warn ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{marginLine.text}</p>
         )}
 
-        {/* EVM cost bars — always shown */}
-        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+        {/* EVM cost bars — a health-aware mini-card: the surface tints emerald when cost is on/under
+            budget (CPI ≥ 1), rose when over budget, slate before any actual cost — so the background
+            itself signals budget health, echoing the app's RAG language. */}
+        <div className={`mt-3 rounded-xl border p-3 ${accentSurface(evmTone)}`}>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><KpiIcon name="coins" accent="blue" className="h-6 w-6" />{id ? 'Biaya (EVM)' : 'Cost (EVM)'}</h3>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><KpiIcon name="coins" accent={evmTone} className="h-6 w-6" />{id ? 'Biaya (EVM)' : 'Cost (EVM)'}</h3>
             <span className={`text-xs font-medium ${overBudget ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
               CPI {e.ac > 0 ? formatNum(e.cpi, 2) : '—'}
             </span>
