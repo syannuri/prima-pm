@@ -19,11 +19,12 @@ import ProductTour from '../components/ProductTour';
 type Group = { icon: string; name: string; items: [string, string][] };
 type Content = {
   signin: string;
-  nav: { features: string; security: string; faq: string };
+  nav: { features: string; ai: string; security: string; faq: string };
   hero: { badge: string; titlePre: string; titleAccent: string; sub: string; enter: string; tryFree: string; explore: string };
   why: { eyebrow: string; body: string };
   what: { title: string; body: string };
   features: { title: string; sub: string; groups: Group[] };
+  ai: { eyebrow: string; title: string; sub: string; badge: string; items: [string, string][]; note: string };
   showcase: { title: string; sub: string; labels: string[] };
   evm: { title: string; sub: string; items: [string, string][] };
   principles: { title: string; chips: string[] };
@@ -46,6 +47,16 @@ const SEC = {
   doc: 'M8 3h6l4 4v14a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm6 0v4h4M9 12h6m-6 4h6m-6-8h2',
 };
 
+// AI-section capability icons (stroke-only, 24×24), one per item in order.
+const AI_ICON = [
+  'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Zm-13-4h8m-8 4h5',        // ask in plain language (chat)
+  'M8 3h6l4 4v14a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm6 0v4h4M9 12h6m-6 4h4',   // auto-drafted status (doc)
+  'M3 12h4l2 6 4-14 2 8h6',                                                                 // early warning (predictive pulse)
+  'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 15h.01M9.5 9a2.5 2.5 0 0 1 4 2c0 1.5-2 1.8-2 3',// explains the numbers (help)
+  'M9 12l2 2 4-4M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z',                                       // proposes action (approve badge)
+  'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',                                      // portfolio Q&A (grid)
+];
+
 const ICON = {
   plan: 'M9 3 4 5v16l5-2 6 2 5-2V3l-5 2-6-2Zm0 0v16m6-14v16',
   track: 'M3 12h4l2 6 4-14 2 8h6',
@@ -56,7 +67,7 @@ const ICON = {
 const COPY: Record<Lang, Content> = {
   en: {
     signin: 'Sign in',
-    nav: { features: 'Features', security: 'Security', faq: 'FAQ' },
+    nav: { features: 'Features', ai: 'AI', security: 'Security', faq: 'FAQ' },
     hero: {
       badge: 'Made by people who run projects',
       titlePre: 'Clarity in every ',
@@ -99,6 +110,21 @@ const COPY: Record<Lang, Content> = {
           ['Role-aware access', 'PMO, PM, Finance, Risk, and team each see just their slice.'],
         ]},
       ],
+    },
+    ai: {
+      eyebrow: 'AI, built for delivery',
+      badge: 'Meet the AI Agent',
+      title: 'An AI Agent that works the way a PM thinks',
+      sub: 'Prismatix reads your live cost, schedule, risk and Earned-Value data — so the AI Agent answers in the language of delivery, not generic chit-chat. It drafts, explains and flags; you decide.',
+      items: [
+        ['Ask your project in plain language', 'Type a question, get a straight answer with a table you can export — no query builder, no spreadsheets.'],
+        ['Auto-drafted status & weekly briefings', 'It writes the status narrative and a weekly briefing per active project, ready for you to review, edit and publish.'],
+        ['Early warning, before it’s expensive', 'Predictive slip and cost-overrun signals from your Earned-Value trend, so drift surfaces while it’s still small.'],
+        ['Explains the numbers', 'Plain-language EVM read-outs, change-request impact and risk suggestions — the “so what” behind SPI, CPI and the forecast.'],
+        ['Proposes the next action', 'It can suggest tidying the schedule or logging a risk — and only runs after you approve. You stay in control.'],
+        ['Portfolio Q&A', 'Ask across every project you can see and get a portfolio-level answer in seconds.'],
+      ],
+      note: 'Human-in-the-loop by design: nothing is published or changed without your approval. An optional, opt-in capability depending on your plan.',
     },
     showcase: {
       title: 'A look inside',
@@ -170,7 +196,7 @@ const COPY: Record<Lang, Content> = {
   },
   id: {
     signin: 'Masuk',
-    nav: { features: 'Fitur', security: 'Keamanan', faq: 'FAQ' },
+    nav: { features: 'Fitur', ai: 'AI', security: 'Keamanan', faq: 'FAQ' },
     hero: {
       badge: 'Dibuat orang proyek, untuk komunitas',
       titlePre: 'Kejelasan di setiap ',
@@ -213,6 +239,21 @@ const COPY: Record<Lang, Content> = {
           ['Akses sesuai peran', 'PMO, PM, Finance, Risk, dan tim masing-masing melihat bagiannya saja.'],
         ]},
       ],
+    },
+    ai: {
+      eyebrow: 'AI untuk pelaksanaan',
+      badge: 'Kenalan dengan AI Agent',
+      title: 'AI Agent yang berpikir seperti seorang PM',
+      sub: 'Prismatix membaca data biaya, jadwal, risiko, dan Earned Value proyek Anda secara langsung — jadi AI Agent menjawab dalam bahasa pelaksanaan proyek, bukan obrolan umum. Ia membuat draf, menjelaskan, dan memberi peringatan; Anda yang memutuskan.',
+      items: [
+        ['Tanya proyek pakai bahasa biasa', 'Ketik pertanyaan, dapat jawaban langsung plus tabel yang bisa diekspor — tanpa query, tanpa spreadsheet.'],
+        ['Draf status & briefing mingguan otomatis', 'Ia menulis narasi status dan briefing mingguan tiap proyek aktif, siap Anda tinjau, sunting, dan terbitkan.'],
+        ['Peringatan dini sebelum jadi mahal', 'Sinyal prediktif keterlambatan dan pembengkakan biaya dari tren Earned Value — penyimpangan terlihat selagi masih kecil.'],
+        ['Menjelaskan angka-angkanya', 'Pembacaan EVM dalam bahasa manusia, dampak change request, dan saran risiko — makna di balik SPI, CPI, dan forecast.'],
+        ['Mengusulkan tindakan berikutnya', 'Ia bisa mengusulkan merapikan jadwal atau mencatat risiko — dan baru berjalan setelah Anda setujui. Kendali tetap di tangan Anda.'],
+        ['Tanya-jawab lintas portfolio', 'Tanyakan lintas semua proyek yang bisa Anda akses, dapat jawaban tingkat portfolio dalam hitungan detik.'],
+      ],
+      note: 'Human-in-the-loop: tak ada yang diterbitkan atau diubah tanpa persetujuan Anda. Fitur opsional (opt-in), tergantung paket langganan.',
     },
     showcase: {
       title: 'Lihat lebih dekat',
@@ -492,7 +533,7 @@ export default function HomePage() {
           <Link to="/" aria-label="Prismatix — home" className="inline-block rounded-md outline-none transition hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand-400"><Wordmark bare /></Link>
           {/* center nav — anchored to on-page sections (desktop only) */}
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 md:flex">
-            {([['#features', t.nav.features], ['#security', t.nav.security], ['#faq', t.nav.faq]] as const).map(([href, label]) => (
+            {([['#features', t.nav.features], ['#ai', t.nav.ai], ['#security', t.nav.security], ['#faq', t.nav.faq]] as const).map(([href, label]) => (
               <a key={href} href={href} className="text-sm font-medium text-slate-600 transition hover:text-slate-900">{label}</a>
             ))}
           </nav>
@@ -622,6 +663,38 @@ export default function HomePage() {
               </Reveal>
             ))}
           </div>
+          </div>
+        </section>
+
+        {/* ---------- AI Agent: capabilities + how it helps the PM ---------- */}
+        <section id="ai" className="relative scroll-mt-24 overflow-hidden bg-gradient-to-b from-indigo-50 via-white to-white">
+          {/* soft brand aura behind the heading */}
+          <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-brand-400/20 blur-3xl" />
+          <div className="relative mx-auto max-w-6xl px-5 py-16 sm:px-8">
+            <Reveal className="mb-10 text-center">
+              <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white/70 px-3 py-1 text-xs font-semibold text-brand-700 shadow-sm backdrop-blur">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1" /></svg>
+                {t.ai.badge}
+              </span>
+              <SectionTitle>{t.ai.title}</SectionTitle>
+              <p className="mx-auto mt-4 max-w-2xl text-slate-500">{t.ai.sub}</p>
+            </Reveal>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {t.ai.items.map(([name, desc], i) => (
+                <Reveal key={name} className="reveal-zoom" delay={(i % 3) * 80}>
+                  <div className="group h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-lg hover:shadow-brand-500/5">
+                    <span className="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-indigo-500 shadow-sm shadow-brand-500/30 ring-1 ring-brand-600/20">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5 text-white" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={AI_ICON[i % AI_ICON.length]} /></svg>
+                    </span>
+                    <h3 className="text-base font-semibold text-slate-900">{name}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{desc}</p>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+            <Reveal className="mt-8">
+              <p className="mx-auto max-w-2xl text-center text-xs leading-relaxed text-slate-500">{t.ai.note}</p>
+            </Reveal>
           </div>
         </section>
 
