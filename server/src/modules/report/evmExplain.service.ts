@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
-import { AppError, Forbidden, NotFound } from '../../lib/errors.js';
+import { AppError, NotFound } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { getAiPort } from '../../lib/ai.js';
+import { getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { getProjectReport } from './report.service.js';
 
 type Report = Awaited<ReturnType<typeof getProjectReport>>;
@@ -95,7 +95,7 @@ async function assertTenantOptedIn(projectId: string): Promise<void> {
   if (!proj) throw NotFound('Project not found');
   const hasTenant = Boolean(getTenantStore()?.tenantId || proj.tenantId);
   if (hasTenant && proj.tenant?.aiNarrativeEnabled !== true) {
-    throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+    throw aiNotEnabledError();
   }
 }
 

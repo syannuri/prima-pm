@@ -7,6 +7,7 @@ import { useToast } from '../../components/Toast';
 import { formatIdr, formatDate, formatDateInput, formatNum } from '../../lib/format';
 import ForecastChart from '../../components/ForecastChart';
 import InfoTip from '../../components/InfoTip';
+import GuestAiNote, { useIsGuest } from '../../components/GuestAiNote';
 
 const money = (n: number) => formatIdr(n);
 
@@ -27,6 +28,7 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
     queryFn: () => api.get<Forecast>(`/projects/${projectId}/forecast?statusDate=${statusDate}`),
   });
 
+  const isGuest = useIsGuest();
   // AI EVM explainer (advisory) — only surfaced when AI is available (env + tenant opt-in).
   const aiQ = useQuery({
     queryKey: ['ai-available', projectId],
@@ -120,6 +122,7 @@ export default function ForecastPanel({ projectId }: { projectId: string }) {
               )}
             </Card>
           )}
+          {!aiQ.data?.aiAvailable && isGuest && <GuestAiNote className="mt-1" />}
 
           {/* Baseline-staleness caveat: revenue moved on an approved change but the cost baseline
               may not reflect it yet, so the margin below is provisional. */}
@@ -197,12 +200,13 @@ const fmtIdrDelta = (d: number) => (d === 0 ? '—' : `${d > 0 ? '+' : ''}${form
 
 function WhatIfCard({ projectId, aiAvailable }: { projectId: string; aiAvailable: boolean }) {
   const toast = useToast();
+  const isGuest = useIsGuest();
   const [q, setQ] = useState('');
   const run = useMutation({
     mutationFn: (question: string) => api.post<WhatIfResponse>(`/projects/${projectId}/forecast/whatif/ai`, { question }),
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI could not run the simulation'),
   });
-  if (!aiAvailable) return null;
+  if (!aiAvailable) return isGuest ? <GuestAiNote /> : null;
   const r = run.data;
   const submit = () => { if (q.trim().length >= 3) run.mutate(q.trim()); };
 

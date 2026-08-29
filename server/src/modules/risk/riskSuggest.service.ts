@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
-import { AppError, Forbidden, NotFound } from '../../lib/errors.js';
+import { AppError, NotFound } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { getAiPort } from '../../lib/ai.js';
+import { getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 
 // A single suggested risk — qualitative only. EMV (probabilityPct / impactCostIdr) is left to the PM
 // on accept, so the model never fabricates money figures. Response strategy follows the PMBOK enum
@@ -101,7 +101,7 @@ async function assertTenantOptedIn(projectId: string): Promise<void> {
   if (!proj) throw NotFound('Project not found');
   const hasTenant = Boolean(getTenantStore()?.tenantId || proj.tenantId);
   if (hasTenant && proj.tenant?.aiNarrativeEnabled !== true) {
-    throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+    throw aiNotEnabledError();
   }
 }
 

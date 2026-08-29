@@ -1,8 +1,8 @@
 import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { AppError, Forbidden } from '../../lib/errors.js';
+import { AppError } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { aiEnabled, getAiPort } from '../../lib/ai.js';
+import { aiEnabled, getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { getPortfolioSummary } from './portfolio.service.js';
 import { detectConflicts } from '../resource/resourceConflicts.service.js';
 
@@ -124,7 +124,7 @@ export async function draftAttentionNarrative(userId: string, role: string): Pro
   const tid = getTenantStore()?.tenantId;
   if (tid) {
     const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true } });
-    if (t?.aiNarrativeEnabled !== true) throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+    if (t?.aiNarrativeEnabled !== true) throw aiNotEnabledError();
   }
   const { items } = await getPortfolioAttention(userId, role);
   if (items.length === 0) return { items, narrative: { headline: 'Tidak ada proyek yang butuh perhatian khusus minggu ini.', focus: [], summary: 'Portofolio dalam kondisi sehat.' } };

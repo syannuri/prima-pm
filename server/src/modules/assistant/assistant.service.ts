@@ -1,8 +1,8 @@
 import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { AppError, Forbidden } from '../../lib/errors.js';
+import { AppError } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { aiEnabled, getAiPort, type AiToolDef } from '../../lib/ai.js';
+import { aiEnabled, getAiPort, type AiToolDef, aiNotEnabledError } from '../../lib/ai.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
@@ -264,7 +264,7 @@ async function assertCallerTenantOptedIn(): Promise<void> {
   if (!tid) return;
   const tenant = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true } });
   if (tenant?.aiNarrativeEnabled !== true) {
-    throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+    throw aiNotEnabledError();
   }
 }
 

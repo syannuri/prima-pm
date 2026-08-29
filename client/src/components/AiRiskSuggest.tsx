@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Badge, Button, Modal } from './ui';
 import { useToast } from './Toast';
+import GuestAiNote, { useIsGuest } from './GuestAiNote';
 
 // Advisory AI risk suggestions from the charter + WBS. Shape mirrors the server's RiskSuggestSchema.
 interface RiskSuggestion {
@@ -30,6 +31,7 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
   const [items, setItems] = useState<RiskSuggestion[]>([]);
   const [checked, setChecked] = useState<Set<number>>(new Set());
 
+  const isGuest = useIsGuest();
   const aiQ = useQuery({
     queryKey: ['ai-available', projectId],
     queryFn: () => api.get<{ aiAvailable: boolean }>(`/projects/${projectId}/ai-available`),
@@ -73,7 +75,7 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Gagal menambah risiko'),
   });
 
-  if (!aiQ.data?.aiAvailable) return null;
+  if (!aiQ.data?.aiAvailable) return isGuest ? <GuestAiNote /> : null;
 
   const toggle = (i: number) => setChecked((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
   const chosen = items.filter((_, i) => checked.has(i));

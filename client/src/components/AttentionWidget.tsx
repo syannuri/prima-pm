@@ -5,6 +5,7 @@ import { api, ApiError } from '../api/client';
 import { Button, Card, SectionTitle } from './ui';
 import { useToast } from './Toast';
 import { useLang } from '../context/LanguageContext';
+import GuestAiNote, { useIsGuest } from './GuestAiNote';
 
 // Portfolio "one thing" digest: deterministic ranking of where attention matters most this week,
 // with reason chips + an optional AI "focus this week" narrative. Self-hides when nothing needs
@@ -33,6 +34,7 @@ const healthDot = (h: string) => (h === 'RED' ? 'bg-red-500' : h === 'AMBER' ? '
 export default function AttentionWidget() {
   const { lang } = useLang();
   const id = lang === 'id';
+  const isGuest = useIsGuest();
   const toast = useToast();
   const [narr, setNarr] = useState<Narrative | null>(null);
 
@@ -55,11 +57,13 @@ export default function AttentionWidget() {
         <SectionTitle sub={id ? 'Di mana perhatian paling dibutuhkan minggu ini (heuristik, bukan ML).' : 'Where attention matters most this week (heuristic, not ML).'}>
           {id ? 'Perlu perhatian' : 'Needs attention'}
         </SectionTitle>
-        {data.aiAvailable && (
+        {data.aiAvailable ? (
           <Button variant="secondary" className="!py-1 text-xs shrink-0" disabled={aiFocus.isPending} onClick={() => aiFocus.mutate()}>
             {aiFocus.isPending ? (id ? 'Menyusun…' : 'Drafting…') : (id ? '✨ Fokus AI' : '✨ AI focus')}
           </Button>
-        )}
+        ) : isGuest ? (
+          <GuestAiNote className="shrink-0" />
+        ) : null}
       </div>
 
       {narr && (

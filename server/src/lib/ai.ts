@@ -1,5 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
+import { Forbidden } from './errors.js';
+import { activeTenantIsPersonal } from './tenant/context.js';
+
+// The Forbidden thrown when an AI feature is gated off for the caller's tenant. A guest's personal
+// sandbox has no governance surface and can NEVER opt in, so the generic "not enabled for this
+// workspace" (which implies an admin could switch it on) is misleading there — give guests an
+// honest, sandbox-specific message instead. Corporate tenants keep the actionable original.
+export function aiNotEnabledError() {
+  if (activeTenantIsPersonal()) {
+    return Forbidden('Fitur AI tidak tersedia di ruang kerja tamu (sandbox). Buat atau gabung workspace untuk memakai asisten AI.');
+  }
+  return Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+}
 
 // AI Status Narrative — the first Claude-powered feature. Config is read LIVE from process.env
 // (like lsConfig()/billingEnabled() and multitenancyEnforced()), NOT captured at import, so tests

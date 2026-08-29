@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import type { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { AppError, Forbidden } from '../../lib/errors.js';
+import { AppError } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { aiEnabled, getAiPort } from '../../lib/ai.js';
+import { aiEnabled, getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { getResourceCapacity } from './resource.service.js';
 import { eachBusinessDay, periodKey, type CapacityReport, type Granularity } from './resource.helpers.js';
 
@@ -197,7 +197,7 @@ async function assertAdvisoryOptedIn(): Promise<void> {
   const tid = getTenantStore()?.tenantId;
   if (!tid) return; // personal/guest workspace — no tenant gate
   const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true } });
-  if (t?.aiNarrativeEnabled !== true) throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+  if (t?.aiNarrativeEnabled !== true) throw aiNotEnabledError();
 }
 
 // Whether the advisory AI is usable for the caller (env + tenant opt-in) — drives client show/hide.
