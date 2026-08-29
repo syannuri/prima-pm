@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Badge, Button, Modal } from './ui';
 import { useToast } from './Toast';
+import GuestAiNote, { useIsGuest } from './GuestAiNote';
 
 // Stage A — extract structured updates from free-text notes, then apply the ones the PM keeps via
 // the existing write endpoints (audited, permission-checked). The AI only drafts; nothing is
@@ -23,6 +24,7 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
   const [pickTasks, setPickTasks] = useState<Set<string>>(new Set());
   const [pickIssues, setPickIssues] = useState<Set<number>>(new Set());
 
+  const isGuest = useIsGuest();
   const aiQ = useQuery({
     queryKey: ['ai-available', projectId],
     queryFn: () => api.get<{ aiAvailable: boolean }>(`/projects/${projectId}/ai-available`),
@@ -68,7 +70,7 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
 
   const close = () => { setOpen(false); setText(''); setDraft(null); };
 
-  if (!aiQ.data?.aiAvailable) return null;
+  if (!aiQ.data?.aiAvailable) return isGuest ? <GuestAiNote /> : null;
 
   const toggleTask = (id: string) => setPickTasks((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleIssue = (i: number) => setPickIssues((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; });

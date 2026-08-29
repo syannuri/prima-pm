@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client';
 import { Button, Card, Spinner, Badge, SectionTitle } from './ui';
 import { useToast } from './Toast';
 import { formatNum } from '../lib/format';
+import GuestAiNote, { useIsGuest } from './GuestAiNote';
 
 type Granularity = 'month' | 'week';
 
@@ -227,6 +228,7 @@ const conflictId = (c: Conflict) => `${c.resourceKey}|${c.period}`;
 // can be PROPOSED (Stage C → approval → REASSIGN_MANPOWER). Nothing changes without approval.
 function ResourceConflicts({ granularity }: { granularity: Granularity }) {
   const toast = useToast();
+  const isGuest = useIsGuest();
   const [drafts, setDrafts] = useState<Record<string, ReallocDraft>>({});
 
   const { data } = useQuery({
@@ -251,6 +253,7 @@ function ResourceConflicts({ granularity }: { granularity: Granularity }) {
   return (
     <Card className="border-red-200 dark:border-red-900/40">
       <SectionTitle sub="A resource booked beyond capacity in a period. Reassign work to a lighter-loaded peer — proposals need approval before anything changes.">Over-allocation conflicts</SectionTitle>
+      {!data.aiAvailable && isGuest && <GuestAiNote className="mt-1" />}
       <div className="mt-3 space-y-3">
         {data.conflicts.map((c) => {
           const id = conflictId(c);

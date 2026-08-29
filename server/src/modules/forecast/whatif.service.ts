@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
-import { AppError, Forbidden, NotFound } from '../../lib/errors.js';
+import { AppError, NotFound } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { getAiPort } from '../../lib/ai.js';
+import { getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { getProjectForecast, eacScenarios } from './forecast.service.js';
 import {
   autoSchedule, computeCpm, workingDaysBetween, addWorkingDays,
@@ -199,7 +199,7 @@ async function assertTenantOptedIn(projectId: string): Promise<void> {
   const proj = await prisma.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { tenantId: true, tenant: { select: { aiNarrativeEnabled: true } } } });
   if (!proj) throw NotFound('Project not found');
   const hasTenant = Boolean(getTenantStore()?.tenantId || proj.tenantId);
-  if (hasTenant && proj.tenant?.aiNarrativeEnabled !== true) throw Forbidden('Fitur AI belum diaktifkan untuk workspace ini.');
+  if (hasTenant && proj.tenant?.aiNarrativeEnabled !== true) throw aiNotEnabledError();
 }
 
 // NL question → bounded WhatIfSpec (grounded to real task ids; unknown ids are dropped at simulate).
