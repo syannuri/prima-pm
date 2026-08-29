@@ -122,7 +122,7 @@ async function auditInUserTenant(userId: string, input: Parameters<typeof writeA
 }
 
 interface AuthResult {
-  user: { id: string; name: string; email: string; role: Role; isPlatformAdmin: boolean };
+  user: { id: string; name: string; email: string; role: Role; isPlatformAdmin: boolean; dashboardLayout: string[] | null; dashboardDefaultView: string | null };
   accessToken: string;
   refreshToken: string;
 }
@@ -147,7 +147,10 @@ async function issueTokenPair(user: User, opts: { replacesJti?: string; preferre
   // enforcement off we keep the global User.role so single-tenant behaviour is unchanged.
   const effectiveRole = multitenancyEnforced() && active ? active.role : user.role;
   return {
-    user: { id: user.id, name: user.name, email: user.email, role: effectiveRole, isPlatformAdmin: user.isPlatformAdmin },
+    // Include the dashboard prefs so the layout survives login WITHOUT a full reload (the client sets
+    // `user` straight from this response; /auth/me only runs on a fresh page load). Fixes the saved
+    // dashboard reverting to default right after logout→login.
+    user: { id: user.id, name: user.name, email: user.email, role: effectiveRole, isPlatformAdmin: user.isPlatformAdmin, dashboardLayout: (user.dashboardLayout as string[] | null) ?? null, dashboardDefaultView: user.dashboardDefaultView ?? null },
     accessToken: signAccessToken({ sub: user.id, role: effectiveRole, email: user.email, tv: user.tokenVersion, tid: active?.tenantId }),
     refreshToken,
   };
