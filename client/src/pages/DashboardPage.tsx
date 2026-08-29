@@ -143,7 +143,8 @@ export default function DashboardPage() {
   // in the user's chosen language (auto-detected from the browser, overridable in Settings).
   const now = new Date();
   const greeting = greet(lang, now.getHours());
-  const firstName = user?.name?.split(' ')[0] ?? (lang === 'id' ? 'Anda' : 'there');
+  // Hero addresses the role, not the person's name (by request).
+  const firstName = 'Project Manager';
   const today = now.toLocaleDateString(dateLocale(lang), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const projectCount = data?.projects.length ?? 0;
   const noun = projectCount === 1 ? 'project' : 'projects';
