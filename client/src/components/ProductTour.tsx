@@ -10,11 +10,11 @@ import MockCharts from './mocks/MockCharts';
 // Honours prefers-reduced-motion (no autoplay, manual dots), and pauses when scrolled off-screen.
 type Scene = { Comp: (p: { className?: string }) => JSX.Element; label: string; hint: string };
 const SCENES: Scene[] = [
-  { Comp: MockAssistant, label: 'AI Agent', hint: 'Ask your data in plain language' },
   { Comp: HeroMockup, label: 'Portfolio dashboard', hint: 'Health, cost & schedule at a glance' },
   { Comp: MockGantt, label: 'WBS & Gantt', hint: 'Plan the schedule, track progress' },
   { Comp: MockSCurve, label: 'Earned-Value S-curve', hint: 'PV · EV · AC with SPI & CPI' },
   { Comp: MockCharts, label: 'Portfolio charts', hint: 'Cost & schedule status' },
+  { Comp: MockAssistant, label: 'AI Agent', hint: 'Ask your data in plain language' },
 ];
 const DUR = 3600; // ms per scene
 
