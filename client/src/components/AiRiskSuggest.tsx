@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client';
 import { Badge, Button, Modal } from './ui';
 import { useToast } from './Toast';
 import GuestAiNote, { useIsGuest } from './GuestAiNote';
+import { useLang } from '../context/LanguageContext';
 
 // Advisory AI risk suggestions from the charter + WBS. Shape mirrors the server's RiskSuggestSchema.
 interface RiskSuggestion {
@@ -27,6 +28,8 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
   base: string; projectId: string; existingTitles: string[]; onDone: () => void;
 }) {
   const toast = useToast();
+  const { lang } = useLang();
+  const t = (id: string, en: string) => (lang === 'id' ? id : en);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<RiskSuggestion[]>([]);
   const [checked, setChecked] = useState<Set<number>>(new Set());
@@ -39,7 +42,7 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
   });
 
   const suggest = useMutation({
-    mutationFn: () => api.post<{ risks: RiskSuggestion[] }>(`${base}/ai-suggest`),
+    mutationFn: () => api.post<{ risks: RiskSuggestion[] }>(`${base}/ai-suggest`, { lang }),
     onSuccess: (res) => {
       // Pre-tick suggestions that aren't near-duplicates of an existing risk title.
       const existing = new Set(existingTitles.map((t) => t.trim().toLowerCase()));
@@ -49,7 +52,7 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
       setChecked(next);
       setOpen(true);
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'AI tidak dapat menyusun saran risiko'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('AI tidak dapat menyusun saran risiko', 'AI could not compose risk suggestions')),
   });
 
   const add = useMutation({
@@ -68,11 +71,14 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
       }
     },
     onSuccess: (_d, chosen) => {
-      toast.success(`${chosen.length} risiko ditambahkan sebagai draft — lengkapi EMV via Edit.`);
+      toast.success(t(
+        `${chosen.length} risiko ditambahkan sebagai draft — lengkapi EMV via Edit.`,
+        `${chosen.length} risk${chosen.length === 1 ? '' : 's'} added as draft — complete the EMV via Edit.`,
+      ));
       setOpen(false);
       onDone();
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Gagal menambah risiko'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('Gagal menambah risiko', 'Failed to add risk')),
   });
 
   if (!aiQ.data?.aiAvailable) return isGuest ? <GuestAiNote /> : null;
@@ -83,18 +89,20 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
   return (
     <>
       <Button variant="secondary" className="!py-1 text-xs" disabled={suggest.isPending} onClick={() => suggest.mutate()}>
-        {suggest.isPending ? 'Menganalisa…' : '✨ Sarankan risiko dengan AI'}
+        {suggest.isPending ? t('Menganalisa…', 'Analyzing…') : t('✨ Sarankan risiko dengan AI', '✨ Suggest risks with AI')}
       </Button>
 
       {open && (
-        <Modal onClose={() => setOpen(false)} title="Saran risiko (AI)" size="lg">
+        <Modal onClose={() => setOpen(false)} title={t('Saran risiko (AI)', 'Risk suggestions (AI)')} size="lg">
           <div className="space-y-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Centang risiko yang ingin ditambahkan. Setiap risiko dibuat sebagai draft (status Identified);
-              lengkapi nilai EMV lewat Edit. Hasil AI bersifat masukan — verifikasi sebelum dipakai.
+              {t(
+                'Centang risiko yang ingin ditambahkan. Setiap risiko dibuat sebagai draft (status Identified); lengkapi nilai EMV lewat Edit. Hasil AI bersifat masukan — verifikasi sebelum dipakai.',
+                'Tick the risks you want to add. Each is created as a draft (status Identified); complete the EMV value via Edit. AI output is advisory — verify before use.',
+              )}
             </p>
             {items.length === 0 ? (
-              <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Tidak ada saran risiko.</p>
+              <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">{t('Tidak ada saran risiko.', 'No risk suggestions.')}</p>
             ) : (
               <ul className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
                 {items.map((r, i) => {
@@ -110,7 +118,7 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
                             <Badge color={r.kind === 'OPPORTUNITY' ? 'green' : 'slate'}>{r.kind === 'OPPORTUNITY' ? 'Opportunity' : 'Threat'}</Badge>
                             <Badge color={SEV_COLOR(rs)}>P{r.probabilityScore}×I{r.impactScore} = {rs}</Badge>
                             {r.responseStrategy && <Badge color="indigo">{cap(r.responseStrategy)}</Badge>}
-                            {dup && <Badge color="amber">Mirip yang ada</Badge>}
+                            {dup && <Badge color="amber">{t('Mirip yang ada', 'Similar exists')}</Badge>}
                           </div>
                           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{r.category} · {r.description}</p>
                         </div>
@@ -121,9 +129,9 @@ export default function AiRiskSuggest({ base, projectId, existingTitles, onDone 
               </ul>
             )}
             <div className="flex justify-end gap-2 border-t border-slate-200/70 pt-3 dark:border-slate-800/70">
-              <Button variant="secondary" onClick={() => setOpen(false)}>Batal</Button>
+              <Button variant="secondary" onClick={() => setOpen(false)}>{t('Batal', 'Cancel')}</Button>
               <Button disabled={chosen.length === 0 || add.isPending} onClick={() => add.mutate(chosen)}>
-                {add.isPending ? 'Menambah…' : `Tambah terpilih (${chosen.length})`}
+                {add.isPending ? t('Menambah…', 'Adding…') : t(`Tambah terpilih (${chosen.length})`, `Add selected (${chosen.length})`)}
               </Button>
             </div>
           </div>
