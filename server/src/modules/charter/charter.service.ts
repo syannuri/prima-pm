@@ -92,11 +92,13 @@ export async function upsertCharter(
   return charter;
 }
 
-// Commit = lock the baseline, snapshot the version, advance project status.
+// Commit = confirm the charter and advance the project to CHARTERED (unlocking Cost / Risk /
+// Schedule). The charter STAYS EDITABLE through the planning phase — it is only frozen (locked) when
+// the project is activated (CHARTERED → IN_PROGRESS). See projects.service activation.
 export async function commitCharter(projectId: string, actorId: string) {
   const charter = await prisma.projectCharter.findUnique({ where: { projectId } });
   if (!charter) throw NotFound('Charter has not been created yet');
-  if (charter.locked) throw Conflict('Charter is already committed');
+  if (charter.committedAt) throw Conflict('Charter is already confirmed');
 
   // Defensive completeness check (DB record could have been partially populated).
   const completeness = checkCharterCompleteness(charter as unknown as Record<string, unknown>);
@@ -118,9 +120,10 @@ export async function commitCharter(projectId: string, actorId: string) {
       },
     });
 
+    // NOT locked here — the charter stays editable until activation freezes it.
     const committed = await tx.projectCharter.update({
       where: { projectId },
-      data: { locked: true, committedAt: new Date(), committedBy: actorId },
+      data: { committedAt: new Date(), committedBy: actorId },
     });
 
     // Unlock downstream modules by moving the project past DRAFT.
