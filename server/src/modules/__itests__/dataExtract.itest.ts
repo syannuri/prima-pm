@@ -80,7 +80,7 @@ afterAll(async () => {
 });
 
 const url = () => api(`/projects/${projectId}/data-extract/ai-draft`);
-const post = (token: string, body: unknown = { text: 'Design sudah 60%. API vendor mati.' }) => request(app).post(url()).set(bearer(token)).send(body);
+const post = (token: string, body: object = { text: 'Design sudah 60%. API vendor mati.' }) => request(app).post(url()).set(bearer(token)).send(body);
 
 describe('AI data extract — data-extract/ai-draft', () => {
   it('503 when the global gate is off (ANTHROPIC_API_KEY unset)', async () => {

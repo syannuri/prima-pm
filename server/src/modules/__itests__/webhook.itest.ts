@@ -66,7 +66,7 @@ describe('Outbound webhooks (T3.3)', () => {
     await webhooks.deliverDueDeliveries();
 
     // Other tests' subscriptions may also listen for this event; assert on OUR delivery's call.
-    const call = fetchMock.mock.calls.find((c) => c[0] === 'https://example.test/deliver') as [string, RequestInit & { headers: Record<string, string> }] | undefined;
+    const call = fetchMock.mock.calls.find((c) => (c as unknown[])[0] === 'https://example.test/deliver') as [string, RequestInit & { headers: Record<string, string> }] | undefined;
     expect(call).toBeTruthy();
     const [url, opts] = call!;
     expect(url).toBe('https://example.test/deliver');
@@ -102,7 +102,7 @@ describe('Outbound webhooks (T3.3)', () => {
     await webhooks.enqueueWebhookEvent('project.created', { name: 'Acme Revamp', code: 'PRJ-9' });
     await webhooks.deliverDueDeliveries();
 
-    const call = fetchMock.mock.calls.find((c) => c[0] === 'https://hooks.slack.test/xxx') as [string, RequestInit & { headers: Record<string, string> }] | undefined;
+    const call = fetchMock.mock.calls.find((c) => (c as unknown[])[0] === 'https://hooks.slack.test/xxx') as [string, RequestInit & { headers: Record<string, string> }] | undefined;
     expect(call).toBeTruthy();
     const [, opts] = call!;
     expect(JSON.parse(opts.body as string).text).toContain('Acme Revamp');

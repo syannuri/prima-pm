@@ -48,7 +48,7 @@ describe('Message file attachments', () => {
     const thread = await getConversationMessages(bob, conversationId);
     expect(thread.messages.find((m) => m.id === message.id)!.attachment?.name).toBe('spec.pdf');
 
-    const conv = (await listConversations(bob)).find((c) => c.other.id === alice)!;
+    const conv = (await listConversations(bob)).find((c) => c.other?.id === alice)!;
     expect(conv.lastMessage?.body).toBe('📎 spec.pdf');
   });
 
