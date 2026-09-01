@@ -6,7 +6,8 @@ import { AppError, BadRequest, NotFound } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
 import { getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { assertBaselineUnlocked } from '../projects/baseline.service.js';
-import { generateTaskCode } from './schedule.helpers.js';
+import { generateTaskCode, hasDependencyCycle } from './schedule.helpers.js';
+import { applyAutoSchedule } from './schedule.service.js';
 
 // ---------------------------------------------------------------------------
 // AI-generated timeline (schedule draft) from the Project Charter.
@@ -24,6 +25,8 @@ const MAX_TOTAL_TASKS = 40;
 const MAX_DURATION_DAYS = 365;
 
 // A single work package under a phase. durationDays 0 (or isMilestone) = milestone.
+// `ref` is an AI-assigned token other tasks reference via `deps` (finish-to-start predecessors);
+// links are validated (refs must exist) and made acyclic on apply.
 export const DraftTaskSchema = z.object({
   name: z.string().min(2).max(200),
   durationDays: z.number().int().min(0).max(MAX_DURATION_DAYS),
@@ -31,6 +34,8 @@ export const DraftTaskSchema = z.object({
   deliverable: z.string().max(1000).nullable().optional(),
   acceptanceCriteria: z.string().max(2000).nullable().optional(),
   weight: z.number().min(0).max(1000).nullable().optional(),
+  ref: z.string().min(1).max(40).optional(),
+  deps: z.array(z.string().min(1).max(40)).max(20).optional(),
 });
 
 // A summary phase (WBS parent) grouping its work packages.
@@ -52,6 +57,9 @@ export const ScheduleDraftSchema = ScheduleDraftBase.refine(withinTotalCap, tota
 // server so PM edits can't smuggle out-of-bounds values past the generate-time schema.
 export const ApplyScheduleDraftSchema = ScheduleDraftBase.extend({
   startDate: z.coerce.date().optional(),
+  // When true (default) create FS dependency links + auto-schedule (weekend-aware) so editing a
+  // duration cascades downstream. When false, tasks keep the plain sequential calendar dates.
+  link: z.boolean().optional(),
 }).refine(withinTotalCap, totalCapIssue);
 
 export type DraftTask = z.infer<typeof DraftTaskSchema>;
@@ -80,8 +88,10 @@ const SCHEDULE_DRAFT_JSON_SCHEMA = {
                 deliverable: { type: 'string' },
                 acceptanceCriteria: { type: 'string' },
                 weight: { type: 'number' },
+                ref: { type: 'string' },
+                deps: { type: 'array', items: { type: 'string' } },
               },
-              required: ['name', 'durationDays'],
+              required: ['name', 'durationDays', 'ref'],
               additionalProperties: false,
             },
           },
@@ -109,8 +119,9 @@ const SYSTEM_PROMPT_ID = [
   '- USAHAKAN total durasi (jumlah durasi seluruh tugas yang berurutan) muat dalam scheduleWorkingDaysBudget. Jika lingkup terlalu besar, tetap realistis — jangan memaksa.',
   '- Petakan deliverable dari charter ke tugas/fase yang menghasilkannya (isi field deliverable).',
   '- Beri weight relatif per tugas/fase mencerminkan besarnya usaha (opsional; jumlah tidak harus 100). JANGAN sertakan angka biaya/uang apa pun.',
+  '- KETERGANTUNGAN (dependency): beri tiap task `ref` unik & pendek (mis. "t1","t2"). Isi `deps` = daftar ref task yang harus SELESAI sebelum task ini mulai (finish-to-start). Boleh lintas-fase, boleh paralel (dua task ber-deps sama) dan merge (satu task ber-deps banyak). WAJIB acyclic (jangan melingkar). Kalau ragu, kosongkan `deps`.',
   '',
-  'Untuk tiap fase hasilkan: name, deliverable (opsional), weight (opsional), dan tasks[]. Untuk tiap task: name, durationDays, isMilestone, deliverable (opsional), acceptanceCriteria (opsional), weight (opsional).',
+  'Untuk tiap fase hasilkan: name, deliverable (opsional), weight (opsional), dan tasks[]. Untuk tiap task: name, durationDays, isMilestone, deliverable (opsional), acceptanceCriteria (opsional), weight (opsional), ref, deps (opsional).',
 ].join('\n');
 
 const SYSTEM_PROMPT_EN = [
@@ -125,8 +136,9 @@ const SYSTEM_PROMPT_EN = [
   '- TRY to keep the total duration (sum of the sequential task durations) within scheduleWorkingDaysBudget. If the scope is too large, stay realistic — do not force it.',
   '- Map the charter deliverables to the tasks/phases that produce them (fill the deliverable field).',
   '- Give a relative weight per task/phase reflecting effort (optional; the sum need not be 100). Do NOT include any cost/money figures.',
+  '- DEPENDENCIES: give each task a short unique `ref` (e.g. "t1","t2"). Fill `deps` = the refs of the tasks that must FINISH before this task starts (finish-to-start). Cross-phase is allowed, as are parallel branches (two tasks sharing a predecessor) and merges (one task with several deps). It MUST stay acyclic (no loops). If unsure, leave `deps` empty.',
   '',
-  'For each phase produce: name, deliverable (optional), weight (optional), and tasks[]. For each task: name, durationDays, isMilestone, deliverable (optional), acceptanceCriteria (optional), weight (optional).',
+  'For each phase produce: name, deliverable (optional), weight (optional), and tasks[]. For each task: name, durationDays, isMilestone, deliverable (optional), acceptanceCriteria (optional), weight (optional), ref, deps (optional).',
 ].join('\n');
 
 export type SuggestLang = 'id' | 'en';
@@ -257,7 +269,7 @@ export function planScheduleRows(
   startDate: Date,
   startCount: number,
   startSort: number,
-): { rows: PlannedRow[]; projectedEnd: Date } {
+): { rows: PlannedRow[]; projectedEnd: Date; refToId: Map<string, string>; orderedLeafIds: string[] } {
   const base = new Date(startDate);
   base.setUTCHours(0, 0, 0, 0);
   let cursor = +base; // epoch ms of the next task's start
@@ -265,6 +277,8 @@ export function planScheduleRows(
   let sort = startSort;
   const parents: PlannedRow[] = [];
   const children: PlannedRow[] = [];
+  const refToId = new Map<string, string>(); // AI ref → created work-package id (first ref wins)
+  const orderedLeafIds: string[] = []; // work packages in creation order (sequential-chain fallback)
 
   for (const phase of draft.phases) {
     const phaseId = randomUUID();
@@ -277,8 +291,11 @@ export function planScheduleRows(
       const start = cursor;
       const end = cursor + task.durationDays * MS_PER_DAY;
       cursor = end; // next work package starts when this one finishes
+      const taskId = randomUUID();
+      if (task.ref && !refToId.has(task.ref)) refToId.set(task.ref, taskId);
+      orderedLeafIds.push(taskId);
       children.push({
-        id: randomUUID(),
+        id: taskId,
         parentTaskId: phaseId,
         projectId,
         wbsCode: generateTaskCode(++seq),
@@ -310,7 +327,46 @@ export function planScheduleRows(
     });
   }
   // Parents must be inserted before children (self-referencing FK).
-  return { rows: [...parents, ...children], projectedEnd: new Date(cursor) };
+  return { rows: [...parents, ...children], projectedEnd: new Date(cursor), refToId, orderedLeafIds };
+}
+
+// PURE: derive finish-to-start dependency edges from the draft. Prefers the AI's `deps` graph
+// (validated: refs must resolve, no self-loops, deduped) and drops any edge that would introduce a
+// cycle. Falls back to a sequential chain (each work package after the previous) ONLY when the AI
+// supplied no usable links at all. Unit-tested without a DB.
+export function planDependencies(
+  draft: ScheduleDraft,
+  refToId: Map<string, string>,
+  orderedLeafIds: string[],
+): { predecessorId: string; successorId: string }[] {
+  const aiEdges: { predecessorId: string; successorId: string }[] = [];
+  const seen = new Set<string>();
+  for (const phase of draft.phases) {
+    for (const task of phase.tasks) {
+      const succ = task.ref ? refToId.get(task.ref) : undefined;
+      if (!succ || !task.deps?.length) continue;
+      for (const depRef of task.deps) {
+        const pred = refToId.get(depRef);
+        if (!pred || pred === succ) continue; // dangling ref or self-loop
+        const key = `${pred}->${succ}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        aiEdges.push({ predecessorId: pred, successorId: succ });
+      }
+    }
+  }
+
+  const candidate = aiEdges.length
+    ? aiEdges
+    : orderedLeafIds.slice(1).map((id, i) => ({ predecessorId: orderedLeafIds[i], successorId: id }));
+
+  // Add edges one at a time, skipping any that would close a cycle (defense-in-depth).
+  const accepted: { predecessorId: string; successorId: string }[] = [];
+  for (const e of candidate) {
+    const edges = [...accepted, e].map((x) => ({ from: x.predecessorId, to: x.successorId }));
+    if (!hasDependencyCycle(edges)) accepted.push(e);
+  }
+  return accepted;
 }
 
 // Materialise a (possibly PM-edited) draft into the WBS. Re-checks the gates + baseline lock, then
@@ -321,7 +377,8 @@ export async function applyScheduleDraft(
   draft: ScheduleDraft,
   startDate: Date | undefined,
   actorId: string,
-): Promise<{ created: number; phases: number; projectedEnd: Date }> {
+  opts: { link?: boolean } = {},
+): Promise<{ created: number; phases: number; projectedEnd: Date; links: number }> {
   await loadCharterContext(projectId); // gate + opt-in + chartered
   await assertBaselineUnlocked(projectId);
 
@@ -344,13 +401,21 @@ export async function applyScheduleDraft(
     }
   }
 
-  const { rows, projectedEnd } = planScheduleRows(projectId, draft, base, startCount, startSort);
+  const { rows, projectedEnd, refToId, orderedLeafIds } = planScheduleRows(projectId, draft, base, startCount, startSort);
   const parents = rows.filter((r) => r.parentTaskId === null);
   const children = rows.filter((r) => r.parentTaskId !== null);
+
+  // Hybrid dependencies: the AI's validated FS graph, else a sequential chain. Only for the tasks
+  // this call creates (existing tasks are never re-linked).
+  const link = opts.link !== false;
+  const deps = link ? planDependencies(draft, refToId, orderedLeafIds) : [];
 
   await prisma.$transaction([
     prisma.task.createMany({ data: parents }),
     prisma.task.createMany({ data: children }),
+    ...(deps.length
+      ? [prisma.taskDependency.createMany({ data: deps.map((d) => ({ predecessorId: d.predecessorId, successorId: d.successorId, type: 'FS' as const, lagDays: 0 })) })]
+      : []),
   ]);
   await writeAudit({
     projectId,
@@ -358,7 +423,41 @@ export async function applyScheduleDraft(
     entity: 'Task',
     entityId: projectId,
     action: 'CREATE',
-    after: { aiGeneratedSchedule: true, phases: parents.length, taskCount: rows.length },
+    after: { aiGeneratedSchedule: true, phases: parents.length, taskCount: rows.length, links: deps.length },
   });
-  return { created: rows.length, phases: parents.length, projectedEnd };
+
+  // Weekend-aware auto-schedule so the FS network drives the dates, then roll the phase spans up
+  // from their (possibly shifted) work packages.
+  if (deps.length) {
+    await applyAutoSchedule(projectId, { actorId, mode: 'asap' });
+    await recomputeParentSpans(projectId);
+  }
+  return { created: rows.length, phases: parents.length, projectedEnd, links: deps.length };
+}
+
+// After leaves move (auto-schedule), a summary phase should span its work packages. Updates only
+// the parents whose min-child-start / max-child-end drifted from what's stored.
+async function recomputeParentSpans(projectId: string): Promise<void> {
+  const tasks = await prisma.task.findMany({
+    where: { projectId },
+    select: { id: true, parentTaskId: true, planStart: true, planEnd: true },
+  });
+  const childrenByParent = new Map<string, { planStart: Date; planEnd: Date }[]>();
+  for (const t of tasks) {
+    if (!t.parentTaskId) continue;
+    const arr = childrenByParent.get(t.parentTaskId) ?? [];
+    arr.push({ planStart: t.planStart, planEnd: t.planEnd });
+    childrenByParent.set(t.parentTaskId, arr);
+  }
+  const updates = [];
+  for (const p of tasks) {
+    const kids = childrenByParent.get(p.id);
+    if (!kids?.length) continue;
+    const start = new Date(Math.min(...kids.map((k) => +k.planStart)));
+    const end = new Date(Math.max(...kids.map((k) => +k.planEnd)));
+    if (+start !== +p.planStart || +end !== +p.planEnd) {
+      updates.push(prisma.task.update({ where: { id: p.id }, data: { planStart: start, planEnd: end } }));
+    }
+  }
+  if (updates.length) await prisma.$transaction(updates);
 }

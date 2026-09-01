@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   planScheduleRows,
+  planDependencies,
   buildScheduleSuggestPrompt,
   ScheduleDraftSchema,
   ApplyScheduleDraftSchema,
@@ -72,6 +73,56 @@ describe('planScheduleRows — deterministic materialiser', () => {
     const appended = planScheduleRows('proj-1', draft, start, 6, 5); // 6 existing tasks, max sort 5
     expect(appended.rows.find((r) => r.name === 'Planning')!.wbsCode).toBe('T-007');
     expect(appended.rows.every((r) => r.sortOrder > 5)).toBe(true);
+  });
+});
+
+describe('planDependencies — hybrid FS graph', () => {
+  const start = new Date('2026-01-05T00:00:00.000Z');
+
+  it('honours the AI graph (parallel branches + merge), mapped to created ids', () => {
+    const linked: ScheduleDraft = {
+      phases: [
+        { name: 'P1', tasks: [
+          { name: 'A', durationDays: 5, ref: 'a' },
+          { name: 'B', durationDays: 5, ref: 'b', deps: ['a'] },
+        ] },
+        { name: 'P2', tasks: [
+          { name: 'C', durationDays: 3, ref: 'c', deps: ['a'] }, // parallel with B
+          { name: 'D', durationDays: 2, ref: 'd', deps: ['b', 'c'] }, // merge
+        ] },
+      ],
+    };
+    const { refToId, orderedLeafIds } = planScheduleRows('proj-1', linked, start, 0, -1);
+    const edges = planDependencies(linked, refToId, orderedLeafIds);
+    const has = (p: string, s: string) => edges.some((e) => e.predecessorId === refToId.get(p) && e.successorId === refToId.get(s));
+    expect(edges).toHaveLength(4);
+    expect(has('a', 'b')).toBe(true);
+    expect(has('a', 'c')).toBe(true);
+    expect(has('b', 'd')).toBe(true);
+    expect(has('c', 'd')).toBe(true);
+  });
+
+  it('falls back to a sequential chain when the AI supplies no links', () => {
+    const { refToId, orderedLeafIds } = planScheduleRows('proj-1', draft, start, 0, -1); // draft has no refs/deps
+    const edges = planDependencies(draft, refToId, orderedLeafIds);
+    expect(edges).toHaveLength(orderedLeafIds.length - 1); // 4 leaves → 3 links
+    edges.forEach((e, i) => {
+      expect(e.predecessorId).toBe(orderedLeafIds[i]);
+      expect(e.successorId).toBe(orderedLeafIds[i + 1]);
+    });
+  });
+
+  it('drops edges that would create a cycle, and dangling/self refs', () => {
+    const cyclic: ScheduleDraft = {
+      phases: [{ name: 'P', tasks: [
+        { name: 'X', durationDays: 1, ref: 'x', deps: ['y', 'ghost', 'x'] }, // ghost dangling, x self
+        { name: 'Y', durationDays: 1, ref: 'y', deps: ['x'] },
+      ] }],
+    };
+    const { refToId, orderedLeafIds } = planScheduleRows('proj-1', cyclic, start, 0, -1);
+    const edges = planDependencies(cyclic, refToId, orderedLeafIds);
+    expect(edges).toHaveLength(1); // one of y→x / x→y kept, the cycle-closing one dropped
+    expect(edges.every((e) => e.predecessorId !== e.successorId)).toBe(true);
   });
 });
 

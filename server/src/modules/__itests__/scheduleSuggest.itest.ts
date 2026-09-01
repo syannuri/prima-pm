@@ -128,11 +128,12 @@ describe('AI timeline — schedule/ai-generate + apply-ai-draft', () => {
     expect(res.body.error.code).toBe('AI_UNAVAILABLE');
   });
 
-  it('apply seeds the WBS with phases + work packages (nested via parentTaskId)', async () => {
+  it('apply seeds the WBS + a sequential FS chain (link on by default)', async () => {
     const res = await request(app).post(applyUrl()).set(bearer(ownerToken)).send(DRAFT);
     expect(res.status).toBe(201);
     expect(res.body.created).toBe(6); // 2 phases + 4 tasks
     expect(res.body.phases).toBe(2);
+    expect(res.body.links).toBe(3); // 4 work packages chained → 3 FS links (no AI refs → fallback)
 
     const tasks = await runWithTenant(aico, () => prisma.task.findMany({ where: { projectId }, select: { id: true, name: true, parentTaskId: true, isMilestone: true } }));
     expect(tasks).toHaveLength(6);
@@ -141,6 +142,8 @@ describe('AI timeline — schedule/ai-generate + apply-ai-draft', () => {
     expect(planning.parentTaskId).toBeNull();
     expect(requirements.parentTaskId).toBe(planning.id); // child points at its phase
     expect(tasks.find((t) => t.name === 'Kick-off')!.isMilestone).toBe(true);
+    const depCount = await runWithTenant(aico, () => prisma.taskDependency.count({ where: { predecessor: { projectId } } }));
+    expect(depCount).toBe(3);
   });
 
   it('apply again APPENDS onto the existing schedule (no wipe)', async () => {
@@ -148,6 +151,34 @@ describe('AI timeline — schedule/ai-generate + apply-ai-draft', () => {
     expect(res.status).toBe(201);
     const count = await runWithTenant(aico, () => prisma.task.count({ where: { projectId } }));
     expect(count).toBe(12); // appended, not replaced
+    const depCount = await runWithTenant(aico, () => prisma.taskDependency.count({ where: { predecessor: { projectId } } }));
+    expect(depCount).toBe(6); // +3 for the appended block; existing tasks are never re-linked
+  });
+
+  it('link=false appends without creating any dependencies', async () => {
+    const res = await request(app).post(applyUrl()).set(bearer(ownerToken)).send({ ...DRAFT, link: false });
+    expect(res.status).toBe(201);
+    expect(res.body.links).toBe(0);
+    const [count, depCount] = await runWithTenant(aico, () => Promise.all([
+      prisma.task.count({ where: { projectId } }),
+      prisma.taskDependency.count({ where: { predecessor: { projectId } } }),
+    ]));
+    expect(count).toBe(18); // +6 rows
+    expect(depCount).toBe(6); // unchanged
+  });
+
+  it('honours an AI-provided FS graph (parallel + merge)', async () => {
+    const linked = { phases: [
+      { name: 'Build phase', tasks: [
+        { name: 'WP-A', durationDays: 4, ref: 'a' },
+        { name: 'WP-B', durationDays: 4, ref: 'b', deps: ['a'] },
+        { name: 'WP-C', durationDays: 3, ref: 'c', deps: ['a'] }, // parallel with B
+        { name: 'WP-D', durationDays: 2, ref: 'd', deps: ['b', 'c'] }, // merge
+      ] },
+    ] };
+    const res = await request(app).post(applyUrl()).set(bearer(ownerToken)).send(linked);
+    expect(res.status).toBe(201);
+    expect(res.body.links).toBe(4); // a→b, a→c, b→d, c→d
   });
 
   it('403 when a non-writer (VIEWER) calls apply', async () => {
