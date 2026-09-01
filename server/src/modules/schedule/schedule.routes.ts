@@ -141,6 +141,17 @@ router.post('/clear', ...canWrite, asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
+// Undo / redo the last bulk-cleanup op(s), and the button state for the toolbar.
+router.get('/undo-state', canRead, asyncHandler(async (req, res) => {
+  res.json(await svc.getUndoState(req.params.projectId));
+}));
+router.post('/undo', ...canWrite, asyncHandler(async (req, res) => {
+  res.json(await svc.undoSchedule(req.params.projectId, req.user!.id));
+}));
+router.post('/redo', ...canWrite, asyncHandler(async (req, res) => {
+  res.json(await svc.redoSchedule(req.params.projectId, req.user!.id));
+}));
+
 // Dependencies (successor task gains a predecessor).
 router.post('/tasks/:taskId/dependencies', ...canWrite, validateBody(dependencySchema), asyncHandler(async (req, res) => {
   const dep = await svc.addDependency(req.params.projectId, req.params.taskId, req.body, req.user!.id);

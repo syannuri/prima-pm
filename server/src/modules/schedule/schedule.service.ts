@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
@@ -523,22 +524,162 @@ export async function deleteTask(projectId: string, taskId: string, actorId: str
 }
 
 // Bulk delete: every selected task plus its descendants, in one transaction. Ids not in the project
-// are ignored (idempotent). Used by "delete selected" in the WBS multi-select.
+// are ignored (idempotent). Captures an undo entry. Used by "delete selected" in the WBS multi-select.
 export async function bulkDeleteTasks(projectId: string, ids: string[], actorId: string) {
   const all = await prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true } });
   const present = new Set(all.map((t) => t.id));
   const roots = ids.filter((id) => present.has(id));
-  if (roots.length === 0) return { deleted: 0 };
+  if (roots.length === 0) return { deleted: 0, undo: await getUndoState(projectId) };
   await assertBaselineUnlocked(projectId);
-  return removeTasks(projectId, collectSubtrees(all, roots), actorId, projectId);
+  const expanded = collectSubtrees(all, roots);
+  return deleteWithUndo(projectId, expanded, 'BULK_DELETE', actorId);
 }
 
 // Clear the whole schedule (delete every task in the project). Strong-confirmed on the client.
 export async function clearSchedule(projectId: string, actorId: string) {
   const all = await prisma.task.findMany({ where: { projectId }, select: { id: true } });
-  if (all.length === 0) return { deleted: 0 };
+  if (all.length === 0) return { deleted: 0, undo: await getUndoState(projectId) };
   await assertBaselineUnlocked(projectId);
-  return removeTasks(projectId, all.map((t) => t.id), actorId, projectId);
+  return deleteWithUndo(projectId, all.map((t) => t.id), 'CLEAR', actorId);
+}
+
+// =====================================================================
+// Undo / Redo for the bulk-cleanup ops. A bounded, per-project stack: each entry snapshots exactly
+// what the op removed (so Undo can recreate it) + the expanded id set (so Redo can re-delete it),
+// bracketed by schedule fingerprints so the stack self-invalidates when anything else edits the
+// schedule. See the ScheduleUndo model.
+// =====================================================================
+
+const UNDO_STACK_CAP = 10;
+
+// Recreatable task fields (no tenantId / createdAt / updatedAt — those are re-derived on create).
+const TASK_SNAPSHOT_SELECT = {
+  id: true, parentTaskId: true, wbsCode: true, name: true, description: true, deliverable: true,
+  acceptanceCriteria: true, planStart: true, planEnd: true, baselineStart: true, baselineFinish: true,
+  actualStart: true, actualFinish: true, picUserId: true, picResourceId: true, progressPct: true,
+  weight: true, baselineWeight: true, isMilestone: true, sortOrder: true,
+} as const;
+
+interface RemovedSnapshot {
+  tasks: Array<Record<string, unknown>>;
+  deps: Array<{ predecessorId: string; successorId: string; type: string; lagDays: number }>;
+  owners: Array<{ taskId: string; resourceId: string }>;
+  steps: Array<{ id: string; taskId: string; name: string; weight: number; done: boolean; sortOrder: number }>;
+  reqLinks: Array<{ id: string; requirementId: string; taskId: string }>;
+  costLinks: Array<{ id: string; taskId: string }>;
+}
+
+// Fingerprint the schedule (tasks + dependencies) so the undo stack self-invalidates on any change.
+async function scheduleSignature(projectId: string): Promise<string> {
+  const [tasks, deps] = await Promise.all([
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, wbsCode: true, name: true, planStart: true, planEnd: true, progressPct: true, weight: true, isMilestone: true, sortOrder: true }, orderBy: { id: 'asc' } }),
+    prisma.taskDependency.findMany({ where: { predecessor: { projectId } }, select: { predecessorId: true, successorId: true, type: true, lagDays: true }, orderBy: [{ predecessorId: 'asc' }, { successorId: 'asc' }] }),
+  ]);
+  return createHash('sha1').update(JSON.stringify({ tasks, deps })).digest('hex');
+}
+
+// Snapshot everything that removing `ids` (already the expanded subtree set) destroys.
+async function captureRemoved(projectId: string, ids: string[]): Promise<RemovedSnapshot> {
+  const [tasks, deps, owners, steps, reqLinks, costLinks] = await Promise.all([
+    prisma.task.findMany({ where: { id: { in: ids } }, select: TASK_SNAPSHOT_SELECT }),
+    prisma.taskDependency.findMany({ where: { OR: [{ predecessorId: { in: ids } }, { successorId: { in: ids } }] }, select: { predecessorId: true, successorId: true, type: true, lagDays: true } }),
+    prisma.taskOwner.findMany({ where: { taskId: { in: ids } }, select: { taskId: true, resourceId: true } }),
+    prisma.taskStep.findMany({ where: { taskId: { in: ids } }, select: { id: true, taskId: true, name: true, weight: true, done: true, sortOrder: true } }),
+    prisma.requirementTaskLink.findMany({ where: { taskId: { in: ids } }, select: { id: true, requirementId: true, taskId: true } }),
+    prisma.costItemDirect.findMany({ where: { taskId: { in: ids } }, select: { id: true, taskId: true } }),
+  ]);
+  return {
+    tasks: tasks as Array<Record<string, unknown>>,
+    deps: deps.map((d) => ({ predecessorId: d.predecessorId, successorId: d.successorId, type: d.type as string, lagDays: d.lagDays })),
+    owners, steps,
+    reqLinks,
+    costLinks: costLinks.map((c) => ({ id: c.id, taskId: c.taskId! })),
+  };
+}
+
+const UNDO_DATE_FIELDS = ['planStart', 'planEnd', 'baselineStart', 'baselineFinish', 'actualStart', 'actualFinish'];
+
+// Recreate a captured snapshot (Undo). Tasks are inserted parents-first for the self-referencing FK;
+// dependencies / owners / steps / requirement links are re-created and cost lines re-linked.
+async function restoreRemoved(projectId: string, removed: RemovedSnapshot): Promise<void> {
+  const byId = new Map(removed.tasks.map((t) => [t.id as string, t]));
+  const depthOf = (t: Record<string, unknown>): number => {
+    let d = 0; let p = t.parentTaskId as string | null; const seen = new Set<string>();
+    while (p && byId.has(p) && !seen.has(p)) { seen.add(p); d++; p = byId.get(p)!.parentTaskId as string | null; }
+    return d;
+  };
+  const taskData = [...removed.tasks]
+    .sort((a, b) => depthOf(a) - depthOf(b))
+    .map((t) => { const o: Record<string, unknown> = { ...t, projectId }; for (const f of UNDO_DATE_FIELDS) if (o[f] != null) o[f] = new Date(o[f] as string); return o; });
+
+  await prisma.$transaction([
+    prisma.task.createMany({ data: taskData as never }),
+    ...(removed.deps.length ? [prisma.taskDependency.createMany({ data: removed.deps as never })] : []),
+    ...(removed.owners.length ? [prisma.taskOwner.createMany({ data: removed.owners })] : []),
+    ...(removed.steps.length ? [prisma.taskStep.createMany({ data: removed.steps })] : []),
+    ...(removed.reqLinks.length ? [prisma.requirementTaskLink.createMany({ data: removed.reqLinks })] : []),
+    ...removed.costLinks.map((cl) => prisma.costItemDirect.update({ where: { id: cl.id }, data: { taskId: cl.taskId } })),
+  ]);
+}
+
+// Delete `ids` and record an undo entry (snapshot before + fingerprints + expanded ids for redo).
+async function deleteWithUndo(projectId: string, ids: string[], kind: 'BULK_DELETE' | 'CLEAR', actorId: string) {
+  const sigBefore = await scheduleSignature(projectId);
+  const removed = await captureRemoved(projectId, ids);
+  const res = await removeTasks(projectId, ids, actorId, projectId);
+  const sigAfter = await scheduleSignature(projectId);
+  const label = kind === 'CLEAR' ? 'Clear timeline' : `Delete ${res.deleted} task${res.deleted === 1 ? '' : 's'}`;
+
+  const rows = await prisma.scheduleUndo.findMany({ where: { projectId }, select: { id: true, seq: true, undone: true } });
+  const redoTail = rows.filter((r) => r.undone).map((r) => r.id); // a new op discards the redo tail
+  const maxSeq = rows.reduce((m, r) => Math.max(m, r.seq), 0);
+  await prisma.$transaction([
+    ...(redoTail.length ? [prisma.scheduleUndo.deleteMany({ where: { id: { in: redoTail } } })] : []),
+    prisma.scheduleUndo.create({ data: { projectId, seq: maxSeq + 1, kind, label, ids, removedJson: removed as never, sigBefore, sigAfter, createdBy: actorId } }),
+  ]);
+  const overflow = await prisma.scheduleUndo.findMany({ where: { projectId }, orderBy: { seq: 'desc' }, skip: UNDO_STACK_CAP, select: { id: true } });
+  if (overflow.length) await prisma.scheduleUndo.deleteMany({ where: { id: { in: overflow.map((o) => o.id) } } });
+
+  return { ...res, undo: await getUndoState(projectId) };
+}
+
+// Button state for the client: is there a live (non-stale) undo / redo, and its label.
+export async function getUndoState(projectId: string) {
+  const [undoRow, redoRow, sig] = await Promise.all([
+    prisma.scheduleUndo.findFirst({ where: { projectId, undone: false }, orderBy: { seq: 'desc' }, select: { label: true, sigAfter: true } }),
+    prisma.scheduleUndo.findFirst({ where: { projectId, undone: true }, orderBy: { seq: 'asc' }, select: { label: true, sigBefore: true } }),
+    scheduleSignature(projectId),
+  ]);
+  const canUndo = !!undoRow && undoRow.sigAfter === sig;
+  const canRedo = !!redoRow && redoRow.sigBefore === sig;
+  return { canUndo, canRedo, undoLabel: canUndo ? undoRow!.label : null, redoLabel: canRedo ? redoRow!.label : null };
+}
+
+export async function undoSchedule(projectId: string, actorId: string) {
+  await assertBaselineUnlocked(projectId);
+  const row = await prisma.scheduleUndo.findFirst({ where: { projectId, undone: false }, orderBy: { seq: 'desc' } });
+  if (!row) throw BadRequest('Nothing to undo');
+  if ((await scheduleSignature(projectId)) !== row.sigAfter) {
+    await prisma.scheduleUndo.deleteMany({ where: { projectId } });
+    throw Conflict('The schedule changed since — undo history was cleared');
+  }
+  await restoreRemoved(projectId, row.removedJson as unknown as RemovedSnapshot);
+  await prisma.scheduleUndo.update({ where: { id: row.id }, data: { undone: true } });
+  await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: projectId, action: 'UPDATE', after: { undo: row.label } });
+  return { restored: (row.removedJson as unknown as RemovedSnapshot).tasks.length, undo: await getUndoState(projectId) };
+}
+
+export async function redoSchedule(projectId: string, actorId: string) {
+  await assertBaselineUnlocked(projectId);
+  const row = await prisma.scheduleUndo.findFirst({ where: { projectId, undone: true }, orderBy: { seq: 'asc' } });
+  if (!row) throw BadRequest('Nothing to redo');
+  if ((await scheduleSignature(projectId)) !== row.sigBefore) {
+    await prisma.scheduleUndo.deleteMany({ where: { projectId } });
+    throw Conflict('The schedule changed since — undo history was cleared');
+  }
+  const res = await removeTasks(projectId, row.ids, actorId, projectId);
+  await prisma.scheduleUndo.update({ where: { id: row.id }, data: { undone: false } });
+  return { ...res, undo: await getUndoState(projectId) };
 }
 
 // --- Dependencies ---

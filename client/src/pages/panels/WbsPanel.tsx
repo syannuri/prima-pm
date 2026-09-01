@@ -600,6 +600,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     qc.invalidateQueries({ queryKey: ['evm', base] });
     // Baseline capture + progress edits change the guided next-step cues.
     qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
+    // Any schedule change may make the bulk-cleanup undo/redo stack go stale.
+    qc.invalidateQueries({ queryKey: ['undo-state', projectId] });
   };
 
   const rows = useMemo(() => (ganttQ.data ? flatten(ganttQ.data.tree, collapsed) : []), [ganttQ.data, collapsed]);
@@ -948,6 +950,25 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     onSuccess: (res) => { invalidate(); toast.success(`Timeline cleared — ${res.deleted} task${res.deleted === 1 ? '' : 's'} removed`); exitSelect(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to clear the timeline'),
   });
+  // Undo/redo for the bulk-cleanup ops (delete selected / clear). Self-invalidates when the schedule
+  // is edited another way (the server fingerprints it), so the buttons just reflect undo-state.
+  interface UndoState { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
+  const undoStateQ = useQuery({
+    queryKey: ['undo-state', projectId],
+    queryFn: () => api.get<UndoState>(`${base}/undo-state`),
+    enabled: canEdit,
+  });
+  const undoState = undoStateQ.data;
+  const undo = useMutation({
+    mutationFn: () => api.post<{ undo: UndoState }>(`${base}/undo`, {}),
+    onSuccess: () => { invalidate(); toast.success('Undone'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Nothing to undo'),
+  });
+  const redo = useMutation({
+    mutationFn: () => api.post<{ undo: UndoState }>(`${base}/redo`, {}),
+    onSuccess: () => { invalidate(); toast.success('Redone'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Nothing to redo'),
+  });
   // When an edit auto-shifts downstream tasks, tell the user how many moved (honest & non-modal).
   const notifyAutoMoves = (res: { autoScheduled?: AutoMoveRow[] } | undefined) => {
     const n = res?.autoScheduled?.length ?? 0;
@@ -1276,6 +1297,17 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
           {/* AI timeline generator — draft/append a WBS from the Project Charter (write + baseline unlocked). */}
           {canPlan && (
             <AiTimelineGenerate base={base} projectId={projectId} hasTasks={rows.length > 0} onApplied={invalidate} className={CTRL_BTN} />
+          )}
+          {/* Undo / redo the last bulk-cleanup op(s). Enabled only when the server has a live entry. */}
+          {canPlan && (undoState?.canUndo || undoState?.canRedo) && (
+            <>
+              <button onClick={() => undo.mutate()} disabled={!undoState?.canUndo || undo.isPending} title={undoState?.undoLabel ? `Undo: ${undoState.undoLabel}` : 'Undo'} className={`${CTRL_BTN} disabled:opacity-40`}>
+                ↶ Undo
+              </button>
+              <button onClick={() => redo.mutate()} disabled={!undoState?.canRedo || redo.isPending} title={undoState?.redoLabel ? `Redo: ${undoState.redoLabel}` : 'Redo'} className={`${CTRL_BTN} disabled:opacity-40`}>
+                ↷ Redo
+              </button>
+            </>
           )}
           {/* Multi-select cleanup — pick several tasks to delete, or clear the whole timeline. */}
           {canPlan && rows.length > 0 && (
