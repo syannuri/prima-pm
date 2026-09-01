@@ -42,8 +42,38 @@ export function MarkdownEditor({
   const { lang } = useLang();
   const t = (id: string, en: string) => (lang === 'id' ? id : en);
 
-  // Re-apply selection after a programmatic edit so the caret stays where the user expects.
+  // --- Undo / redo -------------------------------------------------------------------------------
+  // A controlled textarea whose value is set programmatically (toolbar inserts) loses the browser's
+  // native undo history, so we keep our own value+selection stacks. Typing is coalesced (one undo
+  // step per short burst); toolbar/list edits are always their own step.
+  type Snap = { value: string; s: number; e: number };
+  const undoStack = useRef<Snap[]>([]);
+  const redoStack = useRef<Snap[]>([]);
+  const lastType = useRef(0);
+  const [, forceRerender] = useState(0); // reflect stack emptiness on the toolbar buttons
+  const snapNow = (): Snap => { const el = ref.current; return { value, s: el?.selectionStart ?? value.length, e: el?.selectionEnd ?? value.length }; };
+  // Record the CURRENT (pre-change) state. coalesce=true merges rapid typing into one step.
+  const record = (coalesce: boolean) => {
+    const now = Date.now();
+    if (coalesce && undoStack.current.length && now - lastType.current < 500) { lastType.current = now; return; }
+    undoStack.current.push(snapNow());
+    if (undoStack.current.length > 300) undoStack.current.shift();
+    redoStack.current = [];
+    lastType.current = now;
+    forceRerender((n) => n + 1);
+  };
+  const restore = (snap: Snap) => {
+    onChange(snap.value);
+    requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(snap.s, snap.e); refreshActive(); } });
+    forceRerender((n) => n + 1);
+  };
+  const undo = () => { if (!undoStack.current.length) return; redoStack.current.push(snapNow()); restore(undoStack.current.pop()!); };
+  const redo = () => { if (!redoStack.current.length) return; undoStack.current.push(snapNow()); restore(redoStack.current.pop()!); };
+
+  // Re-apply selection after a programmatic edit so the caret stays where the user expects. Records
+  // an undo step first (a toolbar/list edit is always its own step).
   const apply = (next: string, selStart: number, selEnd: number) => {
+    record(false);
     onChange(next);
     requestAnimationFrame(() => {
       const el = ref.current;
@@ -103,10 +133,27 @@ export function MarkdownEditor({
     apply(next, urlStart, urlStart + url.length);
   };
 
+  // Insert a markdown table skeleton on its own line; caret lands selecting the first header cell.
+  const insertTable = () => {
+    const el = ref.current;
+    if (!el) return;
+    const s = el.selectionStart, e = el.selectionEnd;
+    const lead = s === 0 || value[s - 1] === '\n' ? '' : '\n';
+    const h1 = t('Kolom 1', 'Column 1'), h2 = t('Kolom 2', 'Column 2'), cell = t('Sel', 'Cell');
+    const tpl = `${lead}| ${h1} | ${h2} |\n| --- | --- |\n| ${cell} | ${cell} |\n`;
+    const next = value.slice(0, s) + tpl + value.slice(e);
+    const caret = s + lead.length + 2; // after the leading "| "
+    apply(next, caret, caret + h1.length);
+  };
+
   const onKeyDown = (ev: KeyboardEvent<HTMLTextAreaElement>) => {
     const el = ref.current;
     if (!el) return;
     const meta = ev.ctrlKey || ev.metaKey;
+    // Undo / redo (our own stacks, since native history is lost on programmatic inserts).
+    if (meta && (ev.key === 'z' || ev.key === 'Z') && !ev.shiftKey) { ev.preventDefault(); return undo(); }
+    if (meta && ((ev.key === 'z' || ev.key === 'Z') && ev.shiftKey)) { ev.preventDefault(); return redo(); }
+    if (meta && (ev.key === 'y' || ev.key === 'Y')) { ev.preventDefault(); return redo(); }
     if (meta && (ev.key === 'b' || ev.key === 'B')) { ev.preventDefault(); return wrap('**'); }
     if (meta && (ev.key === 'i' || ev.key === 'I')) { ev.preventDefault(); return wrap('*'); }
     if (meta && (ev.key === 'k' || ev.key === 'K')) { ev.preventDefault(); return insertLink(); }
@@ -138,15 +185,16 @@ export function MarkdownEditor({
 
   const words = value.trim() ? value.trim().split(/\s+/).length : 0;
 
-  const Btn = ({ onClick, label, active: on, children }: { onClick: () => void; label: string; active?: boolean; children: React.ReactNode }) => (
+  const Btn = ({ onClick, label, active: on, disabled, children }: { onClick: () => void; label: string; active?: boolean; disabled?: boolean; children: React.ReactNode }) => (
     <button
       type="button"
       title={label}
       aria-label={label}
       aria-pressed={on}
+      disabled={disabled}
       onMouseDown={(ev) => ev.preventDefault() /* keep textarea focus/selection */}
       onClick={onClick}
-      className={`rounded px-1.5 py-0.5 text-xs font-medium hover:bg-slate-200 hover:text-slate-800 dark:hover:bg-slate-700 dark:hover:text-slate-100 ${on ? 'bg-brand-100 text-brand-700 dark:bg-brand-500/25 dark:text-brand-300' : 'text-slate-500 dark:text-slate-400'}`}
+      className={`rounded px-1.5 py-0.5 text-xs font-medium hover:bg-slate-200 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-slate-700 dark:hover:text-slate-100 ${on ? 'bg-brand-100 text-brand-700 dark:bg-brand-500/25 dark:text-brand-300' : 'text-slate-500 dark:text-slate-400'}`}
     >
       {children}
     </button>
@@ -155,12 +203,16 @@ export function MarkdownEditor({
   return (
     <div>
       <div className={`flex items-center gap-0.5 rounded-t-lg border bg-slate-50 px-1.5 py-1 dark:bg-slate-900/40 ${barBorder[state]}`}>
+        <Btn onClick={undo} disabled={undoStack.current.length === 0} label={`${t('Urungkan', 'Undo')} (Ctrl+Z)`}>↶</Btn>
+        <Btn onClick={redo} disabled={redoStack.current.length === 0} label={`${t('Ulangi', 'Redo')} (Ctrl+Shift+Z)`}>↷</Btn>
+        <span className="mx-0.5 h-4 w-px bg-slate-300 dark:bg-slate-700" />
         <Btn onClick={() => wrap('**')} label={`${t('Tebal', 'Bold')} (Ctrl+B)`} active={active.bold}><span className="font-bold">B</span></Btn>
         <Btn onClick={() => wrap('*')} label={`${t('Miring', 'Italic')} (Ctrl+I)`} active={active.italic}><span className="italic">I</span></Btn>
         <span className="mx-0.5 h-4 w-px bg-slate-300 dark:bg-slate-700" />
         <Btn onClick={() => prefixLines('- ')} label={t('Poin', 'Bullet list')}>• List</Btn>
         <Btn onClick={() => prefixLines('', true)} label={t('Bernomor', 'Numbered list')}>1. List</Btn>
         <Btn onClick={() => prefixLines('## ')} label={t('Judul', 'Heading')}>H</Btn>
+        <Btn onClick={insertTable} label={t('Tabel', 'Table')}>▦</Btn>
         <Btn onClick={insertLink} label={`${t('Tautan', 'Link')} (Ctrl+K)`}>🔗</Btn>
         <button
           type="button"
@@ -183,7 +235,7 @@ export function MarkdownEditor({
           spellCheck
           className={`${inputBase} ${border[state]}`}
           value={value}
-          onChange={(ev) => onChange(ev.target.value)}
+          onChange={(ev) => { record(true); onChange(ev.target.value); }}
           onBlur={onBlur}
           onKeyDown={onKeyDown}
           onSelect={refreshActive}
