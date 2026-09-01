@@ -4,6 +4,8 @@ import { requireProjectGovernance, requireProjectAccess } from '../../middleware
 import { upsertTaskSchema, dependencySchema, dependencyEditSchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
+import { aiEnabled } from '../../lib/ai.js';
+import { ApplyScheduleDraftSchema, generateScheduleDraft, applyScheduleDraft } from './scheduleSuggest.service.js';
 
 const router = Router({ mergeParams: true });
 
@@ -49,6 +51,26 @@ router.get('/templates', canRead, asyncHandler(async (_req, res) => {
 
 router.post('/apply-template', ...canWrite, validateBody(applyTemplateSchema), asyncHandler(async (req, res) => {
   const result = await svc.applyTemplate(req.params.projectId, req.body.templateId, req.body.startDate ?? new Date(), req.user!.id);
+  res.status(201).json(result);
+}));
+
+// AI-generated timeline from the Project Charter (advisory, ephemeral — persists nothing). Gated
+// globally by ANTHROPIC_API_KEY (503) + per-tenant opt-in (403 in the service). The PM reviews the
+// draft and applies it via /apply-ai-draft.
+router.post('/ai-generate', ...canWrite, asyncHandler(async (req, res) => {
+  if (!aiEnabled()) {
+    res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
+    return;
+  }
+  // Generate schedule text in the PM's current app language (defaults to English).
+  const lang = req.body?.lang === 'id' ? 'id' : 'en';
+  res.json(await generateScheduleDraft(req.params.projectId, lang));
+}));
+
+// Apply a (possibly PM-edited) AI schedule draft into the WBS. Same write authorization as tasks.
+router.post('/apply-ai-draft', ...canWrite, validateBody(ApplyScheduleDraftSchema), asyncHandler(async (req, res) => {
+  const { startDate, ...draft } = req.body;
+  const result = await applyScheduleDraft(req.params.projectId, draft, startDate, req.user!.id);
   res.status(201).json(result);
 }));
 
