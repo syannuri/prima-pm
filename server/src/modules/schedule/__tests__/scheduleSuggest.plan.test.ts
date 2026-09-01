@@ -2,11 +2,14 @@ import { describe, it, expect } from 'vitest';
 import {
   planScheduleRows,
   planDependencies,
+  fitDraftToWindow,
   buildScheduleSuggestPrompt,
   ScheduleDraftSchema,
   ApplyScheduleDraftSchema,
   type ScheduleDraft,
 } from '../scheduleSuggest.service.js';
+
+const sumDur = (d: ScheduleDraft) => d.phases.reduce((s, p) => s + p.tasks.reduce((t, tk) => t + tk.durationDays, 0), 0);
 
 const DAY = 86_400_000;
 const draft: ScheduleDraft = {
@@ -123,6 +126,38 @@ describe('planDependencies — hybrid FS graph', () => {
     const edges = planDependencies(cyclic, refToId, orderedLeafIds);
     expect(edges).toHaveLength(1); // one of y→x / x→y kept, the cycle-closing one dropped
     expect(edges.every((e) => e.predecessorId !== e.successorId)).toBe(true);
+  });
+});
+
+describe('fitDraftToWindow — hard-fit to the charter window', () => {
+  const d: ScheduleDraft = {
+    phases: [{ name: 'P', tasks: [
+      { name: 'T1', durationDays: 10 },
+      { name: 'MS', durationDays: 0, isMilestone: true },
+      { name: 'T2', durationDays: 10 },
+    ] }],
+  };
+
+  it('shrinks proportionally to exactly the window; milestones stay 0', () => {
+    const out = fitDraftToWindow(d, 10); // half of 20
+    expect(out.phases[0].tasks.map((t) => t.durationDays)).toEqual([5, 0, 5]);
+    expect(sumDur(out)).toBe(10);
+  });
+
+  it('stretches to fill a larger window and folds the rounding residual (Σ == window)', () => {
+    expect(sumDur(fitDraftToWindow(d, 30))).toBe(30);
+    expect(sumDur(fitDraftToWindow(d, 11))).toBe(11); // 5.5→6,6 then −1 residual folded back
+  });
+
+  it('keeps every scaled task >= 1 day even for a tiny window', () => {
+    const out = fitDraftToWindow(d, 1);
+    out.phases[0].tasks.filter((t) => !t.isMilestone).forEach((t) => expect(t.durationDays).toBeGreaterThanOrEqual(1));
+  });
+
+  it('is a no-op for a non-positive window or an all-milestone draft', () => {
+    expect(fitDraftToWindow(d, 0)).toBe(d);
+    const allMs: ScheduleDraft = { phases: [{ name: 'P', tasks: [{ name: 'M', durationDays: 0, isMilestone: true }] }] };
+    expect(fitDraftToWindow(allMs, 30)).toBe(allMs);
   });
 });
 

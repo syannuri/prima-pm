@@ -38,6 +38,7 @@ let ownerToken = '';   // ADMIN (can write schedule)
 let viewerToken = '';  // VIEWER (cannot write)
 let aico = '';
 let projectId = '';
+let ownerId = '';
 
 beforeAll(async () => {
   prevFlag = process.env.MULTITENANCY_ENFORCE;
@@ -56,6 +57,7 @@ beforeAll(async () => {
   const t = await prisma.tenant.create({ data: { slug: 'schedco', name: 'Sched Co' } });
   aico = t.id;
   const owner = await prisma.user.create({ data: { name: 'owner', email: 'owner@schedco.test', role: 'ADMIN', passwordHash: await hashPassword('x'), isActive: true } });
+  ownerId = owner.id;
   await prisma.membership.create({ data: { userId: owner.id, tenantId: aico, role: 'ADMIN' } });
   ownerToken = signAccessToken({ sub: owner.id, role: 'ADMIN', email: owner.email, tv: 0, tid: aico });
 
@@ -179,6 +181,24 @@ describe('AI timeline — schedule/ai-generate + apply-ai-draft', () => {
     const res = await request(app).post(applyUrl()).set(bearer(ownerToken)).send(linked);
     expect(res.status).toBe(201);
     expect(res.body.links).toBe(4); // a→b, a→c, b→d, c→d
+  });
+
+  it('fit=true scales an overrunning draft to land on the charter end', async () => {
+    // Fresh project with a 30-day charter window; draft totals 100 days → must be scaled down.
+    const p2 = await runWithTenant(aico, async () => {
+      const proj = await prisma.project.create({ data: { code: 'SCH-FIT', name: 'Fit', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE' }, select: { id: true } });
+      await prisma.projectCharter.create({ data: {
+        projectId: proj.id, description: 'd', goals: 'g', category: 'APP_DEV', hiScope: 's', hiCostIdr: 0, hiDeliverables: 'a',
+        hiScheduleStart: new Date('2026-01-05'), hiScheduleEnd: new Date('2026-02-04'), pmUserId: ownerId, // 30-day window
+      } });
+      return proj.id;
+    });
+    const big = { phases: [{ name: 'Phase', tasks: [{ name: 'Big one', durationDays: 50 }, { name: 'Big two', durationDays: 50 }] }] };
+    const res = await request(app).post(api(`/projects/${p2}/schedule/apply-ai-draft`)).set(bearer(ownerToken))
+      .send({ ...big, link: false, fit: true, startDate: '2026-01-05' });
+    expect(res.status).toBe(201);
+    // link off → pure calendar dates → projected end lands exactly on the charter end.
+    expect(new Date(res.body.projectedEnd).toISOString().slice(0, 10)).toBe('2026-02-04');
   });
 
   it('403 when a non-writer (VIEWER) calls apply', async () => {
