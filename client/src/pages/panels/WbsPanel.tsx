@@ -13,6 +13,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { formatDate, formatDateInput, formatIdrShort } from '../../lib/format';
 import { useProjectWrite } from '../../lib/useProjectWrite';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import AiTimelineGenerate from '../../components/AiTimelineGenerate';
 
 interface Row {
   node: GanttNode;
@@ -1257,6 +1258,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               ⬆ Import
             </button>
           )}
+          {/* AI timeline generator — draft/append a WBS from the Project Charter (write + baseline unlocked). */}
+          {canPlan && (
+            <AiTimelineGenerate base={base} projectId={projectId} hasTasks={rows.length > 0} onApplied={invalidate} className={CTRL_BTN} />
+          )}
           {/* Phase-weight editor — steer the % roll-up from the top level (needs write + unlocked baseline). */}
           {canPlan && rows.length > 0 && (
             <button onClick={() => setWeightsOpen(true)} title="Set phase weights to steer the project %" className={CTRL_BTN}>
@@ -1368,6 +1373,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                     className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100 dark:border-brand-700 dark:bg-brand-900/20 dark:text-brand-300 dark:hover:bg-brand-900/40">
                     + Add first task
                   </button>
+                </div>
+              )}
+              {canEdit && (
+                <div className="mt-3 flex justify-center">
+                  <AiTimelineGenerate base={base} projectId={projectId} hasTasks={false} onApplied={invalidate} />
                 </div>
               )}
               {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
