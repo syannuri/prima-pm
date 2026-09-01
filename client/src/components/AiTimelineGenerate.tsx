@@ -50,6 +50,7 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
   const [phases, setPhases] = useState<EPhase[]>([]);
   const [charter, setCharter] = useState<GenerateResponse['charter'] | null>(null);
   const [startDate, setStartDate] = useState(formatDateInput(new Date()));
+  const [link, setLink] = useState(true); // create FS links + auto-schedule (weekend-aware)
 
   const isGuest = useIsGuest();
   const aiQ = useQuery({
@@ -74,6 +75,7 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
     mutationFn: () => {
       const payload = {
         startDate,
+        link,
         phases: phases
           .filter((p) => p.include)
           .map((p) => ({
@@ -93,12 +95,15 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
           }))
           .filter((p) => p.tasks.length > 0),
       };
-      return api.post<{ created: number; phases: number }>(`${base}/apply-ai-draft`, payload);
+      return api.post<{ created: number; phases: number; links: number }>(`${base}/apply-ai-draft`, payload);
     },
     onSuccess: (res) => {
+      const links = res.links > 0
+        ? t(` + ${res.links} keterkaitan (auto-schedule)`, ` + ${res.links} link${res.links === 1 ? '' : 's'} (auto-scheduled)`)
+        : '';
       toast.success(t(
-        `${res.created} item jadwal dibuat (${res.phases} fase) — sesuaikan lewat WBS.`,
-        `${res.created} schedule items created (${res.phases} phases) — refine them in the WBS.`,
+        `${res.created} item jadwal dibuat (${res.phases} fase)${links} — sesuaikan lewat WBS.`,
+        `${res.created} schedule items created (${res.phases} phases)${links} — refine them in the WBS.`,
       ));
       setOpen(false);
       onApplied();
@@ -172,6 +177,21 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
                 )}
               </div>
             </div>
+
+            {/* Link tasks (FS) + auto-schedule. When on, the projected end above is a rough estimate —
+                real dates snap to working days (weekends skipped). */}
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs dark:border-slate-800">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={link} onChange={(e) => setLink(e.target.checked)} />
+              <span>
+                <span className="font-medium text-slate-700 dark:text-slate-200">🔗 {t('Kaitkan tugas (FS) & auto-schedule', 'Link tasks (FS) & auto-schedule')}</span>
+                <span className="mt-0.5 block text-slate-500 dark:text-slate-400">
+                  {t(
+                    'Buat ketergantungan finish-to-start lalu jadwalkan pada hari kerja — edit durasi akan menggeser jadwal downstream otomatis.',
+                    'Create finish-to-start links then schedule on working days — editing a duration then cascades to downstream tasks.',
+                  )}
+                </span>
+              </span>
+            </label>
 
             {phases.length === 0 ? (
               <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">{t('Tidak ada usulan jadwal.', 'No schedule suggestions.')}</p>
