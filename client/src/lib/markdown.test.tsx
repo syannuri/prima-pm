@@ -52,4 +52,30 @@ describe('Markdown', () => {
     expect(container.querySelector('a')).toBeNull();
     expect(container.textContent).toContain('[x](javascript:alert(1))');
   });
+
+  it('renders a pipe table as <table> with header + body cells', () => {
+    const { container } = render(<Markdown text={'| Item | Owner |\n| --- | --- |\n| Kickoff | PM |\n| Design | Lead |'} />);
+    const table = container.querySelector('table');
+    expect(table).not.toBeNull();
+    expect(container.querySelectorAll('thead th')).toHaveLength(2);
+    expect(container.querySelector('thead th')?.textContent).toBe('Item');
+    const rows = container.querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelectorAll('td')[1].textContent).toBe('PM');
+    // no raw pipe markers leak into the rendered text
+    expect(container.textContent).not.toContain('---');
+  });
+
+  it('renders inline markup inside table cells and pads short rows', () => {
+    const { container } = render(<Markdown text={'| A | B |\n| --- | --- |\n| **x** |'} />);
+    expect(container.querySelector('tbody strong')?.textContent).toBe('x');
+    // the missing 2nd cell is padded so the grid stays rectangular
+    expect(container.querySelectorAll('tbody tr td')).toHaveLength(2);
+  });
+
+  it('leaves a lone pipe line (no separator) as plain text, not a table', () => {
+    const { container } = render(<Markdown text={'a | b | c'} />);
+    expect(container.querySelector('table')).toBeNull();
+    expect(container.textContent).toContain('a | b | c');
+  });
 });

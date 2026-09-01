@@ -55,7 +55,17 @@ type Block =
   | { type: 'h'; level: number; text: string }
   | { type: 'ul'; items: string[] }
   | { type: 'ol'; items: string[] }
+  | { type: 'table'; header: string[]; rows: string[][] }
   | { type: 'p'; lines: string[] };
+
+// A pipe table row: "| a | b |" → ['a','b'] (outer pipes optional; empty edge cells dropped).
+const isTableRow = (line: string) => /\|/.test(line) && /^\s*\|?.*\|.*$/.test(line.trim());
+function splitRow(line: string): string[] {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+}
+// Separator row under the header: each cell is only dashes/colons, e.g. "--- | :--:".
+const isTableSeparator = (line: string) =>
+  isTableRow(line) && splitRow(line).every((c) => /^:?-{1,}:?$/.test(c));
 
 function parseBlocks(src: string): Block[] {
   const lines = src.replace(/\r\n?/g, '\n').split('\n');
@@ -64,11 +74,26 @@ function parseBlocks(src: string): Block[] {
   const flushPara = () => {
     if (para.length) { blocks.push({ type: 'p', lines: para }); para = []; }
   };
-  for (const raw of lines) {
-    const line = raw.trimEnd();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
     const heading = /^(#{1,3})\s+(.*)$/.exec(line);
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
     const ordered = /^\s*\d+\.\s+(.*)$/.exec(line);
+    // A table = a header row immediately followed by a separator row, then zero+ body rows.
+    if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      flushPara();
+      const header = splitRow(line);
+      const rows: string[][] = [];
+      let j = i + 2;
+      for (; j < lines.length && isTableRow(lines[j]) && lines[j].trim() !== ''; j++) {
+        const cells = splitRow(lines[j]);
+        // Pad/truncate to the header width so the grid stays rectangular.
+        rows.push(Array.from({ length: header.length }, (_, k) => cells[k] ?? ''));
+      }
+      blocks.push({ type: 'table', header, rows });
+      i = j - 1;
+      continue;
+    }
     if (line.trim() === '') { flushPara(); continue; }
     if (heading) {
       flushPara();
@@ -113,6 +138,27 @@ export function Markdown({ text, className }: { text: string; className?: string
             <ol key={i} className="list-decimal space-y-0.5 pl-5">
               {b.items.map((it, j) => <li key={j}>{renderInline(it)}</li>)}
             </ol>
+          );
+        if (b.type === 'table')
+          return (
+            <div key={i} className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr>
+                    {b.header.map((h, j) => (
+                      <th key={j} className="border border-slate-300 bg-slate-50 px-2 py-1 text-left font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{renderInline(h)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {b.rows.map((r, j) => (
+                    <tr key={j}>
+                      {r.map((c, k) => <td key={k} className="border border-slate-300 px-2 py-1 align-top dark:border-slate-700">{renderInline(c)}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           );
         return (
           <p key={i} className="leading-relaxed">
