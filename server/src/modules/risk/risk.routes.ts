@@ -56,7 +56,9 @@ router.post(
       res.status(503).json({ error: { code: 'AI_DISABLED', message: 'Fitur AI belum dikonfigurasi.' } });
       return;
     }
-    res.json(await generateRiskSuggestions(req.params.projectId));
+    // Generate risk text in the PM's current app language (defaults to English).
+    const lang = req.body?.lang === 'id' ? 'id' : 'en';
+    res.json(await generateRiskSuggestions(req.params.projectId, lang));
   }),
 );
 
