@@ -75,7 +75,7 @@ describe('Messages edit / delete / search', () => {
     const { message } = await sendMessageTo(carol, bob, 'last line');
     await deleteMessage(carol, message.id);
     const convs = await listConversations(bob);
-    const conv = convs.find((c) => c.other.id === carol)!;
+    const conv = convs.find((c) => c.other?.id === carol)!;
     expect(conv.lastMessage?.deleted).toBe(true);
     expect(conv.lastMessage?.body).toBe('');
   });

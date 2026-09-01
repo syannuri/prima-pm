@@ -499,7 +499,7 @@ export async function typingSignal(meId: string, conversationId: string) {
 // conversation's display info + the sender name so the client can deep-link into the thread.
 export async function searchMessages(meId: string, rawQuery: string, conversationId?: string) {
   const q = rawQuery.trim();
-  if (q.length < 2) return { query: q, results: [] as unknown[] };
+  if (q.length < 2) return { query: q, results: [] };
 
   const convs = await prisma.conversation.findMany({
     where: { members: { some: { userId: meId } }, ...(conversationId ? { id: conversationId } : {}) },

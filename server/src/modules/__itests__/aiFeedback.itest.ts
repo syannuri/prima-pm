@@ -32,7 +32,7 @@ let adminToken = '';
 let pmToken = '';
 let memTid = '';
 
-const feedback = (token: string, body: unknown) => request(app).post(api('/assistant/feedback')).set(bearer(token)).send(body);
+const feedback = (token: string, body: object) => request(app).post(api('/assistant/feedback')).set(bearer(token)).send(body);
 const enableMemory = (on: boolean) => prisma.tenant.update({ where: { id: memTid }, data: { aiMemoryEnabled: on } });
 const askSystem = (token: string) => request(app).post(api('/assistant/ask')).set(bearer(token)).send({ messages: [{ role: 'user', content: 'x' }] });
 
