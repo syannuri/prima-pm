@@ -60,6 +60,8 @@ export const ApplyScheduleDraftSchema = ScheduleDraftBase.extend({
   // When true (default) create FS dependency links + auto-schedule (weekend-aware) so editing a
   // duration cascades downstream. When false, tasks keep the plain sequential calendar dates.
   link: z.boolean().optional(),
+  // When true, scale durations so the timeline lands on the charter end (opt-in; distorts estimates).
+  fit: z.boolean().optional(),
 }).refine(withinTotalCap, totalCapIssue);
 
 export type DraftTask = z.infer<typeof DraftTaskSchema>;
@@ -369,17 +371,51 @@ export function planDependencies(
   return accepted;
 }
 
+// PURE: scale non-milestone task durations proportionally so the sequential timeline spans exactly
+// `windowDays` (calendar). Milestones stay 0. The integer-rounding residual is folded into the
+// longest task so the total lands on windowDays (each task stays >= 1 day). Returns a NEW draft;
+// the input is untouched. No-op when there is nothing to scale or the window is non-positive.
+export function fitDraftToWindow(draft: ScheduleDraft, windowDays: number): ScheduleDraft {
+  const nm: { pi: number; ti: number; dd: number }[] = [];
+  draft.phases.forEach((p, pi) => p.tasks.forEach((tk, ti) => {
+    if (!(tk.isMilestone === true || tk.durationDays === 0)) nm.push({ pi, ti, dd: tk.durationDays });
+  }));
+  const total = nm.reduce((s, x) => s + x.dd, 0);
+  if (total <= 0 || windowDays <= 0) return draft;
+
+  const factor = windowDays / total;
+  const scaled = nm.map((x) => ({ pi: x.pi, ti: x.ti, v: Math.max(1, Math.round(x.dd * factor)) }));
+  let residual = windowDays - scaled.reduce((s, x) => s + x.v, 0);
+  if (residual !== 0 && scaled.length) {
+    let idx = 0;
+    for (let i = 1; i < scaled.length; i++) if (scaled[i].v > scaled[idx].v) idx = i;
+    scaled[idx].v = Math.max(1, scaled[idx].v + residual);
+  }
+  const byKey = new Map(scaled.map((x) => [`${x.pi}:${x.ti}`, x.v]));
+  return {
+    phases: draft.phases.map((p, pi) => ({
+      ...p,
+      tasks: p.tasks.map((tk, ti) => {
+        const v = byKey.get(`${pi}:${ti}`);
+        return v == null ? tk : { ...tk, durationDays: v };
+      }),
+    })),
+  };
+}
+
+const daysBetween = (a: Date, b: Date): number => Math.round((+b - +a) / MS_PER_DAY);
+
 // Materialise a (possibly PM-edited) draft into the WBS. Re-checks the gates + baseline lock, then
 // creates the phase parents and their work packages in one transaction. Appends when the schedule
 // already has tasks (WBS codes / sortOrder continue from the current max).
 export async function applyScheduleDraft(
   projectId: string,
-  draft: ScheduleDraft,
+  inputDraft: ScheduleDraft,
   startDate: Date | undefined,
   actorId: string,
-  opts: { link?: boolean } = {},
+  opts: { link?: boolean; fit?: boolean } = {},
 ): Promise<{ created: number; phases: number; projectedEnd: Date; links: number }> {
-  await loadCharterContext(projectId); // gate + opt-in + chartered
+  const ctx = await loadCharterContext(projectId); // gate + opt-in + chartered
   await assertBaselineUnlocked(projectId);
 
   const existing = await prisma.task.findMany({
@@ -400,6 +436,9 @@ export async function applyScheduleDraft(
       base = c?.hiScheduleStart ?? new Date();
     }
   }
+
+  // Hard-fit (opt-in): scale durations so the timeline lands on the charter end from the chosen start.
+  const draft = opts.fit ? fitDraftToWindow(inputDraft, daysBetween(base, ctx.charter.scheduleEnd)) : inputDraft;
 
   const { rows, projectedEnd, refToId, orderedLeafIds } = planScheduleRows(projectId, draft, base, startCount, startSort);
   const parents = rows.filter((r) => r.parentTaskId === null);

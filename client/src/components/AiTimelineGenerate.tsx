@@ -51,6 +51,7 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
   const [charter, setCharter] = useState<GenerateResponse['charter'] | null>(null);
   const [startDate, setStartDate] = useState(formatDateInput(new Date()));
   const [link, setLink] = useState(true); // create FS links + auto-schedule (weekend-aware)
+  const [fit, setFit] = useState(false); // scale durations to land on the charter end (opt-in)
 
   const isGuest = useIsGuest();
   const aiQ = useQuery({
@@ -76,6 +77,7 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
       const payload = {
         startDate,
         link,
+        fit,
         phases: phases
           .filter((p) => p.include)
           .map((p) => ({
@@ -117,11 +119,13 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
     const inc = phases.filter((p) => p.include).flatMap((p) => p.tasks.filter((tk) => tk.include));
     const totalDays = inc.reduce((s, tk) => s + Math.max(0, Math.round(tk.durationDays || 0)), 0);
     const start = startDate ? new Date(startDate) : new Date();
-    const end = new Date(+start + totalDays * DAY);
     const charterEnd = charter ? new Date(charter.scheduleEnd) : null;
+    // With fit on, the server scales durations so the timeline lands on the charter end.
+    const canFit = fit && charterEnd && totalDays > 0 && +charterEnd > +start;
+    const end = canFit ? charterEnd : new Date(+start + totalDays * DAY);
     const over = charterEnd ? Math.round((+end - +charterEnd) / DAY) : 0;
     return { includedTasks: inc.length, projectedEnd: end, overByDays: over };
-  }, [phases, startDate, charter]);
+  }, [phases, startDate, charter, fit]);
 
   if (!aiQ.data?.aiAvailable) return isGuest ? <GuestAiNote /> : null;
 
@@ -188,6 +192,21 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
                   {t(
                     'Buat ketergantungan finish-to-start lalu jadwalkan pada hari kerja — edit durasi akan menggeser jadwal downstream otomatis.',
                     'Create finish-to-start links then schedule on working days — editing a duration then cascades to downstream tasks.',
+                  )}
+                </span>
+              </span>
+            </label>
+
+            {/* Hard-fit: scale durations so the timeline lands on the charter end. Opt-in (distorts the
+                AI's estimates). Exact when linking is off; with auto-schedule, working days may extend it. */}
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs dark:border-slate-800">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={fit} onChange={(e) => setFit(e.target.checked)} />
+              <span>
+                <span className="font-medium text-slate-700 dark:text-slate-200">📐 {t('Paskan ke jendela charter (skala durasi)', 'Fit to charter window (scale durations)')}</span>
+                <span className="mt-0.5 block text-slate-500 dark:text-slate-400">
+                  {t(
+                    'Durasi diskalakan proporsional agar mendarat di akhir charter. Eksak saat penjadwalan mati; dengan auto-schedule, hari kerja bisa sedikit memperpanjang.',
+                    'Durations are scaled proportionally to land on the charter end. Exact when linking is off; with auto-schedule, working days may extend it slightly.',
                   )}
                 </span>
               </span>

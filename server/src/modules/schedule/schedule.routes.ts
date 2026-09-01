@@ -69,8 +69,8 @@ router.post('/ai-generate', ...canWrite, asyncHandler(async (req, res) => {
 
 // Apply a (possibly PM-edited) AI schedule draft into the WBS. Same write authorization as tasks.
 router.post('/apply-ai-draft', ...canWrite, validateBody(ApplyScheduleDraftSchema), asyncHandler(async (req, res) => {
-  const { startDate, link, ...draft } = req.body;
-  const result = await applyScheduleDraft(req.params.projectId, draft, startDate, req.user!.id, { link });
+  const { startDate, link, fit, ...draft } = req.body;
+  const result = await applyScheduleDraft(req.params.projectId, draft, startDate, req.user!.id, { link, fit });
   res.status(201).json(result);
 }));
 
