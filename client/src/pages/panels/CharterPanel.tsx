@@ -74,7 +74,8 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   });
 
   const charter = charterQ.data?.charter;
-  const locked = charter?.locked ?? false;
+  const locked = charter?.locked ?? false; // frozen at activation → edits need a Change Request
+  const committed = !!charter?.committedAt; // confirmed (CHARTERED) but still editable until activation
 
   useEffect(() => {
     if (charter) {
@@ -108,7 +109,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   const commit = useMutation({
     mutationFn: () => api.post(`/projects/${projectId}/charter/commit`),
     onSuccess: () => {
-      setMsg('Charter committed — modules unlocked.');
+      setMsg('Charter confirmed — Cost, Risk & Schedule unlocked. You can still edit it until activation.');
       qc.invalidateQueries({ queryKey: ['charter', projectId] });
       qc.invalidateQueries({ queryKey: ['project', projectId] });
       qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
@@ -146,9 +147,9 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   };
   const commitCharter = async () => {
     if (await confirm({
-      title: 'Commit charter?',
-      message: 'Committing locks the charter baseline and unlocks Cost, Risk & Schedule. After this, changes require a Change Request.',
-      confirmLabel: 'Commit charter',
+      title: 'Confirm charter?',
+      message: 'This confirms the charter and unlocks Cost, Risk & Schedule. You can keep editing the charter until the project is activated — after activation, changes require a Change Request.',
+      confirmLabel: 'Confirm charter',
     })) commit.mutate();
   };
 
@@ -177,12 +178,12 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
     <div className="space-y-5">
     <Card>
       <div className="mb-4 flex items-center justify-between">
-        <SectionTitle sub={t('Field bertanda * wajib diisi. Commit mengunci baseline dan membuka Cost, Risk & Schedule.', 'Fields marked * are required. Commit locks the baseline and unlocks Cost, Risk & Schedule.')}>
+        <SectionTitle sub={t('Field bertanda * wajib diisi. Konfirmasi membuka Cost, Risk & Schedule; charter tetap bisa diedit sampai project diaktifkan.', 'Fields marked * are required. Confirm unlocks Cost, Risk & Schedule; the charter stays editable until the project is activated.')}>
           Project Charter
         </SectionTitle>
         {charter && (
           <div className="flex items-center gap-2">
-            <Badge color={locked ? 'green' : 'amber'}>{locked ? `Committed v${charter.version}` : 'Draft'}</Badge>
+            <Badge color={locked ? 'green' : committed ? 'sky' : 'amber'}>{locked ? `Locked v${charter.version}` : committed ? t('Chartered · bisa diedit', 'Chartered · editable') : 'Draft'}</Badge>
           </div>
         )}
       </div>
@@ -221,7 +222,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
             <Input className="mt-2" state={errState('categoryOther')} value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} onBlur={() => touch('categoryOther')} placeholder="Describe the category" />
           )}
         </Field>
-        <Field label="Delivery Approach" hint="Locked at commit — change later via a Change Request">
+        <Field label="Delivery Approach" hint="Editable until activation — after that, change via a Change Request">
           <Select value={approach} onChange={(e) => setApproach(e.target.value as DeliveryApproach)}>
             {(approach === 'HYBRID' ? [...APPROACHES, 'HYBRID' as DeliveryApproach] : APPROACHES).map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
           </Select>
@@ -270,18 +271,21 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         {!locked && (
           <>
             <Button variant="secondary" onClick={saveDraft} disabled={save.isPending}>
-              Save draft
+              {committed ? t('Simpan perubahan', 'Save changes') : t('Simpan draft', 'Save draft')}
             </Button>
-            <Button data-tour="charter-commit" onClick={commitCharter} disabled={!charter || !allFilled || commit.isPending}>
-              {commit.isPending ? 'Committing…' : 'Commit Charter'}
-            </Button>
-            {!charter && <span className="text-xs text-slate-500 dark:text-slate-400">{t('Simpan draft dulu, lalu Commit.', 'Save the draft first, then Commit.')}</span>}
-            {charter && !allFilled && <span className="text-xs text-amber-500">{t('Lengkapi semua field wajib untuk mengaktifkan Commit.', 'Fill all required fields to enable Commit.')}</span>}
+            {!committed && (
+              <Button data-tour="charter-commit" onClick={commitCharter} disabled={!charter || !allFilled || commit.isPending}>
+                {commit.isPending ? t('Menyimpan…', 'Confirming…') : t('Konfirmasi Charter', 'Confirm Charter')}
+              </Button>
+            )}
+            {!charter && <span className="text-xs text-slate-500 dark:text-slate-400">{t('Simpan draft dulu, lalu Konfirmasi.', 'Save the draft first, then Confirm.')}</span>}
+            {charter && !committed && !allFilled && <span className="text-xs text-amber-500">{t('Lengkapi semua field wajib untuk mengaktifkan Konfirmasi.', 'Fill all required fields to enable Confirm.')}</span>}
+            {committed && <span className="text-xs text-slate-500 dark:text-slate-400">{t('Charter masih bisa diedit sampai project diaktifkan — setelah itu perlu Change Request.', 'Editable until the project is activated — after that, changes need a Change Request.')}</span>}
           </>
         )}
         {locked && (
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Charter is locked. Changes require a Change Request (PMO approval).
+            {t('Charter terkunci (project sudah aktif). Perubahan perlu Change Request (persetujuan PMO).', 'Charter is locked (project is active). Changes require a Change Request (PMO approval).')}
           </p>
         )}
       </div>

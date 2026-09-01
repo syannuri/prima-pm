@@ -5,7 +5,7 @@ import { NotFound, BadRequest, Conflict } from '../../lib/errors.js';
 import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
 import { assertCanCreateProject } from '../../lib/tenant/quota.js';
 import { tenantMemberUserIds } from '../../lib/tenant/members.js';
-import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
+import { generateProjectCode, nextProjectSeq, checkCharterCompleteness, buildCharterSnapshot } from '../charter/charter.helpers.js';
 import { createNotification } from '../notification/notification.service.js';
 import { emitDomainEvent } from '../events/dispatch.js';
 import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas.js';
@@ -226,6 +226,13 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
   const isActivating = before.status === 'CHARTERED' && input.status === 'IN_PROGRESS';
   let activateReason: string | undefined;
   if (isActivating) {
+    // The charter stays editable through planning, so re-check it is still complete before we freeze
+    // it at activation (a planning-phase edit could have blanked a field). Only when a charter
+    // exists — some flows reach CHARTERED without one.
+    const charter = await prisma.projectCharter.findUnique({ where: { projectId: id } });
+    if (charter && !checkCharterCompleteness(charter as unknown as Record<string, unknown>).ok) {
+      throw BadRequest('The Project Charter is incomplete — complete it before activating the project.');
+    }
     const readiness = await getActivationReadiness(id);
     if (!readiness.canActivate && !input.forceActivate) {
       throw BadRequest(
@@ -297,6 +304,24 @@ export async function updateProject(id: string, input: UpdateProjectInput, actor
       ...statusData,
     },
   });
+
+  // Freeze the charter at activation: editable all through DRAFT + CHARTERED, locked here so any
+  // later edit goes via a Change Request. Refresh the committed version snapshot so the frozen
+  // baseline reflects any planning-phase edits (create it if commit predated versioning).
+  if (isActivating) {
+    const charter = await prisma.projectCharter.findUnique({ where: { projectId: id } });
+    if (charter && !charter.locked) {
+      const snapshot = buildCharterSnapshot(charter as unknown as Record<string, unknown>) as object;
+      await prisma.$transaction(async (tx) => {
+        await tx.projectCharter.update({
+          where: { projectId: id },
+          data: { locked: true, committedAt: charter.committedAt ?? new Date(), committedBy: charter.committedBy ?? actorId },
+        });
+        const upd = await tx.charterVersion.updateMany({ where: { projectId: id, version: charter.version }, data: { snapshot } });
+        if (upd.count === 0) await tx.charterVersion.create({ data: { projectId: id, version: charter.version, snapshot, committedBy: actorId } });
+      });
+    }
+  }
 
   const action = isReopening
     ? 'REOPEN'
