@@ -600,6 +600,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     qc.invalidateQueries({ queryKey: ['evm', base] });
     // Baseline capture + progress edits change the guided next-step cues.
     qc.invalidateQueries({ queryKey: ['next-steps', projectId] });
+    // Any schedule change may make the bulk-cleanup undo/redo stack go stale.
+    qc.invalidateQueries({ queryKey: ['undo-state', projectId] });
   };
 
   const rows = useMemo(() => (ganttQ.data ? flatten(ganttQ.data.tree, collapsed) : []), [ganttQ.data, collapsed]);
@@ -933,6 +935,40 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     onSuccess: () => { invalidate(); toast.success('Task deleted'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete task'),
   });
+  // Multi-select cleanup — pick several tasks (each deletes its subtree) or clear the whole timeline.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSel = (id: string) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const bulkDelete = useMutation({
+    mutationFn: (ids: string[]) => api.post<{ deleted: number }>(`${base}/tasks/bulk-delete`, { ids }),
+    onSuccess: (res) => { invalidate(); toast.success(`${res.deleted} task${res.deleted === 1 ? '' : 's'} deleted`); exitSelect(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete tasks'),
+  });
+  const clearAll = useMutation({
+    mutationFn: () => api.post<{ deleted: number }>(`${base}/clear`, {}),
+    onSuccess: (res) => { invalidate(); toast.success(`Timeline cleared — ${res.deleted} task${res.deleted === 1 ? '' : 's'} removed`); exitSelect(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to clear the timeline'),
+  });
+  // Undo/redo for the bulk-cleanup ops (delete selected / clear). Self-invalidates when the schedule
+  // is edited another way (the server fingerprints it), so the buttons just reflect undo-state.
+  interface UndoState { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
+  const undoStateQ = useQuery({
+    queryKey: ['undo-state', projectId],
+    queryFn: () => api.get<UndoState>(`${base}/undo-state`),
+    enabled: canEdit,
+  });
+  const undoState = undoStateQ.data;
+  const undo = useMutation({
+    mutationFn: () => api.post<{ undo: UndoState }>(`${base}/undo`, {}),
+    onSuccess: () => { invalidate(); toast.success('Undone'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Nothing to undo'),
+  });
+  const redo = useMutation({
+    mutationFn: () => api.post<{ undo: UndoState }>(`${base}/redo`, {}),
+    onSuccess: () => { invalidate(); toast.success('Redone'); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Nothing to redo'),
+  });
   // When an edit auto-shifts downstream tasks, tell the user how many moved (honest & non-modal).
   const notifyAutoMoves = (res: { autoScheduled?: AutoMoveRow[] } | undefined) => {
     const n = res?.autoScheduled?.length ?? 0;
@@ -1262,6 +1298,30 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
           {canPlan && (
             <AiTimelineGenerate base={base} projectId={projectId} hasTasks={rows.length > 0} onApplied={invalidate} className={CTRL_BTN} />
           )}
+          {/* Undo / redo the last bulk-cleanup op(s). Enabled only when the server has a live entry. */}
+          {canPlan && (undoState?.canUndo || undoState?.canRedo) && (
+            <>
+              <button onClick={() => undo.mutate()} disabled={!undoState?.canUndo || undo.isPending} title={undoState?.undoLabel ? `Undo: ${undoState.undoLabel}` : 'Undo'} className={`${CTRL_BTN} disabled:opacity-40`}>
+                ↶ Undo
+              </button>
+              <button onClick={() => redo.mutate()} disabled={!undoState?.canRedo || redo.isPending} title={undoState?.redoLabel ? `Redo: ${undoState.redoLabel}` : 'Redo'} className={`${CTRL_BTN} disabled:opacity-40`}>
+                ↷ Redo
+              </button>
+            </>
+          )}
+          {/* Multi-select cleanup — pick several tasks to delete, or clear the whole timeline. */}
+          {canPlan && rows.length > 0 && (
+            <button onClick={() => (selectMode ? exitSelect() : setSelectMode(true))} title="Select multiple tasks to delete" className={`${CTRL_BTN} ${selectMode ? '!border-brand-400 !text-brand-700 dark:!text-brand-300' : ''}`}>
+              ☑ {selectMode ? 'Selecting…' : 'Select'}
+            </button>
+          )}
+          {canPlan && rows.length > 0 && (
+            <button
+              onClick={async () => { if (await confirm({ title: 'Clear the whole timeline?', message: <>Delete <strong>all {rows.length} rows</strong> from this schedule? This removes every task and dependency. This cannot be undone.</>, confirmLabel: 'Clear timeline', danger: true, container: modalContainer })) clearAll.mutate(); }}
+              title="Delete every task in this schedule" className={CTRL_BTN}>
+              🧹 Clear timeline
+            </button>
+          )}
           {/* Phase-weight editor — steer the % roll-up from the top level (needs write + unlocked baseline). */}
           {canPlan && rows.length > 0 && (
             <button onClick={() => setWeightsOpen(true)} title="Set phase weights to steer the project %" className={CTRL_BTN}>
@@ -1349,6 +1409,25 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         {!fullscreen && rows.length > 0 && <ProgressBadge pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
         </div>
       </div>
+
+      {/* Multi-select action bar — appears while picking tasks to delete. */}
+      {selectMode && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm dark:border-brand-900/50 dark:bg-brand-900/15">
+          <span className="font-medium text-brand-800 dark:text-brand-200">{selectedIds.size} selected</span>
+          <div className="flex-1" />
+          <button onClick={() => setSelectedIds(new Set())} disabled={!selectedIds.size} className={`${CTRL_BTN} disabled:opacity-40`}>Clear selection</button>
+          <Button
+            variant="danger" className="!py-1 text-xs"
+            disabled={!selectedIds.size || bulkDelete.isPending}
+            onClick={async () => {
+              const n = selectedIds.size;
+              if (await confirm({ title: 'Delete selected tasks?', message: <>Delete the <strong>{n}</strong> selected task{n === 1 ? '' : 's'} and all of their subtasks? This cannot be undone.</>, confirmLabel: `Delete ${n}`, danger: true, container: modalContainer })) bulkDelete.mutate([...selectedIds]);
+            }}>
+            🗑 {bulkDelete.isPending ? 'Deleting…' : 'Delete selected'}
+          </Button>
+          <button onClick={exitSelect} className={CTRL_BTN}>Done</button>
+        </div>
+      )}
 
       {!rows.length ? (
         <div className="py-6">
@@ -1469,7 +1548,16 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
                   then (rowSpan=hrs), 1 otherwise. */}
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title="Mark task / subtask complete"><span className="text-slate-300 dark:text-slate-600">✓</span></th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title={selectMode ? 'Select all' : 'Mark task / subtask complete'}>
+                  {selectMode ? (
+                    <input
+                      type="checkbox" aria-label="Select all tasks"
+                      checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.node.id))}
+                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(rows.map((r) => r.node.id)) : new Set())}
+                      className="h-4 w-4 accent-brand-600"
+                    />
+                  ) : <span className="text-slate-300 dark:text-slate-600">✓</span>}
+                </th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
                 <th rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) responsible for the task">Owner</th>
@@ -1580,7 +1668,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                     className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 [&>td]:py-3 [&>td]:pr-3 [&>td]:transition-colors ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
-                        <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent || node.stepCount > 0} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
+                        {selectMode ? (
+                          <input type="checkbox" aria-label={`Select ${node.name}`} checked={selectedIds.has(node.id)} onChange={() => toggleSel(node.id)} className="h-4 w-4 accent-brand-600" />
+                        ) : (
+                          <CircleCheck pct={r.pct} readOnly={!canEdit || r.isParent || node.stepCount > 0} busy={togglingId} onSet={(v) => progress.mutate({ id: node.id, pct: v })} />
+                        )}
                       </div>
                     </td>
                     <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-600 dark:text-slate-300 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>

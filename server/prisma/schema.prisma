@@ -391,6 +391,7 @@ model Tenant {
   tasks  Task[]
   taskSteps  TaskStep[]
   taskDependencys  TaskDependency[]
+  scheduleUndos  ScheduleUndo[]
   changeRequests  ChangeRequest[]
   attachments  Attachment[]
   sprints  Sprint[]
@@ -714,6 +715,7 @@ model Project {
   approvalRequests ApprovalRequest[]
   aiActionProposals AiActionProposal[]
   aiActionOutcomes AiActionOutcome[]
+  scheduleUndos    ScheduleUndo[]
 
   @@index([status])
   @@index([pmUserId])
@@ -1639,6 +1641,32 @@ model TaskDependency {
   lagDays       Int            @default(0)
 
   @@unique([predecessorId, successorId])
+  @@index([tenantId])
+}
+
+// Bounded per-project undo stack for the WBS bulk-cleanup ops (bulk delete / clear). Each entry
+// captures exactly what the op removed (tasks + their dependencies, owners, steps, requirement
+// links, and the cost-line links it unlinked) so Undo can recreate it, plus the expanded id set so
+// Redo can re-delete it. `sigBefore`/`sigAfter` fingerprint the schedule around the op so the stack
+// self-invalidates when anything else changes it. Transient — safe to prune. See schedule.service.
+model ScheduleUndo {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  seq         Int
+  kind        String   // BULK_DELETE | CLEAR
+  label       String
+  ids         String[] // the expanded task ids the op deleted (roots + subtrees) — for redo
+  removedJson Json     // { tasks, deps, owners, steps, reqLinks, costLinks } captured before delete
+  sigBefore   String
+  sigAfter    String
+  undone      Boolean  @default(false)
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, seq])
   @@index([tenantId])
 }
 
