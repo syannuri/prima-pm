@@ -477,13 +477,10 @@ export async function setScheduleBaseline(projectId: string, actorId: string) {
 }
 
 // Delete a task and its whole subtree; unlink manpower and drop dependencies.
-export async function deleteTask(projectId: string, taskId: string, actorId: string) {
-  const all = await prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true } });
-  const existing = all.find((t) => t.id === taskId);
-  if (!existing) throw NotFound('Task not found');
-  await assertBaselineUnlocked(projectId);
-
-  // Collect the subtree (the task + all descendants).
+// Expand a set of root task ids to the full set of ids to remove (each root + all its descendants).
+// PURE given the (id, parentTaskId) list. Dedupes, so overlapping roots (a phase + one of its tasks)
+// are handled once.
+function collectSubtrees(all: { id: string; parentTaskId: string | null }[], roots: string[]): string[] {
   const childrenOf = new Map<string, string[]>();
   for (const t of all) {
     if (t.parentTaskId) {
@@ -491,24 +488,57 @@ export async function deleteTask(projectId: string, taskId: string, actorId: str
       childrenOf.get(t.parentTaskId)!.push(t.id);
     }
   }
-  const toDelete: string[] = [];
-  const stack = [taskId];
+  const seen = new Set<string>();
+  const stack = [...roots];
   while (stack.length) {
     const id = stack.pop()!;
-    toDelete.push(id);
+    if (seen.has(id)) continue;
+    seen.add(id);
     stack.push(...(childrenOf.get(id) ?? []));
   }
+  return [...seen];
+}
 
+// Delete a set of tasks (each expanded to its subtree) in one transaction: unlink cost lines, drop
+// dependencies touching them, then remove the tasks. assertBaselineUnlocked already checked by callers
+// that gate on it; the standalone routes assert it here.
+async function removeTasks(projectId: string, ids: string[], actorId: string, entityId: string) {
+  if (ids.length === 0) return { deleted: 0 };
   await prisma.$transaction([
-    prisma.costItemDirect.updateMany({ where: { taskId: { in: toDelete } }, data: { taskId: null } }),
+    prisma.costItemDirect.updateMany({ where: { taskId: { in: ids } }, data: { taskId: null } }),
     prisma.taskDependency.deleteMany({
-      where: { OR: [{ predecessorId: { in: toDelete } }, { successorId: { in: toDelete } }] },
+      where: { OR: [{ predecessorId: { in: ids } }, { successorId: { in: ids } }] },
     }),
-    prisma.task.deleteMany({ where: { id: { in: toDelete } } }),
+    prisma.task.deleteMany({ where: { id: { in: ids } } }),
   ]);
+  await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId, action: 'DELETE', before: { deletedIds: ids } });
+  return { deleted: ids.length };
+}
 
-  await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: taskId, action: 'DELETE', before: { deletedIds: toDelete } });
-  return { deleted: toDelete.length };
+export async function deleteTask(projectId: string, taskId: string, actorId: string) {
+  const all = await prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true } });
+  if (!all.some((t) => t.id === taskId)) throw NotFound('Task not found');
+  await assertBaselineUnlocked(projectId);
+  return removeTasks(projectId, collectSubtrees(all, [taskId]), actorId, taskId);
+}
+
+// Bulk delete: every selected task plus its descendants, in one transaction. Ids not in the project
+// are ignored (idempotent). Used by "delete selected" in the WBS multi-select.
+export async function bulkDeleteTasks(projectId: string, ids: string[], actorId: string) {
+  const all = await prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true } });
+  const present = new Set(all.map((t) => t.id));
+  const roots = ids.filter((id) => present.has(id));
+  if (roots.length === 0) return { deleted: 0 };
+  await assertBaselineUnlocked(projectId);
+  return removeTasks(projectId, collectSubtrees(all, roots), actorId, projectId);
+}
+
+// Clear the whole schedule (delete every task in the project). Strong-confirmed on the client.
+export async function clearSchedule(projectId: string, actorId: string) {
+  const all = await prisma.task.findMany({ where: { projectId }, select: { id: true } });
+  if (all.length === 0) return { deleted: 0 };
+  await assertBaselineUnlocked(projectId);
+  return removeTasks(projectId, all.map((t) => t.id), actorId, projectId);
 }
 
 // --- Dependencies ---

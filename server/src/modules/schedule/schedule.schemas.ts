@@ -103,6 +103,11 @@ export const applyTemplateSchema = z.object({
   startDate: z.coerce.date().optional(),
 });
 
+// Bulk-delete selected tasks (each expanded to its subtree). Bounded to avoid an unbounded IN list.
+export const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(2000),
+});
+
 export type TaskStepsInput = z.infer<typeof taskStepsSchema>;
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;

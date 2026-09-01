@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
-import { upsertTaskSchema, dependencySchema, dependencyEditSchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema } from './schedule.schemas.js';
+import { upsertTaskSchema, dependencySchema, dependencyEditSchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema, bulkDeleteSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
 import { aiEnabled } from '../../lib/ai.js';
@@ -126,6 +126,18 @@ router.patch('/tasks/:taskId/actuals', ...canWrite, validateBody(taskActualsSche
 
 router.delete('/tasks/:taskId', ...canWrite, asyncHandler(async (req, res) => {
   const result = await svc.deleteTask(req.params.projectId, req.params.taskId, req.user!.id);
+  res.json(result);
+}));
+
+// Bulk-delete selected tasks (each expanded to its subtree), one transaction.
+router.post('/tasks/bulk-delete', ...canWrite, validateBody(bulkDeleteSchema), asyncHandler(async (req, res) => {
+  const result = await svc.bulkDeleteTasks(req.params.projectId, req.body.ids, req.user!.id);
+  res.json(result);
+}));
+
+// Clear the whole schedule (delete every task). Strong-confirmed on the client.
+router.post('/clear', ...canWrite, asyncHandler(async (req, res) => {
+  const result = await svc.clearSchedule(req.params.projectId, req.user!.id);
   res.json(result);
 }));
 
