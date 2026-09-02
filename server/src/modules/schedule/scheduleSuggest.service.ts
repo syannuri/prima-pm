@@ -13,6 +13,7 @@ import {
   mergeResourcePool,
   type AvailableResource,
 } from './scheduleResource.helpers.js';
+import { resolveAssignments, planLevelingEdges, type LevelTask } from './resourceLeveling.js';
 
 // ---------------------------------------------------------------------------
 // AI-generated timeline (schedule draft) from the Project Charter.
@@ -72,6 +73,10 @@ export const ApplyScheduleDraftSchema = ScheduleDraftBase.extend({
   link: z.boolean().optional(),
   // When true, scale durations so the timeline lands on the charter end (opt-in; distorts estimates).
   fit: z.boolean().optional(),
+  // Resource-aware options (default ON). `level` adds capacity-respecting FS edges so same-resource
+  // work serialises (needs `link`); `assign` sets the task owner from a matched register resource.
+  level: z.boolean().optional(),
+  assign: z.boolean().optional(),
 }).refine(withinTotalCap, totalCapIssue);
 
 export type DraftTask = z.infer<typeof DraftTaskSchema>;
@@ -297,6 +302,8 @@ export interface PlannedRow {
   acceptanceCriteria: string | null;
   progressPct: number;
   weight: number | null;
+  // Lead owner, set during materialise when the task's role maps to a register resource.
+  picResourceId?: string | null;
 }
 
 // PURE: turn a draft into createMany rows. Sequential calendar-day dates (parity with templates):
@@ -451,8 +458,8 @@ export async function applyScheduleDraft(
   inputDraft: ScheduleDraft,
   startDate: Date | undefined,
   actorId: string,
-  opts: { link?: boolean; fit?: boolean } = {},
-): Promise<{ created: number; phases: number; projectedEnd: Date; links: number }> {
+  opts: { link?: boolean; fit?: boolean; level?: boolean; assign?: boolean } = {},
+): Promise<{ created: number; phases: number; projectedEnd: Date; links: number; levelingLinks: number; assigned: number }> {
   const ctx = await loadCharterContext(projectId); // gate + opt-in + chartered
   await assertBaselineUnlocked(projectId);
 
@@ -482,14 +489,61 @@ export async function applyScheduleDraft(
   const parents = rows.filter((r) => r.parentTaskId === null);
   const children = rows.filter((r) => r.parentTaskId !== null);
 
+  const link = opts.link !== false;
+  const doAssign = opts.assign !== false;
+  const doLevel = opts.level !== false;
+
+  // Pair each draft task with its created leaf id (planScheduleRows visits tasks in this same order,
+  // so orderedLeafIds[k] is the k-th draft task) and resolve it to a pool resource.
+  const pool = ctx.availableResources;
+  const poolByRef = new Map(pool.map((r) => [r.ref, r]));
+  const pairs: { task: DraftTask; id: string; order: number }[] = [];
+  let k = 0;
+  for (const phase of draft.phases) for (const task of phase.tasks) { pairs.push({ task, id: orderedLeafIds[k], order: k }); k++; }
+  const assign = resolveAssignments(pairs.map((p) => ({ id: p.id, resourceRole: p.task.resourceRole, resourceRef: p.task.resourceRef })), pool);
+
+  // Owner assignment: set the lead owner only when the resolved pool entry is a real register
+  // resource (narrative-only roles have no id → left unassigned for the PM to fill).
+  const ownerRows: { taskId: string; resourceId: string }[] = [];
+  if (doAssign) {
+    const childById = new Map(children.map((c) => [c.id, c]));
+    for (const p of pairs) {
+      const ref = assign.get(p.id);
+      const res = ref ? poolByRef.get(ref) : undefined;
+      if (!res?.resourceId) continue;
+      const row = childById.get(p.id);
+      if (row) { row.picResourceId = res.resourceId; ownerRows.push({ taskId: p.id, resourceId: res.resourceId }); }
+    }
+  }
+
   // Hybrid dependencies: the AI's validated FS graph, else a sequential chain. Only for the tasks
   // this call creates (existing tasks are never re-linked).
-  const link = opts.link !== false;
-  const deps = link ? planDependencies(draft, refToId, orderedLeafIds) : [];
+  const aiDeps = link ? planDependencies(draft, refToId, orderedLeafIds) : [];
+  // Resource leveling: add the minimum FS edges so no resource is booked past capacity (same-resource
+  // work serialises; different resources stay parallel). Layered on the logical graph, acyclic-guarded.
+  let deps = aiDeps;
+  if (link && doLevel && pool.length) {
+    const levelTasks: LevelTask[] = pairs.map((p) => ({
+      id: p.id,
+      durationDays: p.task.durationDays,
+      sortOrder: p.order,
+      poolRef: assign.get(p.id) ?? null,
+      isMilestone: p.task.isMilestone === true || p.task.durationDays === 0,
+    }));
+    const capMap = new Map(pool.map((r) => [r.ref, r.capacityPerDay]));
+    const accepted = [...aiDeps];
+    for (const e of planLevelingEdges(levelTasks, aiDeps, capMap)) {
+      const edges = [...accepted, e].map((x) => ({ from: x.predecessorId, to: x.successorId }));
+      if (!hasDependencyCycle(edges)) accepted.push(e);
+    }
+    deps = accepted;
+  }
+  const levelingLinks = deps.length - aiDeps.length;
 
   await prisma.$transaction([
     prisma.task.createMany({ data: parents }),
     prisma.task.createMany({ data: children }),
+    ...(ownerRows.length ? [prisma.taskOwner.createMany({ data: ownerRows })] : []),
     ...(deps.length
       ? [prisma.taskDependency.createMany({ data: deps.map((d) => ({ predecessorId: d.predecessorId, successorId: d.successorId, type: 'FS' as const, lagDays: 0 })) })]
       : []),
@@ -500,7 +554,7 @@ export async function applyScheduleDraft(
     entity: 'Task',
     entityId: projectId,
     action: 'CREATE',
-    after: { aiGeneratedSchedule: true, phases: parents.length, taskCount: rows.length, links: deps.length },
+    after: { aiGeneratedSchedule: true, phases: parents.length, taskCount: rows.length, links: deps.length, levelingLinks, assigned: ownerRows.length },
   });
 
   // Weekend-aware auto-schedule so the FS network drives the dates, then roll the phase spans up
@@ -509,7 +563,7 @@ export async function applyScheduleDraft(
     await applyAutoSchedule(projectId, { actorId, mode: 'asap' });
     await recomputeParentSpans(projectId);
   }
-  return { created: rows.length, phases: parents.length, projectedEnd, links: deps.length };
+  return { created: rows.length, phases: parents.length, projectedEnd, links: deps.length, levelingLinks, assigned: ownerRows.length };
 }
 
 // After leaves move (auto-schedule), a summary phase should span its work packages. Updates only
