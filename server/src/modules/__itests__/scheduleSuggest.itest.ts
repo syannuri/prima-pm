@@ -20,16 +20,18 @@ const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 const DRAFT: ScheduleDraft = {
   phases: [
     { name: 'Planning', deliverable: 'Plan', tasks: [
-      { name: 'Requirements', durationDays: 5, deliverable: 'SRS' },
-      { name: 'Design', durationDays: 5 },
+      { name: 'Requirements', durationDays: 5, deliverable: 'SRS', resourceRole: 'Business Analyst' },
+      { name: 'Design', durationDays: 5, resourceRole: 'Backend Engineer', resourceRef: 'r1' },
     ] },
     { name: 'Delivery', tasks: [
       { name: 'Kick-off', durationDays: 0, isMilestone: true },
-      { name: 'Build', durationDays: 10, weight: 30 },
+      { name: 'Build', durationDays: 10, weight: 30, resourceRole: 'Backend Engineer', resourceRef: 'r1' },
     ] },
   ],
 };
-const fakePort: AiPort = { async draftJson() { return DRAFT; }, async draftNarrative() { return null; } };
+// Capture the last user payload so a test can assert the resource pool was assembled + passed in.
+let capturedUser = '';
+const fakePort: AiPort = { async draftJson({ user }) { capturedUser = user; return DRAFT; }, async draftNarrative() { return null; } };
 
 let prevFlag: string | undefined;
 let prevKey: string | undefined;
@@ -76,8 +78,11 @@ beforeAll(async () => {
         hiScope: 'Build the thing', hiCostIdr: 0, hiDeliverables: 'A, B, C',
         hiScheduleStart: new Date('2026-01-05'), hiScheduleEnd: new Date('2026-03-05'),
         pmUserId: owner.id,
+        hiResources: '- 1 Backend Engineer\n- 1 QA Engineer',
       },
     });
+    // A register resource (structured capacity) — pooled with the narrative roles for the AI.
+    await prisma.resource.create({ data: { name: 'Andi', roleTitle: 'Backend Engineer', capacityPerDay: 1 } });
     return proj.id;
   });
 });
@@ -120,6 +125,23 @@ describe('AI timeline — schedule/ai-generate + apply-ai-draft', () => {
     expect(res.status).toBe(200);
     expect(res.body.draft).toEqual(DRAFT);
     expect(res.body.charter.scheduleWorkingDaysBudget).toBeGreaterThan(0);
+    // The pool travels to the client for the review modal (no register ids leaked).
+    expect(Array.isArray(res.body.resources)).toBe(true);
+    expect(res.body.resources.length).toBeGreaterThan(0);
+    expect(res.body.resources[0]).toHaveProperty('capacityPerDay');
+    expect(JSON.stringify(res.body.resources)).not.toContain('resourceId');
+  });
+
+  it('assembles the resource pool (register + charter hiResources) into the AI payload', async () => {
+    await request(app).post(genUrl()).set(bearer(ownerToken)).send({ lang: 'en' });
+    const payload = JSON.parse(capturedUser);
+    const labels = payload.availableResources.map((r: { label: string }) => r.label);
+    // Register row comes first (name · role); the narrative QA role supplements it; the register's
+    // Backend Engineer role de-dupes the narrative "Backend Engineer" line.
+    expect(labels).toContain('Andi · Backend Engineer');
+    expect(labels).toContain('QA Engineer');
+    expect(labels).not.toContain('Backend Engineer'); // narrative dup dropped in favour of the register row
+    expect(payload.availableResources.every((r: { capacityPerDay: number }) => r.capacityPerDay > 0)).toBe(true);
   });
 
   it('502 when the model declines / returns nothing', async () => {
@@ -181,6 +203,69 @@ describe('AI timeline — schedule/ai-generate + apply-ai-draft', () => {
     const res = await request(app).post(applyUrl()).set(bearer(ownerToken)).send(linked);
     expect(res.status).toBe(201);
     expect(res.body.links).toBe(4); // a→b, a→c, b→d, c→d
+  });
+
+  it('resource-levels same-resource parallel branches + assigns owners (Phase 3)', async () => {
+    // Two register resources (capacity 1 each) so the pool has real ids to own + level against.
+    const { p3, andiId, bellaId } = await runWithTenant(aico, async () => {
+      const andi = await prisma.resource.findFirst({ where: { name: 'Andi' }, select: { id: true } });
+      const bella = await prisma.resource.create({ data: { name: 'Bella', roleTitle: 'Designer', capacityPerDay: 1 }, select: { id: true } });
+      const proj = await prisma.project.create({ data: { code: 'SCH-LVL', name: 'Leveling', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE' }, select: { id: true } });
+      await prisma.projectCharter.create({ data: {
+        projectId: proj.id, description: 'd', goals: 'g', category: 'APP_DEV', hiScope: 's', hiCostIdr: 0, hiDeliverables: 'a',
+        hiScheduleStart: new Date('2026-01-05'), hiScheduleEnd: new Date('2026-06-05'), pmUserId: ownerId,
+      } });
+      return { p3: proj.id, andiId: andi!.id, bellaId: bella.id };
+    });
+
+    // Kick-off then three branches: A & B both need r1 (Andi) → must serialise; C needs r2 (Bella) → parallel.
+    const draft = { phases: [{ name: 'Build', tasks: [
+      { name: 'Kick-off', durationDays: 0, isMilestone: true, ref: 'k' },
+      { name: 'Backend A', durationDays: 5, ref: 'a', deps: ['k'], resourceRef: 'r1' },
+      { name: 'Backend B', durationDays: 5, ref: 'b', deps: ['k'], resourceRef: 'r1' },
+      { name: 'Design C', durationDays: 5, ref: 'c', deps: ['k'], resourceRef: 'r2' },
+    ] }] };
+    const res = await request(app).post(api(`/projects/${p3}/schedule/apply-ai-draft`)).set(bearer(ownerToken)).send(draft);
+    expect(res.status).toBe(201);
+    expect(res.body.links).toBe(4);        // 3 AI (k→a,k→b,k→c) + 1 leveling (a→b)
+    expect(res.body.levelingLinks).toBe(1);
+    expect(res.body.assigned).toBe(3);     // A,B → Andi; C → Bella; the milestone has no resource
+
+    const tasks = await runWithTenant(aico, () => prisma.task.findMany({
+      where: { projectId: p3 }, select: { name: true, planStart: true, planEnd: true, picResourceId: true },
+    }));
+    const byName = (n: string) => tasks.find((t) => t.name === n)!;
+    const A = byName('Backend A'), B = byName('Backend B'), C = byName('Design C');
+    // Same resource → B starts only after A finishes (no overlap).
+    expect(+B.planStart).toBeGreaterThanOrEqual(+A.planEnd);
+    // Different resource → C runs in parallel with A (overlaps it, not pushed after).
+    expect(+C.planStart).toBeLessThan(+A.planEnd);
+    // Owners were auto-assigned from the matched register resources.
+    expect(A.picResourceId).toBe(andiId);
+    expect(B.picResourceId).toBe(andiId);
+    expect(C.picResourceId).toBe(bellaId);
+    const ownerCount = await runWithTenant(aico, () => prisma.taskOwner.count({ where: { task: { projectId: p3 } } }));
+    expect(ownerCount).toBe(3);
+  });
+
+  it('level=false skips leveling (same-resource branches may overlap)', async () => {
+    const { p4 } = await runWithTenant(aico, async () => {
+      const proj = await prisma.project.create({ data: { code: 'SCH-NOLVL', name: 'No level', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE' }, select: { id: true } });
+      await prisma.projectCharter.create({ data: {
+        projectId: proj.id, description: 'd', goals: 'g', category: 'APP_DEV', hiScope: 's', hiCostIdr: 0, hiDeliverables: 'a',
+        hiScheduleStart: new Date('2026-01-05'), hiScheduleEnd: new Date('2026-06-05'), pmUserId: ownerId,
+      } });
+      return { p4: proj.id };
+    });
+    const draft = { phases: [{ name: 'Build', tasks: [
+      { name: 'Kick-off', durationDays: 0, isMilestone: true, ref: 'k' },
+      { name: 'A2', durationDays: 5, ref: 'a', deps: ['k'], resourceRef: 'r1' },
+      { name: 'B2', durationDays: 5, ref: 'b', deps: ['k'], resourceRef: 'r1' },
+    ] }] };
+    const res = await request(app).post(api(`/projects/${p4}/schedule/apply-ai-draft`)).set(bearer(ownerToken)).send({ ...draft, level: false });
+    expect(res.status).toBe(201);
+    expect(res.body.levelingLinks).toBe(0);
+    expect(res.body.links).toBe(2); // only the AI k→a, k→b
   });
 
   it('fit=true scales an overrunning draft to land on the charter end', async () => {
