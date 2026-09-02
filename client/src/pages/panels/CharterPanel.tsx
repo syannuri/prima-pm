@@ -51,6 +51,9 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
   // Free-text detail, required only when category = OTHER. Kept out of `form` so it doesn't
   // count toward the "all fields filled" gate for the other 13 categories.
   const [categoryOther, setCategoryOther] = useState('');
+  // High-level resources / key roles — optional narrative. Kept out of `form` (like sponsor &
+  // categoryOther) so an empty value never blocks the Confirm gate.
+  const [hiResources, setHiResources] = useState('');
   const [msg, setMsg] = useState('');
   const { lang } = useLang();
   const t = (id: string, en: string) => (lang === 'id' ? id : en);
@@ -93,12 +96,13 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
         pmUserId: personalOwnerId ?? assignedPmId ?? charter.pmUserId,
       });
       setCategoryOther(charter.categoryOther ?? '');
+      setHiResources(charter.hiResources ?? '');
     }
   }, [charter, personalOwnerId, assignedPmId]);
 
   const save = useMutation({
     mutationFn: () =>
-      api.put(`/projects/${projectId}/charter`, { ...form, categoryOther: form.category === 'OTHER' ? (categoryOther.trim() || null) : null, hiCostIdr: Number(form.hiCostIdr), deliveryApproach: approach, sponsor: sponsor.trim() || null }),
+      api.put(`/projects/${projectId}/charter`, { ...form, categoryOther: form.category === 'OTHER' ? (categoryOther.trim() || null) : null, hiResources: hiResources.trim() || null, hiCostIdr: Number(form.hiCostIdr), deliveryApproach: approach, sponsor: sponsor.trim() || null }),
     onSuccess: () => {
       setMsg('Charter saved (draft).');
       qc.invalidateQueries({ queryKey: ['charter', projectId] });
@@ -172,6 +176,7 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
     { label: 'High-Level Project Cost', value: formatIdr(form.hiCostIdr) },
     { label: 'Project Schedule', value: `${formatDate(form.hiScheduleStart)} — ${formatDate(form.hiScheduleEnd)}` },
     { label: 'High-Level Deliverables / Expected Outcome', value: form.hiDeliverables, long: true },
+    { label: 'High-Level Resources / Key Roles', value: hiResources, long: true },
   ];
 
   return (
@@ -200,68 +205,93 @@ export default function CharterPanel({ projectId, approach: initialApproach, spo
           ))}
         </div>
       ) : (
-      <fieldset data-tour="charter-form" disabled={locked} className="grid gap-4 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <Field label="Project Description" required error={errText('description')}>
-            <MarkdownEditor state={errState('description')} value={form.description} onChange={(v) => set('description', v)} onBlur={() => touch('description')} />
-          </Field>
-        </div>
-        <Field label="Project Goals" required error={errText('goals')}>
-          <MarkdownEditor state={errState('goals')} value={form.goals} onChange={(v) => set('goals', v)} onBlur={() => touch('goals')} />
-        </Field>
-        <Field label="High-Level Scope of Work" required error={errText('hiScope')}>
-          <MarkdownEditor state={errState('hiScope')} value={form.hiScope} onChange={(v) => set('hiScope', v)} onBlur={() => touch('hiScope')} />
-        </Field>
-        <Field label="Project Category" required error={errText('categoryOther', t('Jelaskan kategori "Other"', 'Describe the "Other" category'))}>
-          <Select value={form.category} onChange={(e) => set('category', e.target.value)}>
-            {PROJECT_CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </Select>
-          {form.category === 'OTHER' && (
-            <Input className="mt-2" state={errState('categoryOther')} value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} onBlur={() => touch('categoryOther')} placeholder="Describe the category" />
-          )}
-        </Field>
-        <Field label="Delivery Approach" hint="Editable until activation — after that, change via a Change Request">
-          <Select value={approach} onChange={(e) => setApproach(e.target.value as DeliveryApproach)}>
-            {(approach === 'HYBRID' ? [...APPROACHES, 'HYBRID' as DeliveryApproach] : APPROACHES).map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
-          </Select>
-        </Field>
-        {/* Personal (guest) → hidden (owner is the PM). Corporate with an assigned PM (from the
-            PMO at create/assign) → read-only, no re-entry. Corporate not yet assigned → pick one. */}
-        {personalOwnerId ? null : assignedPmId ? (
-          <Field label="Project Manager" hint="Set by the PMO when the project was assigned">
-            <Input value={assignedPmName ?? '—'} disabled />
-          </Field>
-        ) : (
-          <Field label="Project Manager" required error={errText('pmUserId', t('Pilih Project Manager', 'Select a Project Manager'))}>
-            <Select state={errState('pmUserId')} value={form.pmUserId} onChange={(e) => set('pmUserId', e.target.value)} onBlur={() => touch('pmUserId')}>
-              <option value="">— select PM —</option>
-              {usersQ.data?.users.map((u) => (
-                <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-              ))}
-            </Select>
-          </Field>
-        )}
-        <Field label="Project Sponsor" hint="The authorizing party who funds & champions the project">
-          <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office / CTO" />
-        </Field>
-        <Field label="High-Level Project Cost (IDR)" required error={errText('hiCostIdr', t('Masukkan nilai biaya lebih dari 0', 'Enter a cost greater than 0'))}>
-          <MoneyInput state={errState('hiCostIdr')} value={form.hiCostIdr} onValueChange={(v) => set('hiCostIdr', v)} onBlur={() => touch('hiCostIdr')} placeholder="e.g. 1.000.000.000" />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Schedule Start" required error={errText('hiScheduleStart')}>
-            <Input type="date" state={errState('hiScheduleStart')} value={form.hiScheduleStart} onChange={(e) => set('hiScheduleStart', e.target.value)} onBlur={() => touch('hiScheduleStart')} />
-          </Field>
-          <Field label="Schedule End" required error={errText('hiScheduleEnd')}>
-            <Input type="date" state={errState('hiScheduleEnd')} value={form.hiScheduleEnd} onChange={(e) => set('hiScheduleEnd', e.target.value)} onBlur={() => touch('hiScheduleEnd')} />
-          </Field>
-        </div>
-        <div className="md:col-span-2">
-          <Field label="High-Level Deliverables / Expected Outcome" required error={errText('hiDeliverables')}>
-            <MarkdownEditor state={errState('hiDeliverables')} value={form.hiDeliverables} onChange={(v) => set('hiDeliverables', v)} onBlur={() => touch('hiDeliverables')} />
-          </Field>
-        </div>
+      <fieldset data-tour="charter-form" disabled={locked} className="space-y-7">
+        {/* — Narrative — full-width editors, width-capped for comfortable reading & typing. */}
+        <section className="space-y-4">
+          <div className="border-b border-slate-100 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
+            {t('Naratif', 'Narrative')}
+          </div>
+          <div className="max-w-3xl space-y-4">
+            <Field label="Project Description" required error={errText('description')}>
+              <MarkdownEditor state={errState('description')} rows={6} max={4000} value={form.description} onChange={(v) => set('description', v)} onBlur={() => touch('description')} placeholder={t('mis. Membangun portal layanan pelanggan untuk menggantikan proses manual yang lambat…', 'e.g. Build a customer service portal to replace the slow manual process…')} />
+            </Field>
+            <Field label="Project Goals" required error={errText('goals')}>
+              <MarkdownEditor state={errState('goals')} rows={6} max={4000} value={form.goals} onChange={(v) => set('goals', v)} onBlur={() => touch('goals')} placeholder={t('mis. Menurunkan waktu tanggap 40%, satu sumber data pelanggan, go-live Q3…', 'e.g. Cut response time by 40%, single source of customer data, go-live in Q3…')} />
+            </Field>
+            <Field label="High-Level Scope of Work" required error={errText('hiScope')}>
+              <MarkdownEditor state={errState('hiScope')} rows={6} max={4000} value={form.hiScope} onChange={(v) => set('hiScope', v)} onBlur={() => touch('hiScope')} placeholder={t('Termasuk & tidak termasuk. mis. Termasuk: modul tiket, dasbor. Tidak: migrasi data lama.', 'In & out of scope. e.g. In: ticketing, dashboard. Out: legacy data migration.')} />
+            </Field>
+            <Field label="High-Level Deliverables / Expected Outcome" required error={errText('hiDeliverables')}>
+              <MarkdownEditor state={errState('hiDeliverables')} rows={6} max={4000} value={form.hiDeliverables} onChange={(v) => set('hiDeliverables', v)} onBlur={() => touch('hiDeliverables')} placeholder={t('mis. Aplikasi web live, dokumentasi, pelatihan admin, laporan penutupan…', 'e.g. Live web app, documentation, admin training, closeout report…')} />
+            </Field>
+            <Field label="High-Level Resources / Key Roles" hint={t('Opsional — peran, tim, vendor & alat utama yang dibutuhkan (bukan pengganti Resource register).', 'Optional — key roles, teams, vendors & tools needed (not a substitute for the Resource register).')}>
+              <MarkdownEditor rows={5} max={4000} value={hiResources} onChange={setHiResources} placeholder={t('mis. 1 PM (penuh-waktu), 2 engineer backend, vendor CCTV, lisensi & server staging…', 'e.g. 1 PM (full-time), 2 backend engineers, CCTV vendor, licenses & staging server…')} />
+            </Field>
+          </div>
+        </section>
+
+        {/* — Classification & Governance — short fields, two-up on desktop. */}
+        <section className="space-y-4">
+          <div className="border-b border-slate-100 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
+            {t('Klasifikasi & Tata Kelola', 'Classification & Governance')}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Project Category" required error={errText('categoryOther', t('Jelaskan kategori "Other"', 'Describe the "Other" category'))}>
+              <Select value={form.category} onChange={(e) => set('category', e.target.value)}>
+                {PROJECT_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </Select>
+              {form.category === 'OTHER' && (
+                <Input className="mt-2" state={errState('categoryOther')} value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} onBlur={() => touch('categoryOther')} placeholder="Describe the category" />
+              )}
+            </Field>
+            <Field label="Delivery Approach" hint="Editable until activation — after that, change via a Change Request">
+              <Select value={approach} onChange={(e) => setApproach(e.target.value as DeliveryApproach)}>
+                {(approach === 'HYBRID' ? [...APPROACHES, 'HYBRID' as DeliveryApproach] : APPROACHES).map((a) => <option key={a} value={a}>{DELIVERY_APPROACH_LABEL[a]}</option>)}
+              </Select>
+            </Field>
+            {/* Personal (guest) → hidden (owner is the PM). Corporate with an assigned PM (from the
+                PMO at create/assign) → read-only, no re-entry. Corporate not yet assigned → pick one. */}
+            {personalOwnerId ? null : assignedPmId ? (
+              <Field label="Project Manager" hint="Set by the PMO when the project was assigned">
+                <Input value={assignedPmName ?? '—'} disabled />
+              </Field>
+            ) : (
+              <Field label="Project Manager" required error={errText('pmUserId', t('Pilih Project Manager', 'Select a Project Manager'))}>
+                <Select state={errState('pmUserId')} value={form.pmUserId} onChange={(e) => set('pmUserId', e.target.value)} onBlur={() => touch('pmUserId')}>
+                  <option value="">— select PM —</option>
+                  {usersQ.data?.users.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            <Field label="Project Sponsor" hint="The authorizing party who funds & champions the project">
+              <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office / CTO" />
+            </Field>
+          </div>
+        </section>
+
+        {/* — Cost & Schedule — the high-level envelope. */}
+        <section className="space-y-4">
+          <div className="border-b border-slate-100 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
+            {t('Biaya & Jadwal', 'Cost & Schedule')}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="High-Level Project Cost (IDR)" required error={errText('hiCostIdr', t('Masukkan nilai biaya lebih dari 0', 'Enter a cost greater than 0'))}>
+              <MoneyInput state={errState('hiCostIdr')} value={form.hiCostIdr} onValueChange={(v) => set('hiCostIdr', v)} onBlur={() => touch('hiCostIdr')} placeholder="e.g. 1.000.000.000" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Schedule Start" required error={errText('hiScheduleStart')}>
+                <Input type="date" state={errState('hiScheduleStart')} value={form.hiScheduleStart} onChange={(e) => set('hiScheduleStart', e.target.value)} onBlur={() => touch('hiScheduleStart')} />
+              </Field>
+              <Field label="Schedule End" required error={errText('hiScheduleEnd')}>
+                <Input type="date" state={errState('hiScheduleEnd')} value={form.hiScheduleEnd} onChange={(e) => set('hiScheduleEnd', e.target.value)} onBlur={() => touch('hiScheduleEnd')} />
+              </Field>
+            </div>
+          </div>
+        </section>
       </fieldset>
       )}
 

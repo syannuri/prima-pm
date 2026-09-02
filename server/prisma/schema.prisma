@@ -760,6 +760,7 @@ model ProjectCharter {
   hiScheduleStart DateTime
   hiScheduleEnd   DateTime
   hiDeliverables  String
+  hiResources     String?         // high-level resources / key roles (narrative, optional)
 
   pmUserId        String
   pm              User            @relation("CharterPM", fields: [pmUserId], references: [id])
