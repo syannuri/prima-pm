@@ -20,16 +20,18 @@ const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 const DRAFT: ScheduleDraft = {
   phases: [
     { name: 'Planning', deliverable: 'Plan', tasks: [
-      { name: 'Requirements', durationDays: 5, deliverable: 'SRS' },
-      { name: 'Design', durationDays: 5 },
+      { name: 'Requirements', durationDays: 5, deliverable: 'SRS', resourceRole: 'Business Analyst' },
+      { name: 'Design', durationDays: 5, resourceRole: 'Backend Engineer', resourceRef: 'r1' },
     ] },
     { name: 'Delivery', tasks: [
       { name: 'Kick-off', durationDays: 0, isMilestone: true },
-      { name: 'Build', durationDays: 10, weight: 30 },
+      { name: 'Build', durationDays: 10, weight: 30, resourceRole: 'Backend Engineer', resourceRef: 'r1' },
     ] },
   ],
 };
-const fakePort: AiPort = { async draftJson() { return DRAFT; }, async draftNarrative() { return null; } };
+// Capture the last user payload so a test can assert the resource pool was assembled + passed in.
+let capturedUser = '';
+const fakePort: AiPort = { async draftJson({ user }) { capturedUser = user; return DRAFT; }, async draftNarrative() { return null; } };
 
 let prevFlag: string | undefined;
 let prevKey: string | undefined;
@@ -76,8 +78,11 @@ beforeAll(async () => {
         hiScope: 'Build the thing', hiCostIdr: 0, hiDeliverables: 'A, B, C',
         hiScheduleStart: new Date('2026-01-05'), hiScheduleEnd: new Date('2026-03-05'),
         pmUserId: owner.id,
+        hiResources: '- 1 Backend Engineer\n- 1 QA Engineer',
       },
     });
+    // A register resource (structured capacity) — pooled with the narrative roles for the AI.
+    await prisma.resource.create({ data: { name: 'Andi', roleTitle: 'Backend Engineer', capacityPerDay: 1 } });
     return proj.id;
   });
 });
@@ -120,6 +125,18 @@ describe('AI timeline — schedule/ai-generate + apply-ai-draft', () => {
     expect(res.status).toBe(200);
     expect(res.body.draft).toEqual(DRAFT);
     expect(res.body.charter.scheduleWorkingDaysBudget).toBeGreaterThan(0);
+  });
+
+  it('assembles the resource pool (register + charter hiResources) into the AI payload', async () => {
+    await request(app).post(genUrl()).set(bearer(ownerToken)).send({ lang: 'en' });
+    const payload = JSON.parse(capturedUser);
+    const labels = payload.availableResources.map((r: { label: string }) => r.label);
+    // Register row comes first (name · role); the narrative QA role supplements it; the register's
+    // Backend Engineer role de-dupes the narrative "Backend Engineer" line.
+    expect(labels).toContain('Andi · Backend Engineer');
+    expect(labels).toContain('QA Engineer');
+    expect(labels).not.toContain('Backend Engineer'); // narrative dup dropped in favour of the register row
+    expect(payload.availableResources.every((r: { capacityPerDay: number }) => r.capacityPerDay > 0)).toBe(true);
   });
 
   it('502 when the model declines / returns nothing', async () => {

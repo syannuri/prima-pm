@@ -8,6 +8,11 @@ import { getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { assertBaselineUnlocked } from '../projects/baseline.service.js';
 import { generateTaskCode, hasDependencyCycle } from './schedule.helpers.js';
 import { applyAutoSchedule } from './schedule.service.js';
+import {
+  parseHiResources,
+  mergeResourcePool,
+  type AvailableResource,
+} from './scheduleResource.helpers.js';
 
 // ---------------------------------------------------------------------------
 // AI-generated timeline (schedule draft) from the Project Charter.
@@ -36,6 +41,11 @@ export const DraftTaskSchema = z.object({
   weight: z.number().min(0).max(1000).nullable().optional(),
   ref: z.string().min(1).max(40).optional(),
   deps: z.array(z.string().min(1).max(40)).max(20).optional(),
+  // Resource mapping (advisory from the model). `resourceRole` is the human role/name the task
+  // needs; `resourceRef` points into the availableResources pool (e.g. "r2") when it maps to a
+  // specific one. Both are validated/resolved later — never trusted for dates.
+  resourceRole: z.string().max(120).nullable().optional(),
+  resourceRef: z.string().max(40).nullable().optional(),
 });
 
 // A summary phase (WBS parent) grouping its work packages.
@@ -92,6 +102,8 @@ const SCHEDULE_DRAFT_JSON_SCHEMA = {
                 weight: { type: 'number' },
                 ref: { type: 'string' },
                 deps: { type: 'array', items: { type: 'string' } },
+                resourceRole: { type: 'string' },
+                resourceRef: { type: 'string' },
               },
               required: ['name', 'durationDays', 'ref'],
               additionalProperties: false,
@@ -122,8 +134,10 @@ const SYSTEM_PROMPT_ID = [
   '- Petakan deliverable dari charter ke tugas/fase yang menghasilkannya (isi field deliverable).',
   '- Beri weight relatif per tugas/fase mencerminkan besarnya usaha (opsional; jumlah tidak harus 100). JANGAN sertakan angka biaya/uang apa pun.',
   '- KETERGANTUNGAN (dependency): beri tiap task `ref` unik & pendek (mis. "t1","t2"). Isi `deps` = daftar ref task yang harus SELESAI sebelum task ini mulai (finish-to-start). Boleh lintas-fase, boleh paralel (dua task ber-deps sama) dan merge (satu task ber-deps banyak). WAJIB acyclic (jangan melingkar). Kalau ragu, kosongkan `deps`.',
+  '- MINIMALKAN CRITICAL PATH: beri `deps` HANYA jika ada ketergantungan nyata (output/deliverable task lain menjadi input task ini). JANGAN membuat rantai serial hanya karena task berada di fase yang sama. Task yang tidak saling bergantung harus dibiarkan PARALEL (deps kosong / berbagi predecessor yang sama).',
+  '- ALOKASI RESOURCE: payload berisi `availableResources` = daftar {ref,label,capacityPerDay}. Untuk tiap task, isi `resourceRole` (peran/skill yang dibutuhkan) dan `resourceRef` (ref resource dari pool bila cocok dengan salah satu). Pakai ini untuk memutuskan paralelisme: task dengan resource BERBEDA dan tanpa ketergantungan logis boleh jalan bersamaan. Dua task yang butuh resource SAMA akan diserialkan otomatis di tahap berikutnya — JANGAN menambah `deps` buatan untuk itu.',
   '',
-  'Untuk tiap fase hasilkan: name, deliverable (opsional), weight (opsional), dan tasks[]. Untuk tiap task: name, durationDays, isMilestone, deliverable (opsional), acceptanceCriteria (opsional), weight (opsional), ref, deps (opsional).',
+  'Untuk tiap fase hasilkan: name, deliverable (opsional), weight (opsional), dan tasks[]. Untuk tiap task: name, durationDays, isMilestone, deliverable (opsional), acceptanceCriteria (opsional), weight (opsional), ref, deps (opsional), resourceRole (opsional), resourceRef (opsional).',
 ].join('\n');
 
 const SYSTEM_PROMPT_EN = [
@@ -139,8 +153,10 @@ const SYSTEM_PROMPT_EN = [
   '- Map the charter deliverables to the tasks/phases that produce them (fill the deliverable field).',
   '- Give a relative weight per task/phase reflecting effort (optional; the sum need not be 100). Do NOT include any cost/money figures.',
   '- DEPENDENCIES: give each task a short unique `ref` (e.g. "t1","t2"). Fill `deps` = the refs of the tasks that must FINISH before this task starts (finish-to-start). Cross-phase is allowed, as are parallel branches (two tasks sharing a predecessor) and merges (one task with several deps). It MUST stay acyclic (no loops). If unsure, leave `deps` empty.',
+  '- MINIMISE THE CRITICAL PATH: add `deps` ONLY when there is a real dependency (another task\'s output/deliverable is an input to this one). Do NOT create a serial chain just because tasks share a phase. Tasks that do not depend on each other must be left PARALLEL (empty deps / sharing the same predecessor).',
+  '- RESOURCE ALLOCATION: the payload has `availableResources` = a list of {ref,label,capacityPerDay}. For each task, fill `resourceRole` (the role/skill it needs) and `resourceRef` (a pool ref when it maps to a specific one). Use this to decide parallelism: tasks on DIFFERENT resources with no logical dependency may run concurrently. Two tasks needing the SAME resource will be serialised automatically in a later step — do NOT add an artificial `dep` for that.',
   '',
-  'For each phase produce: name, deliverable (optional), weight (optional), and tasks[]. For each task: name, durationDays, isMilestone, deliverable (optional), acceptanceCriteria (optional), weight (optional), ref, deps (optional).',
+  'For each phase produce: name, deliverable (optional), weight (optional), and tasks[]. For each task: name, durationDays, isMilestone, deliverable (optional), acceptanceCriteria (optional), weight (optional), ref, deps (optional), resourceRole (optional), resourceRef (optional).',
 ].join('\n');
 
 export type SuggestLang = 'id' | 'en';
@@ -157,6 +173,8 @@ interface CharterContext {
     scheduleEnd: Date;
   };
   scheduleWorkingDaysBudget: number;
+  // The bounded resource pool (register + charter hiResources) the model maps tasks onto.
+  availableResources: AvailableResource[];
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -182,6 +200,8 @@ export function buildScheduleSuggestPrompt(ctx: CharterContext, lang: SuggestLan
       scheduleEnd: ctx.charter.scheduleEnd,
     },
     scheduleWorkingDaysBudget: ctx.scheduleWorkingDaysBudget,
+    // Only the fields the model needs to map roles — the register id stays server-side.
+    availableResources: ctx.availableResources.map((r) => ({ ref: r.ref, label: r.label, capacityPerDay: r.capacityPerDay })),
   };
   return { system: lang === 'id' ? SYSTEM_PROMPT_ID : SYSTEM_PROMPT_EN, user: JSON.stringify(payload) };
 }
@@ -200,6 +220,8 @@ async function loadCharterContext(projectId: string): Promise<CharterContext> {
   const charter = await prisma.projectCharter.findUnique({ where: { projectId } });
   if (!charter) throw BadRequest('The Project Charter is required to generate a schedule');
 
+  const availableResources = await assembleResourcePool(charter.hiResources);
+
   return {
     project: { code: proj.code, name: proj.name, approach: proj.deliveryApproach },
     charter: {
@@ -212,7 +234,23 @@ async function loadCharterContext(projectId: string): Promise<CharterContext> {
       scheduleEnd: charter.hiScheduleEnd,
     },
     scheduleWorkingDaysBudget: scheduleDayBudget(charter.hiScheduleStart, charter.hiScheduleEnd),
+    availableResources,
   };
+}
+
+// Build the AI resource pool: the tenant's Resource register (structured capacity) merged with the
+// roles parsed out of the charter's hiResources narrative. Register rows come first (real ids +
+// capacity); narrative roles supplement what the register doesn't already cover. Tenant scoping is
+// applied by the Prisma extension. Bounded by mergeResourcePool.
+export async function assembleResourcePool(hiResources: string | null): Promise<AvailableResource[]> {
+  const register = await prisma.resource.findMany({
+    select: { id: true, name: true, roleTitle: true, capacityPerDay: true },
+    orderBy: { name: 'asc' },
+  });
+  return mergeResourcePool(
+    register.map((r) => ({ id: r.id, name: r.name, roleTitle: r.roleTitle, capacityPerDay: Number(r.capacityPerDay) })),
+    parseHiResources(hiResources),
+  );
 }
 
 // Generate a schedule DRAFT. Does NOT persist. Assumes the global env gate (aiEnabled) was already
