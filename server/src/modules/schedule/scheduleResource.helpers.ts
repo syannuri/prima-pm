@@ -47,8 +47,9 @@ function clampCapacity(n: number): number {
   return Math.min(50, Math.max(0.5, Math.round(n * 100) / 100));
 }
 
-/** Normalise a label for duplicate detection: lowercase, collapse whitespace, strip punctuation. */
-function normLabel(s: string): string {
+/** Normalise a label for duplicate detection / role matching: lowercase, collapse whitespace,
+ *  strip punctuation. Shared with the leveling engine's fuzzy role match. */
+export function normalizeLabel(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
@@ -99,12 +100,12 @@ export function mergeResourcePool(
     const role = (r.roleTitle ?? '').trim();
     const label = role ? `${r.name} · ${role}` : r.name;
     pool.push({ ref: `r${pool.length + 1}`, label, capacityPerDay: clampCapacity(r.capacityPerDay), resourceId: r.id });
-    seen.push(normLabel(role || r.name));
+    seen.push(normalizeLabel(role || r.name));
   }
 
   for (const p of parsed) {
     if (pool.length >= MAX_POOL) break;
-    const norm = normLabel(p.label);
+    const norm = normalizeLabel(p.label);
     if (!norm) continue;
     // Skip when a register entry already covers this role (either contains the other).
     if (seen.some((s) => s === norm || s.includes(norm) || norm.includes(s))) continue;
