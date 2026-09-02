@@ -125,6 +125,11 @@ describe('AI timeline — schedule/ai-generate + apply-ai-draft', () => {
     expect(res.status).toBe(200);
     expect(res.body.draft).toEqual(DRAFT);
     expect(res.body.charter.scheduleWorkingDaysBudget).toBeGreaterThan(0);
+    // The pool travels to the client for the review modal (no register ids leaked).
+    expect(Array.isArray(res.body.resources)).toBe(true);
+    expect(res.body.resources.length).toBeGreaterThan(0);
+    expect(res.body.resources[0]).toHaveProperty('capacityPerDay');
+    expect(JSON.stringify(res.body.resources)).not.toContain('resourceId');
   });
 
   it('assembles the resource pool (register + charter hiResources) into the AI payload', async () => {

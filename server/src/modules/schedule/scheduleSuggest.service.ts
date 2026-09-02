@@ -263,6 +263,7 @@ export async function assembleResourcePool(hiResources: string | null): Promise<
 export async function generateScheduleDraft(projectId: string, lang: SuggestLang = 'en'): Promise<{
   draft: ScheduleDraft;
   charter: { scheduleStart: Date; scheduleEnd: Date; scheduleWorkingDaysBudget: number };
+  resources: { ref: string; label: string; capacityPerDay: number }[];
 }> {
   const ctx = await loadCharterContext(projectId);
   const { system, user } = buildScheduleSuggestPrompt(ctx, lang);
@@ -284,6 +285,8 @@ export async function generateScheduleDraft(projectId: string, lang: SuggestLang
       scheduleEnd: ctx.charter.scheduleEnd,
       scheduleWorkingDaysBudget: ctx.scheduleWorkingDaysBudget,
     },
+    // The pool the PM sees in the review modal (register id stays server-side).
+    resources: ctx.availableResources.map((r) => ({ ref: r.ref, label: r.label, capacityPerDay: r.capacityPerDay })),
   };
 }
 
