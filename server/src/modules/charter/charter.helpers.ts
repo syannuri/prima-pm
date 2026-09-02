@@ -76,6 +76,8 @@ export function canEditCharter(charter: CommitGuardInput | null): CommitGuard {
 export function buildCharterSnapshot(charter: Record<string, unknown>): Record<string, unknown> {
   const snapshot: Record<string, unknown> = {};
   for (const f of REQUIRED_CHARTER_FIELDS) snapshot[f] = charter[f] ?? null;
+  // Optional fields aren't in REQUIRED_CHARTER_FIELDS but still belong in the immutable snapshot.
+  snapshot.hiResources = charter.hiResources ?? null;
   snapshot.version = charter.version ?? 1;
   return snapshot;
 }

@@ -363,6 +363,7 @@ export interface Charter {
   hiScheduleStart: string;
   hiScheduleEnd: string;
   hiDeliverables: string;
+  hiResources: string | null;
   pmUserId: string;
   version: number;
   locked: boolean;

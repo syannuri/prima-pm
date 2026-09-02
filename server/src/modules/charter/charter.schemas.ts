@@ -13,6 +13,8 @@ export const upsertCharterSchema = z
     hiScheduleStart: z.coerce.date(),
     hiScheduleEnd: z.coerce.date(),
     hiDeliverables: z.string().min(5).max(4000),
+    // High-level resources / key roles — narrative, optional (empty allowed → stored as null).
+    hiResources: z.string().max(4000).optional().nullable(),
     pmUserId: z.string().uuid(),
     deliveryApproach: z.enum(['PREDICTIVE', 'AGILE', 'HYBRID']).optional(),
     sponsor: z.string().max(160).optional().nullable(),

@@ -51,6 +51,8 @@ export async function upsertCharter(
     hiScheduleStart: input.hiScheduleStart,
     hiScheduleEnd: input.hiScheduleEnd,
     hiDeliverables: input.hiDeliverables,
+    // Optional narrative — normalise empty/whitespace to null.
+    hiResources: input.hiResources?.trim() || null,
     pmUserId: input.pmUserId,
   };
 

@@ -72,6 +72,14 @@ describe('charter editable until activation', () => {
     expect((await getCharter())?.description).toBe('Edited during the planning phase.');
   });
 
+  it('optional hiResources round-trips (saved when present, nulled when blank)', async () => {
+    expect((await putCharter({ hiResources: '- 1 PM\n- 2 backend engineers' })).status).toBe(200);
+    expect((await getCharter())?.hiResources).toBe('- 1 PM\n- 2 backend engineers');
+    // Blank/whitespace normalises back to null (doesn't block the required-fields gate).
+    expect((await putCharter({ hiResources: '   ' })).status).toBe(200);
+    expect((await getCharter())?.hiResources).toBeNull();
+  });
+
   it('activation freezes the charter (locked) and snapshots a version', async () => {
     const act = await request(app).patch(api(`/projects/${projectId}`)).set(bearer(adminToken))
       .send({ status: 'IN_PROGRESS', forceActivate: true, activateReason: 'test activation' });

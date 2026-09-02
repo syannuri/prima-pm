@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { InputState } from './ui';
 import { Markdown } from '../lib/markdown';
 import { useLang } from '../context/LanguageContext';
@@ -27,6 +27,7 @@ export function MarkdownEditor({
   onBlur,
   state = 'none',
   rows = 4,
+  max,
   placeholder,
 }: {
   value: string;
@@ -34,6 +35,8 @@ export function MarkdownEditor({
   onBlur?: () => void;
   state?: InputState;
   rows?: number;
+  /** Soft character limit — surfaces a live counter that warns near/over the cap. */
+  max?: number;
   placeholder?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -183,7 +186,18 @@ export function MarkdownEditor({
     }
   };
 
+  // Auto-grow: the textarea expands to fit its content (up to a comfortable cap, then scrolls) so
+  // long charter prose isn't cramped in a fixed 4-line box. Re-measures on value/preview change.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || preview) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 560)}px`;
+  }, [value, preview]);
+
   const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const near = max != null && value.length > max * 0.9;
+  const over = max != null && value.length > max;
 
   const Btn = ({ onClick, label, active: on, disabled, children }: { onClick: () => void; label: string; active?: boolean; disabled?: boolean; children: React.ReactNode }) => (
     <button
@@ -233,7 +247,8 @@ export function MarkdownEditor({
           ref={ref}
           rows={rows}
           spellCheck
-          className={`${inputBase} ${border[state]}`}
+          maxLength={max}
+          className={`${inputBase} ${border[state]} resize-none overflow-y-auto`}
           value={value}
           onChange={(ev) => { record(true); onChange(ev.target.value); }}
           onBlur={onBlur}
@@ -245,7 +260,9 @@ export function MarkdownEditor({
       )}
       <div className="mt-1 flex justify-end gap-3 pr-1 text-[11px] tabular-nums text-slate-400 dark:text-slate-500">
         <span>{words} {t('kata', words === 1 ? 'word' : 'words')}</span>
-        <span>{value.length} {t('karakter', 'chars')}</span>
+        <span className={over ? 'font-semibold text-red-500' : near ? 'font-medium text-amber-500' : ''}>
+          {value.length}{max != null ? ` / ${max}` : ''} {t('karakter', 'chars')}
+        </span>
       </div>
     </div>
   );
