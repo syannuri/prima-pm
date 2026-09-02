@@ -169,6 +169,10 @@ describe('buildScheduleSuggestPrompt — language selection', () => {
       scheduleStart: new Date('2026-01-01'), scheduleEnd: new Date('2026-03-01'),
     },
     scheduleWorkingDaysBudget: 59,
+    availableResources: [
+      { ref: 'r1', label: 'Andi · Backend Engineer', capacityPerDay: 1, resourceId: 'res-1' },
+      { ref: 'r2', label: 'QA', capacityPerDay: 2 },
+    ],
   };
 
   it('English by default; Indonesian when lang="id"; payload is language-independent', () => {
@@ -181,6 +185,23 @@ describe('buildScheduleSuggestPrompt — language selection', () => {
     const payload = JSON.parse(en.user);
     expect(payload.scheduleWorkingDaysBudget).toBe(59);
     expect(payload.charter.scope).toBe('scope text');
+  });
+
+  it('exposes the resource pool to the model but keeps the register id server-side', () => {
+    const payload = JSON.parse(buildScheduleSuggestPrompt(ctx, 'en').user);
+    expect(payload.availableResources).toEqual([
+      { ref: 'r1', label: 'Andi · Backend Engineer', capacityPerDay: 1 },
+      { ref: 'r2', label: 'QA', capacityPerDay: 2 },
+    ]);
+    // resourceId must NOT leak into the prompt.
+    expect(JSON.stringify(payload.availableResources)).not.toContain('res-1');
+  });
+
+  it('both system prompts carry the resource-allocation + minimise-critical-path guidance', () => {
+    expect(buildScheduleSuggestPrompt(ctx, 'en').system).toContain('RESOURCE ALLOCATION');
+    expect(buildScheduleSuggestPrompt(ctx, 'en').system).toContain('MINIMISE THE CRITICAL PATH');
+    expect(buildScheduleSuggestPrompt(ctx, 'id').system).toContain('ALOKASI RESOURCE');
+    expect(buildScheduleSuggestPrompt(ctx, 'id').system).toContain('MINIMALKAN CRITICAL PATH');
   });
 });
 
