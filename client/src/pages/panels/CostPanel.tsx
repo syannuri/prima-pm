@@ -9,6 +9,7 @@ import { KpiIcon, accentSurface, type Accent, type IconName } from '../../compon
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
+import ImportCostModal from '../../components/ImportCostModal';
 import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
 
 // Sentinel description of the auto-derived "labour from timesheet" AC entry (mirrors the server).
@@ -161,8 +162,8 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
       )}
 
       {/* Cost lines as collapsible accordion sections (header + total always visible). */}
-      <DirectCosts data={data!} base={base} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} onBookAc={bookToLine} onNavigateTab={onNavigateTab} />
-      <IndirectCosts data={data!} base={base} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} onBookAc={bookToLine} />
+      <DirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} onBookAc={bookToLine} onNavigateTab={onNavigateTab} />
+      <IndirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} onBookAc={bookToLine} />
       <div ref={actualRef}>
         <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.actual} onToggle={() => toggle('actual')} target={acTarget} setTarget={setAcTarget} />
       </div>
@@ -451,9 +452,10 @@ function CharterVariance({ charter, bac }: { charter: number; bac: number }) {
   );
 }
 
-function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigateTab }: { data: CostSummary; base: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void; onNavigateTab?: (tab: string) => void }) {
+function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc, onNavigateTab }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void; onNavigateTab?: (tab: string) => void }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const [importing, setImporting] = useState(false);
   const [type, setType] = useState('TECHNOLOGY_CLOUD');
   const [label, setLabel] = useState('');
   const [subCategory, setSubCategory] = useState('');
@@ -637,6 +639,11 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
             <span aria-hidden>{fam.icon}</span> {fam.label}
           </button>
         ))}
+        <button onClick={() => setImporting(true)} title="Import direct cost lines from Excel/CSV"
+          className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+          ⬆ Import
+        </button>
+        {importing && <ImportCostModal projectId={projectId} kind="direct" onClose={() => setImporting(false)} onImported={onChange} />}
       </div>
       {/* Add-line form — rendered at the TOP of the section (right under the header) so it's
           visible immediately when a family's "+ Add" is clicked, instead of hidden below the list. */}
@@ -996,9 +1003,10 @@ function DirectCosts({ data, base, onChange, open, onToggle, onBookAc, onNavigat
   );
 }
 
-function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { data: CostSummary; base: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void }) {
+function IndirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const [importing, setImporting] = useState(false);
   const [type, setType] = useState('TRANSPORTATION');
   const [description, setDescription] = useState('');
   const [subCategory, setSubCategory] = useState('');
@@ -1042,7 +1050,14 @@ function IndirectCosts({ data, base, onChange, open, onToggle, onBookAc }: { dat
     <Card className={accentSurface('violet')}>
       <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} icon="layers" accent="violet" />
       {open && (<div className="mt-3">
-      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Overhead: transport, accommodation, meals, communication, supplies, venue…</p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs text-slate-500 dark:text-slate-400">Overhead: transport, accommodation, meals, communication, supplies, venue…</p>
+        <button onClick={() => setImporting(true)} title="Import indirect cost lines from Excel/CSV"
+          className="shrink-0 rounded-md border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+          ⬆ Import
+        </button>
+      </div>
+      {importing && <ImportCostModal projectId={projectId} kind="indirect" onClose={() => setImporting(false)} onImported={onChange} />}
       {data.indirectCosts.length > 0 && (
         <UntouchedNote count={indirectUntouched.length} total={data.indirectCosts.length} remaining={indirectRemaining} names={indirectUntouched.map((i) => i.description)} />
       )}
