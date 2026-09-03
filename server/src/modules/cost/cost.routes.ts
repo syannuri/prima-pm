@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
+import { BadRequest } from '../../lib/errors.js';
 import {
   directLineSchema,
   reorderDirectSchema,
@@ -10,8 +12,23 @@ import {
   autoPostLabourSchema,
 } from './cost.schemas.js';
 import * as svc from './cost.service.js';
+import {
+  parseDirectUpload, commitDirectImport,
+  parseIndirectUpload, commitIndirectImport,
+} from './cost-import.service.js';
 
 const router = Router({ mergeParams: true });
+
+// In-memory upload (parsed, never stored); 5 MB cap; xlsx or csv only.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(xlsx|csv)$/i.test(file.originalname) || /spreadsheetml|excel|csv|octet-stream/i.test(file.mimetype);
+    if (!ok) { cb(BadRequest('Only .xlsx or .csv files are accepted')); return; }
+    cb(null, true);
+  },
+});
 
 // Writers for cost: PM (owner), PMO, ADMIN, FINANCE (functional, cross-project).
 const canRead = requireProjectAccess({ allowRoles: ['FINANCE', 'RISK_OFFICER'] });
@@ -50,6 +67,30 @@ router.post(
     res.status(201).json({ line });
   }),
 );
+
+// Spreadsheet import of budget lines. ?dryRun=true (default) previews without writing; without it,
+// commit — but only if every row is valid (all-or-nothing). Direct + indirect share the pattern.
+router.post('/import/direct', ...canWrite, upload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) throw BadRequest('file is required (field "file")');
+  const preview = await parseDirectUpload(req.file.buffer, req.file.originalname);
+  if (req.query.dryRun !== 'false') {
+    res.json({ dryRun: true, total: preview.total, willImport: preview.rows.length, errors: preview.errors });
+    return;
+  }
+  if (preview.errors.length > 0) throw BadRequest(`Import has ${preview.errors.length} invalid row(s); fix them or re-run as a dry run to review.`);
+  res.status(201).json({ dryRun: false, ...(await commitDirectImport(req.params.projectId, preview.rows, req.user!.id)) });
+}));
+
+router.post('/import/indirect', ...canWrite, upload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) throw BadRequest('file is required (field "file")');
+  const preview = await parseIndirectUpload(req.file.buffer, req.file.originalname);
+  if (req.query.dryRun !== 'false') {
+    res.json({ dryRun: true, total: preview.total, willImport: preview.rows.length, errors: preview.errors });
+    return;
+  }
+  if (preview.errors.length > 0) throw BadRequest(`Import has ${preview.errors.length} invalid row(s); fix them or re-run as a dry run to review.`);
+  res.status(201).json({ dryRun: false, ...(await commitIndirectImport(req.params.projectId, preview.rows, req.user!.id)) });
+}));
 
 // Drag-to-reorder direct lines (presentational — allowed even when the baseline is locked).
 router.patch(
