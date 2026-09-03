@@ -248,9 +248,16 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 }
 @keyframes anett-spin { to { transform: rotate(360deg); } }
 
-/* Bot glyph blinks its eyes while thinking. */
-.anett-thinking .anett-eye { animation: anett-blink 2.4s steps(1, end) infinite; }
-@keyframes anett-blink { 0%, 90%, 100% { opacity: 1; } 94% { opacity: 0.1; } }
+/* Accent spark twinkles while thinking — a soft pulse + shrink, like a star catching light. */
+.anett-thinking .anett-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: anett-twinkle 1.6s ease-in-out infinite;
+}
+@keyframes anett-twinkle {
+  0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  50%      { opacity: 0.35; transform: scale(0.6) rotate(45deg); }
+}
 
 /* Idle "breathing" glow on the launcher bubble so it feels alive, not a dead button. */
 .anett-breathe { animation: anett-breathe 3.2s ease-in-out infinite; }

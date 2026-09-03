@@ -112,16 +112,15 @@ function usePrefersReducedMotion() {
   return reduce;
 }
 
-// Anett's mark — a "bot" glyph (Lucide-style stroke SVG).
+// Anett's mark — a modern, high-tech AI "spark": a bold curved 4-point star with a
+// small twinkling accent spark (the current universal AI symbol, Gemini/Copilot-style).
+// Rendered glossy-white on the amethyst gradient disc. The accent spark carries
+// .anett-eye so it twinkles while Anett is thinking.
 function AnettIcon({ className }: { className: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M12 8V4H8" />
-      <rect width="16" height="12" x="4" y="8" rx="2" />
-      <path d="M2 14h2" />
-      <path d="M20 14h2" />
-      <path className="anett-eye" d="M15 13v2" />
-      <path className="anett-eye" d="M9 13v2" />
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M13 2.4C13 7.7 13.6 12 19.6 12C13.6 12 13 16.3 13 21.6C13 16.3 12.4 12 6.4 12C12.4 12 13 7.7 13 2.4Z" />
+      <path className="anett-eye" d="M6.2 3.4C6.2 5.5 6.4 7.2 8.8 7.2C6.4 7.2 6.2 8.9 6.2 11C6.2 8.9 6 7.2 3.6 7.2C6 7.2 6.2 5.5 6.2 3.4Z" />
     </svg>
   );
 }
