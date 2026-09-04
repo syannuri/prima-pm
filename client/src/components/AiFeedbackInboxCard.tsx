@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { Card, SectionTitle, Spinner } from './ui';
+import { useToast } from './Toast';
 import { useLang } from '../context/LanguageContext';
 
 interface FeedbackRow {
@@ -14,26 +15,48 @@ const T = {
     sub: 'Workspace-wide — bagaimana Anett dinilai & koreksi 👎 yang menjadi panduan. Untuk audit loop pembelajaran.',
     empty: 'Belum ada umpan balik.', all: 'Semua', up: '👍 Suka', down: '👎 Perbaikan',
     guidance: 'Jadi panduan', loadErr: 'Gagal memuat umpan balik.',
+    analyze: '✨ Analisis 👎 → usul panduan', analyzing: 'Menganalisis…', suggestTitle: 'Usulan panduan dari pola 👎',
+    noSuggest: 'Belum ada pola yang bisa disuling (butuh beberapa 👎 bercatatan).', adopt: 'Terapkan', adopted: 'Panduan diterapkan', adoptErr: 'Gagal menerapkan',
   },
   en: {
     sub: 'Workspace-wide — how Anett is rated & which 👎 became guidance. For auditing the learning loop.',
     empty: 'No feedback yet.', all: 'All', up: '👍 Up', down: '👎 Fix',
     guidance: 'Became guidance', loadErr: 'Failed to load feedback.',
+    analyze: '✨ Analyze 👎 → suggest guidance', analyzing: 'Analyzing…', suggestTitle: 'Guidance suggestions from 👎 patterns',
+    noSuggest: 'No distillable pattern yet (needs a few 👎 with notes).', adopt: 'Adopt', adopted: 'Guidance adopted', adoptErr: 'Failed to adopt',
   },
 };
 
-// Admin feedback inbox (Fase 4): read-only governance view of Anett ratings + the guidance spawned
-// from 👎 notes. Backed by /assistant/feedback/inbox (ADMIN/PMO gated server-side).
+// Admin feedback inbox (Fase 4) + auto prompt-improvement (#2): review ratings/guidance AND distill
+// recurring 👎 into suggested GUIDANCE the admin can adopt org-wide. Backed by /assistant/feedback/*.
 export default function AiFeedbackInboxCard() {
   const { lang } = useLang();
   const t = T[lang];
+  const toast = useToast();
+  const qc = useQueryClient();
   const [filter, setFilter] = useState<'ALL' | 'UP' | 'DOWN'>('ALL');
+  const [suggestions, setSuggestions] = useState<{ content: string }[] | null>(null);
   const q = useQuery({
     queryKey: ['assistant-feedback-inbox', filter],
-    queryFn: () => api.get<{ feedback: FeedbackRow[] }>(`/assistant/feedback/inbox${filter === 'ALL' ? '' : `?rating=${filter}`}`),
+    queryFn: () => api.get<{ feedback: FeedbackRow[]; distillAvailable?: boolean }>(`/assistant/feedback/inbox${filter === 'ALL' ? '' : `?rating=${filter}`}`),
     staleTime: 60_000,
   });
   const rows = q.data?.feedback ?? [];
+  const distillAvailable = q.data?.distillAvailable === true;
+
+  const analyze = useMutation({
+    mutationFn: () => api.post<{ suggestions: { content: string }[] }>('/assistant/feedback/analyze', {}),
+    onSuccess: (r) => setSuggestions(r.suggestions),
+  });
+  const adopt = useMutation({
+    mutationFn: (content: string) => api.post('/assistant/feedback/suggestion', { content }),
+    onSuccess: (_r, content) => {
+      toast.success(t.adopted);
+      setSuggestions((s) => (s ? s.filter((x) => x.content !== content) : s));
+      void qc.invalidateQueries({ queryKey: ['ai-memories'] });
+    },
+    onError: () => toast.error(t.adoptErr),
+  });
 
   return (
     <Card>
@@ -50,6 +73,43 @@ export default function AiFeedbackInboxCard() {
           </button>
         ))}
       </div>
+
+      {/* #2 Feedback → auto prompt-improvement: distill recurring 👎 into adoptable GUIDANCE. */}
+      {distillAvailable && (
+        <div className="mb-3">
+          <button
+            onClick={() => analyze.mutate()}
+            disabled={analyze.isPending}
+            className="text-xs px-2.5 py-1 rounded-full border border-violet-300 text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+          >
+            {analyze.isPending ? t.analyzing : t.analyze}
+          </button>
+          {suggestions && (
+            <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50/40 p-2.5">
+              <p className="text-[11px] font-medium text-violet-800 mb-1.5">{t.suggestTitle}</p>
+              {suggestions.length === 0 ? (
+                <p className="text-xs text-slate-500 italic">{t.noSuggest}</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {suggestions.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs">
+                      <span className="flex-1 text-slate-700">🧠 {s.content}</span>
+                      <button
+                        onClick={() => adopt.mutate(s.content)}
+                        disabled={adopt.isPending}
+                        className="shrink-0 px-2 py-0.5 rounded border border-violet-400 text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                      >
+                        {t.adopt}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {q.isLoading ? (
         <div className="py-4 flex justify-center"><Spinner /></div>
       ) : q.isError ? (
