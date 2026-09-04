@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findPmiTopic, pmiIndex, PMI_KNOWLEDGE, PMI_DISCLAIMER_EN, PMI_DISCLAIMER_ID } from './pmiKnowledge.js';
+import { findPmiTopic, pmiIndex, pmiFramingNote, pmiFramingEnabled, PMI_KNOWLEDGE, PMI_DISCLAIMER_EN, PMI_DISCLAIMER_ID } from './pmiKnowledge.js';
 
 // Retrieval + content sanity for the PMI advisory knowledge base (grounds pmi_guidance).
 describe('pmiKnowledge', () => {
@@ -33,5 +33,16 @@ describe('pmiKnowledge', () => {
       expect(ids.has(id)).toBe(true);
     }
     expect(PMI_KNOWLEDGE.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('framing note (#4) is bilingual, standard-oriented, and gated by env', () => {
+    const prev = process.env.AI_PMI_FRAMING;
+    delete process.env.AI_PMI_FRAMING;
+    expect(pmiFramingEnabled()).toBe(false);
+    process.env.AI_PMI_FRAMING = '1';
+    expect(pmiFramingEnabled()).toBe(true);
+    expect(pmiFramingNote(true)).toMatch(/EVM|change control|PMI/);
+    expect(pmiFramingNote(false)).toMatch(/EVM|integrated change control|PMI/);
+    if (prev === undefined) delete process.env.AI_PMI_FRAMING; else process.env.AI_PMI_FRAMING = prev;
   });
 });

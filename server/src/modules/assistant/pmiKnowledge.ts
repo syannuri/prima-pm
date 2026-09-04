@@ -274,3 +274,18 @@ export function findPmiTopic(query: string): PmiEntry | null {
 export function pmiIndex(): string {
   return PMI_KNOWLEDGE.map((e) => e.title).join('; ');
 }
+
+// #4: extend PMI grounding beyond the chat assistant. When AI_PMI_FRAMING is on, this compact,
+// curated framing note is appended to the EVM-explainer and proactive-narrative prompts so their AI
+// reading is expressed in PMI/PMBOK terms + standard-aligned actions — without fabricating citations.
+// DORMANT by default → those prompts are unchanged unless the flag is set.
+export function pmiFramingEnabled(): boolean {
+  const v = process.env.AI_PMI_FRAMING;
+  return v === '1' || v === 'true';
+}
+
+export function pmiFramingNote(en: boolean): string {
+  return en
+    ? '\n\nWhen you interpret these metrics, frame the reading in PMI/PMBOK terms and, where useful, note the standard-aligned action: SPI/CPI < 1 = behind schedule / over budget per the EVM practice standard; a material variance calls for corrective action via integrated change control; a rising risk EMV calls for a response strategy (avoid/transfer/mitigate/accept). Keep it advisory — do not fabricate PMBOK section numbers.'
+    : '\n\nSaat menafsirkan metrik ini, bingkai pembacaan dalam istilah PMI/PMBOK dan, bila berguna, sebutkan tindakan sesuai standar: SPI/CPI < 1 = di belakang jadwal / over budget menurut practice standard EVM; varians material menuntut corrective action lewat integrated change control; EMV risiko yang naik menuntut strategi respons (avoid/transfer/mitigate/accept). Bersifat advisory — jangan mengarang nomor bab PMBOK.';
+}
