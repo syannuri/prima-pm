@@ -7,7 +7,8 @@ import { AppError } from '../../lib/errors.js';
 import { transcribeAudio, synthesizeSpeech, voiceServerAvailable, MAX_STT_BYTES } from './voice.service.js';
 import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
 import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, type MemScope } from './memory.service.js';
-import { recordFeedback } from './feedback.service.js';
+import { recordFeedback, listFeedbackInbox } from './feedback.service.js';
+import { distillConversation, autoDistillEnabled } from './memoryDistill.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -16,7 +17,8 @@ router.use(requireAuth);
 // propose enabled (env + the separate aiActionsEnabled opt-in) → drives Anett's capability-aware UI.
 router.get('/available', asyncHandler(async (_req, res) => {
   const [aiAvailable, actionsAvailable, voiceServer] = await Promise.all([assistantAvailable(), assistantActionsAvailable(), voiceServerAvailable()]);
-  res.json({ aiAvailable, actionsAvailable, voiceServer });
+  // autoDistill hints the client to POST the transcript at session end (server still enforces the gate).
+  res.json({ aiAvailable, actionsAvailable, voiceServer, autoDistill: autoDistillEnabled() });
 }));
 
 // ── Server-side voice (Whisper STT + ElevenLabs TTS) — dormant unless keys set + tenant opt-in ──────
@@ -132,10 +134,27 @@ router.post('/feedback', validateBody(feedbackSchema), asyncHandler(async (req, 
   res.status(201).json(out);
 }));
 
+// Admin feedback inbox (Fase 4): review how Anett is being rated + which 👎 became guidance.
+router.get('/feedback/inbox', asyncHandler(async (req, res) => {
+  const rating = req.query.rating === 'UP' || req.query.rating === 'DOWN' ? req.query.rating : undefined;
+  const rows = await listFeedbackInbox({ role: req.user!.role }, { rating });
+  res.json({ feedback: rows });
+}));
+
 // ── Cross-session memory (Settings surface) ───────────────────────────────────────────────────────
 // List the memories the caller can see (own USER + all TENANT). Any authenticated user.
 router.get('/memory', asyncHandler(async (req, res) => {
   res.json({ memories: await listMemories(req.user!.id) });
+}));
+
+// Auto-distill a session transcript into durable memories (Fase 4). Dormant unless
+// AI_MEMORY_AUTODISTILL is set + the tenant opted into memory; the client calls this at session end.
+const distillSchema = z.object({
+  turns: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) })).min(1).max(60),
+});
+router.post('/memory/distill', validateBody(distillSchema), asyncHandler(async (req, res) => {
+  const out = await distillConversation(req.body.turns, { userId: req.user!.id, role: req.user!.role, name: req.user!.email ?? null });
+  res.status(201).json(out);
 }));
 
 const memoryCreateSchema = z.object({

@@ -13,6 +13,7 @@ import ApprovalWorkflowsCard from '../components/ApprovalWorkflowsCard';
 import AiNarrativeCard from '../components/AiNarrativeCard';
 import AiActionOutcomesCard from '../components/AiActionOutcomesCard';
 import AiMemoryCard from '../components/AiMemoryCard';
+import AiFeedbackInboxCard from '../components/AiFeedbackInboxCard';
 import AiUsageCard from '../components/AiUsageCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
@@ -66,6 +67,7 @@ export default function SettingsPage() {
               <AiNarrativeCard />
               <AiActionOutcomesCard />
               <AiMemoryCard />
+              <AiFeedbackInboxCard />
               <AiUsageCard />
             </SettingsSection>
           )}
