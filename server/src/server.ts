@@ -1,6 +1,8 @@
 import { createApp } from './app.js';
 import { env, isProd } from './config/env.js';
 import { prisma } from './lib/prisma.js';
+import { runAsSystem } from './lib/tenant/context.js';
+import { pruneStaleMemories } from './modules/assistant/memory.service.js';
 import { pruneExpiredRefreshTokens } from './modules/auth/auth.service.js';
 import { runWeeklyAutoCaptureIfDueAllTenants } from './modules/evm/evm.portfolio.js';
 import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
@@ -68,6 +70,20 @@ async function main() {
   void prune();
   const pruneTimer = setInterval(() => void prune(), PRUNE_INTERVAL_MS);
   pruneTimer.unref();
+
+  // Anett memory prune (improvement #5): deactivate stale, never-used, non-pinned auto/feedback
+  // memories. Dormant unless AI_MEMORY_TTL_DAYS > 0. Daily; cross-tenant maintenance ⇒ runAsSystem.
+  const memoryPrune = async () => {
+    try {
+      const r = await runAsSystem(() => pruneStaleMemories());
+      if (r.deactivated > 0) console.log(`[prima-pm] pruned ${r.deactivated} stale Anett memor(ies)`);
+    } catch (err) {
+      console.error('[prima-pm] Anett memory prune failed', err);
+    }
+  };
+  void memoryPrune();
+  const memoryPruneTimer = setInterval(() => void memoryPrune(), PRUNE_INTERVAL_MS);
+  memoryPruneTimer.unref();
 
   // Weekly EVM auto-capture (opt-in via AppSetting). Check on boot then every 6h; the helper
   // only actually captures when it's enabled, today matches the configured weekday, and it
@@ -183,6 +199,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     console.log(`[prima-pm] ${signal} received, shutting down...`);
     clearInterval(pruneTimer);
+    clearInterval(memoryPruneTimer);
     clearInterval(autoCaptureTimer);
     clearInterval(webhookTimer);
     clearInterval(approvalSlaTimer);
