@@ -114,19 +114,20 @@ function usePrefersReducedMotion() {
 
 // Anett's mark — a modern, high-tech AI "spark": a bold curved 4-point star with a
 // small twinkling accent spark (the current universal AI symbol, Gemini/Copilot-style).
-// Rendered glossy-white on the amethyst gradient disc. The accent spark carries
-// .anett-eye so it twinkles while Anett is thinking.
+// Rendered glossy-white on the amethyst gradient disc. The main star is centered and
+// fills the viewBox edge-to-edge so it reads big and confident; the accent spark tucks
+// into the top-right concave gap and carries .anett-eye so it twinkles while thinking.
 function AnettIcon({ className }: { className: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-      <path d="M13 2.4C13 7.7 13.6 12 19.6 12C13.6 12 13 16.3 13 21.6C13 16.3 12.4 12 6.4 12C12.4 12 13 7.7 13 2.4Z" />
-      <path className="anett-eye" d="M6.2 3.4C6.2 5.5 6.4 7.2 8.8 7.2C6.4 7.2 6.2 8.9 6.2 11C6.2 8.9 6 7.2 3.6 7.2C6 7.2 6.2 5.5 6.2 3.4Z" />
+      <path d="M12 1C12.5 6.6 13 11 17.4 11.4C19.4 11.6 21.2 11.8 23 12C21.2 12.2 19.4 12.4 17.4 12.6C13 13 12.5 17.4 12 23C11.5 17.4 11 13 6.6 12.6C4.6 12.4 2.8 12.2 1 12C2.8 11.8 4.6 11.6 6.6 11.4C11 11 11.5 6.6 12 1Z" />
+      <path className="anett-eye" d="M19 3C19.15 4.5 19.5 4.85 21 5C19.5 5.15 19.15 5.5 19 7C18.85 5.5 18.5 5.15 17 5C18.5 4.85 18.85 4.5 19 3Z" />
     </svg>
   );
 }
 
 // A gradient amethyst avatar disc — Anett's face, reused by launcher, header and message rows.
-function AnettAvatar({ className = 'h-8 w-8', icon = 'h-4 w-4', thinking = false }: { className?: string; icon?: string; thinking?: boolean }) {
+function AnettAvatar({ className = 'h-8 w-8', icon = 'h-5 w-5', thinking = false }: { className?: string; icon?: string; thinking?: boolean }) {
   return (
     <span className={`relative grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-sm ${thinking ? 'anett-halo anett-thinking' : ''} ${className}`}>
       <AnettIcon className={icon} />
@@ -671,7 +672,7 @@ export default function AiAssistant() {
           title="Anett AI Assistant"
           className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'anett-breathe transition-all duration-300 hover:scale-105 active:scale-90'}`}
         >
-          <AnettIcon className="h-6 w-6" />
+          <AnettIcon className="h-8 w-8 drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]" />
         </button>
       )}
 
@@ -684,7 +685,7 @@ export default function AiAssistant() {
         >
           {/* Header — gradient identity band with avatar + status */}
           <div className="flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10">
-            <AnettAvatar className="h-9 w-9" icon="h-5 w-5" />
+            <AnettAvatar className="h-9 w-9" icon="h-6 w-6" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">Anett AI Assistant</div>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
