@@ -22,6 +22,7 @@ interface Summary {
   totals: Omit<Bucket, 'key'>;
   byFeature: Bucket[];
   byModel: Bucket[];
+  budget: { capUsd: number; usedUsd: number; remainingUsd: number } | null;
 }
 
 const FEATURE_LABEL: Record<'id' | 'en', Record<string, string>> = {
@@ -44,13 +45,13 @@ const T = {
     title: 'Penggunaan & biaya AI', sub: 'Workspace-wide — token & estimasi biaya panggilan Claude. Angka biaya adalah PERKIRAAN dari harga per-token, bukan tagihan.',
     month: 'Bulan ini', d30: '30 hari', estCost: 'Estimasi biaya', calls: 'panggilan', tokens: 'token',
     inTok: 'Input', outTok: 'Output', cache: 'Cache', feature: 'Fitur', empty: 'Belum ada penggunaan AI pada periode ini. Angka akan terisi otomatis saat fitur AI dipakai.',
-    estimate: 'Estimasi — bukan tagihan resmi.',
+    estimate: 'Estimasi — bukan tagihan resmi.', budget: 'Anggaran AI bulan ini', ofCap: 'dari',
   },
   en: {
     title: 'AI usage & cost', sub: 'Workspace-wide — tokens & estimated cost of Claude calls. The cost figure is an ESTIMATE from per-token pricing, not a bill.',
     month: 'This month', d30: '30 days', estCost: 'Estimated cost', calls: 'calls', tokens: 'tokens',
     inTok: 'Input', outTok: 'Output', cache: 'Cache', feature: 'Feature', empty: 'No AI usage in this window yet. Figures fill in automatically as AI features are used.',
-    estimate: 'Estimate — not an official bill.',
+    estimate: 'Estimate — not an official bill.', budget: 'AI budget this month', ofCap: 'of',
   },
 };
 
@@ -86,6 +87,22 @@ export default function AiUsageCard() {
           ))}
         </div>
       </div>
+
+      {data?.budget && (
+        <div className="mt-3">
+          <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>{t.budget}</span>
+            <span className="tabular-nums">{fmtUsd(data.budget.usedUsd)} {t.ofCap} {fmtUsd(data.budget.capUsd)}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+            {(() => {
+              const pct = data.budget.capUsd > 0 ? Math.min(100, (data.budget.usedUsd / data.budget.capUsd) * 100) : 0;
+              const tone = pct >= 100 ? 'bg-rose-500' : pct >= 80 ? 'bg-amber-500' : 'bg-violet-600';
+              return <div className={`h-full ${tone}`} style={{ width: `${pct}%` }} />;
+            })()}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="py-6"><Spinner /></div>
