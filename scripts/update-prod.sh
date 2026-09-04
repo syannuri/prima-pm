@@ -56,12 +56,14 @@ deploy() {
 
 PREV="$(git rev-parse HEAD)"
 echo "==> Current commit: $PREV"
-# A past build-prod.sh ran `npm install`, which can rewrite package-lock.json and leave the
-# deploy tree dirty enough to abort `git pull`. That drift is never intentional here, so discard
-# it before pulling. (build-prod.sh now uses `npm ci`, so new runs won't dirty the tree.)
-git checkout -- server/package-lock.json client/package-lock.json 2>/dev/null || true
-echo "==> Pulling origin/$BRANCH"
-git pull --ff-only origin "$BRANCH"
+# Hard-sync to the remote tip instead of `git pull`. A plain pull can ABORT (incidental tree drift —
+# a package-lock rewrite, a half-written file from an aborted run) or silently land a commit behind,
+# which is the #1 cause of "I ran update-prod.sh but /version didn't change". This deploy checkout is
+# never hand-edited, so fetch + reset --hard puts it at exactly origin/$BRANCH every single time.
+echo "==> Fetching origin/$BRANCH"
+git fetch --prune origin "$BRANCH"
+echo "==> Hard-syncing to origin/$BRANCH"
+git reset --hard "origin/$BRANCH"
 NEW="$(git rev-parse HEAD)"
 
 if [ "$PREV" = "$NEW" ]; then
