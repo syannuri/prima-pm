@@ -4,6 +4,7 @@ import { Forbidden } from './errors.js';
 import { activeTenantIsPersonal } from './tenant/context.js';
 import { recordAiUsage, type AiFeature, type RawUsage } from './aiUsage.js';
 import { assertAiBudget } from './aiBudget.js';
+import { createRedactor } from './aiRedact.js';
 
 // The Forbidden thrown when an AI feature is gated off for the caller's tenant. A guest's personal
 // sandbox has no governance surface and can NEVER opt in, so the generic "not enabled for this
@@ -148,6 +149,7 @@ function liveAiPort(): AiPort {
       const { apiKey, model: defaultModel } = aiConfig();
       const model = modelOverride || defaultModel;
       const client = aiClient(apiKey);
+      const redactor = createRedactor(); // #2 privacy guard: scrub secrets/PII outbound (identity unless AI_REDACT)
       // Structured output (constrains to valid JSON) + adaptive thinking (light reasoning) + medium
       // effort (cost/quality balance). System prompt is stable per feature ⇒ prompt-cached.
       const res = await client.messages.create({
@@ -155,8 +157,8 @@ function liveAiPort(): AiPort {
         max_tokens: maxTokens ?? 2000,
         thinking: { type: 'adaptive' },
         output_config: { effort: aiEffort(), format: { type: 'json_schema', schema: jsonSchema } },
-        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: user }],
+        system: [{ type: 'text', text: redactor.redact(system), cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: redactor.redact(user) }],
       });
       await recordAiUsage({ feature: feature ?? 'unknown', model, usage: res.usage });
       // Guard the refusal stop reason BEFORE reading content (empty/partial on a refusal).
@@ -164,7 +166,7 @@ function liveAiPort(): AiPort {
       const text = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
       if (!text) return null;
       try {
-        return JSON.parse(text) as unknown;
+        return JSON.parse(redactor.restore(text)) as unknown; // restore any tokenised value in the output
       } catch {
         return null; // non-JSON output (shouldn't happen with json_schema) → graceful null
       }
@@ -179,7 +181,8 @@ function liveAiPort(): AiPort {
       await assertAiBudget(); // #4: block if the tenant is over its monthly AI budget (no-op unless configured)
       const { apiKey, model } = aiConfig();
       const client = aiClient(apiKey);
-      const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
+      const redactor = createRedactor(); // #2 privacy guard (identity unless AI_REDACT); one map for the whole loop
+      const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: redactor.redact(m.content) }));
       for (let step = 0; step < maxSteps; step++) {
         // Stream so answer text can be forwarded token-by-token (improvement #2). `display: 'summarized'`
         // exposes Anett's reasoning as thinking deltas (#D): `on('text')` fires for the visible answer,
@@ -189,7 +192,7 @@ function liveAiPort(): AiPort {
           max_tokens: maxTokens,
           thinking: { type: 'adaptive', display: 'summarized' },
           output_config: { effort: aiEffort() },
-          system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+          system: [{ type: 'text', text: redactor.redact(system), cache_control: { type: 'ephemeral' } }],
           // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
           // the SDK's Tool shape whose InputSchema requires the literal `type`.
           tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[],
@@ -216,19 +219,21 @@ function liveAiPort(): AiPort {
               } catch {
                 out = JSON.stringify({ error: 'Tool gagal dijalankan.' });
               }
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: out });
+              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: redactor.redact(out) });
             }
           }
           msgs.push({ role: 'user', content: toolResults });
           continue;
         }
-        // end_turn (or any non-tool stop) → return the concatenated text answer.
+        // end_turn (or any non-tool stop) → return the concatenated text answer, restoring any
+        // tokenised value. (Streamed onText deltas are best-effort un-restored; the final answer —
+        // what clients render as the settled message — is authoritative and fully restored.)
         const text = res.content
           .filter((b): b is Anthropic.TextBlock => b.type === 'text')
           .map((b) => b.text)
           .join('\n')
           .trim();
-        return text || null;
+        return text ? redactor.restore(text) : null;
       }
       return null; // exceeded maxSteps
     },
@@ -236,17 +241,24 @@ function liveAiPort(): AiPort {
       const { apiKey, model: defaultModel } = aiConfig();
       const client = aiClient(apiKey);
       const batch = await client.messages.batches.create({
-        requests: requests.map((r) => ({
-          custom_id: r.customId,
-          params: {
-            model: r.model || defaultModel,
-            max_tokens: r.maxTokens ?? 2000,
-            thinking: { type: 'adaptive' },
-            output_config: { effort: aiEffort(), format: { type: 'json_schema', schema: r.jsonSchema } },
-            system: [{ type: 'text', text: r.system, cache_control: { type: 'ephemeral' } }],
-            messages: [{ role: 'user', content: r.user }],
-          },
-        })),
+        requests: requests.map((r) => {
+          // #2 privacy guard on outbound. Batch results are collected asynchronously in pollBatch
+          // (different process/run), so there is no in-memory map to restore against — redaction is
+          // outbound-only here. Proactive narratives summarise status/EVM, not raw contact PII, so a
+          // leaked placeholder is unlikely; the protection (no secrets/PII sent) is what matters.
+          const redactor = createRedactor();
+          return {
+            custom_id: r.customId,
+            params: {
+              model: r.model || defaultModel,
+              max_tokens: r.maxTokens ?? 2000,
+              thinking: { type: 'adaptive' },
+              output_config: { effort: aiEffort(), format: { type: 'json_schema', schema: r.jsonSchema } },
+              system: [{ type: 'text', text: redactor.redact(r.system), cache_control: { type: 'ephemeral' } }],
+              messages: [{ role: 'user', content: redactor.redact(r.user) }],
+            },
+          };
+        }),
       });
       return batch.id;
     },
