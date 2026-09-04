@@ -96,7 +96,15 @@ router.post('/ask/stream', validateBody(askSchema), asyncHandler(async (req, res
   req.on('close', () => { aborted = true; });
   try {
     const messages = req.body.messages as AssistantTurn[];
-    const result = await askAssistant(req.user!.id, req.user!.role, messages, req.body.context, req.body.lang ?? 'id', (label) => send({ type: 'step', label }));
+    const result = await askAssistant(
+      req.user!.id, req.user!.role, messages, req.body.context, req.body.lang ?? 'id',
+      (label) => send({ type: 'step', label }),
+      {
+        // Forward each answer-text delta live; `reset` discards preamble streamed before a tool call.
+        onText: (delta) => { if (!aborted) send({ type: 'token', delta }); },
+        onTextReset: () => { if (!aborted) send({ type: 'reset' }); },
+      },
+    );
     if (!aborted) send({ type: 'answer', ...result });
   } catch (e) {
     send({ type: 'error', message: e instanceof AppError ? e.message : 'AI tidak dapat menjawab saat ini.' });
