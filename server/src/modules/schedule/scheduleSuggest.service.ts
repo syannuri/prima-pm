@@ -267,7 +267,7 @@ export async function generateScheduleDraft(projectId: string, lang: SuggestLang
 }> {
   const ctx = await loadCharterContext(projectId);
   const { system, user } = buildScheduleSuggestPrompt(ctx, lang);
-  const raw = await getAiPort().draftJson({ system, user, jsonSchema: SCHEDULE_DRAFT_JSON_SCHEMA, maxTokens: 4000 });
+  const raw = await getAiPort().draftJson({ system, user, jsonSchema: SCHEDULE_DRAFT_JSON_SCHEMA, maxTokens: 4000, feature: 'schedule_suggest' });
   const parsed = raw == null ? null : ScheduleDraftSchema.safeParse(raw);
   if (!parsed || !parsed.success) {
     throw new AppError(

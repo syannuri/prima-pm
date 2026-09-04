@@ -143,7 +143,7 @@ export async function generateRiskSuggestions(projectId: string, lang: SuggestLa
     existingRiskTitles: risks.map((r) => r.title),
   };
   const { system, user } = buildRiskSuggestPrompt(ctx, lang);
-  const raw = await getAiPort().draftJson({ system, user, jsonSchema: RISK_SUGGEST_JSON_SCHEMA, maxTokens: 2500 });
+  const raw = await getAiPort().draftJson({ system, user, jsonSchema: RISK_SUGGEST_JSON_SCHEMA, maxTokens: 2500, feature: 'risk_suggest' });
   const parsed = raw == null ? null : RiskSuggestSchema.safeParse(raw);
   if (!parsed || !parsed.success) {
     throw new AppError(

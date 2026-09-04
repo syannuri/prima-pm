@@ -163,7 +163,7 @@ export async function generateCrImpact(projectId: string, crId: string): Promise
   // Baseline + current EVM snapshot as of now (period only scopes trend deltas we don't use here).
   const report = await getProjectReport(projectId, 'monthly', new Date());
   const { system, user } = buildCrImpactPrompt(cr, report);
-  const raw = await getAiPort().draftJson({ system, user, jsonSchema: CR_IMPACT_JSON_SCHEMA, maxTokens: 2000 });
+  const raw = await getAiPort().draftJson({ system, user, jsonSchema: CR_IMPACT_JSON_SCHEMA, maxTokens: 2000, feature: 'cr_impact' });
   const parsed = raw == null ? null : CrImpactSchema.safeParse(raw);
   if (!parsed || !parsed.success) {
     throw new AppError(502, 'AI tidak dapat membuat analisa dampak saat ini. Silakan nilai CR secara manual.', 'AI_UNAVAILABLE');

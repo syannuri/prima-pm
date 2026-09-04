@@ -30,6 +30,7 @@ import bookmarkRoutes from './modules/bookmark/bookmark.routes.js';
 import adminAuditRoutes from './modules/audit/adminAudit.routes.js';
 import adminSettingsRoutes from './modules/settings/settings.routes.js';
 import aiSettingsRoutes from './modules/settings/aiSettings.routes.js';
+import { aiUsageRoutes } from './modules/settings/aiUsage.routes.js';
 import assistantRoutes from './modules/assistant/assistant.routes.js';
 import { briefingInboxRoutes } from './modules/report/proactive.routes.js';
 import messagesRoutes from './modules/messages/messages.routes.js';
@@ -231,6 +232,7 @@ export function createApp() {
   api.use('/admin/audit', adminAuditRoutes);
   api.use('/admin/settings', adminSettingsRoutes);
   api.use('/ai-settings', aiSettingsRoutes);
+  api.use('/ai-usage', aiUsageRoutes);
   api.use('/assistant', assistantRoutes);
   api.use('/ai-briefings', briefingInboxRoutes);
   api.use('/messages', messagesRoutes);

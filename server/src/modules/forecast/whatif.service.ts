@@ -206,14 +206,14 @@ async function assertTenantOptedIn(projectId: string): Promise<void> {
 async function draftScenarioSpec(projectId: string, question: string): Promise<WhatIfSpec> {
   const [tasks, forecast] = await Promise.all([whatIfContext(projectId), getProjectForecast(projectId, new Date())]);
   const user = JSON.stringify({ question, tasks, forecast: { bac: forecast.bac, spi: forecast.spi, cpi: forecast.cpi, plannedFinish: forecast.schedule.plannedFinish } });
-  const raw = await getAiPort().draftJson({ system: SPEC_SYSTEM, user, jsonSchema: WHATIF_SPEC_JSON_SCHEMA, maxTokens: 900 });
+  const raw = await getAiPort().draftJson({ system: SPEC_SYSTEM, user, jsonSchema: WHATIF_SPEC_JSON_SCHEMA, maxTokens: 900, feature: 'whatif' });
   const parsed = raw == null ? null : WhatIfSpecSchema.safeParse(raw);
   if (!parsed || !parsed.success) throw new AppError(502, 'AI tidak dapat menerjemahkan pertanyaan menjadi skenario. Coba lebih spesifik.', 'AI_UNAVAILABLE');
   return parsed.data;
 }
 
 async function narrateScenario(question: string, result: WhatIfResult): Promise<WhatIfNarrative> {
-  const raw = await getAiPort().draftJson({ system: NARRATE_SYSTEM, user: JSON.stringify({ question, ...result }), jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 900 });
+  const raw = await getAiPort().draftJson({ system: NARRATE_SYSTEM, user: JSON.stringify({ question, ...result }), jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 900, feature: 'whatif' });
   const parsed = raw == null ? null : z.object({ summary: z.string(), tradeoffs: z.array(z.string()), recommendation: z.string() }).safeParse(raw);
   if (!parsed || !parsed.success) throw new AppError(502, 'AI tidak dapat menarasikan hasil simulasi.', 'AI_UNAVAILABLE');
   return parsed.data;

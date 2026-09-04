@@ -105,7 +105,7 @@ export async function generateEvmExplain(projectId: string, asOf: Date): Promise
   await assertTenantOptedIn(projectId);
   const report = await getProjectReport(projectId, 'monthly', asOf);
   const { system, user } = buildEvmExplainPrompt(report);
-  const raw = await getAiPort().draftJson({ system, user, jsonSchema: EVM_EXPLAIN_JSON_SCHEMA, maxTokens: 1500 });
+  const raw = await getAiPort().draftJson({ system, user, jsonSchema: EVM_EXPLAIN_JSON_SCHEMA, maxTokens: 1500, feature: 'evm_explain' });
   const parsed = raw == null ? null : EvmExplainSchema.safeParse(raw);
   if (!parsed || !parsed.success) {
     throw new AppError(502, 'AI tidak dapat membuat penjelasan EVM saat ini. Silakan analisa secara manual.', 'AI_UNAVAILABLE');

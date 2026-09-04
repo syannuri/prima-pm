@@ -130,7 +130,7 @@ export async function generateNarrative(
   await assertTenantOptedIn(projectId);
   const report = await getProjectReport(projectId, period, asOf);
   const { system, user } = buildNarrativePrompt(report, lang);
-  const draft = await getAiNarrativePort().draftNarrative({ system, user });
+  const draft = await getAiNarrativePort().draftNarrative({ system, user, feature: 'narrative' });
   if (!draft) {
     // Refusal or empty output — surface gracefully so the PM can fill the commentary manually.
     throw new AppError(502, 'AI tidak dapat membuat draft saat ini. Silakan isi commentary secara manual.', 'AI_UNAVAILABLE');

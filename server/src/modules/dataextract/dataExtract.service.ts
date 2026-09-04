@@ -109,7 +109,7 @@ export async function extractFromNotes(projectId: string, text: string): Promise
     orderBy: { wbsCode: 'asc' },
   });
   const { system, user } = buildExtractPrompt(text, tasks);
-  const raw = await getAiPort().draftJson({ system, user, jsonSchema: EXTRACT_JSON_SCHEMA, maxTokens: 2500 });
+  const raw = await getAiPort().draftJson({ system, user, jsonSchema: EXTRACT_JSON_SCHEMA, maxTokens: 2500, feature: 'data_extract' });
   const parsed = raw == null ? null : ExtractionSchema.safeParse(raw);
   if (!parsed || !parsed.success) {
     throw new AppError(502, 'AI tidak dapat mengekstrak data saat ini. Silakan masukkan manual.', 'AI_UNAVAILABLE');
