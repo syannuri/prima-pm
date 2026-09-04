@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { writeAudit } from '../../lib/audit.js';
 import { BadRequest, Conflict, NotFound } from '../../lib/errors.js';
-import { activeTenantIsPersonal } from '../../lib/tenant/context.js';
+import { activeTenantIsPersonal, getTenantStore } from '../../lib/tenant/context.js';
 import { computeEvm, type EvmTask } from '../../calc/evm.js';
 import { actualCostAsOf } from '../cost/cost.service.js';
 import { assertBaselineUnlocked } from '../projects/baseline.service.js';
@@ -469,8 +469,14 @@ export async function setScheduleBaseline(projectId: string, actorId: string) {
   await ensureChartered(projectId);
   await assertBaselineUnlocked(projectId);
   const now = new Date();
+  // Defense-in-depth: this raw UPDATE bypasses the Prisma tenant-extension, so scope it by hand to
+  // the active tenant too — ensureChartered already rejects a cross-tenant projectId, but self-scoping
+  // means the write is safe even if a caller ever reaches here without that guard. No-op when
+  // enforcement is off (single-tenant): there is no ambient tenantId, so the filter is empty.
+  const tenantId = getTenantStore()?.tenantId;
+  const tenantFilter = tenantId ? Prisma.sql` AND "tenantId" = ${tenantId}` : Prisma.empty;
   await prisma.$transaction([
-    prisma.$executeRaw`UPDATE "Task" SET "baselineStart" = "planStart", "baselineFinish" = "planEnd", "baselineWeight" = "weight" WHERE "projectId" = ${projectId}`,
+    prisma.$executeRaw`UPDATE "Task" SET "baselineStart" = "planStart", "baselineFinish" = "planEnd", "baselineWeight" = "weight" WHERE "projectId" = ${projectId}${tenantFilter}`,
     prisma.project.update({ where: { id: projectId }, data: { scheduleBaselinedAt: now } }),
   ]);
   await writeAudit({ projectId, userId: actorId, entity: 'Project', entityId: projectId, action: 'UPDATE', after: { scheduleBaselinedAt: now } });

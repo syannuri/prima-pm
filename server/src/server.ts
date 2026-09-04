@@ -1,5 +1,5 @@
 import { createApp } from './app.js';
-import { env } from './config/env.js';
+import { env, isProd } from './config/env.js';
 import { prisma } from './lib/prisma.js';
 import { pruneExpiredRefreshTokens } from './modules/auth/auth.service.js';
 import { runWeeklyAutoCaptureIfDueAllTenants } from './modules/evm/evm.portfolio.js';
@@ -28,7 +28,23 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
+// Hardening: the pooled-multitenancy isolation net is env-gated (MULTITENANCY_ENFORCE). If a
+// production deploy is missing the flag, the Prisma tenant-extension becomes a no-op and queries
+// could cross tenants — a silent, config-only failure. Refuse to start in that case, unless
+// single-tenant operation is an explicit, conscious choice (ALLOW_SINGLE_TENANT=true). Non-prod
+// is unaffected so local/dev and the test suite can toggle enforcement freely.
+function assertTenantIsolation(): void {
+  if (isProd && !env.multitenancy.enforce && process.env.ALLOW_SINGLE_TENANT !== 'true') {
+    throw new Error(
+      'Refusing to start: MULTITENANCY_ENFORCE is not "true" in production — tenant isolation ' +
+      'would be OFF, risking cross-tenant data exposure. Set MULTITENANCY_ENFORCE=true, or opt ' +
+      'into single-tenant mode explicitly with ALLOW_SINGLE_TENANT=true.',
+    );
+  }
+}
+
 async function main() {
+  assertTenantIsolation();
   const app = createApp();
   // Bind IPv4 wildcard by default. An IPv6 dualstack bind (Node's default) can miss
   // externally-bridged IPv4 clients on some VM NICs; 0.0.0.0 matches what works.
