@@ -600,6 +600,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, memories, tables, memoryEnabled, en, emitStep, projectsSummary }),
     maxSteps: 6,
     maxTokens: 1500,
+    feature: 'assistant_qa',
   });
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
   return { answer, proposals, navigate: navs, memories, tables };

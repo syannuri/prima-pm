@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { Forbidden } from './errors.js';
 import { activeTenantIsPersonal } from './tenant/context.js';
+import { recordAiUsage, type AiFeature } from './aiUsage.js';
 
 // The Forbidden thrown when an AI feature is gated off for the caller's tenant. A guest's personal
 // sandbox has no governance surface and can NEVER opt in, so the generic "not enabled for this
@@ -79,8 +80,8 @@ export interface AiToolDef {
 }
 
 export interface AiPort {
-  draftJson(input: { system: string; user: string; jsonSchema: Record<string, unknown>; maxTokens?: number; model?: string }): Promise<unknown | null>;
-  draftNarrative(input: { system: string; user: string; model?: string }): Promise<NarrativeDraft | null>;
+  draftJson(input: { system: string; user: string; jsonSchema: Record<string, unknown>; maxTokens?: number; model?: string; feature?: AiFeature }): Promise<unknown | null>;
+  draftNarrative(input: { system: string; user: string; model?: string; feature?: AiFeature }): Promise<NarrativeDraft | null>;
   // Manual agentic tool loop for the project Q&A assistant (Phase 4). Optional so existing fake
   // ports (narrative/CR/EVM/risk itests) don't need to implement it. `executeTool` is a server-side
   // callback that runs the named read-only tool and returns a JSON string; the port drives the
@@ -93,6 +94,7 @@ export interface AiPort {
     executeTool: (name: string, input: unknown) => Promise<string>;
     maxSteps?: number;
     maxTokens?: number;
+    feature?: AiFeature;
   }): Promise<string | null>;
 }
 // Back-compat alias (report/narrative code imported this name).
@@ -107,7 +109,7 @@ export const __setAiPort = __setAiNarrativePort;
 
 function liveAiPort(): AiPort {
   return {
-    async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride }) {
+    async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride, feature }) {
       const { apiKey, model: defaultModel } = aiConfig();
       const model = modelOverride || defaultModel;
       const client = new Anthropic({ apiKey });
@@ -121,6 +123,7 @@ function liveAiPort(): AiPort {
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: user }],
       });
+      await recordAiUsage({ feature: feature ?? 'unknown', model, usage: res.usage });
       // Guard the refusal stop reason BEFORE reading content (empty/partial on a refusal).
       if (res.stop_reason === 'refusal') return null;
       const text = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
@@ -131,13 +134,13 @@ function liveAiPort(): AiPort {
         return null; // non-JSON output (shouldn't happen with json_schema) → graceful null
       }
     },
-    async draftNarrative({ system, user, model }) {
-      const raw = await this.draftJson({ system, user, jsonSchema: NARRATIVE_JSON_SCHEMA, model });
+    async draftNarrative({ system, user, model, feature }) {
+      const raw = await this.draftJson({ system, user, jsonSchema: NARRATIVE_JSON_SCHEMA, model, feature: feature ?? 'narrative' });
       if (raw == null) return null;
       const parsed = NarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
     },
-    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500 }) {
+    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature }) {
       const { apiKey, model } = aiConfig();
       const client = new Anthropic({ apiKey });
       const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
@@ -153,6 +156,8 @@ function liveAiPort(): AiPort {
           tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[],
           messages: msgs,
         });
+        // Record every step of the loop (each is a billed API call).
+        await recordAiUsage({ feature: feature ?? 'assistant_qa', model, usage: res.usage });
         if (res.stop_reason === 'refusal') return null;
         if (res.stop_reason === 'tool_use') {
           // Echo the assistant turn (with its tool_use blocks) then run each tool and feed results back.

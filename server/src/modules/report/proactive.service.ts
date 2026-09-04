@@ -60,7 +60,7 @@ async function draftForProject(
   const report = await getProjectReport(p.id, PERIOD, now);
   const { system, user } = buildNarrativePrompt(report, draftLang());
   const model = aiConfig().proactiveModel;
-  const draft = await getAiPort().draftNarrative({ system, user, model });
+  const draft = await getAiPort().draftNarrative({ system, user, model, feature: 'proactive' });
   if (!draft) return false; // refusal / empty — try again next window
 
   const pred = await getProjectPredictive(p.id, now);

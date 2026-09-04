@@ -214,7 +214,7 @@ export async function reallocationAiAvailable(): Promise<boolean> {
 export async function draftReallocation(conflict: Conflict): Promise<ReallocationDraft> {
   await assertAdvisoryOptedIn();
   const { system, user } = buildReallocationPrompt(conflict);
-  const raw = await getAiPort().draftJson({ system, user, jsonSchema: REALLOC_JSON_SCHEMA, maxTokens: 1200 });
+  const raw = await getAiPort().draftJson({ system, user, jsonSchema: REALLOC_JSON_SCHEMA, maxTokens: 1200, feature: 'resource_realloc' });
   const parsed = raw == null ? null : ReallocationSchema.safeParse(raw);
   if (!parsed || !parsed.success) {
     throw new AppError(502, 'AI tidak dapat menyusun realokasi saat ini. Silakan atur ulang secara manual.', 'AI_UNAVAILABLE');

@@ -128,7 +128,7 @@ export async function draftAttentionNarrative(userId: string, role: string): Pro
   }
   const { items } = await getPortfolioAttention(userId, role);
   if (items.length === 0) return { items, narrative: { headline: 'Tidak ada proyek yang butuh perhatian khusus minggu ini.', focus: [], summary: 'Portofolio dalam kondisi sehat.' } };
-  const raw = await getAiPort().draftJson({ system: NARRATE_SYSTEM, user: JSON.stringify({ items }), jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 900 });
+  const raw = await getAiPort().draftJson({ system: NARRATE_SYSTEM, user: JSON.stringify({ items }), jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 900, feature: 'portfolio_qa' });
   if (raw == null || typeof raw !== 'object' || !('headline' in raw)) throw new AppError(502, 'AI tidak dapat menyusun arahan fokus saat ini.', 'AI_UNAVAILABLE');
   return { items, narrative: raw as AttentionNarrative };
 }

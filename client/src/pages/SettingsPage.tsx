@@ -13,6 +13,7 @@ import ApprovalWorkflowsCard from '../components/ApprovalWorkflowsCard';
 import AiNarrativeCard from '../components/AiNarrativeCard';
 import AiActionOutcomesCard from '../components/AiActionOutcomesCard';
 import AiMemoryCard from '../components/AiMemoryCard';
+import AiUsageCard from '../components/AiUsageCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
@@ -65,6 +66,7 @@ export default function SettingsPage() {
               <AiNarrativeCard />
               <AiActionOutcomesCard />
               <AiMemoryCard />
+              <AiUsageCard />
             </SettingsSection>
           )}
         </div>
