@@ -30,6 +30,18 @@ export function aiConfig() {
   };
 }
 
+// Resilience (improvement #3): bound every AI request so a hung/overloaded Anthropic call can't stall
+// a request for the SDK's 10-minute default, and let the SDK auto-retry transient failures (it retries
+// 408/409/429/5xx + connection errors with exponential backoff). Both env-overridable. Timeout is
+// per-request (per tool-loop step), not for the whole loop. `timeout` is MILLISECONDS in the TS SDK.
+function aiClient(apiKey: string): Anthropic {
+  const timeout = Number(process.env.AI_TIMEOUT_MS) || 120_000; // 2 min/request
+  const maxRetries = Number.isFinite(Number(process.env.AI_MAX_RETRIES)) && process.env.AI_MAX_RETRIES !== undefined
+    ? Number(process.env.AI_MAX_RETRIES)
+    : 3; // one more than the SDK default (2) — cheap insurance against a transient 429/529
+  return new Anthropic({ apiKey, timeout, maxRetries });
+}
+
 // Globally enabled only when the API key is present. This is the deployment-level gate; a SECOND,
 // per-tenant opt-in (Tenant.aiNarrativeEnabled) is enforced in the narrative service.
 export function aiEnabled(): boolean {
@@ -118,7 +130,7 @@ function liveAiPort(): AiPort {
     async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride, feature }) {
       const { apiKey, model: defaultModel } = aiConfig();
       const model = modelOverride || defaultModel;
-      const client = new Anthropic({ apiKey });
+      const client = aiClient(apiKey);
       // Structured output (constrains to valid JSON) + adaptive thinking (light reasoning) + medium
       // effort (cost/quality balance). System prompt is stable per feature ⇒ prompt-cached.
       const res = await client.messages.create({
@@ -148,7 +160,7 @@ function liveAiPort(): AiPort {
     },
     async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, onText, onTextReset }) {
       const { apiKey, model } = aiConfig();
-      const client = new Anthropic({ apiKey });
+      const client = aiClient(apiKey);
       const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
       for (let step = 0; step < maxSteps; step++) {
         // Stream so answer text can be forwarded token-by-token (improvement #2). Thinking blocks
