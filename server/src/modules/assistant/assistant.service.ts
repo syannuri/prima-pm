@@ -601,6 +601,23 @@ function groundednessRegenEnabled(): boolean {
   return process.env.AI_GROUNDEDNESS_REGEN === '1' || process.env.AI_GROUNDEDNESS_REGEN === 'true';
 }
 
+// #3 smart model routing (DORMANT unless AI_MODEL_ROUTING): send clear, short LOOKUP questions to the
+// cheap model (aiConfig().proactiveModel) and keep everything else on the capable model. A deterministic
+// keyword+length heuristic (no LLM) — quality-first: when in doubt it returns the capable model.
+function modelRoutingEnabled(): boolean {
+  return process.env.AI_MODEL_ROUTING === '1' || process.env.AI_MODEL_ROUTING === 'true';
+}
+const COMPLEX_RE = /\b(why|explain|analy|recommend|compare|forecast|risk|strateg|pmi|pmbok|what[\s-]?if|mengapa|kenapa|jelaskan|analis|rekomendasi|saran|bandingkan|skenario|prediksi|sebaiknya|bagaimana jika)\b/i;
+const SIMPLE_RE = /\b(list|show|display|count|status|which|when|who|daftar|tampilkan|lihat|berapa|kapan|siapa|mana|sebutkan)\b/i;
+function routeModel(messages: AssistantTurn[]): string {
+  const { model, proactiveModel } = aiConfig();
+  if (!modelRoutingEnabled()) return model;
+  const last = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  if (last.length > 220 || COMPLEX_RE.test(last)) return model;      // long / analytical → capable
+  if (SIMPLE_RE.test(last) && last.length < 120) return proactiveModel; // clear short lookup → cheap
+  return model; // unsure → quality-first
+}
+
 export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void; onThinking?: (delta: string) => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage: TurnUsage; grounded: boolean }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
@@ -666,6 +683,8 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     tok.cacheCreation += u.cache_creation_input_tokens ?? 0;
     tok.cacheRead += u.cache_read_input_tokens ?? 0;
   };
+  // #3 smart model routing: pick the model for this turn (cheap for a clear lookup, capable otherwise).
+  const chosenModel = routeModel(messages);
   // Run the tool loop. `streaming` gates the live callbacks so a silent #1 regeneration doesn't
   // re-stream tokens to the client (the corrected final answer replaces the first via the answer event).
   const runLoop = (msgs: AssistantTurn[], streaming: boolean) => port.runToolLoop!({
@@ -676,6 +695,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     maxSteps: 6,
     maxTokens: 1500,
     feature: 'assistant_qa',
+    model: chosenModel,
     onText: streaming ? stream?.onText : undefined,
     onTextReset: streaming ? stream?.onTextReset : undefined,
     onThinking: streaming ? stream?.onThinking : undefined,
@@ -708,7 +728,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     }
   }
 
-  const costUsd = estimateCostUsd({ model: aiConfig().model, inputTokens: tok.input, outputTokens: tok.output, cacheCreationTokens: tok.cacheCreation, cacheReadTokens: tok.cacheRead });
+  const costUsd = estimateCostUsd({ model: chosenModel, inputTokens: tok.input, outputTokens: tok.output, cacheCreationTokens: tok.cacheCreation, cacheReadTokens: tok.cacheRead });
   const usage: TurnUsage = { inputTokens: tok.input, outputTokens: tok.output, costUsd };
   return { answer, proposals, navigate: navs, memories, tables, usage, grounded: grade.ok };
 }

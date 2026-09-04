@@ -169,6 +169,22 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(good.body.answer).not.toMatch(/⚠️/);
   });
 
+  it('MODEL ROUTING (#3): a clear lookup goes to the cheap model, analysis to the capable one', async () => {
+    const prev = process.env.AI_MODEL_ROUTING; process.env.AI_MODEL_ROUTING = '1';
+    let captured = '';
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ model }) { captured = model ?? ''; return 'ok'; },
+    });
+    await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'daftar proyek saya' }] });
+    expect(captured).toContain('haiku'); // simple lookup → cheap model
+    await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'mengapa proyek ini berisiko terlambat? tolong analisis dan beri rekomendasi.' }] });
+    expect(captured).toContain('opus'); // analytical → capable model
+    if (prev === undefined) delete process.env.AI_MODEL_ROUTING; else process.env.AI_MODEL_ROUTING = prev;
+    __setAiPort(answerPort);
+  });
+
   it('SECURITY: a PM\'s tools only see their own projects, never another PM\'s', async () => {
     // A port that drives the real executeTool: probe list_projects + a foreign project by code.
     __setAiPort({

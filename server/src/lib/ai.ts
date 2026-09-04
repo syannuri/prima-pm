@@ -117,6 +117,9 @@ export interface AiPort {
     maxSteps?: number;
     maxTokens?: number;
     feature?: AiFeature;
+    // #3 smart model routing: override the model for this turn (e.g. a cheap model for a simple
+    // lookup). Optional — defaults to aiConfig().model.
+    model?: string;
     // Real-time streaming (improvement #2): `onText` fires with each answer-text delta as Claude
     // generates it; `onTextReset` fires when a step turns out to be a tool call, so any preamble text
     // streamed that step is discarded on the client (only the final end_turn text is the answer).
@@ -180,9 +183,10 @@ function liveAiPort(): AiPort {
       const parsed = NarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
     },
-    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, onText, onTextReset, onThinking, onUsage }) {
+    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, model: modelOverride, onText, onTextReset, onThinking, onUsage }) {
       await assertAiBudget(); // #4: block if the tenant is over its monthly AI budget (no-op unless configured)
-      const { apiKey, model } = aiConfig();
+      const { apiKey, model: defaultModel } = aiConfig();
+      const model = modelOverride || defaultModel; // #3 smart model routing
       const client = aiClient(apiKey);
       const redactor = createRedactor(); // #2 privacy guard (identity unless AI_REDACT); one map for the whole loop
       const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: redactor.redact(m.content) }));
