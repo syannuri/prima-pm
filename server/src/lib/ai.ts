@@ -31,6 +31,14 @@ export function aiConfig() {
   };
 }
 
+// Effort knob (#D "adaptive effort"): tune thinking depth / token spend without a code change. Default
+// 'medium' (unchanged). Raise to 'high'/'max' for more rigorous analysis, 'low' for cheap/fast.
+type AiEffort = 'low' | 'medium' | 'high' | 'max';
+export function aiEffort(): AiEffort {
+  const v = process.env.AI_EFFORT;
+  return v === 'low' || v === 'high' || v === 'max' ? v : 'medium';
+}
+
 // Resilience (improvement #3): bound every AI request so a hung/overloaded Anthropic call can't stall
 // a request for the SDK's 10-minute default, and let the SDK auto-retry transient failures (it retries
 // 408/409/429/5xx + connection errors with exponential backoff). Both env-overridable. Timeout is
@@ -114,6 +122,9 @@ export interface AiPort {
     // Both optional — omit for a plain one-shot result.
     onText?: (delta: string) => void;
     onTextReset?: () => void;
+    // #D: streamed reasoning summary — fires with each thinking-summary delta so the UI can show Anett
+    // "reasoning" before the answer. Optional; a no-op when the caller doesn't want it.
+    onThinking?: (delta: string) => void;
   }): Promise<string | null>;
 }
 // Back-compat alias (report/narrative code imported this name).
@@ -139,7 +150,7 @@ function liveAiPort(): AiPort {
         model,
         max_tokens: maxTokens ?? 2000,
         thinking: { type: 'adaptive' },
-        output_config: { effort: 'medium', format: { type: 'json_schema', schema: jsonSchema } },
+        output_config: { effort: aiEffort(), format: { type: 'json_schema', schema: jsonSchema } },
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: user }],
       });
@@ -160,19 +171,20 @@ function liveAiPort(): AiPort {
       const parsed = NarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
     },
-    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, onText, onTextReset }) {
+    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, onText, onTextReset, onThinking }) {
       await assertAiBudget(); // #4: block if the tenant is over its monthly AI budget (no-op unless configured)
       const { apiKey, model } = aiConfig();
       const client = aiClient(apiKey);
       const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
       for (let step = 0; step < maxSteps; step++) {
-        // Stream so answer text can be forwarded token-by-token (improvement #2). Thinking blocks
-        // stream as thinking_delta, not text — `on('text')` fires only for the visible answer.
+        // Stream so answer text can be forwarded token-by-token (improvement #2). `display: 'summarized'`
+        // exposes Anett's reasoning as thinking deltas (#D): `on('text')` fires for the visible answer,
+        // `on('thinking')` for the reasoning summary. Effort is the env-tunable knob (#D).
         const stream = client.messages.stream({
           model,
           max_tokens: maxTokens,
-          thinking: { type: 'adaptive' },
-          output_config: { effort: 'medium' },
+          thinking: { type: 'adaptive', display: 'summarized' },
+          output_config: { effort: aiEffort() },
           system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
           // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
           // the SDK's Tool shape whose InputSchema requires the literal `type`.
@@ -180,6 +192,7 @@ function liveAiPort(): AiPort {
           messages: msgs,
         });
         if (onText) stream.on('text', (delta) => onText(delta));
+        if (onThinking) stream.on('thinking', (delta) => onThinking(delta));
         const res = await stream.finalMessage();
         // Record every step of the loop (each is a billed API call).
         await recordAiUsage({ feature: feature ?? 'assistant_qa', model, usage: res.usage });
