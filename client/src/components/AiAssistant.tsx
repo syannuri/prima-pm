@@ -16,6 +16,7 @@ interface NavRef { label: string; path: string }
 interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
 interface QueryTable { entity: string; columns: { key: string; label: string }[]; rows: Record<string, string | number | boolean | null>[]; total: number; limit: number }
 interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; error?: boolean }
+interface TurnUsage { inputTokens: number; outputTokens: number; costUsd: number } // #5 cost meter
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 interface ApprovalItem { id: string; actionLabel: string; stepName: string; project: { code: string; name: string } | null }
 
@@ -318,6 +319,9 @@ export default function AiAssistant() {
   const [streamSteps, setStreamSteps] = useState<string[]>([]);
   const [streamText, setStreamText] = useState(''); // live answer text as tokens arrive (improvement #2)
   const [streamReasoning, setStreamReasoning] = useState(''); // live thinking-summary (improvement #D)
+  // #5 cost meter: running per-conversation token + $ total (reset on New Chat).
+  const [sessionCost, setSessionCost] = useState({ costUsd: 0, tokens: 0 });
+  const addCost = (u: TurnUsage) => setSessionCost((c) => ({ costUsd: c.costUsd + (u.costUsd || 0), tokens: c.tokens + (u.inputTokens || 0) + (u.outputTokens || 0) }));
   const abortRef = useRef<AbortController | null>(null);
   const sendRef = useRef<(t: string) => void>(() => {});
   // Voice: mic (speech→text, auto-send) + optional spoken answers (text→speech).
@@ -414,12 +418,13 @@ export default function AiAssistant() {
 
   const ask = useMutation({
     // Only real Q&A turns go to the model — error notices are dropped from the sent history.
-    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[] }>(`/assistant/ask`, {
+    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage?: TurnUsage }>(`/assistant/ask`, {
       messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
       context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
       lang,
     }),
     onSuccess: (res) => {
+      if (res.usage) addCost(res.usage); // #5 cost meter
       // The new answer lands at the current end of the list; start the typewriter there (unless reduced-motion).
       if (!reduce && res.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
       setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined, tables: res.tables?.length ? res.tables : undefined }]);
@@ -621,7 +626,7 @@ export default function AiAssistant() {
         for (const part of parts) {
           const line = part.split('\n').find((l) => l.startsWith('data: '));
           if (!line) continue;
-          let ev: { type: string; label?: string; delta?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; message?: string };
+          let ev: { type: string; label?: string; delta?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; message?: string; usage?: TurnUsage };
           try { ev = JSON.parse(line.slice(6)); } catch { continue; }
           started = true;
           if (ev.type === 'step' && ev.label) {
@@ -637,6 +642,7 @@ export default function AiAssistant() {
             // Preamble before a tool call — discard what streamed this step.
             streamedText = false; setStreamText('');
           } else if (ev.type === 'answer') {
+            if (ev.usage) addCost(ev.usage); // #5 cost meter
             // Tokens already animated the text live ⇒ skip the fake typewriter; else keep it.
             if (!reduce && ev.answer && !streamedText) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
             setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined }]);
@@ -679,7 +685,7 @@ export default function AiAssistant() {
     void runAskStream(base);
   };
 
-  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); spokenRef.current = -1; cancelSpeak(); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
+  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); setSessionCost({ costUsd: 0, tokens: 0 }); spokenRef.current = -1; cancelSpeak(); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
 
   // Stop + release the waveform mic stream.
   const stopMic = () => setMicStream((s) => { s?.getTracks().forEach((t) => t.stop()); return null; });
@@ -1066,6 +1072,17 @@ export default function AiAssistant() {
           </div>
 
           <div className="border-t border-slate-200 p-2 dark:border-slate-800">
+            {/* #5 cost meter — running per-conversation estimate; only shows once there's spend. */}
+            {sessionCost.costUsd > 0 && (
+              <div className="mb-1 flex justify-end">
+                <span
+                  title={lang === 'id' ? 'Estimasi biaya percakapan ini (perkiraan, bukan tagihan)' : 'Estimated cost of this conversation (an estimate, not a bill)'}
+                  className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] tabular-nums text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                >
+                  ≈ ${sessionCost.costUsd < 0.01 ? sessionCost.costUsd.toFixed(4) : sessionCost.costUsd.toFixed(3)} · {sessionCost.tokens.toLocaleString()} tok
+                </span>
+              </div>
+            )}
             <div className="flex items-end gap-2">
               {listening ? (
                 <div className="flex min-h-[2.25rem] flex-1 items-center overflow-hidden rounded-lg border border-rose-300 bg-rose-50/40 dark:border-rose-800/60 dark:bg-rose-900/10">

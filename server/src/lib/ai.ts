@@ -126,6 +126,9 @@ export interface AiPort {
     // #D: streamed reasoning summary — fires with each thinking-summary delta so the UI can show Anett
     // "reasoning" before the answer. Optional; a no-op when the caller doesn't want it.
     onThinking?: (delta: string) => void;
+    // #5 cost meter: fires once per loop step with that call's raw token usage, so the caller can
+    // total the turn's tokens/cost for a live meter. Optional.
+    onUsage?: (usage: RawUsage) => void;
   }): Promise<string | null>;
   // Message Batches (#Batch): submit many structured-draft requests as ONE org-wide batch (async,
   // 50% cheaper) and poll for results. Optional — fake ports (itests) don't need them.
@@ -177,7 +180,7 @@ function liveAiPort(): AiPort {
       const parsed = NarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
     },
-    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, onText, onTextReset, onThinking }) {
+    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, onText, onTextReset, onThinking, onUsage }) {
       await assertAiBudget(); // #4: block if the tenant is over its monthly AI budget (no-op unless configured)
       const { apiKey, model } = aiConfig();
       const client = aiClient(apiKey);
@@ -203,6 +206,7 @@ function liveAiPort(): AiPort {
         const res = await stream.finalMessage();
         // Record every step of the loop (each is a billed API call).
         await recordAiUsage({ feature: feature ?? 'assistant_qa', model, usage: res.usage });
+        onUsage?.(res.usage as RawUsage); // #5 cost meter: surface this step's tokens to the caller
         if (res.stop_reason === 'refusal') return null;
         if (res.stop_reason === 'tool_use') {
           // The text streamed this step (if any) was preamble before a tool call — tell the client to
