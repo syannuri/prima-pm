@@ -15,6 +15,8 @@
     "backfill:baseline-versions": "tsx scripts/backfill-baseline-versions.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "eval": "vitest run src/lib/aiEval.gate.test.ts src/lib/aiEval.test.ts",
+    "eval:live": "AI_EVAL=1 npm run test:integration -- --run aiEval.live.itest",
     "test:integration:setup": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' prisma migrate deploy",
     "test:integration": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' MULTITENANCY_ENFORCE=false JWT_ACCESS_SECRET=test-access JWT_REFRESH_SECRET=test-refresh GUEST_SIGNUP_ENABLED=true NODE_ENV=test vitest run --config vitest.integration.config.ts"
   },
