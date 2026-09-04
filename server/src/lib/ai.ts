@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { Forbidden } from './errors.js';
 import { activeTenantIsPersonal } from './tenant/context.js';
-import { recordAiUsage, type AiFeature } from './aiUsage.js';
+import { recordAiUsage, type AiFeature, type RawUsage } from './aiUsage.js';
 import { assertAiBudget } from './aiBudget.js';
 
 // The Forbidden thrown when an AI feature is gated off for the caller's tenant. A guest's personal
@@ -70,7 +70,7 @@ export type NarrativeDraft = z.infer<typeof NarrativeSchema>;
 // Structured-output JSON schema (constrains the model's response to valid JSON). Hand-authored
 // rather than derived from the zod schema — the SDK's zod helper targets a different zod major than
 // the app's, so we constrain via raw JSON schema and validate the result with NarrativeSchema.
-const NARRATIVE_JSON_SCHEMA = {
+export const NARRATIVE_JSON_SCHEMA = {
   type: 'object',
   properties: {
     executiveSummary: { type: 'string' },
@@ -126,6 +126,10 @@ export interface AiPort {
     // "reasoning" before the answer. Optional; a no-op when the caller doesn't want it.
     onThinking?: (delta: string) => void;
   }): Promise<string | null>;
+  // Message Batches (#Batch): submit many structured-draft requests as ONE org-wide batch (async,
+  // 50% cheaper) and poll for results. Optional — fake ports (itests) don't need them.
+  submitBatch?(input: { requests: { customId: string; system: string; user: string; jsonSchema: Record<string, unknown>; model?: string; maxTokens?: number }[] }): Promise<string | null>;
+  pollBatch?(batchId: string): Promise<{ ended: boolean; results?: { customId: string; json: unknown | null; usage?: RawUsage }[] }>;
 }
 // Back-compat alias (report/narrative code imported this name).
 export type AiNarrativePort = AiPort;
@@ -227,6 +231,43 @@ function liveAiPort(): AiPort {
         return text || null;
       }
       return null; // exceeded maxSteps
+    },
+    async submitBatch({ requests }) {
+      const { apiKey, model: defaultModel } = aiConfig();
+      const client = aiClient(apiKey);
+      const batch = await client.messages.batches.create({
+        requests: requests.map((r) => ({
+          custom_id: r.customId,
+          params: {
+            model: r.model || defaultModel,
+            max_tokens: r.maxTokens ?? 2000,
+            thinking: { type: 'adaptive' },
+            output_config: { effort: aiEffort(), format: { type: 'json_schema', schema: r.jsonSchema } },
+            system: [{ type: 'text', text: r.system, cache_control: { type: 'ephemeral' } }],
+            messages: [{ role: 'user', content: r.user }],
+          },
+        })),
+      });
+      return batch.id;
+    },
+    async pollBatch(batchId) {
+      const { apiKey } = aiConfig();
+      const client = aiClient(apiKey);
+      const batch = await client.messages.batches.retrieve(batchId);
+      if (batch.processing_status !== 'ended') return { ended: false };
+      const results: { customId: string; json: unknown | null; usage?: RawUsage }[] = [];
+      for await (const r of await client.messages.batches.results(batchId)) {
+        if (r.result.type === 'succeeded') {
+          const msg = r.result.message;
+          const text = msg.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
+          let json: unknown | null = null;
+          if (text) { try { json = JSON.parse(text); } catch { json = null; } }
+          results.push({ customId: r.custom_id, json, usage: msg.usage as RawUsage });
+        } else {
+          results.push({ customId: r.custom_id, json: null });
+        }
+      }
+      return { ended: true, results };
     },
   };
 }

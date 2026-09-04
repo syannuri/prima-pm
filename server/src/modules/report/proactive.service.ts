@@ -9,7 +9,8 @@
 // spends on the provider with no human click).
 import { prisma } from '../../lib/prisma.js';
 import { runAsSystem, runWithTenant } from '../../lib/tenant/context.js';
-import { aiEnabled, aiConfig, getAiPort } from '../../lib/ai.js';
+import { aiEnabled, aiConfig, getAiPort, NarrativeSchema, NARRATIVE_JSON_SCHEMA } from '../../lib/ai.js';
+import { recordAiUsage } from '../../lib/aiUsage.js';
 import { logger } from '../../lib/observability.js';
 import { getProjectReport, periodKey } from './report.service.js';
 import { buildNarrativePrompt, type NarrativeLang } from './narrative.service.js';
@@ -98,12 +99,135 @@ async function draftForProject(
   return true;
 }
 
+// Batch mode (#Batch): submit ALL project narrative drafts as ONE org-wide Message Batch (50% cheaper,
+// async) instead of N synchronous calls. Dormant by default — set PROACTIVE_BATCH=1 to enable. The
+// batch is finalised later by finalizeDueBatches() once Anthropic finishes processing.
+function batchEnabled(): boolean {
+  return process.env.PROACTIVE_BATCH === '1' || process.env.PROACTIVE_BATCH === 'true';
+}
+
+interface BatchMapEntry {
+  tenantId: string | null; code: string; name: string; pmUserId: string | null;
+  period: string; periodKey: string; model: string;
+  slipLevel: string | null; slipScore: number | null; overrunLevel: string | null; overrunScore: number | null;
+  generatedAt: string;
+}
+
+// Build the batch requests (one per not-yet-drafted active project across opted-in tenants), submit
+// them, and record an AiBatch to finalise later. Returns how many were submitted.
+async function submitProactiveBatch(now: Date): Promise<{ submitted: number }> {
+  const tenants = await runAsSystem(() =>
+    prisma.tenant.findMany({ where: { aiProactiveEnabled: true, status: 'ACTIVE' }, select: { id: true } }),
+  );
+  const key = periodKey(now, PERIOD);
+  const model = aiConfig().proactiveModel;
+  const requests: { customId: string; system: string; user: string; jsonSchema: Record<string, unknown>; model: string }[] = [];
+  const mapping: Record<string, BatchMapEntry> = {};
+
+  for (const t of tenants) {
+    await runWithTenant(t.id, async () => {
+      const projects = await prisma.project.findMany({
+        where: { deletedAt: null, status: 'IN_PROGRESS' },
+        select: { id: true, code: true, name: true, pmUserId: true, tenantId: true },
+        take: MAX_PROJECTS_PER_TENANT,
+      });
+      for (const p of projects) {
+        try {
+          const existing = await prisma.aiBriefing.findUnique({
+            where: { projectId_period_periodKey: { projectId: p.id, period: PERIOD, periodKey: key } },
+            select: { id: true },
+          });
+          if (existing) continue;
+          const report = await getProjectReport(p.id, PERIOD, now);
+          const { system, user } = buildNarrativePrompt(report, draftLang());
+          const pred = await getProjectPredictive(p.id, now);
+          requests.push({ customId: p.id, system, user, jsonSchema: NARRATIVE_JSON_SCHEMA, model });
+          mapping[p.id] = {
+            tenantId: p.tenantId, code: p.code, name: p.name, pmUserId: p.pmUserId,
+            period: PERIOD, periodKey: key, model,
+            slipLevel: pred.slip?.level ?? null, slipScore: pred.slip?.score ?? null,
+            overrunLevel: pred.overrun?.level ?? null, overrunScore: pred.overrun?.score ?? null,
+            generatedAt: now.toISOString(),
+          };
+        } catch (err) {
+          logger.error({ err, projectId: p.id }, '[proactive] batch build failed');
+        }
+      }
+    });
+  }
+  if (requests.length === 0) return { submitted: 0 };
+
+  const port = getAiPort();
+  if (!port.submitBatch) return { submitted: 0 };
+  const batchId = await port.submitBatch({ requests });
+  if (!batchId) return { submitted: 0 };
+  await runAsSystem(() => prisma.aiBatch.create({ data: { batchId, feature: 'proactive', status: 'PENDING', mapping: mapping as object } }));
+  return { submitted: requests.length };
+}
+
+// Poll every in-flight proactive batch; when one has finished processing, create the AiBriefings from
+// its results (mapped back per project) and mark it DONE. Runs on its own timer (see server.ts).
+export async function finalizeDueBatches(now: Date = new Date()): Promise<{ drafted: number }> {
+  if (!aiEnabled()) return { drafted: 0 };
+  const port = getAiPort();
+  if (!port.pollBatch) return { drafted: 0 };
+  const batches = await runAsSystem(() => prisma.aiBatch.findMany({ where: { status: 'PENDING' }, select: { id: true, batchId: true, mapping: true } }));
+  let drafted = 0;
+
+  for (const b of batches) {
+    let res;
+    try { res = await port.pollBatch(b.batchId); } catch (err) { logger.error({ err, batchId: b.batchId }, '[proactive] batch poll failed'); continue; }
+    if (!res.ended) continue; // still processing — check again next tick
+    const mapping = (b.mapping ?? {}) as unknown as Record<string, BatchMapEntry>;
+
+    for (const r of res.results ?? []) {
+      const m = mapping[r.customId];
+      if (!m || r.json == null) continue;
+      const parsed = NarrativeSchema.safeParse(r.json);
+      if (!parsed.success) continue;
+      const draft = parsed.data;
+      try {
+        await runWithTenant(m.tenantId ?? '', async () => {
+          const existing = await prisma.aiBriefing.findUnique({
+            where: { projectId_period_periodKey: { projectId: r.customId, period: m.period, periodKey: m.periodKey } },
+            select: { id: true },
+          });
+          if (existing) return;
+          await recordAiUsage({ feature: 'proactive', model: m.model, usage: r.usage, projectId: r.customId });
+          await prisma.aiBriefing.create({
+            data: {
+              projectId: r.customId, tenantId: m.tenantId, period: m.period, periodKey: m.periodKey, status: 'PENDING',
+              execSummary: draft.executiveSummary, highlights: draft.highlights, lowlights: draft.lowlights, nextFocus: draft.nextFocus,
+              slipLevel: m.slipLevel, slipScore: m.slipScore, overrunLevel: m.overrunLevel, overrunScore: m.overrunScore,
+              model: m.model, generatedAt: new Date(m.generatedAt),
+            },
+          });
+          if (m.pmUserId) {
+            await createNotification({ userId: m.pmUserId, type: 'AI_BRIEFING_READY', title: `AI drafted a status update for ${m.code}`, body: `Review the draft narrative for “${m.name}” and apply or dismiss it.`, projectId: r.customId, link: '/reports' });
+          }
+          drafted++;
+        });
+      } catch (err) {
+        logger.error({ err, projectId: r.customId }, '[proactive] batch finalize failed');
+      }
+    }
+    await runAsSystem(() => prisma.aiBatch.update({ where: { id: b.id }, data: { status: 'DONE', resolvedAt: new Date() } }));
+  }
+  return { drafted };
+}
+
 // Hourly sweep. Fans out over every tenant that opted in (aiProactiveEnabled). Within each, drafts a
 // briefing for each active project not yet drafted this period, up to the per-tenant cap. A no-op
-// (one cheap query) outside the window or when the AI key is unset.
-export async function runProactiveSweepIfDue(now: Date = new Date()): Promise<{ drafted: number }> {
+// (one cheap query) outside the window or when the AI key is unset. In PROACTIVE_BATCH mode it submits
+// one org-wide batch instead (finalised later by finalizeDueBatches).
+export async function runProactiveSweepIfDue(now: Date = new Date()): Promise<{ drafted: number; submitted?: number }> {
   if (!aiEnabled()) return { drafted: 0 }; // dormant until the AI key is set
   if (!isProactiveDue(now)) return { drafted: 0 }; // cheapest exit: wrong window
+
+  if (batchEnabled()) {
+    const { submitted } = await submitProactiveBatch(now);
+    return { drafted: 0, submitted };
+  }
 
   const tenants = await runAsSystem(() =>
     prisma.tenant.findMany({ where: { aiProactiveEnabled: true, status: 'ACTIVE' }, select: { id: true } }),
