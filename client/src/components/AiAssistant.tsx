@@ -347,10 +347,11 @@ export default function AiAssistant() {
 
   const availQ = useQuery({
     queryKey: ['assistant-available'],
-    queryFn: () => api.get<{ aiAvailable: boolean; actionsAvailable: boolean; voiceServer: boolean }>(`/assistant/available`),
+    queryFn: () => api.get<{ aiAvailable: boolean; actionsAvailable: boolean; voiceServer: boolean; autoDistill?: boolean }>(`/assistant/available`),
     staleTime: 5 * 60_000,
   });
   const canPropose = availQ.data?.actionsAvailable === true;
+  const autoDistill = availQ.data?.autoDistill === true;
   // Server-side voice (Whisper/ElevenLabs) when available; else the browser Web Speech API (Voice v2).
   const voiceServer = availQ.data?.voiceServer === true;
   const sttAvailable = VOICE_UI_ENABLED && (voiceServer || !!sttCtor);
@@ -450,6 +451,18 @@ export default function AiAssistant() {
 
   // Persist + keep the view pinned to the latest message (also while the typewriter is revealing).
   useEffect(() => { turnsRef.current = turns; }, [turns]);
+
+  // Auto-distill (Fase 4): when the panel closes, hand the session transcript to the server so it can
+  // extract durable memories. Dormant unless the server says autoDistill (env + tenant opt-in); only
+  // fires when there's something new since the last distill. Fire-and-forget — never blocks the UI.
+  const distilledCountRef = useRef(0);
+  useEffect(() => {
+    if (open || !autoDistill) return;
+    const real = turnsRef.current.filter((t) => !t.error && t.content?.trim());
+    if (real.length < 2 || real.length <= distilledCountRef.current) return;
+    distilledCountRef.current = real.length;
+    void api.post('/assistant/memory/distill', { turns: real.slice(-24).map(({ role, content }) => ({ role, content })) }).catch(() => {});
+  }, [open, autoDistill]);
   useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
   // Pin to the latest message on every new turn/stream tick AND whenever the panel (re)opens — so
   // reopening an existing conversation always lands on the last message (jump instantly on open).

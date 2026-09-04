@@ -29,6 +29,7 @@ export type AiFeature =
   | 'resource_realloc'
   | 'schedule_suggest'
   | 'whatif'
+  | 'memory_distill'
   | 'unknown';
 
 // Record one API call's usage. Reads the active tenant from AsyncLocalStorage (the same context the
