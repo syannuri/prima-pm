@@ -9,7 +9,7 @@ import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
 import { escalateOverdueApprovals } from './modules/approval/approval.service.js';
 import { runTrialReminderSweep } from './modules/billing/trialReminders.js';
 import { runDigestSweepIfDue } from './modules/notification/digest.service.js';
-import { runProactiveSweepIfDue, finalizeDueBatches } from './modules/report/proactive.service.js';
+import { runProactiveSweepIfDue, finalizeDueBatches, runInstantTriggerSweepIfDue } from './modules/report/proactive.service.js';
 import { measureDueOutcomes } from './modules/aiActions/aiActionOutcomes.service.js';
 import { logger, release, initSentry } from './lib/observability.js';
 
@@ -196,6 +196,23 @@ async function main() {
   const batchFinalizeTimer = setInterval(() => void finalizeBatches(), BATCH_FINALIZE_MS);
   batchFinalizeTimer.unref();
 
+  // Real-time trigger briefings (#6): watch each project's predictive signal and draft an instant
+  // briefing the moment it goes HIGH — not just at the weekly window. Dormant unless PROACTIVE_INSTANT.
+  // Every 2h; the deterministic scan is cheap, only an actual HIGH project spends (cheap model), and
+  // it's deduped to one instant briefing per project per day.
+  const INSTANT_SWEEP_MS = Number(process.env.PROACTIVE_INSTANT_MS ?? 2 * 60 * 60 * 1000);
+  const sweepInstant = async () => {
+    try {
+      const r = await runInstantTriggerSweepIfDue();
+      if (r.drafted > 0) console.log(`[prima-pm] instant-triggered ${r.drafted} proactive briefing(s)`);
+    } catch (err) {
+      console.error('[prima-pm] instant trigger sweep failed', err);
+    }
+  };
+  void sweepInstant();
+  const instantTimer = setInterval(() => void sweepInstant(), INSTANT_SWEEP_MS);
+  instantTimer.unref();
+
   // AI outcome-learning sweep: resolve applied Stage-C action proposals whose measurement horizon
   // has elapsed (baseline SPI vs SPI now → IMPROVED/UNCHANGED/WORSENED). Deterministic, no LLM/spend;
   // a cheap indexed no-op when nothing is due. Every 6h.
@@ -223,6 +240,7 @@ async function main() {
     clearInterval(digestTimer);
     clearInterval(proactiveTimer);
     clearInterval(batchFinalizeTimer);
+    clearInterval(instantTimer);
     clearInterval(outcomeTimer);
     server.close();
     await prisma.$disconnect();
