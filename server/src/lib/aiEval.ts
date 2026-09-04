@@ -66,3 +66,27 @@ export function gradeAnswer(answer: string, ctx: GradeContext = {}): { ok: boole
   issues.push(...evmInversions(answer));
   return { ok: issues.length === 0, issues };
 }
+
+// ---- Eval gate (improvement #4) ----
+// A labelled example: the answer + context, and the verdict the graders MUST produce for it.
+export interface GoldenCase { name: string; answer: string; ctx?: GradeContext; expectOk: boolean }
+export interface GoldenScore {
+  total: number;
+  passed: number; // cases where the grader verdict matched the expected label
+  rate: number;   // passed / total (1 = no regression)
+  failures: { name: string; expectedOk: boolean; gotOk: boolean; issues: string[] }[];
+}
+
+// Score a golden set: run each case through gradeAnswer and compare to its expected verdict. A drift
+// (a known-bad answer now passing, or a known-good one now flagged) shows up as a failure and drops
+// the rate below 1 — which the gate (aiEval.gate.test) turns into a failing build.
+export function scoreGoldenSet(cases: GoldenCase[]): GoldenScore {
+  const failures: GoldenScore['failures'] = [];
+  let passed = 0;
+  for (const c of cases) {
+    const got = gradeAnswer(c.answer, c.ctx ?? {});
+    if (got.ok === c.expectOk) passed++;
+    else failures.push({ name: c.name, expectedOk: c.expectOk, gotOk: got.ok, issues: got.issues });
+  }
+  return { total: cases.length, passed, rate: cases.length ? passed / cases.length : 1, failures };
+}
