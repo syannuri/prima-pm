@@ -9,7 +9,7 @@ import { deliverDueDeliveries } from './modules/webhook/webhook.service.js';
 import { escalateOverdueApprovals } from './modules/approval/approval.service.js';
 import { runTrialReminderSweep } from './modules/billing/trialReminders.js';
 import { runDigestSweepIfDue } from './modules/notification/digest.service.js';
-import { runProactiveSweepIfDue } from './modules/report/proactive.service.js';
+import { runProactiveSweepIfDue, finalizeDueBatches } from './modules/report/proactive.service.js';
 import { measureDueOutcomes } from './modules/aiActions/aiActionOutcomes.service.js';
 import { logger, release, initSentry } from './lib/observability.js';
 
@@ -180,6 +180,22 @@ async function main() {
   const proactiveTimer = setInterval(() => void sweepProactive(), PROACTIVE_SWEEP_MS);
   proactiveTimer.unref();
 
+  // Proactive-batch finaliser (#Batch): when PROACTIVE_BATCH mode is on, the sweep submits one org-wide
+  // Message Batch; this drains completed batches into AiBriefings. Every 10 min; a cheap no-op (one
+  // indexed query) when there are no in-flight batches. unref() so it never keeps the process alive.
+  const BATCH_FINALIZE_MS = 10 * 60 * 1000;
+  const finalizeBatches = async () => {
+    try {
+      const r = await finalizeDueBatches();
+      if (r.drafted > 0) console.log(`[prima-pm] finalised ${r.drafted} batched proactive briefing(s)`);
+    } catch (err) {
+      console.error('[prima-pm] proactive batch finalise failed', err);
+    }
+  };
+  void finalizeBatches();
+  const batchFinalizeTimer = setInterval(() => void finalizeBatches(), BATCH_FINALIZE_MS);
+  batchFinalizeTimer.unref();
+
   // AI outcome-learning sweep: resolve applied Stage-C action proposals whose measurement horizon
   // has elapsed (baseline SPI vs SPI now → IMPROVED/UNCHANGED/WORSENED). Deterministic, no LLM/spend;
   // a cheap indexed no-op when nothing is due. Every 6h.
@@ -206,6 +222,7 @@ async function main() {
     clearInterval(trialReminderTimer);
     clearInterval(digestTimer);
     clearInterval(proactiveTimer);
+    clearInterval(batchFinalizeTimer);
     clearInterval(outcomeTimer);
     server.close();
     await prisma.$disconnect();

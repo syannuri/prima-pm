@@ -1293,6 +1293,29 @@ model AiUsage {
   @@index([tenantId, feature])
 }
 
+// In-flight Message Batches job (proactive sweep, #Batch). The weekly sweep can submit all project
+// narrative drafts as ONE org-wide batch (50% cheaper); this row tracks it until a poller retrieves
+// the results and creates the AiBriefings. Cross-tenant system record (not tenant-scoped) — the
+// per-project tenant/pm/predictive context lives in `mapping` (customId=projectId -> {...}).
+model AiBatch {
+  id      String        @id @default(uuid())
+  batchId String        @unique // the Anthropic Message Batch id
+  feature String        @default("proactive")
+  status  AiBatchStatus @default(PENDING)
+  mapping Json // customId(projectId) -> { tenantId, code, name, pmUserId, period, periodKey, model, slipLevel, slipScore, overrunLevel, overrunScore, generatedAt }
+
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([status])
+}
+
+enum AiBatchStatus {
+  PENDING
+  DONE
+  FAILED
+}
+
 enum IssueImpact {
   LOW
   MEDIUM
