@@ -119,6 +119,32 @@ describe('AI portfolio assistant — /assistant', () => {
     __setAiPort(answerPort);
   });
 
+  it('PMI: pmi_guidance grounds advice in the standard + carries a disclaimer, and the prompt advertises it', async () => {
+    let captured = '';
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system, executeTool }) {
+        captured = system;
+        const evm = await executeTool('pmi_guidance', { topic: 'earned value SPI behind schedule' });
+        const missing = await executeTool('pmi_guidance', { topic: 'zzzznotarealtopic' });
+        return JSON.stringify({ evm, missing });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    // The tool returns curated PMI guidance + the standard label + an advisory disclaimer.
+    expect(out.evm).toMatch(/SPI|EVM|Earned Value/i);
+    expect(out.evm).toMatch(/standard/i);
+    expect(out.evm).toMatch(/advisory/i);
+    // Unknown topic → graceful, offers the topic index rather than inventing.
+    expect(out.missing).toContain('availableTopics');
+    // The system prompt advertises the pmi_guidance capability so the model knows to use it.
+    expect(captured).toContain('pmi_guidance');
+  });
+
   it('SECURITY: a PM\'s tools only see their own projects, never another PM\'s', async () => {
     // A port that drives the real executeTool: probe list_projects + a foreign project by code.
     __setAiPort({
