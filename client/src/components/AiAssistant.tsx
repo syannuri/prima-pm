@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, API_BASE, streamHeaders } from '../api/client';
 import { Markdown } from '../lib/markdown';
+import AnettChartCard from './AnettChartCard';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { useLang } from '../context/LanguageContext';
 
@@ -264,10 +265,25 @@ function VoiceListeningBar({ stream }: { stream: MediaStream }) {
   );
 }
 // Strip common markdown so the spoken answer sounds natural (not "asterisk asterisk …").
+// Rich answer cards (#2): a [[chart:CODE|TYPE]] marker becomes a visual card rendered below the text.
+// stripCharts removes the marker from the prose; chartRefs collects the (deduped) refs to render.
+function stripCharts(s: string): string {
+  return s.replace(/\[\[chart:[^\]]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trimEnd();
+}
+function chartRefs(s: string): { code: string; type: string }[] {
+  const seen = new Set<string>();
+  const out: { code: string; type: string }[] = [];
+  for (const m of s.matchAll(/\[\[chart:([A-Za-z0-9-]+)\|(\w+)\]\]/g)) {
+    const key = `${m[1].toUpperCase()}|${m[2]}`;
+    if (!seen.has(key)) { seen.add(key); out.push({ code: m[1], type: m[2] }); }
+  }
+  return out;
+}
+
 function stripMarkdown(s: string): string {
   return s
     .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/\[\[cite:[^\]]+\]\]/g, '') // drop citation markers so TTS doesn't read them
+    .replace(/\[\[(?:cite|chart):[^\]]+\]\]/g, '') // drop citation/chart markers so TTS doesn't read them
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[*_`#>]/g, '')
     .replace(/^\s*[-•]\s*/gm, '')
@@ -860,7 +876,7 @@ export default function AiAssistant() {
                   }`}>
                     {t.role === 'assistant' && !t.error ? (
                       <div className={i === streamIdx ? 'anett-streaming' : undefined}>
-                        <Markdown text={i === streamIdx ? t.content.slice(0, streamLen) : t.content} className="text-sm" renderCitation={renderCitation} />
+                        <Markdown text={stripCharts(i === streamIdx ? t.content.slice(0, streamLen) : t.content)} className="text-sm" renderCitation={renderCitation} />
                       </div>
                     ) : (
                       <div className="flex flex-col gap-1">
@@ -894,6 +910,12 @@ export default function AiAssistant() {
                     ))}
                   </div>
                 )}
+                {/* Rich visual cards (#2) — compact EVM card(s) Anett attached via [[chart:CODE|evm]] */}
+                {i !== streamIdx && chartRefs(t.content)
+                  .filter((r) => r.type === 'evm' && codeToId.has(r.code.toUpperCase()))
+                  .map((r, j) => (
+                    <AnettChartCard key={`${r.code}-${j}`} projectId={codeToId.get(r.code.toUpperCase())!} code={r.code} onNavigate={() => setOpen(false)} />
+                  ))}
                 {/* 🧠 Anett stored a durable memory this turn */}
                 {i !== streamIdx && t.memories && t.memories.length > 0 && (
                   <div className="ml-10 mt-1.5 flex flex-wrap gap-1.5">
