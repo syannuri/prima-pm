@@ -1316,6 +1316,24 @@ enum AiBatchStatus {
   FAILED
 }
 
+// Cached semantic-search vector per project (round-3 #1). The search doc (name/charter/risk/CR/…)
+// is embedded via Voyage AI and stored here; a docHash lets the search skip re-embedding unchanged
+// projects (cost control). Tenant-scoped. Vector is a plain JSON number[] — brute-force cosine in
+// Node over a tenant's handful of projects, so no pgvector extension is required.
+model ProjectEmbedding {
+  id        String @id @default(uuid())
+  tenantId  String
+  projectId String @unique
+  model     String // the embedding model id the vector was produced with
+  docHash   String // sha256 of the source doc; changed ⇒ re-embed
+  vector    Json // number[] embedding
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
 enum IssueImpact {
   LOW
   MEDIUM
