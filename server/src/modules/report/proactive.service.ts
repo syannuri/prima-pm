@@ -255,6 +255,103 @@ export async function runProactiveSweepIfDue(now: Date = new Date()): Promise<{ 
 }
 
 // ---------------------------------------------------------------------------
+// Real-time trigger briefings (round-3 #6)
+// ---------------------------------------------------------------------------
+// The weekly sweep is calendar-driven; a project can blow up mid-week and the PM only learns at the
+// next window. This adds an event-ish path: a frequent tick that watches each project's DETERMINISTIC
+// predictive signal and, the moment it goes HIGH, drafts an instant briefing — so a serious slip/
+// overrun surfaces right away. DORMANT by default (PROACTIVE_INSTANT). Deduped to one instant briefing
+// per project per DAY (period='instant', periodKey=YYYY-MM-DD) so a persistent HIGH signal doesn't spam.
+
+const INSTANT_PERIOD = 'instant' as const;
+const instantKey = (now: Date): string => now.toISOString().slice(0, 10); // YYYY-MM-DD
+
+export function instantTriggerEnabled(): boolean {
+  return process.env.PROACTIVE_INSTANT === '1' || process.env.PROACTIVE_INSTANT === 'true';
+}
+
+// A serious, actionable signal worth interrupting the PM for — either dimension at HIGH.
+function isHighSignal(pred: { slip?: { level?: string } | null; overrun?: { level?: string } | null }): boolean {
+  return pred.slip?.level === 'HIGH' || pred.overrun?.level === 'HIGH';
+}
+
+// Draft an instant briefing for a project that just went HIGH (best-effort). Mirrors draftForProject
+// but keyed on the daily instant period and framed as an alert. Returns true on a new PENDING briefing.
+export async function draftInstant(
+  p: { id: string; code: string; name: string; pmUserId: string | null; tenantId: string | null },
+  key: string,
+  now: Date,
+  pred: Awaited<ReturnType<typeof getProjectPredictive>>,
+): Promise<boolean> {
+  const existing = await prisma.aiBriefing.findUnique({
+    where: { projectId_period_periodKey: { projectId: p.id, period: INSTANT_PERIOD, periodKey: key } },
+    select: { id: true },
+  });
+  if (existing) return false; // already flagged today
+
+  const report = await getProjectReport(p.id, PERIOD, now);
+  const { system, user } = buildNarrativePrompt(report, draftLang());
+  const model = aiConfig().proactiveModel;
+  const draft = await getAiPort().draftNarrative({ system, user, model, feature: 'proactive' });
+  if (!draft) return false;
+
+  await prisma.aiBriefing.create({
+    data: {
+      projectId: p.id, tenantId: p.tenantId, period: INSTANT_PERIOD, periodKey: key, status: 'PENDING',
+      execSummary: draft.executiveSummary, highlights: draft.highlights, lowlights: draft.lowlights, nextFocus: draft.nextFocus,
+      slipLevel: pred.slip?.level ?? null, slipScore: pred.slip?.score ?? null,
+      overrunLevel: pred.overrun?.level ?? null, overrunScore: pred.overrun?.score ?? null,
+      model, generatedAt: now,
+    },
+  });
+
+  if (p.pmUserId) {
+    const which = pred.slip?.level === 'HIGH' && pred.overrun?.level === 'HIGH' ? 'schedule & cost' : pred.slip?.level === 'HIGH' ? 'schedule' : 'cost';
+    await createNotification({
+      userId: p.pmUserId,
+      type: 'AI_BRIEFING_READY',
+      title: `⚠️ AI flagged ${p.code} — high ${which} risk`,
+      body: `A high-risk signal on “${p.name}” triggered an instant status draft. Review it in Reports.`,
+      projectId: p.id,
+      link: '/reports',
+    });
+  }
+  return true;
+}
+
+// Frequent tick (see server.ts). For every opted-in tenant, draft an instant briefing for any active
+// project whose predictive signal is HIGH and hasn't been flagged today. A cheap no-op when the key is
+// unset, the trigger is off, or nothing is HIGH — the predictive signal is deterministic (no LLM) so
+// the scan itself costs nothing; only an actual HIGH project spends (cheap model).
+export async function runInstantTriggerSweepIfDue(now: Date = new Date()): Promise<{ drafted: number }> {
+  if (!aiEnabled() || !instantTriggerEnabled()) return { drafted: 0 };
+  const tenants = await runAsSystem(() =>
+    prisma.tenant.findMany({ where: { aiProactiveEnabled: true, status: 'ACTIVE' }, select: { id: true } }),
+  );
+  const key = instantKey(now);
+  let drafted = 0;
+  for (const t of tenants) {
+    await runWithTenant(t.id, async () => {
+      const projects = await prisma.project.findMany({
+        where: { deletedAt: null, status: 'IN_PROGRESS' },
+        select: { id: true, code: true, name: true, pmUserId: true, tenantId: true },
+        take: MAX_PROJECTS_PER_TENANT,
+      });
+      for (const p of projects) {
+        try {
+          const pred = await getProjectPredictive(p.id, now);
+          if (!isHighSignal(pred)) continue;
+          if (await draftInstant(p, key, now, pred)) drafted++;
+        } catch (err) {
+          logger.error({ err, projectId: p.id }, '[proactive] instant trigger failed');
+        }
+      }
+    });
+  }
+  return { drafted };
+}
+
+// ---------------------------------------------------------------------------
 // Review queries (drive the Reports banner + the portfolio "AI briefings" inbox)
 // ---------------------------------------------------------------------------
 
