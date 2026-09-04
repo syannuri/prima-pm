@@ -59,19 +59,46 @@ export async function listMemories(userId: string): Promise<MemoryRow[]> {
 // The bounded set injected into the system prompt. Empty when the tenant hasn't opted in.
 export async function loadMemoriesForPrompt(userId: string): Promise<{ scope: MemScope; kind: MemKind; content: string }[]> {
   if (!(await callerMemoryEnabled())) return [];
+  // Relevance-ranked (improvement #5): pinned first, then most-recently-USED (not just newest), so a
+  // heavily-used older memory keeps its place in the bounded window instead of being crowded out by a
+  // never-used new one. Falls back to updatedAt for memories not yet used.
   const rows = await prisma.aiMemory.findMany({
     where: visibleWhere(userId),
-    orderBy: [{ pinned: 'desc' }, { updatedAt: 'desc' }],
+    orderBy: [{ pinned: 'desc' }, { lastUsedAt: { sort: 'desc', nulls: 'last' } }, { updatedAt: 'desc' }],
     take: PROMPT_MAX_ITEMS,
+    select: { id: true, scope: true, kind: true, content: true },
   });
   const out: { scope: MemScope; kind: MemKind; content: string }[] = [];
+  const injectedIds: string[] = [];
   let chars = 0;
   for (const r of rows) {
     chars += r.content.length;
     if (chars > PROMPT_MAX_CHARS) break;
     out.push({ scope: r.scope, kind: r.kind, content: r.content });
+    injectedIds.push(r.id);
+  }
+  // Best-effort usage bump so lastUsedAt/useCount reflect what Anett actually leans on (feeds the
+  // ranking above and the stale-prune sweep). Fire-and-forget — never delays or breaks the answer.
+  if (injectedIds.length) {
+    void prisma.aiMemory.updateMany({ where: { id: { in: injectedIds } }, data: { useCount: { increment: 1 }, lastUsedAt: new Date() } }).catch(() => {});
   }
   return out;
+}
+
+// Deterministic pruning sweep (improvement #5). DORMANT BY DEFAULT: only runs when AI_MEMORY_TTL_DAYS
+// > 0. Deactivates (soft-delete) memories that are clearly dead weight — never used, not pinned, not
+// user-entered (EXPLICIT is kept; AUTO/FEEDBACK are prunable), and older than the TTL — so the store
+// and Settings list stay relevant without touching anything a human curated. Cross-tenant maintenance,
+// so the caller runs it under runAsSystem.
+export async function pruneStaleMemories(now: Date = new Date()): Promise<{ deactivated: number }> {
+  const ttlDays = Number(process.env.AI_MEMORY_TTL_DAYS) || 0;
+  if (ttlDays <= 0) return { deactivated: 0 };
+  const cutoff = new Date(now.getTime() - ttlDays * 24 * 60 * 60 * 1000);
+  const r = await prisma.aiMemory.updateMany({
+    where: { active: true, pinned: false, source: { not: 'EXPLICIT' }, useCount: 0, lastUsedAt: null, createdAt: { lt: cutoff } },
+    data: { active: false },
+  });
+  return { deactivated: r.count };
 }
 
 // Render the memory block appended to the system prompt. GUIDANCE (feedback corrections) is framed
