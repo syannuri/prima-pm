@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, API_BASE, streamHeaders } from '../api/client';
 import { Markdown } from '../lib/markdown';
 import AnettChartCard from './AnettChartCard';
+import { onOpenAnett } from '../lib/anettBus';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { useLang } from '../context/LanguageContext';
 
@@ -316,7 +317,9 @@ export default function AiAssistant() {
   const [streaming, setStreaming] = useState(false);
   const [streamSteps, setStreamSteps] = useState<string[]>([]);
   const [streamText, setStreamText] = useState(''); // live answer text as tokens arrive (improvement #2)
+  const [streamReasoning, setStreamReasoning] = useState(''); // live thinking-summary (improvement #D)
   const abortRef = useRef<AbortController | null>(null);
+  const sendRef = useRef<(t: string) => void>(() => {});
   // Voice: mic (speech→text, auto-send) + optional spoken answers (text→speech).
   const sttCtor = getSpeechRecognitionCtor();
   const [listening, setListening] = useState(false);
@@ -450,7 +453,7 @@ export default function AiAssistant() {
   useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
   // Pin to the latest message on every new turn/stream tick AND whenever the panel (re)opens — so
   // reopening an existing conversation always lands on the last message (jump instantly on open).
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: open && !streaming && !ask.isPending ? 'auto' : reduce ? 'auto' : 'smooth' }); }, [open, shown, turns, ask.isPending, streaming, streamSteps.length, streamLen, streamText, reduce]);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: open && !streaming && !ask.isPending ? 'auto' : reduce ? 'auto' : 'smooth' }); }, [open, shown, turns, ask.isPending, streaming, streamSteps.length, streamLen, streamText, streamReasoning, reduce]);
 
   // Typewriter: advance the revealed slice a few chars per frame until the full answer is shown.
   useEffect(() => {
@@ -478,6 +481,28 @@ export default function AiAssistant() {
     window.addEventListener('keydown', onKey);
     return () => { cancelAnimationFrame(raf); clearTimeout(t); window.removeEventListener('keydown', onKey); };
   }, [open]);
+
+  // Global Cmd/Ctrl+K toggles Anett — instant access from anywhere (only when AI is available).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+        if (availQ.data?.aiAvailable !== true) return;
+        e.preventDefault();
+        setOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [availQ.data?.aiAvailable]);
+
+  // In-context nudges (#B): another component can open Anett with a prefilled question via the bus.
+  useEffect(() => {
+    onOpenAnett((prompt) => {
+      setOpen(true);
+      if (prompt) setTimeout(() => sendRef.current(prompt), 80); // let the panel open first
+    });
+    return () => onOpenAnett(null);
+  }, []);
 
   // Load & track available TTS voices (getVoices is async — populated on 'voiceschanged').
   useEffect(() => {
@@ -557,7 +582,7 @@ export default function AiAssistant() {
   // Stream the answer via SSE so Anett's reasoning steps appear live. Falls back to the plain /ask
   // mutation if streaming isn't available (old server, proxy that buffers, or a network hiccup).
   const runAskStream = async (history: Turn[]) => {
-    setStreaming(true); setStreamSteps([]); setStreamText('');
+    setStreaming(true); setStreamSteps([]); setStreamText(''); setStreamReasoning('');
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let started = false; // did we receive any well-formed event? (else fall back)
     let streamedText = false; // did the answer arrive token-by-token? (then skip the typewriter)
@@ -588,6 +613,9 @@ export default function AiAssistant() {
           started = true;
           if (ev.type === 'step' && ev.label) {
             setStreamSteps((s) => [...s, ev.label!]);
+          } else if (ev.type === 'reasoning') {
+            // Anett's thinking summary (#D) — shown live before the answer starts.
+            if (ev.delta) setStreamReasoning((s) => s + ev.delta);
           } else if (ev.type === 'token') {
             // Real token stream: append the delta to the live answer bubble.
             streamedText = true;
@@ -599,7 +627,7 @@ export default function AiAssistant() {
             // Tokens already animated the text live ⇒ skip the fake typewriter; else keep it.
             if (!reduce && ev.answer && !streamedText) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
             setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined }]);
-            setStreamText('');
+            setStreamText(''); setStreamReasoning('');
           } else if (ev.type === 'error') {
             setTurns((t) => [...t, { role: 'assistant', content: ev.message || L.errorGeneric, error: true }]);
           }
@@ -607,11 +635,11 @@ export default function AiAssistant() {
       }
     } catch (e) {
       if ((e as { name?: string })?.name === 'AbortError') return; // user cancelled — leave the chat as-is
-      if (!started) { setStreaming(false); setStreamSteps([]); setStreamText(''); ask.mutate(history); return; } // fall back
+      if (!started) { setStreaming(false); setStreamSteps([]); setStreamText(''); setStreamReasoning(''); ask.mutate(history); return; } // fall back
       setTurns((t) => [...t, { role: 'assistant', content: L.errorGeneric, error: true }]);
     } finally {
       abortRef.current = null;
-      setStreaming(false); setStreamSteps([]); setStreamText('');
+      setStreaming(false); setStreamSteps([]); setStreamText(''); setStreamReasoning('');
     }
   };
 
@@ -624,6 +652,9 @@ export default function AiAssistant() {
     setInput('');
     void runAskStream(next);
   };
+  // Keep a stable handle to the latest sendText so the open-Anett bus (#B nudges) can ask a prefilled
+  // question without re-subscribing on every render.
+  sendRef.current = sendText;
 
   // Retry after a failure: drop the trailing error notice and re-ask with the same question intact
   // (the user's message bubble stays put — no duplicate).
@@ -731,7 +762,7 @@ export default function AiAssistant() {
         <button
           onClick={() => setOpen(true)}
           aria-label={L.launcher}
-          title="Anett AI Assistant"
+          title={`Anett AI Assistant (${navigator.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+'}K)`}
           className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'anett-breathe transition-all duration-300 hover:scale-105 active:scale-90'}`}
         >
           <AnettIcon className="h-8 w-8 drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]" />
@@ -742,8 +773,8 @@ export default function AiAssistant() {
         <div
           role="dialog"
           aria-label="Anett AI Assistant"
-          className={`fixed right-4 z-[70] flex w-[min(92vw,25rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
-          style={{ maxHeight: expanded ? 'min(85vh, 46rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(80vh, 40rem)' : undefined }}
+          className={`fixed right-4 z-[70] flex ${expanded ? 'w-[min(94vw,34rem)]' : 'w-[min(92vw,25rem)]'} origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
+          style={{ maxHeight: expanded ? 'min(90vh, 52rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(85vh, 46rem)' : undefined }}
         >
           {/* Header — gradient identity band with avatar + status */}
           <div className="flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10">
@@ -1000,6 +1031,12 @@ export default function AiAssistant() {
                   {streamText ? (
                     // Real token stream: show the answer building live, with a blinking caret.
                     <div className="text-sm whitespace-pre-wrap break-words text-slate-800 dark:text-slate-100 anett-streaming">{streamText}</div>
+                  ) : streamReasoning ? (
+                    // Anett's live reasoning summary (#D), shown before the answer begins.
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-300"><TypingDots reduce={reduce} /><span>{lang === 'en' ? 'Reasoning…' : 'Menalar…'}</span></div>
+                      <div className="max-h-20 overflow-hidden text-[11px] italic leading-snug text-slate-400 dark:text-slate-500">{streamReasoning.slice(-260)}</div>
+                    </div>
                   ) : streamSteps.length === 0 ? (
                     <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><TypingDots reduce={reduce} /><span>{L.thinking}</span></div>
                   ) : (
@@ -1035,7 +1072,13 @@ export default function AiAssistant() {
               {sttAvailable && (
                 <button onClick={() => (listening ? stopListening() : startListening())} disabled={busy && !listening} aria-label={listening ? L.voiceStop : L.voiceStart} title={listening ? L.voiceStop : L.voiceStart} className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition disabled:opacity-40 ${listening ? `bg-rose-500 text-white ${reduce ? '' : 'animate-pulse'}` : 'text-slate-500 hover:bg-slate-100 hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800'}`}><MicIcon className="h-5 w-5" /></button>
               )}
-              <button onClick={() => sendText(input)} disabled={!input.trim() || busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label={L.send}>➤</button>
+              {busy ? (
+                <button onClick={() => abortRef.current?.abort()} title={lang === 'en' ? 'Stop' : 'Hentikan'} aria-label={lang === 'en' ? 'Stop' : 'Hentikan'} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-600">
+                  <span className="h-3 w-3 rounded-[2px] bg-white" />
+                </button>
+              ) : (
+                <button onClick={() => sendText(input)} disabled={!input.trim()} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label={L.send}>➤</button>
+              )}
             </div>
             {voiceError ? (
               <p className="mt-1 px-1 text-[10px] text-rose-600 dark:text-rose-400">🎤 {voiceError}</p>

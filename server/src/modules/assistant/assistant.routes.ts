@@ -100,9 +100,11 @@ router.post('/ask/stream', validateBody(askSchema), asyncHandler(async (req, res
       req.user!.id, req.user!.role, messages, req.body.context, req.body.lang ?? 'id',
       (label) => send({ type: 'step', label }),
       {
-        // Forward each answer-text delta live; `reset` discards preamble streamed before a tool call.
+        // Forward each answer-text delta live; `reset` discards preamble streamed before a tool call;
+        // `reasoning` carries Anett's thinking-summary deltas (#D).
         onText: (delta) => { if (!aborted) send({ type: 'token', delta }); },
         onTextReset: () => { if (!aborted) send({ type: 'reset' }); },
+        onThinking: (delta) => { if (!aborted) send({ type: 'reasoning', delta }); },
       },
     );
     if (!aborted) send({ type: 'answer', ...result });

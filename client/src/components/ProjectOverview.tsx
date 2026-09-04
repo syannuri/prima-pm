@@ -10,6 +10,7 @@ import HealthBulletGauge from './HealthBulletGauge';
 import EvmTrendChart from './EvmTrendChart';
 import ExtractFromNotes from './ExtractFromNotes';
 import PredictiveCard from './PredictiveCard';
+import AnettNudge from './AnettNudge';
 import InfoTip from './InfoTip';
 import { KpiIcon, accentSurface, type Accent } from './KpiIcon';
 import { useLang } from '../context/LanguageContext';
@@ -224,6 +225,19 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Performance — Schedule (SPI) & Cost (CPI) bullet gauges vs the 1.0 target, then progress. */}
       <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="lg:col-span-4 lg:order-1">
         <HealthBulletGauge spi={e.spi} cpi={e.cpi} hasSchedule={e.pv > 0} hasCost={e.ac > 0} id={id} />
+
+        {/* In-context nudge (#B): when the project is off-track, offer to ask Anett why (opens the
+            widget prefilled). Only renders when AI is available. */}
+        {(health === 'RED' || health === 'AMBER') && (
+          <div className="mt-2 flex justify-end">
+            <AnettNudge
+              label={id ? 'Tanya Anett: kenapa?' : 'Ask Anett: why?'}
+              prompt={id
+                ? `Kenapa proyek ini berstatus ${health === 'RED' ? 'merah' : 'kuning'}? Jelaskan singkat dan sarankan satu langkah.`
+                : `Why is this project ${health === 'RED' ? 'red' : 'amber'}? Explain briefly and suggest one next step.`}
+            />
+          </div>
+        )}
 
         {/* Weighted % complete (the official EVM progress). */}
         <div className="mt-3.5">
