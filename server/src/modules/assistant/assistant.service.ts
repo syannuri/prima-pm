@@ -537,7 +537,7 @@ export interface AskContext { projectId?: string | null; tab?: string | null }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[] }> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[] }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
   const port = getAiPort();
@@ -601,6 +601,8 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     maxSteps: 6,
     maxTokens: 1500,
     feature: 'assistant_qa',
+    onText: stream?.onText,
+    onTextReset: stream?.onTextReset,
   });
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
   return { answer, proposals, navigate: navs, memories, tables };

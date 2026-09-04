@@ -95,6 +95,12 @@ export interface AiPort {
     maxSteps?: number;
     maxTokens?: number;
     feature?: AiFeature;
+    // Real-time streaming (improvement #2): `onText` fires with each answer-text delta as Claude
+    // generates it; `onTextReset` fires when a step turns out to be a tool call, so any preamble text
+    // streamed that step is discarded on the client (only the final end_turn text is the answer).
+    // Both optional — omit for a plain one-shot result.
+    onText?: (delta: string) => void;
+    onTextReset?: () => void;
   }): Promise<string | null>;
 }
 // Back-compat alias (report/narrative code imported this name).
@@ -140,12 +146,14 @@ function liveAiPort(): AiPort {
       const parsed = NarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
     },
-    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature }) {
+    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, onText, onTextReset }) {
       const { apiKey, model } = aiConfig();
       const client = new Anthropic({ apiKey });
       const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
       for (let step = 0; step < maxSteps; step++) {
-        const res = await client.messages.create({
+        // Stream so answer text can be forwarded token-by-token (improvement #2). Thinking blocks
+        // stream as thinking_delta, not text — `on('text')` fires only for the visible answer.
+        const stream = client.messages.stream({
           model,
           max_tokens: maxTokens,
           thinking: { type: 'adaptive' },
@@ -156,10 +164,15 @@ function liveAiPort(): AiPort {
           tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[],
           messages: msgs,
         });
+        if (onText) stream.on('text', (delta) => onText(delta));
+        const res = await stream.finalMessage();
         // Record every step of the loop (each is a billed API call).
         await recordAiUsage({ feature: feature ?? 'assistant_qa', model, usage: res.usage });
         if (res.stop_reason === 'refusal') return null;
         if (res.stop_reason === 'tool_use') {
+          // The text streamed this step (if any) was preamble before a tool call — tell the client to
+          // discard it; only the final end_turn text is the real answer.
+          onTextReset?.();
           // Echo the assistant turn (with its tool_use blocks) then run each tool and feed results back.
           msgs.push({ role: 'assistant', content: res.content });
           const toolResults: Anthropic.ToolResultBlockParam[] = [];

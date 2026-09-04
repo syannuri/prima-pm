@@ -298,6 +298,7 @@ export default function AiAssistant() {
   // Live "thinking process": the tool-loop steps streamed from the server while Anett reasons.
   const [streaming, setStreaming] = useState(false);
   const [streamSteps, setStreamSteps] = useState<string[]>([]);
+  const [streamText, setStreamText] = useState(''); // live answer text as tokens arrive (improvement #2)
   const abortRef = useRef<AbortController | null>(null);
   // Voice: mic (speech→text, auto-send) + optional spoken answers (text→speech).
   const sttCtor = getSpeechRecognitionCtor();
@@ -401,7 +402,7 @@ export default function AiAssistant() {
   useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
   // Pin to the latest message on every new turn/stream tick AND whenever the panel (re)opens — so
   // reopening an existing conversation always lands on the last message (jump instantly on open).
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: open && !streaming && !ask.isPending ? 'auto' : reduce ? 'auto' : 'smooth' }); }, [open, shown, turns, ask.isPending, streaming, streamSteps.length, streamLen, reduce]);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: open && !streaming && !ask.isPending ? 'auto' : reduce ? 'auto' : 'smooth' }); }, [open, shown, turns, ask.isPending, streaming, streamSteps.length, streamLen, streamText, reduce]);
 
   // Typewriter: advance the revealed slice a few chars per frame until the full answer is shown.
   useEffect(() => {
@@ -508,9 +509,10 @@ export default function AiAssistant() {
   // Stream the answer via SSE so Anett's reasoning steps appear live. Falls back to the plain /ask
   // mutation if streaming isn't available (old server, proxy that buffers, or a network hiccup).
   const runAskStream = async (history: Turn[]) => {
-    setStreaming(true); setStreamSteps([]);
+    setStreaming(true); setStreamSteps([]); setStreamText('');
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let started = false; // did we receive any well-formed event? (else fall back)
+    let streamedText = false; // did the answer arrive token-by-token? (then skip the typewriter)
     try {
       const res = await fetch(`${API_BASE}/assistant/ask/stream`, {
         method: 'POST', credentials: 'include', headers: streamHeaders('POST'), signal: ctrl.signal,
@@ -533,14 +535,23 @@ export default function AiAssistant() {
         for (const part of parts) {
           const line = part.split('\n').find((l) => l.startsWith('data: '));
           if (!line) continue;
-          let ev: { type: string; label?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; message?: string };
+          let ev: { type: string; label?: string; delta?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; message?: string };
           try { ev = JSON.parse(line.slice(6)); } catch { continue; }
           started = true;
           if (ev.type === 'step' && ev.label) {
             setStreamSteps((s) => [...s, ev.label!]);
+          } else if (ev.type === 'token') {
+            // Real token stream: append the delta to the live answer bubble.
+            streamedText = true;
+            if (ev.delta) setStreamText((s) => s + ev.delta);
+          } else if (ev.type === 'reset') {
+            // Preamble before a tool call — discard what streamed this step.
+            streamedText = false; setStreamText('');
           } else if (ev.type === 'answer') {
-            if (!reduce && ev.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
+            // Tokens already animated the text live ⇒ skip the fake typewriter; else keep it.
+            if (!reduce && ev.answer && !streamedText) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
             setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined }]);
+            setStreamText('');
           } else if (ev.type === 'error') {
             setTurns((t) => [...t, { role: 'assistant', content: ev.message || L.errorGeneric, error: true }]);
           }
@@ -548,11 +559,11 @@ export default function AiAssistant() {
       }
     } catch (e) {
       if ((e as { name?: string })?.name === 'AbortError') return; // user cancelled — leave the chat as-is
-      if (!started) { setStreaming(false); setStreamSteps([]); ask.mutate(history); return; } // fall back
+      if (!started) { setStreaming(false); setStreamSteps([]); setStreamText(''); ask.mutate(history); return; } // fall back
       setTurns((t) => [...t, { role: 'assistant', content: L.errorGeneric, error: true }]);
     } finally {
       abortRef.current = null;
-      setStreaming(false); setStreamSteps([]);
+      setStreaming(false); setStreamSteps([]); setStreamText('');
     }
   };
 
@@ -932,7 +943,10 @@ export default function AiAssistant() {
               <div className="flex justify-start gap-2">
                 <AnettAvatar thinking />
                 <div className="min-w-0 rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2.5 dark:bg-slate-800">
-                  {streamSteps.length === 0 ? (
+                  {streamText ? (
+                    // Real token stream: show the answer building live, with a blinking caret.
+                    <div className="text-sm whitespace-pre-wrap break-words text-slate-800 dark:text-slate-100 anett-streaming">{streamText}</div>
+                  ) : streamSteps.length === 0 ? (
                     <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><TypingDots reduce={reduce} /><span>{L.thinking}</span></div>
                   ) : (
                     <div className="space-y-1 text-xs">
