@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import { env, isProd } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { cookieParser } from './lib/cookies.js';
+import { version } from './lib/version.js';
 import { csrfGuard } from './middleware/csrf.js';
 import { asyncHandler } from './middleware/validate.js';
 import { attachHostTenant } from './middleware/hostTenant.js';
@@ -170,6 +171,13 @@ export function createApp() {
   // Liveness — the process is up and serving.
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'prima-pm', ts: new Date().toISOString() });
+  });
+
+  // Deploy identity — the git SHA + build time baked into the bundle. Public (like /health) so a
+  // backend deploy can be verified remotely without SSH: curl /version and match the expected SHA.
+  // Low-sensitivity (a commit hash), so no auth.
+  app.get('/version', (_req, res) => {
+    res.json(version());
   });
 
   // Readiness — the process AND its database are reachable (a `SELECT 1` round-trip). 503 when the DB
