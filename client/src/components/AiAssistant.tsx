@@ -267,6 +267,7 @@ function VoiceListeningBar({ stream }: { stream: MediaStream }) {
 function stripMarkdown(s: string): string {
   return s
     .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\[\[cite:[^\]]+\]\]/g, '') // drop citation markers so TTS doesn't read them
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[*_`#>]/g, '')
     .replace(/^\s*[-•]\s*/gm, '')
@@ -346,6 +347,37 @@ export default function AiAssistant() {
     enabled: open && availQ.data?.aiAvailable === true,
     staleTime: 60_000,
   });
+
+  // Inline citations (#1): resolve project CODE → id so a [[cite:CODE|SOURCE]] marker in an answer
+  // becomes a chip that deep-links to that project's tab. Shares the ['projects'] cache with the
+  // dashboard; only fetched while the widget is open.
+  const projectsQ = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.get<{ projects: { id: string; code: string }[] }>('/projects'),
+    enabled: open && availQ.data?.aiAvailable === true,
+    staleTime: 60_000,
+  });
+  const codeToId = new Map((projectsQ.data?.projects ?? []).map((p) => [p.code.toUpperCase(), p.id]));
+  const CITE_TABS = new Set(['Overview', 'Cost', 'Schedule', 'Risk']); // SOURCE values that map to a real ?tab=
+  const renderCitation = (code: string, source: string | undefined) => {
+    const id = codeToId.get(code.toUpperCase());
+    const tab = source && CITE_TABS.has(source) ? source : undefined;
+    const label = source ? `${code} · ${source}` : code;
+    if (!id) {
+      // Unknown code (not in the accessible set) — show a muted, non-clickable chip, never a dead link.
+      return <span className="mx-0.5 inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px align-middle text-[10px] font-medium text-slate-400 dark:bg-slate-800 dark:text-slate-500">{label}</span>;
+    }
+    return (
+      <Link
+        to={`/projects/${id}${tab ? `?tab=${tab}` : ''}`}
+        onClick={() => setOpen(false)}
+        title={`${lang === 'en' ? 'Open' : 'Buka'} ${label}`}
+        className="mx-0.5 inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px align-middle text-[10px] font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/40"
+      >
+        <span aria-hidden>↗</span>{label}
+      </Link>
+    );
+  };
 
   // Approvals routed to the user — surfaced in-chat so they can Approve/Reject without leaving Anett.
   const qc = useQueryClient();
@@ -828,7 +860,7 @@ export default function AiAssistant() {
                   }`}>
                     {t.role === 'assistant' && !t.error ? (
                       <div className={i === streamIdx ? 'anett-streaming' : undefined}>
-                        <Markdown text={i === streamIdx ? t.content.slice(0, streamLen) : t.content} className="text-sm" />
+                        <Markdown text={i === streamIdx ? t.content.slice(0, streamLen) : t.content} className="text-sm" renderCitation={renderCitation} />
                       </div>
                     ) : (
                       <div className="flex flex-col gap-1">

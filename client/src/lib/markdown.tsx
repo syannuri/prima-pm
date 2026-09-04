@@ -23,15 +23,27 @@ export function safeUrl(url: string): string | null {
   return /^(https?:\/\/|mailto:)/i.test(u) ? u : null;
 }
 
-// --- inline: `code`, [text](url), **bold**, *italic*, _italic_ ---
-// `code` is FIRST so its contents are never re-parsed as bold/italic/link markers.
-const INLINE_RE = /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
+// Optional hook (used by the Anett assistant) to turn a [[cite:CODE|SOURCE]] marker into a clickable
+// citation chip. When not supplied (e.g. charter fields), the marker degrades to readable plain text.
+export type RenderCitation = (code: string, source: string | undefined, raw: string) => ReactNode;
+const CITE_RE = /^\[\[cite:([^|\]]+?)(?:\|([^\]]+))?\]\]$/;
+
+// --- inline: [[cite:…]], `code`, [text](url), **bold**, *italic*, _italic_ ---
+// citation is FIRST (a whole-token match), then `code` so its contents are never re-parsed.
+const INLINE_RE = /(\[\[cite:[^\]]+\]\]|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
 const LINK_RE = /^\[([^\]]+)\]\(([^)]+)\)$/;
 
-function renderInline(text: string): ReactNode {
+function renderInline(text: string, renderCitation?: RenderCitation): ReactNode {
   // Split on the markers, keeping the delimiters so we can pair them up.
   const tokens = text.split(INLINE_RE).filter((t) => t !== '');
   return tokens.map((tok, i) => {
+    const cite = CITE_RE.exec(tok);
+    if (cite) {
+      const code = cite[1].trim();
+      const source = cite[2]?.trim();
+      if (renderCitation) return <Fragment key={i}>{renderCitation(code, source, tok)}</Fragment>;
+      return <Fragment key={i}>{source ? `${code} · ${source}` : code}</Fragment>; // graceful plain text
+    }
     const link = LINK_RE.exec(tok);
     if (link) {
       const href = safeUrl(link[2]);
@@ -117,26 +129,27 @@ function parseBlocks(src: string): Block[] {
 }
 
 /** Render markdown-lite text to safe React nodes. Empty/blank input renders nothing. */
-export function Markdown({ text, className }: { text: string; className?: string }) {
+export function Markdown({ text, className, renderCitation }: { text: string; className?: string; renderCitation?: RenderCitation }) {
   if (!text || text.trim() === '') return null;
   const blocks = parseBlocks(text);
+  const ri = (t: string) => renderInline(t, renderCitation);
   return (
     <div className={`md-body space-y-2 ${className ?? ''}`}>
       {blocks.map((b, i) => {
         if (b.type === 'h') {
           const size = b.level === 1 ? 'text-base' : b.level === 2 ? 'text-sm' : 'text-sm';
-          return <div key={i} className={`font-semibold text-slate-800 dark:text-slate-100 ${size}`}>{renderInline(b.text)}</div>;
+          return <div key={i} className={`font-semibold text-slate-800 dark:text-slate-100 ${size}`}>{ri(b.text)}</div>;
         }
         if (b.type === 'ul')
           return (
             <ul key={i} className="list-disc space-y-0.5 pl-5">
-              {b.items.map((it, j) => <li key={j}>{renderInline(it)}</li>)}
+              {b.items.map((it, j) => <li key={j}>{ri(it)}</li>)}
             </ul>
           );
         if (b.type === 'ol')
           return (
             <ol key={i} className="list-decimal space-y-0.5 pl-5">
-              {b.items.map((it, j) => <li key={j}>{renderInline(it)}</li>)}
+              {b.items.map((it, j) => <li key={j}>{ri(it)}</li>)}
             </ol>
           );
         if (b.type === 'table')
@@ -146,14 +159,14 @@ export function Markdown({ text, className }: { text: string; className?: string
                 <thead>
                   <tr>
                     {b.header.map((h, j) => (
-                      <th key={j} className="border border-slate-300 bg-slate-50 px-2 py-1 text-left font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{renderInline(h)}</th>
+                      <th key={j} className="border border-slate-300 bg-slate-50 px-2 py-1 text-left font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{ri(h)}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {b.rows.map((r, j) => (
                     <tr key={j}>
-                      {r.map((c, k) => <td key={k} className="border border-slate-300 px-2 py-1 align-top dark:border-slate-700">{renderInline(c)}</td>)}
+                      {r.map((c, k) => <td key={k} className="border border-slate-300 px-2 py-1 align-top dark:border-slate-700">{ri(c)}</td>)}
                     </tr>
                   ))}
                 </tbody>
@@ -163,7 +176,7 @@ export function Markdown({ text, className }: { text: string; className?: string
         return (
           <p key={i} className="leading-relaxed">
             {b.lines.map((ln, j) => (
-              <Fragment key={j}>{renderInline(ln)}{j < b.lines.length - 1 && <br />}</Fragment>
+              <Fragment key={j}>{ri(ln)}{j < b.lines.length - 1 && <br />}</Fragment>
             ))}
           </p>
         );
