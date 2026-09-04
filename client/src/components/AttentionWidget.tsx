@@ -6,6 +6,7 @@ import { Button, Card, SectionTitle } from './ui';
 import { useToast } from './Toast';
 import { useLang } from '../context/LanguageContext';
 import GuestAiNote, { useIsGuest } from './GuestAiNote';
+import { openAnett } from '../lib/anettBus';
 
 // Portfolio "one thing" digest: deterministic ranking of where attention matters most this week,
 // with reason chips + an optional AI "focus this week" narrative. Self-hides when nothing needs
@@ -58,9 +59,22 @@ export default function AttentionWidget() {
           {id ? 'Perlu perhatian' : 'Needs attention'}
         </SectionTitle>
         {data.aiAvailable ? (
-          <Button variant="secondary" className="!py-1 text-xs shrink-0" disabled={aiFocus.isPending} onClick={() => aiFocus.mutate()}>
-            {aiFocus.isPending ? (id ? 'Menyusun…' : 'Drafting…') : (id ? '✨ Fokus AI' : '✨ AI focus')}
-          </Button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Proactive nudge (#B, portfolio-level): open the Anett CHAT prefilled so the user can
+                converse/drill down — complements the one-shot AI-focus narrative below. */}
+            <button
+              type="button"
+              onClick={() => openAnett(id
+                ? 'Ringkas proyek yang paling perlu perhatian minggu ini beserta alasannya, lalu sarankan urutan prioritas.'
+                : 'Summarize the projects that most need attention this week and why, then suggest a priority order.')}
+              className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/40"
+            >
+              💬 {id ? 'Tanya Anett' : 'Ask Anett'}
+            </button>
+            <Button variant="secondary" className="!py-1 text-xs" disabled={aiFocus.isPending} onClick={() => aiFocus.mutate()}>
+              {aiFocus.isPending ? (id ? 'Menyusun…' : 'Drafting…') : (id ? '✨ Fokus AI' : '✨ AI focus')}
+            </Button>
+          </div>
         ) : isGuest ? (
           <GuestAiNote className="shrink-0" />
         ) : null}
