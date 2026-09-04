@@ -7,6 +7,7 @@ import { signAccessToken } from '../../lib/jwt.js';
 import { runWithTenant } from '../../lib/tenant/context.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
+import { assertAiBudget, budgetStatus } from '../../lib/aiBudget.js';
 
 // AI token & cost accounting (improvement #1): the /ai-usage/summary dashboard is ADMIN-only,
 // tenant-scoped, and derives $ from the per-model price table. These tests verify the roll-up math,
@@ -78,5 +79,38 @@ describe('/ai-usage/summary', () => {
   it('is ADMIN-only (PM is forbidden)', async () => {
     const res = await request(app).get(api('/ai-usage/summary')).set(bearer(pmToken));
     expect(res.status).toBe(403);
+  });
+});
+
+describe('AI budget cap (#4)', () => {
+  // Tenant A has ~$10.50 of usage this month (1M input @ $5 + 0.2M output @ $25 + 1M cacheRead @ $0.5).
+  let prevBudget: string | undefined;
+  beforeAll(() => { prevBudget = process.env.AI_BUDGET_JSON; });
+  afterAll(() => { if (prevBudget === undefined) delete process.env.AI_BUDGET_JSON; else process.env.AI_BUDGET_JSON = prevBudget; });
+
+  it('is dormant (no throw, null status) when no caps configured', async () => {
+    delete process.env.AI_BUDGET_JSON; delete process.env.AI_BUDGET_USD;
+    await runWithTenant(tidA, async () => {
+      await expect(assertAiBudget()).resolves.toBeUndefined();
+      expect(await budgetStatus()).toBeNull();
+    });
+  });
+
+  it('throws AI_BUDGET_EXCEEDED once over the plan cap, and reports status', async () => {
+    process.env.AI_BUDGET_JSON = JSON.stringify({ TRIAL: 5 }); // tenant A (TRIAL) is at ~$10.5 > $5
+    await runWithTenant(tidA, async () => {
+      const status = await budgetStatus();
+      expect(status?.capUsd).toBe(5);
+      expect(status?.usedUsd).toBeCloseTo(10.5, 5);
+      expect(status?.remainingUsd).toBe(0);
+      await expect(assertAiBudget()).rejects.toMatchObject({ code: 'AI_BUDGET_EXCEEDED' });
+    });
+  });
+
+  it('allows calls under the cap', async () => {
+    process.env.AI_BUDGET_JSON = JSON.stringify({ TRIAL: 100 }); // well above tenant A's ~$10.5
+    await runWithTenant(tidA, async () => {
+      await expect(assertAiBudget()).resolves.toBeUndefined();
+    });
   });
 });

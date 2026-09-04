@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Forbidden } from './errors.js';
 import { activeTenantIsPersonal } from './tenant/context.js';
 import { recordAiUsage, type AiFeature } from './aiUsage.js';
+import { assertAiBudget } from './aiBudget.js';
 
 // The Forbidden thrown when an AI feature is gated off for the caller's tenant. A guest's personal
 // sandbox has no governance surface and can NEVER opt in, so the generic "not enabled for this
@@ -128,6 +129,7 @@ export const __setAiPort = __setAiNarrativePort;
 function liveAiPort(): AiPort {
   return {
     async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride, feature }) {
+      await assertAiBudget(); // #4: block if the tenant is over its monthly AI budget (no-op unless configured)
       const { apiKey, model: defaultModel } = aiConfig();
       const model = modelOverride || defaultModel;
       const client = aiClient(apiKey);
@@ -159,6 +161,7 @@ function liveAiPort(): AiPort {
       return parsed.success ? parsed.data : null;
     },
     async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, onText, onTextReset }) {
+      await assertAiBudget(); // #4: block if the tenant is over its monthly AI budget (no-op unless configured)
       const { apiKey, model } = aiConfig();
       const client = aiClient(apiKey);
       const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
