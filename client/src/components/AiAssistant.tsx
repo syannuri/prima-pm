@@ -112,16 +112,19 @@ function usePrefersReducedMotion() {
   return reduce;
 }
 
-// Anett's mark — a modern, high-tech AI "spark": a bold curved 4-point star with a
-// small twinkling accent spark (the current universal AI symbol, Gemini/Copilot-style).
-// Rendered glossy-white on the amethyst gradient disc. The main star is centered and
-// fills the viewBox edge-to-edge so it reads big and confident; the accent spark tucks
-// into the top-right concave gap and carries .anett-eye so it twinkles while thinking.
+// Anett's mark — a prism refracting light into a spectrum: the Prismatix brand metaphor,
+// and a fitting picture of Anett turning raw project data into a clear spread of insight.
+// Rendered glossy-white on the amethyst gradient disc. The exit rays carry .anett-rays so
+// they shimmer in sequence — light pulsing through the prism — while Anett is thinking.
 function AnettIcon({ className }: { className: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-      <path d="M12 1C12.5 6.6 13 11 17.4 11.4C19.4 11.6 21.2 11.8 23 12C21.2 12.2 19.4 12.4 17.4 12.6C13 13 12.5 17.4 12 23C11.5 17.4 11 13 6.6 12.6C4.6 12.4 2.8 12.2 1 12C2.8 11.8 4.6 11.6 6.6 11.4C11 11 11.5 6.6 12 1Z" />
-      <path className="anett-eye" d="M19 3C19.15 4.5 19.5 4.85 21 5C19.5 5.15 19.15 5.5 19 7C18.85 5.5 18.5 5.15 17 5C18.5 4.85 18.85 4.5 19 3Z" />
+      <path d="M11 3L3.5 19L18.5 19Z" />
+      <g className="anett-rays" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
+        <line x1="14.5" y1="10" x2="22.2" y2="6.2" />
+        <line x1="15.6" y1="12.6" x2="23" y2="12" />
+        <line x1="16.6" y1="15.2" x2="22.2" y2="17.8" />
+      </g>
     </svg>
   );
 }

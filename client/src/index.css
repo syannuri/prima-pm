@@ -248,15 +248,16 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 }
 @keyframes anett-spin { to { transform: rotate(360deg); } }
 
-/* Accent spark twinkles while thinking — a soft pulse + shrink, like a star catching light. */
-.anett-thinking .anett-eye {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: anett-twinkle 1.6s ease-in-out infinite;
+/* Prism exit rays shimmer in sequence while thinking — light pulsing through the prism. */
+.anett-thinking .anett-rays line {
+  animation: anett-shimmer 1.2s ease-in-out infinite;
 }
-@keyframes anett-twinkle {
-  0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
-  50%      { opacity: 0.35; transform: scale(0.6) rotate(45deg); }
+.anett-thinking .anett-rays line:nth-child(1) { animation-delay: 0s; }
+.anett-thinking .anett-rays line:nth-child(2) { animation-delay: 0.15s; }
+.anett-thinking .anett-rays line:nth-child(3) { animation-delay: 0.3s; }
+@keyframes anett-shimmer {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.2; }
 }
 
 /* Idle "breathing" glow on the launcher bubble so it feels alive, not a dead button. */
@@ -267,5 +268,5 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .anett-halo::before, .anett-thinking .anett-eye, .anett-breathe { animation: none; }
+  .anett-halo::before, .anett-thinking .anett-rays line, .anett-breathe { animation: none; }
 }
