@@ -4,6 +4,7 @@ import { AppError, NotFound } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
 import { getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { getProjectReport } from './report.service.js';
+import { pmiFramingEnabled, pmiFramingNote } from '../assistant/pmiKnowledge.js';
 
 type Report = Awaited<ReturnType<typeof getProjectReport>>;
 
@@ -82,7 +83,9 @@ function compactEvmContext(r: Report) {
 
 // PURE: builds the {system,user} pair. Unit-testable without a DB or the LLM.
 export function buildEvmExplainPrompt(report: Report): { system: string; user: string } {
-  return { system: SYSTEM_PROMPT, user: JSON.stringify(compactEvmContext(report)) };
+  // #4: optionally ground the reading in PMI/PMBOK terms (dormant unless AI_PMI_FRAMING).
+  const system = pmiFramingEnabled() ? SYSTEM_PROMPT + pmiFramingNote(true) : SYSTEM_PROMPT;
+  return { system, user: JSON.stringify(compactEvmContext(report)) };
 }
 
 // Per-tenant opt-in — reuses Tenant.aiNarrativeEnabled (one switch for all AI). Mirrors

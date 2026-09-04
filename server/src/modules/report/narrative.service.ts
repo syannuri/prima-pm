@@ -4,6 +4,7 @@ import { getTenantStore } from '../../lib/tenant/context.js';
 import { getAiNarrativePort, type NarrativeDraft } from '../../lib/ai.js';
 import { getProjectReport } from './report.service.js';
 import type { ReportPeriod } from './report.service.js';
+import { pmiFramingEnabled, pmiFramingNote } from '../assistant/pmiKnowledge.js';
 
 type Report = Awaited<ReturnType<typeof getProjectReport>>;
 
@@ -100,7 +101,11 @@ function compactReport(r: Report) {
 
 // PURE: builds the {system,user} pair from a report. Unit-testable without a DB or the LLM.
 export function buildNarrativePrompt(report: Report, lang: NarrativeLang = 'id'): { system: string; user: string } {
-  return { system: systemPromptFor(lang), user: JSON.stringify(compactReport(report)) };
+  // #4: optionally ground the narrative in PMI/PMBOK terms (dormant unless AI_PMI_FRAMING). This also
+  // flows into the proactive weekly/instant briefings, which build their prompt via this function.
+  const base = systemPromptFor(lang);
+  const system = pmiFramingEnabled() ? base + pmiFramingNote(lang === 'en') : base;
+  return { system, user: JSON.stringify(compactReport(report)) };
 }
 
 // Resolve the per-tenant opt-in. Tenant is a global (non-scoped) model. When there is no tenant at
