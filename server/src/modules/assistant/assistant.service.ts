@@ -15,6 +15,7 @@ import { getPortfolioAttention } from '../portfolio/portfolioAttention.service.j
 import { findGuide, guideIndex } from './processGuide.js';
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
+import { searchProjects } from './search.service.js';
 
 // Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
 // projects the CALLER can access, via a server-side manual tool loop. The API key and all data
@@ -182,6 +183,20 @@ const TOOLS: AiToolDef[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'search_projects',
+    description: [
+      'CARI teks bebas lintas SEMUA proyek yang dapat diakses (nama, charter, judul/uraian risk, change request, lesson, issue).',
+      'Gunakan untuk pertanyaan "proyek mana yang menyebut/terkait X", "cari proyek tentang Y". Mencocokkan kata/frasa (leksikal, bukan makna).',
+      'Untuk pertanyaan berbasis ANGKA (SPI/biaya/tanggal/hitung) pakai query_data; ini untuk mencari TOPIK/ISTILAH. Balikan cuplikan berperingkat — ringkas temuannya, jangan salin mentah.',
+    ].join('\n'),
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Kata kunci / frasa yang dicari, mis. "scope creep", "migrasi database", "risiko vendor".' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 // Stage C — the ONE write-adjacent tool. It does NOT change data: it stages an AI-proposed action
@@ -345,6 +360,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'list_project_tasks': return en ? `Checking${c} tasks` : `Memeriksa tugas${c}`;
     case 'list_change_requests': return en ? `Reviewing${c} change requests` : `Meninjau change request${c}`;
     case 'query_data': return en ? 'Querying your data' : 'Menjalankan query data';
+    case 'search_projects': return en ? 'Searching across projects' : 'Mencari lintas proyek';
     case 'get_process_guide': return en ? 'Looking up the how-to guide' : 'Mencari panduan cara-pakai';
     case 'propose_action': return en ? 'Preparing an action proposal' : 'Menyiapkan usulan aksi';
     case 'get_action_effectiveness': return en ? 'Checking the action track record' : 'Memeriksa rekam jejak aksi';
@@ -510,6 +526,10 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
         } catch (err) {
           return JSON.stringify({ error: err instanceof AppError ? err.message : 'Query gagal dijalankan.' });
         }
+      }
+      case 'search_projects': {
+        const hits = await searchProjects(typeof args.query === 'string' ? args.query : '', [...accessibleByCode.values()]);
+        return JSON.stringify({ count: hits.length, results: hits.map((h) => ({ code: h.code, name: h.name, snippet: h.snippet })) });
       }
       case 'remember': {
         if (!ctx.memoryEnabled) return JSON.stringify({ error: 'Memori AI tidak aktif untuk workspace ini.' });
