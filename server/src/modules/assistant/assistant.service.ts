@@ -2,7 +2,9 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { aiEnabled, getAiPort, type AiToolDef, aiNotEnabledError } from '../../lib/ai.js';
+import { aiEnabled, aiConfig, getAiPort, type AiToolDef, aiNotEnabledError } from '../../lib/ai.js';
+import { type RawUsage } from '../../lib/aiUsage.js';
+import { estimateCostUsd } from '../../lib/aiPricing.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
@@ -563,7 +565,9 @@ export interface AskContext { projectId?: string | null; tab?: string | null }
 
 // Answer a portfolio question. Assumes the global env gate (aiEnabled) was already checked by the
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void; onThinking?: (delta: string) => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[] }> {
+export interface TurnUsage { inputTokens: number; outputTokens: number; costUsd: number }
+
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void; onThinking?: (delta: string) => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage: TurnUsage }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
   const port = getAiPort();
@@ -619,6 +623,8 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const system = en
     ? `${systemPromptFor('en')}${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.`
     : `${systemPromptFor('id')}${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.`;
+  // #5 cost meter: total this turn's tokens across every loop step for a live per-conversation meter.
+  const tok = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
   const answer = await port.runToolLoop({
     system,
     messages,
@@ -630,9 +636,17 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     onText: stream?.onText,
     onTextReset: stream?.onTextReset,
     onThinking: stream?.onThinking,
+    onUsage: (u: RawUsage) => {
+      tok.input += u.input_tokens ?? 0;
+      tok.output += u.output_tokens ?? 0;
+      tok.cacheCreation += u.cache_creation_input_tokens ?? 0;
+      tok.cacheRead += u.cache_read_input_tokens ?? 0;
+    },
   });
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
-  return { answer, proposals, navigate: navs, memories, tables };
+  const costUsd = estimateCostUsd({ model: aiConfig().model, inputTokens: tok.input, outputTokens: tok.output, cacheCreationTokens: tok.cacheCreation, cacheReadTokens: tok.cacheRead });
+  const usage: TurnUsage = { inputTokens: tok.input, outputTokens: tok.output, costUsd };
+  return { answer, proposals, navigate: navs, memories, tables, usage };
 }
 
 // Deterministic (NO LLM, NO cost) briefing for the assistant's proactive open-state: what needs the

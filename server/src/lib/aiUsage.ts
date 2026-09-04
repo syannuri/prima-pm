@@ -63,6 +63,18 @@ export async function recordAiUsage(input: {
   }
 }
 
+// #5 cost meter: map one RawUsage to token counts + an estimated USD cost for a single turn/call, so
+// a live per-conversation meter can total them client-side. Pure (no DB) — reuses the price table.
+export function costOfRawUsage(model: string, u: RawUsage | null | undefined): { inputTokens: number; outputTokens: number; costUsd: number } {
+  const usage = u ?? {};
+  const inputTokens = usage.input_tokens ?? 0;
+  const outputTokens = usage.output_tokens ?? 0;
+  const cacheCreationTokens = usage.cache_creation_input_tokens ?? 0;
+  const cacheReadTokens = usage.cache_read_input_tokens ?? 0;
+  const costUsd = estimateCostUsd({ model, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens });
+  return { inputTokens, outputTokens, costUsd };
+}
+
 export interface UsageBucket {
   key: string;              // feature name or model id
   calls: number;
