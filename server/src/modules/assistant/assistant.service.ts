@@ -5,6 +5,8 @@ import { getTenantStore } from '../../lib/tenant/context.js';
 import { aiEnabled, aiConfig, getAiPort, type AiToolDef, aiNotEnabledError } from '../../lib/ai.js';
 import { type RawUsage } from '../../lib/aiUsage.js';
 import { estimateCostUsd } from '../../lib/aiPricing.js';
+import { gradeAnswer } from '../../lib/aiEval.js';
+import { logger } from '../../lib/observability.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
@@ -593,7 +595,13 @@ export interface AskContext { projectId?: string | null; tab?: string | null }
 // route (→ 503 when off). `messages` is the recent conversation (last turns + the new question).
 export interface TurnUsage { inputTokens: number; outputTokens: number; costUsd: number }
 
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void; onThinking?: (delta: string) => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage: TurnUsage }> {
+// #1 groundedness guard: opt-in auto-regenerate. Off by default → a flagged answer just gets a
+// transparent caveat (no extra spend). On → the model is asked to correct itself ONCE before the caveat.
+function groundednessRegenEnabled(): boolean {
+  return process.env.AI_GROUNDEDNESS_REGEN === '1' || process.env.AI_GROUNDEDNESS_REGEN === 'true';
+}
+
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void; onThinking?: (delta: string) => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage: TurnUsage; grounded: boolean }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
   const port = getAiPort();
@@ -649,30 +657,60 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const system = en
     ? `${systemPromptFor('en')}${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.\n\nPMI/PMBOK advisory topics (pmi_guidance): ${pmiIndex()}.`
     : `${systemPromptFor('id')}${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.\n\nTopik advisory PMI/PMBOK (pmi_guidance): ${pmiIndex()}.`;
-  // #5 cost meter: total this turn's tokens across every loop step for a live per-conversation meter.
+  // #5 cost meter: total this turn's tokens across every loop step (both the answer and any #1
+  // regeneration) for a live per-conversation meter.
   const tok = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
-  const answer = await port.runToolLoop({
+  const accumulateUsage = (u: RawUsage) => {
+    tok.input += u.input_tokens ?? 0;
+    tok.output += u.output_tokens ?? 0;
+    tok.cacheCreation += u.cache_creation_input_tokens ?? 0;
+    tok.cacheRead += u.cache_read_input_tokens ?? 0;
+  };
+  // Run the tool loop. `streaming` gates the live callbacks so a silent #1 regeneration doesn't
+  // re-stream tokens to the client (the corrected final answer replaces the first via the answer event).
+  const runLoop = (msgs: AssistantTurn[], streaming: boolean) => port.runToolLoop!({
     system,
-    messages,
+    messages: msgs,
     tools: [...tools, ...memoryTools],
     executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, memories, tables, memoryEnabled, en, emitStep, projectsSummary }),
     maxSteps: 6,
     maxTokens: 1500,
     feature: 'assistant_qa',
-    onText: stream?.onText,
-    onTextReset: stream?.onTextReset,
-    onThinking: stream?.onThinking,
-    onUsage: (u: RawUsage) => {
-      tok.input += u.input_tokens ?? 0;
-      tok.output += u.output_tokens ?? 0;
-      tok.cacheCreation += u.cache_creation_input_tokens ?? 0;
-      tok.cacheRead += u.cache_read_input_tokens ?? 0;
-    },
+    onText: streaming ? stream?.onText : undefined,
+    onTextReset: streaming ? stream?.onTextReset : undefined,
+    onThinking: streaming ? stream?.onThinking : undefined,
+    onUsage: accumulateUsage,
   });
+
+  let answer = await runLoop(messages, true);
   if (!answer) throw new AppError(502, 'AI tidak dapat menjawab saat ini. Silakan coba lagi.', 'AI_UNAVAILABLE');
+
+  // #1 online groundedness guard: run the deterministic graders (hallucinated / cross-tenant project
+  // codes + inverted EVM — the high-confidence checks) on the final answer BEFORE returning it. Free
+  // (no LLM). On a hit: optionally regenerate once (AI_GROUNDEDNESS_REGEN), then, if still flagged,
+  // append a transparent caveat so the user isn't silently misled. The noisier tab-name grader stays
+  // in the offline eval gate (#4) to avoid false caveats on ordinary prose.
+  const accessibleCodeList = [...byCode.keys()];
+  let grade = gradeAnswer(answer, { accessibleCodes: accessibleCodeList });
+  if (!grade.ok) {
+    logger.warn({ userId, issues: grade.issues }, '[assistant] groundedness guard flagged an answer');
+    if (groundednessRegenEnabled()) {
+      const corrective = en
+        ? `Your previous answer had grounding issues: ${grade.issues.join('; ')}. Rewrite it: only reference project codes the user can access (${accessibleCodes || 'none'}); never invert EVM (SPI/CPI < 1 = behind/over budget, > 1 = ahead/under budget); do not state facts you cannot support from the tools. Keep it concise.`
+        : `Jawaban sebelumnya bermasalah: ${grade.issues.join('; ')}. Tulis ulang: hanya rujuk kode proyek yang dapat diakses pengguna (${accessibleCodes || 'tidak ada'}); jangan membalik EVM (SPI/CPI < 1 = di belakang/over budget, > 1 = di depan/under budget); jangan menyatakan fakta yang tak bisa didukung tool. Ringkas.`;
+      const fixed = await runLoop([...messages, { role: 'assistant', content: answer }, { role: 'user', content: corrective }], false);
+      if (fixed) { answer = fixed; grade = gradeAnswer(answer, { accessibleCodes: accessibleCodeList }); }
+    }
+    if (!grade.ok) {
+      answer += en
+        ? '\n\n_⚠️ Note: parts of this answer may reference data outside your access or misstate a performance index — please verify against the project’s own tabs._'
+        : '\n\n_⚠️ Catatan: sebagian jawaban ini mungkin merujuk data di luar akses Anda atau salah menyebut indeks kinerja — mohon verifikasi lewat tab proyek terkait._';
+    }
+  }
+
   const costUsd = estimateCostUsd({ model: aiConfig().model, inputTokens: tok.input, outputTokens: tok.output, cacheCreationTokens: tok.cacheCreation, cacheReadTokens: tok.cacheRead });
   const usage: TurnUsage = { inputTokens: tok.input, outputTokens: tok.output, costUsd };
-  return { answer, proposals, navigate: navs, memories, tables, usage };
+  return { answer, proposals, navigate: navs, memories, tables, usage, grounded: grade.ok };
 }
 
 // Deterministic (NO LLM, NO cost) briefing for the assistant's proactive open-state: what needs the

@@ -145,6 +145,30 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(captured).toContain('pmi_guidance');
   });
 
+  it('GROUNDEDNESS GUARD: flags a hallucinated code with a caveat + grounded:false; clean answers pass', async () => {
+    // A hallucinated / non-accessible project code (backtick-cited) trips the ungrounded-code grader.
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop() { return 'Lihat proyek `GHOST-9` untuk detail biayanya.'; },
+    });
+    const bad = await ask(pmToken);
+    expect(bad.status).toBe(200);
+    expect(bad.body.grounded).toBe(false);
+    expect(bad.body.answer).toMatch(/Catatan|Note|verifikasi|verify/i); // caveat appended
+
+    // A clean answer passes untouched (no caveat, grounded true).
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop() { return 'Proyek Anda berjalan sesuai rencana; tidak ada isu berarti.'; },
+    });
+    const good = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(good.body.grounded).toBe(true);
+    expect(good.body.answer).not.toMatch(/⚠️/);
+  });
+
   it('SECURITY: a PM\'s tools only see their own projects, never another PM\'s', async () => {
     // A port that drives the real executeTool: probe list_projects + a foreign project by code.
     __setAiPort({
@@ -352,13 +376,16 @@ describe('AI portfolio assistant — /assistant', () => {
     const resForeign = await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'x' }], context: { projectId: other!.id } });
     __setAiPort(answerPort);
     expect(res.status).toBe(200);
-    const out = JSON.parse(res.body.answer);
+    // This test smuggles the system prompt back as a JSON answer; that prompt contains an example
+    // backtick code, so the #1 groundedness guard appends a caveat (starting with a real newline —
+    // JSON.stringify never emits one). Parse just the JSON first line. (Real answers are prose.)
+    const out = JSON.parse(res.body.answer.split('\n')[0]);
     expect(out.system).toContain('proyek MINE-1');
     expect(out.system).toContain('proyek ini');
     expect(JSON.parse(out.portfolio).totalProjects).toBe(1); // only MINE-1 — OTHER-1 excluded
     expect(out.tasks).toContain('total');
     expect(out.foreign).toContain('tidak dapat diakses'); // cross-PM task list refused
-    expect(JSON.parse(resForeign.body.answer).system).not.toContain('OTHER-1'); // foreign context ignored
+    expect(JSON.parse(resForeign.body.answer.split('\n')[0]).system).not.toContain('OTHER-1'); // foreign context ignored (strip guard caveat)
   });
 
   it('GET /assistant/briefing returns the deterministic attention rollup', async () => {
