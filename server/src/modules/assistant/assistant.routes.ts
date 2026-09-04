@@ -7,7 +7,7 @@ import { AppError } from '../../lib/errors.js';
 import { transcribeAudio, synthesizeSpeech, voiceServerAvailable, MAX_STT_BYTES } from './voice.service.js';
 import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
 import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, type MemScope } from './memory.service.js';
-import { recordFeedback, listFeedbackInbox } from './feedback.service.js';
+import { recordFeedback, listFeedbackInbox, analyzeFeedback, adoptFeedbackSuggestion, feedbackDistillEnabled } from './feedback.service.js';
 import { distillConversation, autoDistillEnabled } from './memoryDistill.service.js';
 
 const router = Router();
@@ -138,7 +138,18 @@ router.post('/feedback', validateBody(feedbackSchema), asyncHandler(async (req, 
 router.get('/feedback/inbox', asyncHandler(async (req, res) => {
   const rating = req.query.rating === 'UP' || req.query.rating === 'DOWN' ? req.query.rating : undefined;
   const rows = await listFeedbackInbox({ role: req.user!.role }, { rating });
-  res.json({ feedback: rows });
+  res.json({ feedback: rows, distillAvailable: feedbackDistillEnabled() });
+}));
+
+// Feedback → auto prompt-improvement (#2): distill recurring 👎 into suggested GUIDANCE rules (ADMIN/PMO).
+router.post('/feedback/analyze', asyncHandler(async (req, res) => {
+  res.json(await analyzeFeedback({ role: req.user!.role }));
+}));
+
+// Adopt one suggestion → a durable TENANT GUIDANCE memory.
+router.post('/feedback/suggestion', validateBody(z.object({ content: z.string().min(3).max(280) })), asyncHandler(async (req, res) => {
+  const out = await adoptFeedbackSuggestion(req.body.content, { userId: req.user!.id, role: req.user!.role, name: req.user!.email ?? null });
+  res.status(201).json(out);
 }));
 
 // ── Cross-session memory (Settings surface) ───────────────────────────────────────────────────────
