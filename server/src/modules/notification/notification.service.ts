@@ -187,7 +187,7 @@ export interface PortfolioAlertRow {
 
 // Portfolio-wide alert summary for the header bell (scoped to visible projects).
 export async function getPortfolioAlerts(userId: string, role: string, now: Date) {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { not: 'DRAFT' } };
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null, status: { not: 'DRAFT' } };
   // Guest sandboxes are kept out of corporate feeds by tenant scoping (guests are their own tenant);
   // only the role rule remains — a non-global role (PM/guest) sees only projects they manage.
   if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
@@ -225,7 +225,7 @@ export interface PortfolioAlertDetail {
 // and same visibility scoping (a non-global role sees only projects they manage). Projects with no
 // alerts are omitted; most-severe project first (HIGH count, then total).
 export async function getPortfolioAlertDetail(userId: string, role: string, now: Date): Promise<PortfolioAlertDetail[]> {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { not: 'DRAFT' } };
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null, status: { not: 'DRAFT' } };
   if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
 
   const projects = await prisma.project.findMany({ where, select: { id: true, code: true, name: true } });
@@ -418,7 +418,7 @@ export async function dismissAttention(userId: string, signature: string) {
 }
 
 export async function getAttentionItems(userId: string, role: string, now: Date) {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { not: 'DRAFT' } };
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null, status: { not: 'DRAFT' } };
   // Guest sandboxes are kept out by tenant scoping; only the role rule remains — a non-global role
   // (PM/guest) sees only projects they manage.
   if (!GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;

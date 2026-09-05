@@ -50,7 +50,7 @@ function resourceKeyOf(i: { resourceId: string | null; resourceUserId: string | 
 
 // Caller-visible project ids — mirrors getResourceCapacity's role scoping (tenant scope handles orgs).
 async function callerProjectIds(userId: string, role: string): Promise<string[]> {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null };
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null };
   if (role !== 'GUEST' && !GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
   const projects = await prisma.project.findMany({ where, select: { id: true } });
   return projects.map((p) => p.id);

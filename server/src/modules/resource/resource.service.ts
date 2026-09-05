@@ -13,7 +13,7 @@ export interface CapacityQuery {
 
 // Portfolio-wide manpower allocation vs. capacity, scoped to the caller's visible projects.
 export async function getResourceCapacity(userId: string, role: string, q: CapacityQuery) {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null };
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null };
   // Guest/corporate separation is handled by tenant scoping; only the role rule remains.
   if (role !== 'GUEST' && !GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
 
