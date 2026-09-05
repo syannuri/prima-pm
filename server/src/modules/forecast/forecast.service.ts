@@ -5,7 +5,7 @@ import { NotFound } from '../../lib/errors.js';
 // here made agile/hybrid projects show BAC/EV/CPI/SPI ≈ 0 on Forecast while other surfaces
 // used story-point EVM.
 import { getProjectEvm } from '../agile/agile.service.js';
-import { evmPvSeries } from '../schedule/evm.batch.js';
+import { evmPvSeries, scheduleProgressSeries } from '../schedule/evm.batch.js';
 
 const DAY = 86_400_000;
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -42,7 +42,7 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
   });
   if (!project) throw NotFound('Project not found');
 
-  const [evm, charter, tasks, actuals, pendingCr] = await Promise.all([
+  const [evm, charter, tasks, actuals, pendingCr, progressSeries] = await Promise.all([
     getProjectEvm(projectId, undefined, statusDate),
     prisma.projectCharter.findUnique({ where: { projectId }, select: { hiScheduleStart: true, hiScheduleEnd: true } }),
     prisma.task.findMany({ where: { projectId }, select: { planStart: true, planEnd: true } }),
@@ -63,6 +63,8 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
       orderBy: { decidedAt: 'desc' },
       select: { title: true, decidedAt: true },
     }),
+    // Timeline-based weekly plan-vs-actual PROGRESS series (predictive; null for agile/hybrid).
+    scheduleProgressSeries(projectId, statusDate),
   ]);
 
   const { bac, ev, ac, cpi, spi } = evm;
@@ -145,5 +147,8 @@ export async function getProjectForecast(projectId: string, statusDate: Date) {
     pendingChangeTitle: pendingCr?.title ?? null,
     hasData,
     sCurve,
+    // Timeline-derived weekly progress (0..1 of scope): planned vs actual, dense (independent of
+    // manual EVM snapshots). Null for agile/hybrid — the client falls back to snapshot EV.
+    progressSeries,
   };
 }

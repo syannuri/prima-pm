@@ -109,6 +109,19 @@ export async function buildScurveWorkbook(d: ScurveExport): Promise<Buffer> {
   }
   if (!f.sCurve.length) ws.addRow(['—', 'No S-curve data (baseline not locked yet)']);
 
+  // Weekly plan-vs-actual PROGRESS (timeline-derived) — the dense progress curve the chart plots
+  // for the progress variant. Both columns come straight from the WBS schedule (planned window +
+  // actual dates), so this table matches the Actual/Plan Progress lines week by week.
+  if (f.progressSeries && f.progressSeries.length) {
+    ws.addRow([]);
+    styleHeader(ws.addRow(['Week (date)', 'Planned progress', 'Actual progress']));
+    for (const p of f.progressSeries) {
+      const r = ws.addRow([d10(p.t), p.plannedPct, p.actualPct]);
+      r.getCell(2).numFmt = '0%';
+      if (p.actualPct != null) r.getCell(3).numFmt = '0%';
+    }
+  }
+
   // EVM Snapshots sheet — the captured earned-value data points.
   const sn = wb.addWorksheet('EVM Snapshots');
   sn.columns = [{ width: 14 }, { width: 20 }, { width: 20 }, { width: 20 }, { width: 10 }, { width: 10 }, { width: 12 }, { width: 30 }];

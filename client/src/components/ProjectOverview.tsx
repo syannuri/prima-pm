@@ -146,25 +146,38 @@ async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast |
     if (!trend) return null;
     const sc = forecast?.sCurve ?? [];
     const snaps = trend.snapshots ?? [];
-    if (!sc.length && !snaps.length) return null;
+    const ms = (s: string): number => +new Date(s);
+    // Progress variant: prefer the DENSE, weekly, timeline-derived plan-vs-actual progress series
+    // (from the WBS's own actual dates) over the sparse manual EVM snapshots. Falls back to
+    // snapshot EV when the timeline series is absent (e.g. agile/hybrid).
+    const ps = forecast?.progressSeries ?? null;
+    const useTimeline = variant === 'progress' && !!ps && ps.length >= 2;
+    if (!sc.length && !snaps.length && !useTimeline) return null;
     const bac = forecast?.bac || trend.bac || 0;
     const asPct = variant === 'progress';
     const toY = (v: number): number => (asPct && bac > 0 ? (v / bac) * 100 : v);
-    const ms = (s: string): number => +new Date(s);
 
     // Series to plot for this variant.
     type Ser = { label: string; color: string; dashed: boolean; dots?: boolean; pts: [number, number | null][] };
-    const pvPts: [number, number | null][] = sc.map((p) => [ms(p.t), toY(p.pv)]);
-    const evPts: [number, number | null][] = snaps.map((s) => [ms(s.statusDate), toY(s.ev)]);
-    const acPts: [number, number | null][] = sc.map((p) => [ms(p.t), p.ac != null ? toY(p.ac as number) : null]);
-    const fcPts: [number, number | null][] = sc.map((p) => [ms(p.t), p.forecast != null ? toY(p.forecast as number) : null]);
     const series: Ser[] = [];
-    series.push({ label: variant === 'cost' ? 'Plan Cost (PV)' : variant === 'progress' ? 'Plan Progress (PV)' : 'Planned (PV)', color: '#6366f1', dashed: false, pts: pvPts });
-    if (variant === 'progress' || variant === 'combo') series.push({ label: variant === 'progress' ? 'Actual Progress (EV)' : 'Earned (EV)', color: '#10b981', dashed: false, dots: true, pts: evPts });
-    if (variant === 'cost' || variant === 'combo') series.push({ label: variant === 'cost' ? 'Actual Cost (AC)' : 'Actual (AC)', color: '#f59e0b', dashed: false, pts: acPts });
-    if (variant === 'combo') series.push({ label: 'Forecast', color: '#a855f7', dashed: true, pts: fcPts });
+    if (useTimeline) {
+      // Weekly plan vs actual progress, both straight from the timeline (0..1 → %).
+      const pvPts: [number, number | null][] = ps!.map((p) => [ms(p.t), p.plannedPct * 100]);
+      const evPts: [number, number | null][] = ps!.map((p) => [ms(p.t), p.actualPct != null ? p.actualPct * 100 : null]);
+      series.push({ label: 'Plan Progress', color: '#6366f1', dashed: false, pts: pvPts });
+      series.push({ label: 'Actual Progress', color: '#10b981', dashed: false, pts: evPts });
+    } else {
+      const pvPts: [number, number | null][] = sc.map((p) => [ms(p.t), toY(p.pv)]);
+      const evPts: [number, number | null][] = snaps.map((s) => [ms(s.statusDate), toY(s.ev)]);
+      const acPts: [number, number | null][] = sc.map((p) => [ms(p.t), p.ac != null ? toY(p.ac as number) : null]);
+      const fcPts: [number, number | null][] = sc.map((p) => [ms(p.t), p.forecast != null ? toY(p.forecast as number) : null]);
+      series.push({ label: variant === 'cost' ? 'Plan Cost (PV)' : variant === 'progress' ? 'Plan Progress (PV)' : 'Planned (PV)', color: '#6366f1', dashed: false, pts: pvPts });
+      if (variant === 'progress' || variant === 'combo') series.push({ label: variant === 'progress' ? 'Actual Progress (EV)' : 'Earned (EV)', color: '#10b981', dashed: false, dots: true, pts: evPts });
+      if (variant === 'cost' || variant === 'combo') series.push({ label: variant === 'cost' ? 'Actual Cost (AC)' : 'Actual (AC)', color: '#f59e0b', dashed: false, pts: acPts });
+      if (variant === 'combo') series.push({ label: 'Forecast', color: '#a855f7', dashed: true, pts: fcPts });
+    }
 
-    const dates = [...sc.map((p) => ms(p.t)), ...snaps.map((s) => ms(s.statusDate))].filter(Number.isFinite);
+    const dates = (useTimeline ? ps!.map((p) => ms(p.t)) : [...sc.map((p) => ms(p.t)), ...snaps.map((s) => ms(s.statusDate))]).filter(Number.isFinite);
     if (!dates.length) return null;
     const xMin = Math.min(...dates), xMax = Math.max(...dates);
     const yVals = series.flatMap((s) => s.pts.map(([, v]) => v)).filter((v): v is number => v != null && Number.isFinite(v));
@@ -183,7 +196,18 @@ async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast |
     const X = (t: number): number => mL + (xMax === xMin ? 0.5 : (t - xMin) / (xMax - xMin)) * pw;
     const Y = (v: number): number => mT + ph - (v / yMax) * ph;
     const fmtY = (v: number): string => (asPct ? `${Math.round(v)}%` : formatIdrShort(v));
-    const fmtX = (t: number): string => { const d = new Date(t); return `${d.getUTCFullYear().toString().slice(2)}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+    // ISO week number — the weekly cadence for the timeline progress series.
+    const isoWeek = (t: number): number => {
+      const d = new Date(t); const u = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      const day = u.getUTCDay() || 7; u.setUTCDate(u.getUTCDate() + 4 - day);
+      const ys = new Date(Date.UTC(u.getUTCFullYear(), 0, 1));
+      return Math.ceil(((+u - +ys) / 86_400_000 + 1) / 7);
+    };
+    const fmtX = (t: number): string => {
+      const d = new Date(t);
+      if (useTimeline) return `W${isoWeek(t)}`; // weekly cadence
+      return `${d.getUTCFullYear().toString().slice(2)}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    };
 
     ctx.font = '11px Arial, sans-serif';
     for (let i = 0; i <= 5; i++) {
@@ -194,7 +218,7 @@ async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast |
       ctx.fillText(fmtY(v), mL - 6, y);
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    const N = Math.min(6, Math.max(1, sc.length - 1));
+    const N = Math.min(useTimeline ? 8 : 6, Math.max(1, (useTimeline ? ps!.length : sc.length) - 1));
     for (let i = 0; i <= N; i++) { const t = xMin + ((xMax - xMin) * i) / N; ctx.fillText(fmtX(t), X(t), H - mB + 6); }
 
     for (const s of series) {
@@ -228,7 +252,7 @@ async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast |
     }
 
     const titleFor: Record<ScurveVariant, string> = {
-      progress: 'S-Curve — Plan vs Actual Progress (% of BAC)',
+      progress: useTimeline ? 'S-Curve — Weekly Plan vs Actual Progress (from timeline)' : 'S-Curve — Plan vs Actual Progress (% of BAC)',
       cost: 'S-Curve — Plan vs Actual Cost',
       combo: 'S-Curve — Combined (PV / EV / AC / Forecast)',
     };

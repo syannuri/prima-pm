@@ -852,6 +852,9 @@ export interface EvmTaskRow {
   baselineWeight: number | null;
   baselineStart: Date | null;
   baselineFinish: Date | null;
+  /** Actual schedule window — used by the timeline-based progress series (ignored by evmFromRows). */
+  actualStart?: Date | null;
+  actualFinish?: Date | null;
 }
 
 export interface EvmRows {
