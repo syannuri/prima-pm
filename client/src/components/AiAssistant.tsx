@@ -311,6 +311,9 @@ export default function AiAssistant() {
   const [uiV2, setUiV2] = useState(() => { try { return localStorage.getItem('anett-ui-v2') !== '0'; } catch { return true; } });
   const toggleUiV2 = () => setUiV2((v) => { const n = !v; try { localStorage.setItem('anett-ui-v2', n ? '1' : '0'); } catch { /* quota */ } return n; });
   const [reasoningOpen, setReasoningOpen] = useState(true); // UI v2 thought-tray fold state
+  // #2 depth: scroll-edge shadows — track whether the message list is at its top/bottom so the header
+  // & footer can cast a soft shadow over content that scrolls under them. Both true = no shadow.
+  const [scrollEdges, setScrollEdges] = useState({ top: true, bottom: true });
   // Typewriter reveal for the freshest answer (Hostinger-style): which turn is animating + how far.
   const [streamIdx, setStreamIdx] = useState<number | null>(null);
   const [streamLen, setStreamLen] = useState(0);
@@ -473,9 +476,20 @@ export default function AiAssistant() {
     void api.post('/assistant/memory/distill', { turns: real.slice(-24).map(({ role, content }) => ({ role, content })) }).catch(() => {});
   }, [open, autoDistill]);
   useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
+  // #2 depth: recompute the scroll-edge state (top/bottom) from the scroll container.
+  const updateScrollEdges = () => {
+    const el = scrollRef.current; if (!el) return;
+    const top = el.scrollTop <= 2;
+    const bottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+    setScrollEdges((s) => (s.top === top && s.bottom === bottom ? s : { top, bottom }));
+  };
   // Pin to the latest message on every new turn/stream tick AND whenever the panel (re)opens — so
   // reopening an existing conversation always lands on the last message (jump instantly on open).
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: open && !streaming && !ask.isPending ? 'auto' : reduce ? 'auto' : 'smooth' }); }, [open, shown, turns, ask.isPending, streaming, streamSteps.length, streamLen, streamText, streamReasoning, reduce]);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: open && !streaming && !ask.isPending ? 'auto' : reduce ? 'auto' : 'smooth' });
+    const id = requestAnimationFrame(updateScrollEdges); // after layout settles
+    return () => cancelAnimationFrame(id);
+  }, [open, shown, turns, ask.isPending, streaming, streamSteps.length, streamLen, streamText, streamReasoning, reduce]);
 
   // Typewriter: advance the revealed slice a few chars per frame until the full answer is shown.
   useEffect(() => {
@@ -796,7 +810,7 @@ export default function AiAssistant() {
         <div
           role="dialog"
           aria-label="Anett AI Assistant"
-          className={`fixed right-4 z-[70] flex ${expanded ? 'w-[min(94vw,34rem)]' : 'w-[min(92vw,25rem)]'} origin-bottom-right flex-col overflow-hidden rounded-2xl border shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 ${uiV2 ? 'anett-glass border-white/40 dark:border-white/10' : 'bg-white border-slate-200 dark:border-slate-700 dark:bg-slate-900'} ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
+          className={`fixed right-4 z-[70] flex ${expanded ? 'w-[min(94vw,34rem)]' : 'w-[min(92vw,25rem)]'} origin-bottom-right flex-col overflow-hidden rounded-2xl border bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 ${uiV2 ? 'anett-glass anett-elevate border-white/40 dark:border-white/10' : 'bg-white border-slate-200 shadow-2xl dark:border-slate-700 dark:bg-slate-900'} ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
           style={{ maxHeight: expanded ? 'min(90vh, 52rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(85vh, 46rem)' : undefined }}
         >
           {/* Header — gradient identity band with avatar + status */}
@@ -883,7 +897,8 @@ export default function AiAssistant() {
             </div>
           )}
 
-          <div ref={scrollRef} aria-live="polite" className="flex-1 space-y-2.5 overflow-y-auto p-3">
+          <div className="relative flex-1 min-h-0">
+          <div ref={scrollRef} aria-live="polite" onScroll={updateScrollEdges} className="absolute inset-0 space-y-2.5 overflow-y-auto p-3">
             {turns.length === 0 && (
               <div className="space-y-3">
                 <div className="flex gap-2">
@@ -1092,6 +1107,10 @@ export default function AiAssistant() {
                 </div>
               </div>
             )}
+          </div>
+            {/* #2 depth: soft scroll-edge shadows — content recedes under the header / footer. */}
+            {uiV2 && !scrollEdges.top && <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-5 bg-gradient-to-b from-slate-900/[0.07] to-transparent dark:from-black/30" />}
+            {uiV2 && !scrollEdges.bottom && <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-5 bg-gradient-to-t from-slate-900/[0.07] to-transparent dark:from-black/30" />}
           </div>
 
           <div className="border-t border-slate-200 p-2 dark:border-slate-800">

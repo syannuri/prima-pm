@@ -289,6 +289,15 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 }
 .anett-glow-active::after { opacity: 0.7; animation-duration: 2.4s; }
 
+/* Layered elevation (#1 depth): contact + key (amethyst) + ambient — replaces a flat shadow so the
+   panel reads as physically raised. No animation → no reduced-motion concern. */
+.anett-elevate {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 10px 24px -10px rgba(124, 58, 237, 0.20), 0 28px 56px -18px rgba(15, 23, 42, 0.24);
+}
+.dark .anett-elevate {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 24px -10px rgba(124, 58, 237, 0.38), 0 28px 64px -18px rgba(0, 0, 0, 0.65);
+}
+
 /* Prism "thinking" orb — a small refracting disc with a light core. */
 .anett-orb {
   display: inline-block; width: 14px; height: 14px; border-radius: 9999px; position: relative;
