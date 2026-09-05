@@ -946,7 +946,10 @@ export default function AiAssistant() {
                       ? 'whitespace-pre-wrap rounded-tr-sm bg-violet-600 text-white'
                       : t.error
                         ? 'rounded-tl-sm border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200'
-                        : 'rounded-tl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                        : uiV2
+                          // #4 depth: Anett's bubble floats — top-lighter gradient + soft shadow + a hairline top-rim ring.
+                          ? 'rounded-tl-sm bg-gradient-to-b from-white to-slate-100 text-slate-700 shadow-md shadow-slate-900/[0.06] ring-1 ring-black/[0.04] dark:from-slate-700/70 dark:to-slate-800 dark:text-slate-200 dark:shadow-black/40 dark:ring-white/[0.06]'
+                          : 'rounded-tl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
                   }`}>
                     {t.role === 'assistant' && !t.error ? (
                       <div className={i === streamIdx ? 'anett-streaming' : undefined}>
@@ -1113,7 +1116,7 @@ export default function AiAssistant() {
             {uiV2 && !scrollEdges.bottom && <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-5 bg-gradient-to-t from-slate-900/[0.07] to-transparent dark:from-black/30" />}
           </div>
 
-          <div className="border-t border-slate-200 p-2 dark:border-slate-800">
+          <div className={`border-t border-slate-200 p-2 dark:border-slate-800 ${uiV2 ? 'anett-footer-recess' : ''}`}>
             {/* #5 cost meter — running per-conversation estimate; only shows once there's spend. */}
             {sessionCost.costUsd > 0 && (
               <div className="mb-1 flex justify-end">
@@ -1138,7 +1141,7 @@ export default function AiAssistant() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(input); } }}
                   placeholder={L.inputPlaceholder}
-                  className="min-h-[2.25rem] flex-1 resize-none overflow-y-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className={`min-h-[2.25rem] flex-1 resize-none overflow-y-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 ${uiV2 ? 'anett-input-well' : ''}`}
                 />
               )}
               {sttAvailable && (
