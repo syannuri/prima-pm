@@ -267,6 +267,38 @@ button, a, [role="button"], [role="switch"], label, select, summary {
   50%      { box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.30), 0 0 0 9px rgba(139, 92, 246, 0); }
 }
 
+/* ── Anett UI v2 "Prism Copilot" — opt-in via the ⋮ menu (anett-ui-v2); dormant otherwise ── */
+/* Frosted-glass panel. */
+.anett-glass { background: rgba(255, 255, 255, 0.80); -webkit-backdrop-filter: blur(14px) saturate(1.35); backdrop-filter: blur(14px) saturate(1.35); }
+.dark .anett-glass { background: rgba(15, 23, 42, 0.74); }
+
+/* Subtle refraction sweep across the header. */
+.anett-aurora::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 20%, rgba(168, 85, 247, 0.10) 40%, rgba(217, 70, 239, 0.12) 55%, rgba(99, 102, 241, 0.10) 70%, transparent 85%);
+  background-size: 220% 100%;
+  animation: anett-aurora 9s ease-in-out infinite;
+}
+@keyframes anett-aurora { 0%, 100% { background-position: 0% 0; } 50% { background-position: 100% 0; } }
+
+/* Prismatic glow behind the launcher; brighter while Anett is processing. */
+.anett-glow-v2::after {
+  content: ''; position: absolute; inset: -6px; border-radius: 9999px; z-index: -1;
+  background: conic-gradient(from 0deg, #8b5cf6, #d946ef, #6366f1, #22d3ee, #8b5cf6);
+  filter: blur(9px); opacity: 0.35; animation: anett-spin 6s linear infinite;
+}
+.anett-glow-active::after { opacity: 0.7; animation-duration: 2.4s; }
+
+/* Prism "thinking" orb — a small refracting disc with a light core. */
+.anett-orb {
+  display: inline-block; width: 14px; height: 14px; border-radius: 9999px; position: relative;
+  background: conic-gradient(from 0deg, #8b5cf6, #d946ef, #6366f1, #22d3ee, #8b5cf6);
+  animation: anett-spin 1.6s linear infinite; box-shadow: 0 0 6px rgba(168, 85, 247, 0.6);
+}
+.anett-orb::after { content: ''; position: absolute; inset: 3px; border-radius: 9999px; background: #fff; }
+.dark .anett-orb::after { background: #0f172a; }
+
 @media (prefers-reduced-motion: reduce) {
-  .anett-halo::before, .anett-thinking .anett-rays line, .anett-breathe { animation: none; }
+  .anett-halo::before, .anett-thinking .anett-rays line, .anett-breathe,
+  .anett-aurora::before, .anett-glow-v2::after, .anett-orb { animation: none; }
 }
