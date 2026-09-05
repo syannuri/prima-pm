@@ -1,6 +1,6 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../api/client';
+import { api, API_BASE, streamHeaders } from '../api/client';
 import type { Evm, EvmTrend, Forecast, GanttNode } from '../api/types';
 import { Card, Spinner } from './ui';
 import { formatIdr, formatIdrShort } from '../lib/format';
@@ -132,6 +132,36 @@ function Tile({ label, value, tone, hint }: { label: string; value: string; tone
   );
 }
 
+// Rasterize the S-curve SVG to a PNG blob (for embedding in the Excel export). White background so it
+// reads on an Excel sheet; 2x scale for a crisp image. Best-effort — returns null on any failure.
+async function svgToPngBlob(svg: SVGSVGElement): Promise<Blob | null> {
+  try {
+    const rect = svg.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width || 640));
+    const h = Math.max(1, Math.round(rect.height || 320));
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('width', String(w));
+    clone.setAttribute('height', String(h));
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const xml = new XMLSerializer().serializeToString(clone);
+    const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error('svg-img')); img.src = svg64; });
+    const scale = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = w * scale; canvas.height = h * scale;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, w, h);
+    return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
+  } catch {
+    return null;
+  }
+}
+
 export default function ProjectOverview({ projectId, onJump }: { projectId: string; onJump?: (tab: string) => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
@@ -157,6 +187,34 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   // return violates the Rules of Hooks (the count changes once data loads → React throws
   // "rendered more hooks than during the previous render" and the tab goes blank/black).
   const [sCurveTab, setSCurveTab] = useState<'progress' | 'cost'>('progress');
+  // S-curve Excel export: rasterize the on-screen chart → POST as PNG → download the .xlsx the server builds.
+  const chartWrapRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const exportScurve = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const svg = chartWrapRef.current?.querySelector('svg') as SVGSVGElement | null;
+      const png = svg ? await svgToPngBlob(svg) : null;
+      const res = await fetch(`${API_BASE}/projects/${projectId}/evm/scurve/export?mode=${sCurveTab}`, {
+        method: 'POST', credentials: 'include',
+        headers: { ...streamHeaders('POST'), 'Content-Type': 'image/png' },
+        body: png ?? new Blob([]),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const fn = /filename="([^"]+)"/.exec(cd)?.[1] || 'SCurve.xlsx';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fn; document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* best-effort download */
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (evmQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
   const e = evmQ.data;
@@ -376,6 +434,14 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
                   </button>
                 ))}
               </div>
+              <button
+                onClick={exportScurve}
+                disabled={exporting || !hasTrend}
+                title={id ? 'Unduh Excel — chart S-curve + ringkasan EVM + data' : 'Download Excel — S-curve chart + EVM summary + data'}
+                className="whitespace-nowrap rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                {exporting ? (id ? 'Menyiapkan…' : 'Preparing…') : (id ? '⬇ Excel' : '⬇ Excel')}
+              </button>
               {onJump && (
                 <button onClick={() => onJump('EVM Trend')} className="whitespace-nowrap text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
                   {id ? 'EVM Trend →' : 'EVM Trend →'}
@@ -386,7 +452,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           {trendQ.isLoading ? (
             <div className="flex justify-center py-8"><Spinner /></div>
           ) : hasTrend && trend ? (
-            <EvmTrendChart data={trend} forecast={fcQ.data} mode={sCurveTab === 'progress' ? 'progress' : 'money'} bare compact title={null} />
+            <div ref={chartWrapRef}>
+              <EvmTrendChart data={trend} forecast={fcQ.data} mode={sCurveTab === 'progress' ? 'progress' : 'money'} bare compact title={null} />
+            </div>
           ) : (
             <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
           )}
