@@ -800,7 +800,7 @@ export default function AiAssistant() {
           style={{ maxHeight: expanded ? 'min(90vh, 52rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(85vh, 46rem)' : undefined }}
         >
           {/* Header — gradient identity band with avatar + status */}
-          <div className={`relative flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10 ${uiV2 ? 'anett-aurora overflow-hidden' : ''}`}>
+          <div className={`relative flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10 ${uiV2 ? 'anett-aurora' : ''}`}>
             <AnettAvatar className="h-9 w-9" icon="h-6 w-6" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">Anett AI Assistant</div>
