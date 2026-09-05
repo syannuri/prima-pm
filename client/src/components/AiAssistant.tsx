@@ -311,6 +311,9 @@ export default function AiAssistant() {
   const [uiV2, setUiV2] = useState(() => { try { return localStorage.getItem('anett-ui-v2') !== '0'; } catch { return true; } });
   const toggleUiV2 = () => setUiV2((v) => { const n = !v; try { localStorage.setItem('anett-ui-v2', n ? '1' : '0'); } catch { /* quota */ } return n; });
   const [reasoningOpen, setReasoningOpen] = useState(true); // UI v2 thought-tray fold state
+  // #2 dock mode: pin Anett as a full-height right rail (copilot) instead of the floating bubble. Persisted.
+  const [docked, setDocked] = useState(() => { try { return localStorage.getItem('anett-dock') === '1'; } catch { return false; } });
+  const toggleDock = () => setDocked((v) => { const n = !v; try { localStorage.setItem('anett-dock', n ? '1' : '0'); } catch { /* quota */ } return n; });
   // #2 depth: scroll-edge shadows — track whether the message list is at its top/bottom so the header
   // & footer can cast a soft shadow over content that scrolls under them. Both true = no shadow.
   const [scrollEdges, setScrollEdges] = useState({ top: true, bottom: true });
@@ -810,8 +813,10 @@ export default function AiAssistant() {
         <div
           role="dialog"
           aria-label="Anett AI Assistant"
-          className={`fixed right-4 z-[70] flex ${expanded ? 'w-[min(94vw,34rem)]' : 'w-[min(92vw,25rem)]'} origin-bottom-right flex-col overflow-hidden rounded-2xl border bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 ${uiV2 ? 'anett-glass anett-elevate border-white/40 dark:border-white/10' : 'bg-white border-slate-200 shadow-2xl dark:border-slate-700 dark:bg-slate-900'} ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
-          style={{ maxHeight: expanded ? 'min(90vh, 52rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(85vh, 46rem)' : undefined }}
+          className={`fixed z-[70] flex flex-col overflow-hidden border ${uiV2 ? 'anett-glass anett-elevate border-white/40 dark:border-white/10' : 'bg-white border-slate-200 shadow-2xl dark:border-slate-700 dark:bg-slate-900'} ${reduce ? '' : 'transition-all duration-200 ease-out'} ${docked
+            ? `right-0 top-0 h-full w-[min(94vw,26rem)] rounded-l-2xl ${shown || reduce ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`
+            : `right-4 origin-bottom-right rounded-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 ${expanded ? 'w-[min(94vw,34rem)]' : 'w-[min(92vw,25rem)]'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}`}
+          style={docked ? { height: '100dvh', maxHeight: '100dvh' } : { maxHeight: expanded ? 'min(90vh, 52rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(85vh, 46rem)' : undefined }}
         >
           {/* Header — gradient identity band with avatar + status */}
           <div className={`relative flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10 ${uiV2 ? 'anett-aurora' : ''}`}>
@@ -851,8 +856,12 @@ export default function AiAssistant() {
                           <SpeakerIcon className="h-4 w-4 shrink-0" muted={!ttsOn} /><span className="flex-1">{L.menuReadAloud}</span>{ttsOn && <span className="text-violet-500">✓</span>}
                         </button>
                       )}
+                      {/* #2 dock mode toggle */}
+                      <button role="menuitemcheckbox" aria-checked={docked} onClick={() => { toggleDock(); setMenuOpen(false); }} className={`flex w-full items-center gap-2.5 border-t border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-700 ${docked ? 'text-violet-600 dark:text-violet-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                        <span className="w-4 text-center text-base leading-none">▤</span><span className="flex-1">{lang === 'en' ? 'Dock to side' : 'Tempel ke samping'}</span>{docked && <span className="text-violet-500">✓</span>}
+                      </button>
                       {/* Prototype look toggle (UI v2 "Prism Copilot") */}
-                      <button role="menuitemcheckbox" aria-checked={uiV2} onClick={() => { toggleUiV2(); setMenuOpen(false); }} className={`flex w-full items-center gap-2.5 border-t border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-700 ${uiV2 ? 'text-violet-600 dark:text-violet-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                      <button role="menuitemcheckbox" aria-checked={uiV2} onClick={() => { toggleUiV2(); setMenuOpen(false); }} className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${uiV2 ? 'text-violet-600 dark:text-violet-300' : 'text-slate-700 dark:text-slate-200'}`}>
                         <span className="w-4 text-center text-base leading-none">✨</span><span className="flex-1">{lang === 'en' ? 'Prism look' : 'Tampilan Prism'}</span>{uiV2 && <span className="text-violet-500">✓</span>}
                       </button>
                     </div>
