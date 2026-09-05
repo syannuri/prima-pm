@@ -75,7 +75,7 @@ router.post(
   canRead,
   raw({ type: ['image/png', 'application/octet-stream'], limit: '6mb' }),
   asyncHandler(async (req, res) => {
-    const mode = req.query.mode === 'progress' ? 'progress' : 'cost';
+    const mode = req.query.mode === 'progress' || req.query.mode === 'cost' ? req.query.mode : 'combo';
     const { statusDate } = statusDateQuery.parse(req.query);
     const png = Buffer.isBuffer(req.body) && req.body.length ? (req.body as Buffer) : null;
     const data = await gatherScurveExport(req.params.projectId, mode, statusDate ?? new Date(), png);
