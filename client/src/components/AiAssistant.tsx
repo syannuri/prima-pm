@@ -307,8 +307,8 @@ export default function AiAssistant() {
   const [input, setInput] = useState('');
   const [expanded, setExpanded] = useState(false); // larger panel (not fullscreen)
   const [menuOpen, setMenuOpen] = useState(false);  // header ⋮ overflow menu (New Chat / voice toggles)
-  // Prototype "Prism Copilot" look (UI v2) — opt-in via the ⋮ menu, persisted; default OFF so the live UI is unchanged.
-  const [uiV2, setUiV2] = useState(() => { try { return localStorage.getItem('anett-ui-v2') === '1'; } catch { return false; } });
+  // "Prism Copilot" look (UI v2) — now the DEFAULT; the ⋮-menu toggle is an opt-out (persisted as '0').
+  const [uiV2, setUiV2] = useState(() => { try { return localStorage.getItem('anett-ui-v2') !== '0'; } catch { return true; } });
   const toggleUiV2 = () => setUiV2((v) => { const n = !v; try { localStorage.setItem('anett-ui-v2', n ? '1' : '0'); } catch { /* quota */ } return n; });
   const [reasoningOpen, setReasoningOpen] = useState(true); // UI v2 thought-tray fold state
   // Typewriter reveal for the freshest answer (Hostinger-style): which turn is animating + how far.
@@ -839,7 +839,7 @@ export default function AiAssistant() {
                       )}
                       {/* Prototype look toggle (UI v2 "Prism Copilot") */}
                       <button role="menuitemcheckbox" aria-checked={uiV2} onClick={() => { toggleUiV2(); setMenuOpen(false); }} className={`flex w-full items-center gap-2.5 border-t border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-700 ${uiV2 ? 'text-violet-600 dark:text-violet-300' : 'text-slate-700 dark:text-slate-200'}`}>
-                        <span className="w-4 text-center text-base leading-none">✨</span><span className="flex-1">{lang === 'en' ? 'New look (beta)' : 'Tampilan baru (beta)'}</span>{uiV2 && <span className="text-violet-500">✓</span>}
+                        <span className="w-4 text-center text-base leading-none">✨</span><span className="flex-1">{lang === 'en' ? 'Prism look' : 'Tampilan Prism'}</span>{uiV2 && <span className="text-violet-500">✓</span>}
                       </button>
                     </div>
                   </>
