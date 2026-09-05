@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, raw } from 'express';
 import { z } from 'zod';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
@@ -6,6 +6,8 @@ import { captureSnapshotSchema } from './evm.schemas.js';
 import * as svc from './evm.service.js';
 import { getProjectEvm } from '../agile/agile.service.js';
 import { evmQuerySchema } from '../schedule/schedule.schemas.js';
+import { gatherScurveExport } from '../export/export.scurve.data.js';
+import { buildScurveWorkbook } from '../export/build.scurve.excel.js';
 
 const router = Router({ mergeParams: true });
 
@@ -62,6 +64,25 @@ router.delete(
   asyncHandler(async (req, res) => {
     await svc.deleteSnapshot(req.params.projectId, req.params.snapshotId, req.user!.id);
     res.status(204).send();
+  }),
+);
+
+// Export the S-Curve as an Excel workbook (chart image + full EVM summary + per-period data + snapshots).
+// The chart is rendered client-side and POSTed as raw PNG bytes (Content-Type image/png) — sidesteps the
+// JSON body-size limit and keeps the exact on-screen chart. Read-scoped like the other EVM status views.
+router.post(
+  '/scurve/export',
+  canRead,
+  raw({ type: ['image/png', 'application/octet-stream'], limit: '6mb' }),
+  asyncHandler(async (req, res) => {
+    const mode = req.query.mode === 'progress' ? 'progress' : 'cost';
+    const { statusDate } = statusDateQuery.parse(req.query);
+    const png = Buffer.isBuffer(req.body) && req.body.length ? (req.body as Buffer) : null;
+    const data = await gatherScurveExport(req.params.projectId, mode, statusDate ?? new Date(), png);
+    const buffer = await buildScurveWorkbook(data);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="SCurve_${data.project.code}.xlsx"`);
+    res.send(buffer);
   }),
 );
 
