@@ -897,8 +897,8 @@ export default function AiAssistant() {
             </div>
           )}
 
-          <div className="relative flex-1 min-h-0">
-          <div ref={scrollRef} aria-live="polite" onScroll={updateScrollEdges} className="absolute inset-0 space-y-2.5 overflow-y-auto p-3">
+          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div ref={scrollRef} aria-live="polite" onScroll={updateScrollEdges} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
             {turns.length === 0 && (
               <div className="space-y-3">
                 <div className="flex gap-2">
