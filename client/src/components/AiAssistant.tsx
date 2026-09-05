@@ -307,6 +307,10 @@ export default function AiAssistant() {
   const [input, setInput] = useState('');
   const [expanded, setExpanded] = useState(false); // larger panel (not fullscreen)
   const [menuOpen, setMenuOpen] = useState(false);  // header ⋮ overflow menu (New Chat / voice toggles)
+  // Prototype "Prism Copilot" look (UI v2) — opt-in via the ⋮ menu, persisted; default OFF so the live UI is unchanged.
+  const [uiV2, setUiV2] = useState(() => { try { return localStorage.getItem('anett-ui-v2') === '1'; } catch { return false; } });
+  const toggleUiV2 = () => setUiV2((v) => { const n = !v; try { localStorage.setItem('anett-ui-v2', n ? '1' : '0'); } catch { /* quota */ } return n; });
+  const [reasoningOpen, setReasoningOpen] = useState(true); // UI v2 thought-tray fold state
   // Typewriter reveal for the freshest answer (Hostinger-style): which turn is animating + how far.
   const [streamIdx, setStreamIdx] = useState<number | null>(null);
   const [streamLen, setStreamLen] = useState(0);
@@ -782,7 +786,7 @@ export default function AiAssistant() {
           onClick={() => setOpen(true)}
           aria-label={L.launcher}
           title={`Anett AI Assistant (${navigator.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+'}K)`}
-          className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'anett-breathe transition-all duration-300 hover:scale-105 active:scale-90'}`}
+          className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'anett-breathe transition-all duration-300 hover:scale-105 active:scale-90'} ${uiV2 ? 'anett-glow-v2' : ''} ${uiV2 && (ask.isPending || streaming) ? 'anett-glow-active' : ''}`}
         >
           <AnettIcon className="h-8 w-8 drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]" />
         </button>
@@ -792,11 +796,11 @@ export default function AiAssistant() {
         <div
           role="dialog"
           aria-label="Anett AI Assistant"
-          className={`fixed right-4 z-[70] flex ${expanded ? 'w-[min(94vw,34rem)]' : 'w-[min(92vw,25rem)]'} origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 dark:border-slate-700 dark:bg-slate-900 ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
+          className={`fixed right-4 z-[70] flex ${expanded ? 'w-[min(94vw,34rem)]' : 'w-[min(92vw,25rem)]'} origin-bottom-right flex-col overflow-hidden rounded-2xl border shadow-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 ${uiV2 ? 'anett-glass border-white/40 dark:border-white/10' : 'bg-white border-slate-200 dark:border-slate-700 dark:bg-slate-900'} ${reduce ? '' : 'transition-all duration-200 ease-out'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}
           style={{ maxHeight: expanded ? 'min(90vh, 52rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(85vh, 46rem)' : undefined }}
         >
           {/* Header — gradient identity band with avatar + status */}
-          <div className="flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10">
+          <div className={`relative flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10 ${uiV2 ? 'anett-aurora overflow-hidden' : ''}`}>
             <AnettAvatar className="h-9 w-9" icon="h-6 w-6" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">Anett AI Assistant</div>
@@ -808,7 +812,8 @@ export default function AiAssistant() {
               <ResizeIcon expanded={expanded} />
             </button>
             {/* ⋮ overflow menu — New Chat + voice toggles (kept out of the header row) */}
-            {(turns.length > 0 || ttsAvailable) && (
+            {/* Always render the ⋮ menu — it always offers at least the "New look" toggle. */}
+            {true && (
               <div className="relative">
                 <button onClick={() => setMenuOpen((v) => !v)} aria-label={L.menuAria} title={L.menuAria} aria-haspopup="menu" aria-expanded={menuOpen} className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-white/60 hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800">
                   <KebabIcon className="h-5 w-5" />
@@ -832,6 +837,10 @@ export default function AiAssistant() {
                           <SpeakerIcon className="h-4 w-4 shrink-0" muted={!ttsOn} /><span className="flex-1">{L.menuReadAloud}</span>{ttsOn && <span className="text-violet-500">✓</span>}
                         </button>
                       )}
+                      {/* Prototype look toggle (UI v2 "Prism Copilot") */}
+                      <button role="menuitemcheckbox" aria-checked={uiV2} onClick={() => { toggleUiV2(); setMenuOpen(false); }} className={`flex w-full items-center gap-2.5 border-t border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-700 ${uiV2 ? 'text-violet-600 dark:text-violet-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                        <span className="w-4 text-center text-base leading-none">✨</span><span className="flex-1">{lang === 'en' ? 'New look (beta)' : 'Tampilan baru (beta)'}</span>{uiV2 && <span className="text-violet-500">✓</span>}
+                      </button>
                     </div>
                   </>
                 )}
@@ -1052,10 +1061,24 @@ export default function AiAssistant() {
                     <div className="text-sm whitespace-pre-wrap break-words text-slate-800 dark:text-slate-100 anett-streaming">{streamText}</div>
                   ) : streamReasoning ? (
                     // Anett's live reasoning summary (#D), shown before the answer begins.
+                    uiV2 ? (
+                      // UI v2: a prism "thinking" orb + a collapsible thought-tray.
+                      <div className="space-y-1">
+                        <button onClick={() => setReasoningOpen((o) => !o)} className="flex items-center gap-2 text-xs font-medium text-violet-600 dark:text-violet-300" aria-expanded={reasoningOpen}>
+                          <span className="anett-orb" aria-hidden />
+                          <span>{lang === 'en' ? 'Reasoning…' : 'Menalar…'}</span>
+                          <span className={`text-slate-400 transition-transform ${reasoningOpen ? 'rotate-90' : ''}`} aria-hidden>›</span>
+                        </button>
+                        {reasoningOpen && (
+                          <div className="max-h-24 overflow-hidden rounded-lg border border-violet-100 bg-violet-50/40 px-2 py-1 text-[11px] italic leading-snug text-slate-500 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-400">{streamReasoning.slice(-300)}</div>
+                        )}
+                      </div>
+                    ) : (
                     <div className="space-y-1">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-300"><TypingDots reduce={reduce} /><span>{lang === 'en' ? 'Reasoning…' : 'Menalar…'}</span></div>
                       <div className="max-h-20 overflow-hidden text-[11px] italic leading-snug text-slate-400 dark:text-slate-500">{streamReasoning.slice(-260)}</div>
                     </div>
+                    )
                   ) : streamSteps.length === 0 ? (
                     <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><TypingDots reduce={reduce} /><span>{L.thinking}</span></div>
                   ) : (
