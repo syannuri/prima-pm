@@ -3,6 +3,8 @@ import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
 import { archiveProject, unarchiveProject, listProjectDatabase, listProjects } from '../projects/projects.service.js';
 import { getPortfolioSummary } from '../portfolio/portfolio.service.js';
+import { getPlanningReminders } from '../projects/activation.js';
+import { getAwaitingClosure } from '../projects/closure.js';
 
 // Project archive: a reversible hide. Archived projects drop out of the corporate list, dashboard
 // and portfolio, and only surface in the ADMIN/PMO Project Database Archive.
@@ -54,6 +56,26 @@ describe('Project archive', () => {
     expect(restored.archivedAt).toBeNull();
     expect(restored.archivedById).toBeNull();
     expect((await listProjects(adminId, 'ADMIN')).some((x) => x.id === p.id)).toBe(true);
+  });
+
+  it('archiving drops a project out of the dashboard attention queues (planning reminders, awaiting closure)', async () => {
+    const draft = await project({ status: 'DRAFT' });
+    const inProg = await project({ status: 'IN_PROGRESS' });
+
+    // Present in the queues before archiving.
+    expect((await getPlanningReminders(adminId, 'ADMIN')).items.some((x) => x.id === draft.id)).toBe(true);
+    expect((await getAwaitingClosure('ADMIN')).items.some((x) => x.id === inProg.id)).toBe(true);
+
+    await archiveProject(draft.id, adminId);
+    await archiveProject(inProg.id, adminId);
+
+    // Gone from the attention queues once archived.
+    expect((await getPlanningReminders(adminId, 'ADMIN')).items.some((x) => x.id === draft.id)).toBe(false);
+    expect((await getAwaitingClosure('ADMIN')).items.some((x) => x.id === inProg.id)).toBe(false);
+
+    // Restoring brings them back.
+    await unarchiveProject(draft.id, adminId);
+    expect((await getPlanningReminders(adminId, 'ADMIN')).items.some((x) => x.id === draft.id)).toBe(true);
   });
 
   it('an ARCHIVE + UNARCHIVE audit trail is recorded', async () => {

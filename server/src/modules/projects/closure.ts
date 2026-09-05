@@ -77,7 +77,7 @@ export async function getAwaitingClosure(role: string) {
 
   const projects = await prisma.project.findMany({
     // Tenant scoping keeps this corporate ADMIN/PMO queue free of guest projects (personal tenants).
-    where: { status: 'IN_PROGRESS', deletedAt: null },
+    where: { status: 'IN_PROGRESS', deletedAt: null, archivedAt: null },
     select: { id: true, code: true, name: true, pm: { select: { name: true } } },
     orderBy: { code: 'asc' },
   });

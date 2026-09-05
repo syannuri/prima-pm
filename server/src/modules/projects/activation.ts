@@ -97,7 +97,7 @@ export async function getAwaitingActivation(role: string) {
   const projects = await prisma.project.findMany({
     // Tenant scoping keeps this corporate ADMIN/PMO queue free of guest projects (personal tenants).
     // activationReviewStatus: null → rejected / needs-revision projects drop out until resubmitted.
-    where: { status: 'CHARTERED', deletedAt: null, activationReviewStatus: null },
+    where: { status: 'CHARTERED', deletedAt: null, archivedAt: null, activationReviewStatus: null },
     select: { id: true, code: true, name: true, deliveryApproach: true, baselineLockedAt: true, scheduleBaselinedAt: true, pm: { select: { name: true } } },
     orderBy: { code: 'asc' },
   });
@@ -128,7 +128,7 @@ export async function getAwaitingActivation(role: string) {
  * projects are excluded.
  */
 export async function getPlanningReminders(userId: string, role: string) {
-  const where: Prisma.ProjectWhereInput = { deletedAt: null, status: { in: ['DRAFT', 'CHARTERED'] } };
+  const where: Prisma.ProjectWhereInput = { deletedAt: null, archivedAt: null, status: { in: ['DRAFT', 'CHARTERED'] } };
   // Guest/corporate separation is handled by tenant scoping; only the role rule remains.
   if (role !== 'GUEST' && !GLOBAL_ROLES.includes(role as Role)) where.pmUserId = userId;
 
