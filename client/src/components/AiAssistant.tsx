@@ -403,7 +403,7 @@ export default function AiAssistant() {
         to={`/projects/${id}${tab ? `?tab=${tab}` : ''}`}
         onClick={() => setOpen(false)}
         title={`${lang === 'en' ? 'Open' : 'Buka'} ${label}`}
-        className="mx-0.5 inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px align-middle text-[10px] font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/40"
+        className={`mx-0.5 inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px align-middle text-[10px] font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/40 ${uiV2 ? 'shadow-sm shadow-violet-900/10 ring-1 ring-white/50 dark:ring-white/5' : ''}`}
       >
         <span aria-hidden>↗</span>{label}
       </Link>
@@ -991,7 +991,7 @@ export default function AiAssistant() {
                 {i !== streamIdx && chartRefs(t.content)
                   .filter((r) => r.type === 'evm' && codeToId.has(r.code.toUpperCase()))
                   .map((r, j) => (
-                    <AnettChartCard key={`${r.code}-${j}`} projectId={codeToId.get(r.code.toUpperCase())!} code={r.code} onNavigate={() => setOpen(false)} />
+                    <AnettChartCard key={`${r.code}-${j}`} projectId={codeToId.get(r.code.toUpperCase())!} code={r.code} onNavigate={() => setOpen(false)} v2={uiV2} />
                   ))}
                 {/* 🧠 Anett stored a durable memory this turn */}
                 {i !== streamIdx && t.memories && t.memories.length > 0 && (
