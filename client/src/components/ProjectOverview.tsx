@@ -205,6 +205,28 @@ async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast |
       if (s.dots) { ctx.fillStyle = s.color; for (const [t, v] of s.pts) { if (v == null) continue; ctx.beginPath(); ctx.arc(X(t), Y(v), 3, 0, Math.PI * 2); ctx.fill(); } }
     }
 
+    // Latest-value label at the END of each line (the newest progress/cost). Endpoint dot at the real
+    // position; the label is nudged vertically when two endpoints are close so they don't collide.
+    const labels: { x: number; realY: number; y: number; txt: string; color: string }[] = [];
+    for (const s of series) {
+      let last: [number, number] | null = null;
+      for (const [t, v] of s.pts) if (v != null && Number.isFinite(v)) last = [t, v];
+      if (!last) continue;
+      const ly2 = Y(last[1]);
+      labels.push({ x: X(last[0]), realY: ly2, y: ly2, txt: fmtY(last[1]), color: s.color });
+    }
+    labels.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 15) labels[i].y = labels[i - 1].y + 15;
+    ctx.font = 'bold 11px Arial, sans-serif'; ctx.textBaseline = 'middle';
+    for (const L of labels) {
+      ctx.fillStyle = L.color; ctx.beginPath(); ctx.arc(L.x, L.realY, 3.5, 0, Math.PI * 2); ctx.fill();
+      const tw = ctx.measureText(L.txt).width;
+      const rightOk = L.x + 8 + tw + 4 <= W - mR;
+      const tx = rightOk ? L.x + 8 : L.x - 8 - tw;
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(tx - 3, L.y - 8, tw + 6, 16);
+      ctx.fillStyle = L.color; ctx.textAlign = 'left'; ctx.fillText(L.txt, tx, L.y);
+    }
+
     const titleFor: Record<ScurveVariant, string> = {
       progress: 'S-Curve — Plan vs Actual Progress (% of BAC)',
       cost: 'S-Curve — Plan vs Actual Cost',
