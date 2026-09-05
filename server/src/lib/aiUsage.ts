@@ -31,6 +31,7 @@ export type AiFeature =
   | 'whatif'
   | 'memory_distill'
   | 'feedback_distill'
+  | 'eval_judge'
   | 'unknown';
 
 // Record one API call's usage. Reads the active tenant from AsyncLocalStorage (the same context the
