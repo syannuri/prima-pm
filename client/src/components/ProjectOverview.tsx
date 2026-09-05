@@ -1,4 +1,4 @@
-import { type ReactNode, useRef, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, API_BASE, streamHeaders } from '../api/client';
 import type { Evm, EvmTrend, Forecast, GanttNode } from '../api/types';
@@ -132,30 +132,85 @@ function Tile({ label, value, tone, hint }: { label: string; value: string; tone
   );
 }
 
-// Rasterize the S-curve SVG to a PNG blob (for embedding in the Excel export). White background so it
-// reads on an Excel sheet; 2x scale for a crisp image. Best-effort — returns null on any failure.
-async function svgToPngBlob(svg: SVGSVGElement): Promise<Blob | null> {
+// Render a CLEAN S-curve straight onto a canvas from the data (for the Excel export) — not by
+// rasterizing the compact on-screen SVG (which has no legend + cramped labels). Full control: axes,
+// gridlines, tick labels, four series (Planned PV / Earned EV / Actual AC / Forecast) and a legend.
+// Best-effort → returns null on any failure. Cost mode plots money; progress mode plots % of BAC.
+async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast | undefined, mode: 'progress' | 'cost'): Promise<Blob | null> {
   try {
-    const rect = svg.getBoundingClientRect();
-    const w = Math.max(1, Math.round(rect.width || 640));
-    const h = Math.max(1, Math.round(rect.height || 320));
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute('width', String(w));
-    clone.setAttribute('height', String(h));
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    const xml = new XMLSerializer().serializeToString(clone);
-    const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
-    const img = new Image();
-    await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error('svg-img')); img.src = svg64; });
-    const scale = 2;
+    if (!trend) return null;
+    const sc = forecast?.sCurve ?? [];
+    const snaps = trend.snapshots ?? [];
+    if (!sc.length && !snaps.length) return null;
+    const bac = forecast?.bac || trend.bac || 0;
+    const toY = (v: number): number => (mode === 'progress' && bac > 0 ? (v / bac) * 100 : v);
+    const ms = (s: string): number => +new Date(s);
+
+    const dates = [...sc.map((p) => ms(p.t)), ...snaps.map((s) => ms(s.statusDate))].filter(Number.isFinite);
+    if (!dates.length) return null;
+    const xMin = Math.min(...dates), xMax = Math.max(...dates);
+    const yVals = [
+      ...sc.map((p) => toY(p.pv)),
+      ...sc.filter((p) => p.ac != null).map((p) => toY(p.ac as number)),
+      ...sc.filter((p) => p.forecast != null).map((p) => toY(p.forecast as number)),
+      ...snaps.map((s) => toY(s.ev)),
+    ].filter(Number.isFinite);
+    const yMax = Math.max(1, ...yVals);
+
+    const W = 780, H = 430, S = 2;
     const canvas = document.createElement('canvas');
-    canvas.width = w * scale; canvas.height = h * scale;
+    canvas.width = W * S; canvas.height = H * S;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(scale, scale);
-    ctx.drawImage(img, 0, 0, w, h);
+    ctx.scale(S, S);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+
+    const mL = 74, mR = 20, mT = 58, mB = 44;
+    const pw = W - mL - mR, ph = H - mT - mB;
+    const X = (t: number): number => mL + (xMax === xMin ? 0.5 : (t - xMin) / (xMax - xMin)) * pw;
+    const Y = (v: number): number => mT + ph - (v / yMax) * ph;
+    const fmtY = (v: number): string => (mode === 'progress' ? `${Math.round(v)}%` : formatIdrShort(v));
+    const fmtX = (t: number): string => { const d = new Date(t); return `${d.getUTCFullYear().toString().slice(2)}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+
+    // Gridlines + Y ticks.
+    ctx.font = '11px Arial, sans-serif';
+    for (let i = 0; i <= 5; i++) {
+      const v = (yMax * i) / 5, y = Y(v);
+      ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(mL, y); ctx.lineTo(W - mR, y); ctx.stroke();
+      ctx.fillStyle = '#64748b'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(fmtY(v), mL - 6, y);
+    }
+    // X ticks.
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const N = Math.min(6, Math.max(1, sc.length - 1));
+    for (let i = 0; i <= N; i++) { const t = xMin + ((xMax - xMin) * i) / N; ctx.fillText(fmtX(t), X(t), H - mB + 6); }
+
+    const drawLine = (pts: [number, number | null][], color: string, dashed: boolean): void => {
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dashed ? [6, 4] : []);
+      ctx.beginPath(); let started = false;
+      for (const [t, v] of pts) { if (v == null || !Number.isFinite(v)) continue; const x = X(t), y = Y(v); if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y); }
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    drawLine(sc.map((p) => [ms(p.t), toY(p.pv)]), '#6366f1', false);            // Planned (PV)
+    drawLine(sc.map((p) => [ms(p.t), p.ac != null ? toY(p.ac) : null]), '#f59e0b', false);  // Actual (AC)
+    drawLine(sc.map((p) => [ms(p.t), p.forecast != null ? toY(p.forecast) : null]), '#a855f7', true); // Forecast
+    drawLine(snaps.map((s) => [ms(s.statusDate), toY(s.ev)]), '#10b981', false); // Earned (EV)
+    ctx.fillStyle = '#10b981';
+    for (const s of snaps) { ctx.beginPath(); ctx.arc(X(ms(s.statusDate)), Y(toY(s.ev)), 3, 0, Math.PI * 2); ctx.fill(); }
+
+    // Title.
+    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 14px Arial, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`S-Curve — ${mode === 'progress' ? 'Progress (% of BAC)' : 'Cost'}`, mL, 24);
+    // Legend.
+    ctx.font = '11px Arial, sans-serif'; ctx.textBaseline = 'middle';
+    let lx = mL; const ly = 42;
+    for (const [label, color] of [['Planned (PV)', '#6366f1'], ['Earned (EV)', '#10b981'], ['Actual (AC)', '#f59e0b'], ['Forecast', '#a855f7']] as const) {
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 18, ly); ctx.stroke();
+      ctx.fillStyle = '#334155'; ctx.textAlign = 'left'; ctx.fillText(label, lx + 22, ly);
+      lx += 22 + ctx.measureText(label).width + 20;
+    }
+
     return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
   } catch {
     return null;
@@ -187,15 +242,13 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   // return violates the Rules of Hooks (the count changes once data loads → React throws
   // "rendered more hooks than during the previous render" and the tab goes blank/black).
   const [sCurveTab, setSCurveTab] = useState<'progress' | 'cost'>('progress');
-  // S-curve Excel export: rasterize the on-screen chart → POST as PNG → download the .xlsx the server builds.
-  const chartWrapRef = useRef<HTMLDivElement>(null);
+  // S-curve Excel export: render a clean chart from the data → POST as PNG → download the .xlsx.
   const [exporting, setExporting] = useState(false);
   const exportScurve = async () => {
     if (exporting) return;
     setExporting(true);
     try {
-      const svg = chartWrapRef.current?.querySelector('svg') as SVGSVGElement | null;
-      const png = svg ? await svgToPngBlob(svg) : null;
+      const png = await renderScurvePng(trendQ.data, fcQ.data, sCurveTab);
       const res = await fetch(`${API_BASE}/projects/${projectId}/evm/scurve/export?mode=${sCurveTab}`, {
         method: 'POST', credentials: 'include',
         headers: { ...streamHeaders('POST'), 'Content-Type': 'image/png' },
@@ -452,9 +505,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           {trendQ.isLoading ? (
             <div className="flex justify-center py-8"><Spinner /></div>
           ) : hasTrend && trend ? (
-            <div ref={chartWrapRef}>
-              <EvmTrendChart data={trend} forecast={fcQ.data} mode={sCurveTab === 'progress' ? 'progress' : 'money'} bare compact title={null} />
-            </div>
+            <EvmTrendChart data={trend} forecast={fcQ.data} mode={sCurveTab === 'progress' ? 'progress' : 'money'} bare compact title={null} />
           ) : (
             <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{id ? 'Belum ada baseline/snapshot.' : 'No baseline or snapshots yet.'}</p>
           )}
