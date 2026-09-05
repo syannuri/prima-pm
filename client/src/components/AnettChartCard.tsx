@@ -29,7 +29,7 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
   );
 }
 
-export default function AnettChartCard({ projectId, code, onNavigate }: { projectId: string; code: string; onNavigate?: () => void }) {
+export default function AnettChartCard({ projectId, code, onNavigate, v2 }: { projectId: string; code: string; onNavigate?: () => void; v2?: boolean }) {
   const { lang } = useLang();
   const t = T[lang];
   const { data: e, isLoading, isError } = useQuery({
@@ -51,24 +51,32 @@ export default function AnettChartCard({ projectId, code, onNavigate }: { projec
     </div>
   );
 
+  const body = isLoading ? (
+    <div className="py-3 text-xs text-slate-400">{t.loading}</div>
+  ) : isError || !e || e.health === 'NO_DATA' ? (
+    <div className="py-2 text-xs text-slate-400">{t.noData}</div>
+  ) : (
+    <div className="space-y-2">
+      <HealthBulletGauge spi={e.spi} cpi={e.cpi} hasSchedule={e.pv > 0} hasCost={e.ac > 0} id={lang === 'id'} compact />
+      <div className="grid grid-cols-4 gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+        <Stat label="EV" value={formatIdrShort(e.ev)} />
+        <Stat label="AC" value={formatIdrShort(e.ac)} warn={e.ac > e.ev} />
+        <Stat label="BAC" value={formatIdrShort(e.bac)} />
+        <Stat label={t.complete} value={`${Math.round((e.percentComplete ?? 0) * 100)}%`} />
+      </div>
+    </div>
+  );
+
+  // #1 insight card (v2): elevated frame + a per-project violet accent spine + a gradient header band,
+  // consistent with the app's card language. Classic keeps the flat bordered card.
   return (
-    <div className="ml-10 mt-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-      {header}
-      {isLoading ? (
-        <div className="py-3 text-xs text-slate-400">{t.loading}</div>
-      ) : isError || !e || e.health === 'NO_DATA' ? (
-        <div className="py-2 text-xs text-slate-400">{t.noData}</div>
-      ) : (
-        <div className="mt-2 space-y-2">
-          <HealthBulletGauge spi={e.spi} cpi={e.cpi} hasSchedule={e.pv > 0} hasCost={e.ac > 0} id={lang === 'id'} compact />
-          <div className="grid grid-cols-4 gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
-            <Stat label="EV" value={formatIdrShort(e.ev)} />
-            <Stat label="AC" value={formatIdrShort(e.ac)} warn={e.ac > e.ev} />
-            <Stat label="BAC" value={formatIdrShort(e.bac)} />
-            <Stat label={t.complete} value={`${Math.round((e.percentComplete ?? 0) * 100)}%`} />
-          </div>
-        </div>
-      )}
+    <div className={`ml-10 mt-2 overflow-hidden rounded-xl border ${v2
+      ? 'border-slate-200/80 border-l-[3px] border-l-violet-400 bg-white shadow-sm shadow-slate-900/[0.06] ring-1 ring-black/[0.03] dark:border-slate-700 dark:border-l-violet-500 dark:bg-slate-900 dark:shadow-black/30'
+      : 'border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900'}`}>
+      <div className={v2 ? 'border-b border-violet-100/70 bg-gradient-to-r from-violet-50/70 to-fuchsia-50/40 px-3 py-2 dark:border-slate-800 dark:from-violet-900/15 dark:to-fuchsia-900/10' : ''}>
+        {header}
+      </div>
+      <div className={v2 ? 'px-3 pb-3 pt-2' : 'mt-2'}>{body}</div>
     </div>
   );
 }
