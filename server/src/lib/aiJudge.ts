@@ -19,12 +19,14 @@ export interface JudgeScore {
   rationale: string;
 }
 
+// Anthropic's structured-output json_schema subset does NOT support minimum/maximum on integers — the
+// 1–5 bound is enforced in the rubric prompt and clamped in code (clampScore) instead.
 const RUBRIC_SCHEMA = {
   type: 'object',
   properties: {
-    groundedness: { type: 'integer', minimum: 1, maximum: 5 },
-    helpfulness: { type: 'integer', minimum: 1, maximum: 5 },
-    clarity: { type: 'integer', minimum: 1, maximum: 5 },
+    groundedness: { type: 'integer' },
+    helpfulness: { type: 'integer' },
+    clarity: { type: 'integer' },
     rationale: { type: 'string' },
   },
   required: ['groundedness', 'helpfulness', 'clarity', 'rationale'],

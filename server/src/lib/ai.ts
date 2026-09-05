@@ -148,6 +148,14 @@ export function __setAiNarrativePort(port: AiPort | null): void {
 }
 export const __setAiPort = __setAiNarrativePort;
 
+// Adaptive thinking and the `effort` knob are Claude 4.6+ features; Haiku 4.5 (and older models)
+// reject them with a 400 ("adaptive thinking is not supported on this model" / "does not support the
+// effort parameter"). Detect the 4.6+ family so the cheap-model paths (proactive narrative & batch,
+// #3 model-routing, the LLM judge) send a compatible request — structured `format` works everywhere.
+function supportsModernThinking(model: string): boolean {
+  return /claude-(opus-4-(6|7|8)|sonnet-4-6|fable-5|mythos-5|mythos-preview)/.test(model);
+}
+
 function liveAiPort(): AiPort {
   return {
     async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride, feature }) {
@@ -158,11 +166,15 @@ function liveAiPort(): AiPort {
       const redactor = createRedactor(); // #2 privacy guard: scrub secrets/PII outbound (identity unless AI_REDACT)
       // Structured output (constrains to valid JSON) + adaptive thinking (light reasoning) + medium
       // effort (cost/quality balance). System prompt is stable per feature ⇒ prompt-cached.
+      const modern = supportsModernThinking(model);
       const res = await client.messages.create({
         model,
         max_tokens: maxTokens ?? 2000,
-        thinking: { type: 'adaptive' },
-        output_config: { effort: aiEffort(), format: { type: 'json_schema', schema: jsonSchema } },
+        // 4.6+ only: adaptive thinking + effort. On older/cheap models omit them (json_schema still works).
+        thinking: modern ? { type: 'adaptive' } : undefined,
+        output_config: modern
+          ? { effort: aiEffort(), format: { type: 'json_schema', schema: jsonSchema } }
+          : { format: { type: 'json_schema', schema: jsonSchema } },
         system: [{ type: 'text', text: redactor.redact(system), cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: redactor.redact(user) }],
       });
@@ -190,15 +202,17 @@ function liveAiPort(): AiPort {
       const client = aiClient(apiKey);
       const redactor = createRedactor(); // #2 privacy guard (identity unless AI_REDACT); one map for the whole loop
       const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: redactor.redact(m.content) }));
+      const modern = supportsModernThinking(model); // 4.6+ only: adaptive thinking + effort (omit on Haiku etc)
       for (let step = 0; step < maxSteps; step++) {
         // Stream so answer text can be forwarded token-by-token (improvement #2). `display: 'summarized'`
         // exposes Anett's reasoning as thinking deltas (#D): `on('text')` fires for the visible answer,
-        // `on('thinking')` for the reasoning summary. Effort is the env-tunable knob (#D).
+        // `on('thinking')` for the reasoning summary. Effort is the env-tunable knob (#D). Both are
+        // 4.6+-only, so a routed cheap model (#3) runs without them.
         const stream = client.messages.stream({
           model,
           max_tokens: maxTokens,
-          thinking: { type: 'adaptive', display: 'summarized' },
-          output_config: { effort: aiEffort() },
+          thinking: modern ? { type: 'adaptive', display: 'summarized' } : undefined,
+          output_config: modern ? { effort: aiEffort() } : undefined,
           system: [{ type: 'text', text: redactor.redact(system), cache_control: { type: 'ephemeral' } }],
           // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
           // the SDK's Tool shape whose InputSchema requires the literal `type`.
@@ -255,13 +269,17 @@ function liveAiPort(): AiPort {
           // outbound-only here. Proactive narratives summarise status/EVM, not raw contact PII, so a
           // leaked placeholder is unlikely; the protection (no secrets/PII sent) is what matters.
           const redactor = createRedactor();
+          const model = r.model || defaultModel;
+          const modern = supportsModernThinking(model); // proactive batch uses Haiku → omit 4.6+-only params
           return {
             custom_id: r.customId,
             params: {
-              model: r.model || defaultModel,
+              model,
               max_tokens: r.maxTokens ?? 2000,
-              thinking: { type: 'adaptive' },
-              output_config: { effort: aiEffort(), format: { type: 'json_schema', schema: r.jsonSchema } },
+              thinking: modern ? { type: 'adaptive' } : undefined,
+              output_config: modern
+                ? { effort: aiEffort(), format: { type: 'json_schema', schema: r.jsonSchema } }
+                : { format: { type: 'json_schema', schema: r.jsonSchema } },
               system: [{ type: 'text', text: redactor.redact(r.system), cache_control: { type: 'ephemeral' } }],
               messages: [{ role: 'user', content: redactor.redact(r.user) }],
             },
