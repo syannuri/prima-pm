@@ -47,7 +47,7 @@ export async function buildScurveWorkbook(d: ScurveExport): Promise<Buffer> {
     ['Project', `${d.project.code} — ${d.project.name}`],
     ['PM', d.project.pm ?? '—'],
     ['Status date', d10(d.statusDate)],
-    ['Mode', d.mode === 'progress' ? 'Progress (PV / EV / AC)' : 'Cost (money)'],
+    ['Variant', d.mode === 'progress' ? 'Plan vs Actual — Progress (% of BAC)' : d.mode === 'cost' ? 'Plan vs Actual — Cost (money)' : 'Combined (PV / EV / AC / Forecast)'],
     ['Planned start', d10(f.schedule.plannedStart)],
     ['Planned finish', d10(f.schedule.plannedFinish)],
     ['Forecast finish', d10(f.schedule.forecastFinish)],

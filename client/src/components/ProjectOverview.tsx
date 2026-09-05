@@ -132,47 +132,59 @@ function Tile({ label, value, tone, hint }: { label: string; value: string; tone
   );
 }
 
+export type ScurveVariant = 'progress' | 'cost' | 'combo';
+
 // Render a CLEAN S-curve straight onto a canvas from the data (for the Excel export) — not by
 // rasterizing the compact on-screen SVG (which has no legend + cramped labels). Full control: axes,
-// gridlines, tick labels, four series (Planned PV / Earned EV / Actual AC / Forecast) and a legend.
-// Best-effort → returns null on any failure. Cost mode plots money; progress mode plots % of BAC.
-async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast | undefined, mode: 'progress' | 'cost'): Promise<Blob | null> {
+// gridlines, tick labels, a legend, and the SERIES the chosen variant needs:
+//   progress → Plan Progress (PV) vs Actual Progress (EV), as % of BAC
+//   cost     → Plan Cost (PV) vs Actual Cost (AC), in money
+//   combo    → PV + EV + AC + Forecast, in money (the full S-curve)
+// Best-effort → returns null on any failure.
+async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast | undefined, variant: ScurveVariant): Promise<Blob | null> {
   try {
     if (!trend) return null;
     const sc = forecast?.sCurve ?? [];
     const snaps = trend.snapshots ?? [];
     if (!sc.length && !snaps.length) return null;
     const bac = forecast?.bac || trend.bac || 0;
-    const toY = (v: number): number => (mode === 'progress' && bac > 0 ? (v / bac) * 100 : v);
+    const asPct = variant === 'progress';
+    const toY = (v: number): number => (asPct && bac > 0 ? (v / bac) * 100 : v);
     const ms = (s: string): number => +new Date(s);
+
+    // Series to plot for this variant.
+    type Ser = { label: string; color: string; dashed: boolean; dots?: boolean; pts: [number, number | null][] };
+    const pvPts: [number, number | null][] = sc.map((p) => [ms(p.t), toY(p.pv)]);
+    const evPts: [number, number | null][] = snaps.map((s) => [ms(s.statusDate), toY(s.ev)]);
+    const acPts: [number, number | null][] = sc.map((p) => [ms(p.t), p.ac != null ? toY(p.ac as number) : null]);
+    const fcPts: [number, number | null][] = sc.map((p) => [ms(p.t), p.forecast != null ? toY(p.forecast as number) : null]);
+    const series: Ser[] = [];
+    series.push({ label: variant === 'cost' ? 'Plan Cost (PV)' : variant === 'progress' ? 'Plan Progress (PV)' : 'Planned (PV)', color: '#6366f1', dashed: false, pts: pvPts });
+    if (variant === 'progress' || variant === 'combo') series.push({ label: variant === 'progress' ? 'Actual Progress (EV)' : 'Earned (EV)', color: '#10b981', dashed: false, dots: true, pts: evPts });
+    if (variant === 'cost' || variant === 'combo') series.push({ label: variant === 'cost' ? 'Actual Cost (AC)' : 'Actual (AC)', color: '#f59e0b', dashed: false, pts: acPts });
+    if (variant === 'combo') series.push({ label: 'Forecast', color: '#a855f7', dashed: true, pts: fcPts });
 
     const dates = [...sc.map((p) => ms(p.t)), ...snaps.map((s) => ms(s.statusDate))].filter(Number.isFinite);
     if (!dates.length) return null;
     const xMin = Math.min(...dates), xMax = Math.max(...dates);
-    const yVals = [
-      ...sc.map((p) => toY(p.pv)),
-      ...sc.filter((p) => p.ac != null).map((p) => toY(p.ac as number)),
-      ...sc.filter((p) => p.forecast != null).map((p) => toY(p.forecast as number)),
-      ...snaps.map((s) => toY(s.ev)),
-    ].filter(Number.isFinite);
+    const yVals = series.flatMap((s) => s.pts.map(([, v]) => v)).filter((v): v is number => v != null && Number.isFinite(v));
     const yMax = Math.max(1, ...yVals);
 
-    const W = 780, H = 430, S = 2;
+    const W = 780, H = 430, SC = 2;
     const canvas = document.createElement('canvas');
-    canvas.width = W * S; canvas.height = H * S;
+    canvas.width = W * SC; canvas.height = H * SC;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    ctx.scale(S, S);
+    ctx.scale(SC, SC);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
 
-    const mL = 74, mR = 20, mT = 58, mB = 44;
+    const mL = 78, mR = 20, mT = 58, mB = 44;
     const pw = W - mL - mR, ph = H - mT - mB;
     const X = (t: number): number => mL + (xMax === xMin ? 0.5 : (t - xMin) / (xMax - xMin)) * pw;
     const Y = (v: number): number => mT + ph - (v / yMax) * ph;
-    const fmtY = (v: number): string => (mode === 'progress' ? `${Math.round(v)}%` : formatIdrShort(v));
+    const fmtY = (v: number): string => (asPct ? `${Math.round(v)}%` : formatIdrShort(v));
     const fmtX = (t: number): string => { const d = new Date(t); return `${d.getUTCFullYear().toString().slice(2)}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
 
-    // Gridlines + Y ticks.
     ctx.font = '11px Arial, sans-serif';
     for (let i = 0; i <= 5; i++) {
       const v = (yMax * i) / 5, y = Y(v);
@@ -181,34 +193,32 @@ async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast |
       ctx.fillStyle = '#64748b'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(fmtY(v), mL - 6, y);
     }
-    // X ticks.
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     const N = Math.min(6, Math.max(1, sc.length - 1));
     for (let i = 0; i <= N; i++) { const t = xMin + ((xMax - xMin) * i) / N; ctx.fillText(fmtX(t), X(t), H - mB + 6); }
 
-    const drawLine = (pts: [number, number | null][], color: string, dashed: boolean): void => {
-      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dashed ? [6, 4] : []);
+    for (const s of series) {
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.setLineDash(s.dashed ? [6, 4] : []);
       ctx.beginPath(); let started = false;
-      for (const [t, v] of pts) { if (v == null || !Number.isFinite(v)) continue; const x = X(t), y = Y(v); if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y); }
+      for (const [t, v] of s.pts) { if (v == null || !Number.isFinite(v)) continue; const x = X(t), y = Y(v); if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y); }
       ctx.stroke(); ctx.setLineDash([]);
-    };
-    drawLine(sc.map((p) => [ms(p.t), toY(p.pv)]), '#6366f1', false);            // Planned (PV)
-    drawLine(sc.map((p) => [ms(p.t), p.ac != null ? toY(p.ac) : null]), '#f59e0b', false);  // Actual (AC)
-    drawLine(sc.map((p) => [ms(p.t), p.forecast != null ? toY(p.forecast) : null]), '#a855f7', true); // Forecast
-    drawLine(snaps.map((s) => [ms(s.statusDate), toY(s.ev)]), '#10b981', false); // Earned (EV)
-    ctx.fillStyle = '#10b981';
-    for (const s of snaps) { ctx.beginPath(); ctx.arc(X(ms(s.statusDate)), Y(toY(s.ev)), 3, 0, Math.PI * 2); ctx.fill(); }
+      if (s.dots) { ctx.fillStyle = s.color; for (const [t, v] of s.pts) { if (v == null) continue; ctx.beginPath(); ctx.arc(X(t), Y(v), 3, 0, Math.PI * 2); ctx.fill(); } }
+    }
 
-    // Title.
+    const titleFor: Record<ScurveVariant, string> = {
+      progress: 'S-Curve — Plan vs Actual Progress (% of BAC)',
+      cost: 'S-Curve — Plan vs Actual Cost',
+      combo: 'S-Curve — Combined (PV / EV / AC / Forecast)',
+    };
     ctx.fillStyle = '#0f172a'; ctx.font = 'bold 14px Arial, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(`S-Curve — ${mode === 'progress' ? 'Progress (% of BAC)' : 'Cost'}`, mL, 24);
-    // Legend.
+    ctx.fillText(titleFor[variant], mL, 24);
     ctx.font = '11px Arial, sans-serif'; ctx.textBaseline = 'middle';
     let lx = mL; const ly = 42;
-    for (const [label, color] of [['Planned (PV)', '#6366f1'], ['Earned (EV)', '#10b981'], ['Actual (AC)', '#f59e0b'], ['Forecast', '#a855f7']] as const) {
-      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 18, ly); ctx.stroke();
-      ctx.fillStyle = '#334155'; ctx.textAlign = 'left'; ctx.fillText(label, lx + 22, ly);
-      lx += 22 + ctx.measureText(label).width + 20;
+    for (const s of series) {
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.setLineDash(s.dashed ? [6, 4] : []);
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 18, ly); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#334155'; ctx.textAlign = 'left'; ctx.fillText(s.label, lx + 22, ly);
+      lx += 22 + ctx.measureText(s.label).width + 20;
     }
 
     return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
@@ -242,14 +252,16 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   // return violates the Rules of Hooks (the count changes once data loads → React throws
   // "rendered more hooks than during the previous render" and the tab goes blank/black).
   const [sCurveTab, setSCurveTab] = useState<'progress' | 'cost'>('progress');
-  // S-curve Excel export: render a clean chart from the data → POST as PNG → download the .xlsx.
+  // S-curve Excel export: pick a variant → render a clean chart from the data → POST as PNG → download.
   const [exporting, setExporting] = useState(false);
-  const exportScurve = async () => {
+  const [exportMenu, setExportMenu] = useState(false);
+  const exportScurve = async (variant: ScurveVariant) => {
     if (exporting) return;
+    setExportMenu(false);
     setExporting(true);
     try {
-      const png = await renderScurvePng(trendQ.data, fcQ.data, sCurveTab);
-      const res = await fetch(`${API_BASE}/projects/${projectId}/evm/scurve/export?mode=${sCurveTab}`, {
+      const png = await renderScurvePng(trendQ.data, fcQ.data, variant);
+      const res = await fetch(`${API_BASE}/projects/${projectId}/evm/scurve/export?mode=${variant}`, {
         method: 'POST', credentials: 'include',
         headers: { ...streamHeaders('POST'), 'Content-Type': 'image/png' },
         body: png ?? new Blob([]),
@@ -487,14 +499,32 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
                   </button>
                 ))}
               </div>
-              <button
-                onClick={exportScurve}
-                disabled={exporting || !hasTrend}
-                title={id ? 'Unduh Excel — chart S-curve + ringkasan EVM + data' : 'Download Excel — S-curve chart + EVM summary + data'}
-                className="whitespace-nowrap rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                {exporting ? (id ? 'Menyiapkan…' : 'Preparing…') : (id ? '⬇ Excel' : '⬇ Excel')}
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setExportMenu((v) => !v)}
+                  disabled={exporting || !hasTrend}
+                  title={id ? 'Unduh Excel — pilih varian S-curve' : 'Download Excel — choose S-curve variant'}
+                  className="whitespace-nowrap rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  {exporting ? (id ? 'Menyiapkan…' : 'Preparing…') : '⬇ Excel ▾'}
+                </button>
+                {exportMenu && (
+                  <>
+                    <button className="fixed inset-0 z-30 cursor-default" aria-hidden tabIndex={-1} onClick={() => setExportMenu(false)} />
+                    <div role="menu" className="absolute right-0 z-40 mt-1 w-60 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                      {([
+                        ['progress', id ? 'Plan vs Actual — Progres' : 'Plan vs Actual — Progress'],
+                        ['cost', id ? 'Plan vs Actual — Biaya' : 'Plan vs Actual — Cost'],
+                        ['combo', id ? 'Kombinasi (PV/EV/AC/Forecast)' : 'Combined (PV/EV/AC/Forecast)'],
+                      ] as const).map(([variant, label]) => (
+                        <button key={variant} role="menuitem" onClick={() => exportScurve(variant)} className="flex w-full items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
+                          <span className="text-slate-400">⬇</span>{label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
               {onJump && (
                 <button onClick={() => onJump('EVM Trend')} className="whitespace-nowrap text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
                   {id ? 'EVM Trend →' : 'EVM Trend →'}
