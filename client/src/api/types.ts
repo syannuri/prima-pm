@@ -861,6 +861,8 @@ export interface Forecast {
   pendingChangeTitle: string | null;
   hasData: boolean;
   sCurve: { t: string; pv: number; ac: number | null; forecast: number | null }[];
+  // Timeline-derived weekly plan-vs-actual progress (0..1 of scope). Null for agile/hybrid.
+  progressSeries: { t: string; plannedPct: number; actualPct: number | null }[] | null;
 }
 
 export type CashflowGranularity = 'week' | 'month' | 'quarter';
