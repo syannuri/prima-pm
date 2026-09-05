@@ -196,16 +196,11 @@ async function renderScurvePng(trend: EvmTrend | undefined, forecast: Forecast |
     const X = (t: number): number => mL + (xMax === xMin ? 0.5 : (t - xMin) / (xMax - xMin)) * pw;
     const Y = (v: number): number => mT + ph - (v / yMax) * ph;
     const fmtY = (v: number): string => (asPct ? `${Math.round(v)}%` : formatIdrShort(v));
-    // ISO week number — the weekly cadence for the timeline progress series.
-    const isoWeek = (t: number): number => {
-      const d = new Date(t); const u = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-      const day = u.getUTCDay() || 7; u.setUTCDate(u.getUTCDate() + 4 - day);
-      const ys = new Date(Date.UTC(u.getUTCFullYear(), 0, 1));
-      return Math.ceil(((+u - +ys) / 86_400_000 + 1) / 7);
-    };
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const fmtX = (t: number): string => {
       const d = new Date(t);
-      if (useTimeline) return `W${isoWeek(t)}`; // weekly cadence
+      // Timeline (weekly) axis is labelled by date + month, e.g. "1 Sep".
+      if (useTimeline) return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`;
       return `${d.getUTCFullYear().toString().slice(2)}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
     };
 
