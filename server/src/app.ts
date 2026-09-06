@@ -21,6 +21,7 @@ import usersRoutes from './modules/users/users.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
 import rateCardRoutes from './modules/ratecard/ratecard.routes.js';
 import portfolioRoutes from './modules/portfolio/portfolio.routes.js';
+import programRoutes from './modules/program/program.routes.js';
 import notificationRoutes from './modules/notification/notification.routes.js';
 import feedbackRoutes from './modules/feedback/feedback.routes.js';
 import feedbackAdminRoutes from './modules/feedback/feedback.admin.routes.js';
@@ -223,6 +224,7 @@ export function createApp() {
   api.use('/projects/:projectId/import', importRoutes); // spreadsheet import (T4.3)
   api.use('/ratecards', rateCardRoutes);
   api.use('/portfolio', portfolioRoutes);
+  api.use('/programs', programRoutes);
   api.use('/notifications', notificationRoutes);
   api.use('/feedback', feedbackRoutes);
   api.use('/admin/feedback', feedbackAdminRoutes);

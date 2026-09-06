@@ -245,6 +245,8 @@ export interface Project {
   totalRevenueIdr: string | null;
   status: ProjectStatus;
   pmUserId: string | null;
+  // Optional grouping into a Program (Tier-3 portfolio hierarchy).
+  programId?: string | null;
   // When set, this is a personal (guest) project owned by that user — sandboxed + self-governed.
   personalOwnerId?: string | null;
   closedAt?: string | null;
