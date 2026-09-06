@@ -449,6 +449,11 @@ export default function LoginPage() {
               </>
               )}
         </div>
+        <nav className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
+          <Link to="/legal/terms" className="text-xs text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300">{lang === 'id' ? 'Ketentuan' : 'Terms'}</Link>
+          <Link to="/legal/privacy" className="text-xs text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300">{lang === 'id' ? 'Privasi' : 'Privacy'}</Link>
+          <Link to="/legal/cookies" className="text-xs text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300">{lang === 'id' ? 'Cookie' : 'Cookies'}</Link>
+        </nav>
       </div>
     </div>
   );
