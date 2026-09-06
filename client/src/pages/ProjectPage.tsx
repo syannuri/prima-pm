@@ -35,6 +35,7 @@ import LifecycleActions from '../components/LifecycleActions';
 import ActivationReviewModal from '../components/ActivationReviewModal';
 import EvmHealth from '../components/EvmHealth';
 import ProjectOverview from '../components/ProjectOverview';
+import ProjectCustomFieldsCard from '../components/ProjectCustomFieldsCard';
 import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
@@ -264,7 +265,12 @@ export default function ProjectPage() {
         </Card>
       )}
 
-      {activeTab === 'Overview' && chartered && <ProjectOverview projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
+      {activeTab === 'Overview' && chartered && (
+        <div className="space-y-6">
+          <ProjectOverview projectId={projectId} onJump={(t) => setTab(t as Tab)} />
+          <ProjectCustomFieldsCard projectId={projectId} canEdit={user?.role !== 'VIEWER'} />
+        </div>
+      )}
       {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} costBaselineIdr={project.costBaselineIdr} personalOwnerId={project.personalOwnerId ?? null} assignedPmId={project.pmUserId} assignedPmName={project.pm?.name ?? null} />}
       {activeTab === 'Agile' && <AgilePanel projectId={projectId} approach={project.deliveryApproach} chartered={chartered} />}
       {activeTab === 'Cost' && chartered && <CostPanel projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} focusId={focus?.id ?? null} focusKey={focus?.key} />}

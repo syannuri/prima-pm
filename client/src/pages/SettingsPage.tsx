@@ -17,6 +17,7 @@ import AiFeedbackInboxCard from '../components/AiFeedbackInboxCard';
 import AiUsageCard from '../components/AiUsageCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
+import CustomFieldsAdminCard from '../components/CustomFieldsAdminCard';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 export default function SettingsPage() {
@@ -48,6 +49,13 @@ export default function SettingsPage() {
           {isAdmin && (
             <SettingsSection title="Workspace" sub="Your organization's address on the platform.">
               <WorkspaceAddressCard />
+            </SettingsSection>
+          )}
+
+          {/* Workspace data-model configuration — tenant-ADMIN only. */}
+          {isAdmin && (
+            <SettingsSection title="Workspace configuration" sub="Workspace-wide — tailor projects with your own fields.">
+              <CustomFieldsAdminCard />
             </SettingsSection>
           )}
 

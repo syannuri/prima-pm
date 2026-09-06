@@ -1334,6 +1334,47 @@ model ProjectEmbedding {
   @@index([tenantId])
 }
 
+// Tenant-defined custom field (Tier-3). Definitions are workspace-level configuration managed by an
+// ADMIN; the actual per-entity values live in CustomFieldValue keyed by entity + entityId. Tenant-scoped
+// (in SCOPED_MODELS). `entity` is a plain string ("project" | "task") so adding entity types later needs
+// no migration; the initial surface wires "project".
+model CustomFieldDef {
+  id        String   @id @default(uuid())
+  tenantId  String
+  entity    String   @default("project") // "project" | "task"
+  key       String // stable slug, unique per (tenant, entity)
+  label     String
+  type      String   @default("text") // text | number | date | boolean | select
+  options   Json? // string[] of choices when type = select
+  required  Boolean  @default(false)
+  sortOrder Int      @default(0)
+  archived  Boolean  @default(false) // hidden from forms but values retained
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  values CustomFieldValue[]
+
+  @@unique([tenantId, entity, key])
+  @@index([tenantId, entity])
+}
+
+// A custom-field value for one entity instance (entityId = projectId or taskId). Tenant-scoped; a value
+// is deleted when its definition is (cascade). value is stored as text and (de)serialized per def.type.
+model CustomFieldValue {
+  id       String  @id @default(uuid())
+  tenantId String
+  defId    String
+  def      CustomFieldDef @relation(fields: [defId], references: [id], onDelete: Cascade)
+  entityId String // projectId or taskId
+  value    String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([defId, entityId])
+  @@index([tenantId, entityId])
+}
+
 enum IssueImpact {
   LOW
   MEDIUM
