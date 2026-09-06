@@ -149,17 +149,16 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
 
   return (
     <div className="space-y-5">
-      {/* Top row — Baseline setup and the Total Budget summary side by side on wide screens
-          (stacked on mobile). Two-step baseline setup (① schedule → ② cost lock) on the left;
-          the budget composition + drawdown summary on the right (keeps the ?focus=spent anchor). */}
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
-        <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} />
-        <div className={`rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
-          <CostSummaryPanel summary={data!} projectId={projectId} />
-        </div>
-      </div>
+      {/* Two-step baseline setup (① schedule → ② cost lock). Freezes cost lines / WBS / schedule
+          baseline (PMB/BAC). Shared bar rendered identically on the Schedule tab. */}
+      <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} />
       {/* Nudge to re-lock after a change opened the baseline (e.g. an approved CR). */}
       <RebaselineReminder projectId={projectId} />
+      {/* Budget composition + drawdown as two proportional bars (replaces the two KPI-tile grids).
+          Keeps the ?focus=spent deep-link anchor (now inside the panel's drawdown section). */}
+      <div className={`rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
+        <CostSummaryPanel summary={data!} projectId={projectId} />
+      </div>
       {data?.highLevelCharterCost != null && b && (
         <div data-cost-focus="baseline" className={`rounded-xl transition-all ${flash === 'baseline' ? 'ring-2 ring-amber-400' : ''}`}><CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} /></div>
       )}
