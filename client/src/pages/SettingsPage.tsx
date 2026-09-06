@@ -18,6 +18,7 @@ import AiUsageCard from '../components/AiUsageCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
 import CustomFieldsAdminCard from '../components/CustomFieldsAdminCard';
+import CustomRolesAdminCard from '../components/CustomRolesAdminCard';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
 export default function SettingsPage() {
@@ -54,8 +55,9 @@ export default function SettingsPage() {
 
           {/* Workspace data-model configuration — tenant-ADMIN only. */}
           {isAdmin && (
-            <SettingsSection title="Workspace configuration" sub="Workspace-wide — tailor projects with your own fields.">
+            <SettingsSection title="Workspace configuration" sub="Workspace-wide — tailor projects and roles to your organization.">
               <CustomFieldsAdminCard />
+              <CustomRolesAdminCard />
             </SettingsSection>
           )}
 

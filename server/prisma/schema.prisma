@@ -440,6 +440,10 @@ model Membership {
   userId    String
   tenantId  String
   role      Role     @default(VIEWER)
+  // Optional org-defined role (Tier-3). Enforcement always uses `role` (the built-in base role a custom
+  // role maps to); customRoleId only carries the workspace's display label. Plain id (no FK), cleared by
+  // the service when its CustomRole is deleted.
+  customRoleId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1417,6 +1421,23 @@ model CrossProjectLink {
   @@index([tenantId])
   @@index([successorTaskId])
   @@index([predecessorTaskId])
+}
+
+// An org-defined role (Tier-3). A custom role is a workspace-specific NAME + description mapped onto one
+// built-in base role, whose permissions it inherits. Enforcement never reads this model — Membership.role
+// (set to baseRole on assignment) drives every guard — so custom roles add a governed role catalog with
+// zero change to the permission logic. Tenant-scoped.
+model CustomRole {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  name        String
+  description String?
+  baseRole    Role // the built-in role whose permissions this custom role inherits
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 enum IssueImpact {

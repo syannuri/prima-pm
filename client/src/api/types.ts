@@ -116,7 +116,18 @@ export interface TenantMember {
   email: string;
   isActive: boolean;
   role: Role;
+  // Optional org-defined role (Tier-3). `role` is always the effective built-in role; these carry the label.
+  customRoleId?: string | null;
+  customRoleName?: string | null;
   since: string;
+}
+
+// An org-defined role catalog entry (GET /custom-roles). Maps a workspace name onto a built-in base role.
+export interface CustomRole {
+  id: string;
+  name: string;
+  description: string | null;
+  baseRole: Role;
 }
 
 // Admin-only global audit trail (GET /admin/audit).

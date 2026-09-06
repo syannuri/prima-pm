@@ -29,6 +29,7 @@ import resourceRoutes from './modules/resource/resource.routes.js';
 import myTimesheetRoutes from './modules/timesheet/timesheet.me.routes.js';
 import bookmarkRoutes from './modules/bookmark/bookmark.routes.js';
 import customFieldRoutes from './modules/customField/customField.routes.js';
+import customRoleRoutes from './modules/customRole/customRole.routes.js';
 import adminAuditRoutes from './modules/audit/adminAudit.routes.js';
 import adminSettingsRoutes from './modules/settings/settings.routes.js';
 import aiSettingsRoutes from './modules/settings/aiSettings.routes.js';
@@ -225,6 +226,7 @@ export function createApp() {
   api.use('/projects/:projectId/import', importRoutes); // spreadsheet import (T4.3)
   api.use('/ratecards', rateCardRoutes);
   api.use('/custom-fields', customFieldRoutes);
+  api.use('/custom-roles', customRoleRoutes);
   api.use('/portfolio', portfolioRoutes);
   api.use('/programs', programRoutes);
   api.use('/notifications', notificationRoutes);
