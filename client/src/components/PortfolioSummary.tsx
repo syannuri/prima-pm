@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -16,6 +16,7 @@ import PieChart, { type Slice } from './PieChart';
 import ProgressChart from './ProgressChart';
 import DonutChart, { type DonutSlice } from './DonutChart';
 import { projectAccent } from '../lib/projectColor';
+import { StackBar, Legend, SpentRing, cpiHealthStroke } from './budgetViz';
 
 const PIE = { green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', coral: '#2563eb' };
 
@@ -58,6 +59,9 @@ export default function PortfolioSummary() {
     queryFn: () => api.get<{ series: { statusDate: string; spi: number; cpi: number }[] }>('/portfolio/evm/trend'),
   });
   const { pinned, toggle: togglePin } = useBookmarks();
+  // Play the budget bar/ring mount-in animation once, just after first paint.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const r = requestAnimationFrame(() => setMounted(true)); return () => cancelAnimationFrame(r); }, []);
 
   if (isLoading) {
     return (
@@ -207,6 +211,37 @@ export default function PortfolioSummary() {
           </div>
         </div>
       </div>
+
+      {/* Band 1.5 — Portfolio budget: a spent-of-BAC ring + a gradient drawdown bar (Actual vs
+          Remaining, with Earned Value in the legend). Same design language as the project Cost card. */}
+      {t.bac > 0 && (
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+          <div className="flex flex-wrap items-center gap-4">
+            <SpentRing pct={(t.ac / t.bac) * 100} stroke={cpiHealthStroke(t.cpi || null, t.ac)} mounted={mounted} />
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Portfolio budget</p>
+                <span className="text-[11px] font-semibold tabular-nums text-slate-500 dark:text-slate-400" title={formatIdr(t.bac)}>{formatIdrShort(t.bac)} BAC</span>
+              </div>
+              <StackBar
+                over={t.bac}
+                mounted={mounted}
+                segs={[
+                  { key: 'ac', label: 'Actual cost', value: t.ac, grad: t.ac > t.bac ? 'from-red-500 to-red-400' : 'from-orange-500 to-orange-400' },
+                  { key: 'rem', label: 'Remaining', value: Math.max(0, t.bac - t.ac), grad: 'from-emerald-500 to-emerald-400' },
+                ]}
+              />
+              <Legend
+                segs={[
+                  { key: 'acL', label: 'Actual (AC)', value: t.ac, grad: t.ac > t.bac ? 'from-red-500 to-red-400' : 'from-orange-500 to-orange-400' },
+                  { key: 'remL', label: 'Remaining', value: Math.max(0, t.bac - t.ac), grad: 'from-emerald-500 to-emerald-400' },
+                  { key: 'evL', label: 'Earned (EV)', value: t.ev, grad: 'from-indigo-500 to-indigo-400' },
+                ]}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Band 2 — KPI strip: the money/scope figures as an even 6-up row (was crammed beside the
           gauge). One clean strip, equal tiles, aligned gutters. */}

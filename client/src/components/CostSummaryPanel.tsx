@@ -4,81 +4,18 @@ import { api } from '../api/client';
 import type { CostSummary, Evm } from '../api/types';
 import { Card } from './ui';
 import { formatIdr, formatIdrShort, formatDateInput } from '../lib/format';
+import { StackBar, Legend, SpentRing, type Seg } from './budgetViz';
 
 // Cost summary — two proportional bars replace the old 10-tile KPI walls:
 //   • Budget (plan) composition:  Direct | Indirect | Contingency | Mgmt Reserve  (over Total Budget)
 //   • Actuals & drawdown:         Spent  | Committed | Available                   (over the drawable base)
-// Richer presentation pass: gradient segment fills with hairline separators, a spent-of-BAC progress
-// ring beside the hero, a mount-in width animation, and refined hero typography. Presentation-only.
+// Bars/ring/legend come from the shared budgetViz primitives, so this and the dashboard's Portfolio
+// budget band read as one design language. Presentation-only.
 
 const num = (d: unknown): number => (d == null ? 0 : Number(d));
 
-interface Seg { key: string; label: string; value: number; grad: string }
-
-// A proportional stacked bar with gradient segments, hairline separators (the 2px flex gap shows the
-// track colour through), an inner shadow, and a width transition that plays once `mounted` flips true.
-function StackBar({ segs, over, mounted }: { segs: Seg[]; over: number; mounted: boolean }) {
-  const denom = over > 0 ? over : segs.reduce((s, x) => s + Math.max(0, x.value), 0) || 1;
-  return (
-    <div className="flex h-3.5 w-full gap-[2px] overflow-hidden rounded-full bg-slate-100 shadow-inner ring-1 ring-slate-900/5 dark:bg-slate-800 dark:ring-white/5">
-      {segs.map((s) => {
-        const pct = Math.max(0, Math.min(100, (Math.max(0, s.value) / denom) * 100));
-        if (pct <= 0) return null;
-        return (
-          <div
-            key={s.key}
-            className={`h-full bg-gradient-to-b ${s.grad} transition-[width] duration-700 ease-out first:rounded-l-full last:rounded-r-full`}
-            style={{ width: mounted ? `${pct}%` : '0%' }}
-            title={`${s.label}: ${formatIdr(s.value)}`}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function Legend({ segs }: { segs: Seg[] }) {
-  return (
-    <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
-      {segs.map((s) => (
-        <div key={s.key} className="flex items-center gap-1.5" title={formatIdr(s.value)}>
-          <span className={`h-2 w-2 shrink-0 rounded-full bg-gradient-to-b ${s.grad}`} />
-          <span className="text-[11px] text-slate-500 dark:text-slate-400">{s.label}</span>
-          <span className="text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">{formatIdrShort(s.value)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function GroupLabel({ children }: { children: React.ReactNode }) {
   return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{children}</p>;
-}
-
-// A compact progress ring (spent as a share of BAC). Animates its sweep in with `mounted`.
-function SpentRing({ pct, stroke, mounted }: { pct: number; stroke: string; mounted: boolean }) {
-  const r = 26;
-  const C = 2 * Math.PI * r;
-  const clamped = Math.max(0, Math.min(100, pct));
-  const offset = mounted ? C * (1 - clamped / 100) : C;
-  return (
-    <div className="relative h-[68px] w-[68px] shrink-0">
-      <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
-        <circle cx="32" cy="32" r={r} fill="none" strokeWidth="7" className="stroke-slate-100 dark:stroke-slate-800" />
-        <circle
-          cx="32" cy="32" r={r} fill="none" strokeWidth="7" strokeLinecap="round"
-          className={stroke}
-          strokeDasharray={C}
-          strokeDashoffset={offset}
-          style={{ transition: 'stroke-dashoffset 800ms ease-out' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">{Math.round(clamped)}%</span>
-        <span className="text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">spent</span>
-      </div>
-    </div>
-  );
 }
 
 // Hero amount: a muted "Rp" prefix + a large, tight, tabular figure.
