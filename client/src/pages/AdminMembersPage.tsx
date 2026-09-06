@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import type { TenantMember, Role } from '../api/types';
+import type { TenantMember, Role, CustomRole } from '../api/types';
 import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -12,6 +12,25 @@ import { formatDate } from '../lib/format';
 
 // The 7 corporate roles a membership can carry (GUEST is a self-service sandbox identity, never a member).
 const ROLES: Role[] = ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER'];
+
+// A role <select> value is either a built-in role, or `custom:<id>` for an org-defined role. This keeps
+// both kinds in one dropdown; the parsed value becomes the PATCH/POST payload.
+type Assign = { role?: Role; customRoleId?: string | null };
+function parseAssign(value: string): Assign {
+  return value.startsWith('custom:') ? { customRoleId: value.slice(7) } : { role: value as Role, customRoleId: null };
+}
+function RoleOptions({ customRoles }: { customRoles: CustomRole[] }) {
+  return (
+    <>
+      {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+      {customRoles.length > 0 && (
+        <optgroup label="Custom roles">
+          {customRoles.map((r) => <option key={r.id} value={`custom:${r.id}`}>{r.name} ({r.baseRole})</option>)}
+        </optgroup>
+      )}
+    </>
+  );
+}
 
 // Tenant-centric membership admin: who belongs to THIS org and with what role. Distinct from
 // /admin/users (global identity). Backed by the /members API. ADMIN-only, active tenant.
@@ -27,6 +46,12 @@ export default function AdminMembersPage() {
     queryFn: () => api.get<{ members: TenantMember[] }>('/members'),
     enabled: user?.role === 'ADMIN',
   });
+  const customRolesQ = useQuery({
+    queryKey: ['custom-roles'],
+    queryFn: () => api.get<{ roles: CustomRole[] }>('/custom-roles'),
+    enabled: user?.role === 'ADMIN',
+  });
+  const customRoles = customRolesQ.data?.roles ?? [];
   const invalidate = () => qc.invalidateQueries({ queryKey: ['members'] });
 
   if (user?.role !== 'ADMIN') {
@@ -39,7 +64,7 @@ export default function AdminMembersPage() {
         {id ? 'Anggota' : 'Members'}
       </SectionTitle>
 
-      <AddMember onChange={invalidate} />
+      <AddMember customRoles={customRoles} onChange={invalidate} />
 
       <Card>
         {isLoading ? (
@@ -56,12 +81,12 @@ export default function AdminMembersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.members.map((m) => <MemberRow key={m.id} m={m} isSelf={m.id === user.id} onChange={invalidate} />)}
+                  {data.members.map((m) => <MemberRow key={m.id} m={m} isSelf={m.id === user.id} customRoles={customRoles} onChange={invalidate} />)}
                 </tbody>
               </table>
             </div>
             <div className="space-y-2 sm:hidden">
-              {data.members.map((m) => <MemberCard key={m.id} m={m} isSelf={m.id === user.id} onChange={invalidate} />)}
+              {data.members.map((m) => <MemberCard key={m.id} m={m} isSelf={m.id === user.id} customRoles={customRoles} onChange={invalidate} />)}
             </div>
           </>
         )}
@@ -77,7 +102,7 @@ function useMemberActions(m: TenantMember, onChange: () => void) {
   const toast = useToast();
   const confirm = useConfirm();
   const setRole = useMutation({
-    mutationFn: (role: Role) => api.patch(`/members/${m.id}`, { role }),
+    mutationFn: (assign: Assign) => api.patch(`/members/${m.id}`, assign),
     onSuccess: () => { onChange(); toast.success(id ? `Peran ${m.name} diperbarui` : `Role updated for ${m.name}`); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
   });
@@ -97,7 +122,7 @@ function useMemberActions(m: TenantMember, onChange: () => void) {
   return { setRole, remove, askRemove };
 }
 
-function MemberRow({ m, isSelf, onChange }: { m: TenantMember; isSelf: boolean; onChange: () => void }) {
+function MemberRow({ m, isSelf, customRoles, onChange }: { m: TenantMember; isSelf: boolean; customRoles: CustomRole[]; onChange: () => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
   const { setRole, remove, askRemove } = useMemberActions(m, onChange);
@@ -106,8 +131,8 @@ function MemberRow({ m, isSelf, onChange }: { m: TenantMember; isSelf: boolean; 
       <td className="py-2 font-medium text-slate-700 dark:text-slate-200">{m.name}{isSelf && <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">({id ? 'Anda' : 'you'})</span>}</td>
       <td className="text-slate-500 dark:text-slate-400">{m.email}</td>
       <td>
-        <Select value={m.role} disabled={isSelf} onChange={(e) => setRole.mutate(e.target.value as Role)} className="w-40">
-          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+        <Select value={m.customRoleId ? `custom:${m.customRoleId}` : m.role} disabled={isSelf} onChange={(e) => setRole.mutate(parseAssign(e.target.value))} className="w-44">
+          <RoleOptions customRoles={customRoles} />
         </Select>
       </td>
       <td><Badge color={m.isActive ? 'green' : 'slate'}>{m.isActive ? (id ? 'Aktif' : 'Active') : (id ? 'Nonaktif' : 'Inactive')}</Badge></td>
@@ -119,7 +144,7 @@ function MemberRow({ m, isSelf, onChange }: { m: TenantMember; isSelf: boolean; 
   );
 }
 
-function MemberCard({ m, isSelf, onChange }: { m: TenantMember; isSelf: boolean; onChange: () => void }) {
+function MemberCard({ m, isSelf, customRoles, onChange }: { m: TenantMember; isSelf: boolean; customRoles: CustomRole[]; onChange: () => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
   const { setRole, remove, askRemove } = useMemberActions(m, onChange);
@@ -135,8 +160,8 @@ function MemberCard({ m, isSelf, onChange }: { m: TenantMember; isSelf: boolean;
       <div className="mt-2 grid grid-cols-2 items-end gap-3 border-t border-slate-100 pt-2 dark:border-slate-800">
         <div>
           <span className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{id ? 'Peran' : 'Role'}</span>
-          <Select value={m.role} disabled={isSelf} onChange={(e) => setRole.mutate(e.target.value as Role)} className="mt-1">
-            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          <Select value={m.customRoleId ? `custom:${m.customRoleId}` : m.role} disabled={isSelf} onChange={(e) => setRole.mutate(parseAssign(e.target.value))} className="mt-1">
+            <RoleOptions customRoles={customRoles} />
           </Select>
         </div>
         <div className="text-right">
@@ -147,16 +172,16 @@ function MemberCard({ m, isSelf, onChange }: { m: TenantMember; isSelf: boolean;
   );
 }
 
-// Add an existing user (by email) to the active tenant with a role.
-function AddMember({ onChange }: { onChange: () => void }) {
+// Add an existing user (by email) to the active tenant with a role (built-in or custom).
+function AddMember({ customRoles, onChange }: { customRoles: CustomRole[]; onChange: () => void }) {
   const { lang } = useLang();
   const id = lang === 'id';
   const toast = useToast();
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Role>('VIEWER');
+  const [assignValue, setAssignValue] = useState<string>('VIEWER');
   const add = useMutation({
-    mutationFn: () => api.post('/members', { email: email.trim().toLowerCase(), role }),
-    onSuccess: () => { setEmail(''); setRole('VIEWER'); onChange(); toast.success(id ? 'Anggota ditambahkan' : 'Member added'); },
+    mutationFn: () => api.post('/members', { email: email.trim().toLowerCase(), ...parseAssign(assignValue) }),
+    onSuccess: () => { setEmail(''); setAssignValue('VIEWER'); onChange(); toast.success(id ? 'Anggota ditambahkan' : 'Member added'); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to add member'),
   });
   const canSubmit = /.+@.+\..+/.test(email.trim());
@@ -168,8 +193,8 @@ function AddMember({ onChange }: { onChange: () => void }) {
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="colleague@company.com" />
         </Field>
         <Field label={id ? 'Peran' : 'Role'}>
-          <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          <Select value={assignValue} onChange={(e) => setAssignValue(e.target.value)}>
+            <RoleOptions customRoles={customRoles} />
           </Select>
         </Field>
         <Button type="submit" disabled={!canSubmit || add.isPending}>{add.isPending ? (id ? 'Menambah…' : 'Adding…') : (id ? 'Tambah' : 'Add')}</Button>

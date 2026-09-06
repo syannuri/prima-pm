@@ -21,12 +21,15 @@ import usersRoutes from './modules/users/users.routes.js';
 import projectsRoutes from './modules/projects/projects.routes.js';
 import rateCardRoutes from './modules/ratecard/ratecard.routes.js';
 import portfolioRoutes from './modules/portfolio/portfolio.routes.js';
+import programRoutes from './modules/program/program.routes.js';
 import notificationRoutes from './modules/notification/notification.routes.js';
 import feedbackRoutes from './modules/feedback/feedback.routes.js';
 import feedbackAdminRoutes from './modules/feedback/feedback.admin.routes.js';
 import resourceRoutes from './modules/resource/resource.routes.js';
 import myTimesheetRoutes from './modules/timesheet/timesheet.me.routes.js';
 import bookmarkRoutes from './modules/bookmark/bookmark.routes.js';
+import customFieldRoutes from './modules/customField/customField.routes.js';
+import customRoleRoutes from './modules/customRole/customRole.routes.js';
 import adminAuditRoutes from './modules/audit/adminAudit.routes.js';
 import adminSettingsRoutes from './modules/settings/settings.routes.js';
 import aiSettingsRoutes from './modules/settings/aiSettings.routes.js';
@@ -222,7 +225,10 @@ export function createApp() {
   api.use('/projects', projectsRoutes); // includes nested /:projectId/charter and /cost
   api.use('/projects/:projectId/import', importRoutes); // spreadsheet import (T4.3)
   api.use('/ratecards', rateCardRoutes);
+  api.use('/custom-fields', customFieldRoutes);
+  api.use('/custom-roles', customRoleRoutes);
   api.use('/portfolio', portfolioRoutes);
+  api.use('/programs', programRoutes);
   api.use('/notifications', notificationRoutes);
   api.use('/feedback', feedbackRoutes);
   api.use('/admin/feedback', feedbackAdminRoutes);

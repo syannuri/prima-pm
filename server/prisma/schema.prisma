@@ -440,6 +440,10 @@ model Membership {
   userId    String
   tenantId  String
   role      Role     @default(VIEWER)
+  // Optional org-defined role (Tier-3). Enforcement always uses `role` (the built-in base role a custom
+  // role maps to); customRoleId only carries the workspace's display label. Plain id (no FK), cleared by
+  // the service when its CustomRole is deleted.
+  customRoleId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -649,6 +653,10 @@ model Project {
   mandaysPerPoint Decimal @default(1) @db.Decimal(6, 2)
   pmUserId  String?
   pm        User?         @relation("ProjectManager", fields: [pmUserId], references: [id])
+  // Optional grouping into a Program (Tier-3 portfolio hierarchy). A project belongs to at most one
+  // program; deleting the program detaches its projects (SET NULL).
+  programId String?
+  program   Program?      @relation(fields: [programId], references: [id])
   // (A guest's project is a PERSONAL sandbox — self-governed with no approval matrix. This is now
   // driven entirely by the guest's PERSONAL TENANT, not a per-project flag. The old
   // `personalOwnerId` column was dropped in Phase 5 / de-scatter.)
@@ -1331,6 +1339,104 @@ model ProjectEmbedding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([tenantId])
+}
+
+// Tenant-defined custom field (Tier-3). Definitions are workspace-level configuration managed by an
+// ADMIN; the actual per-entity values live in CustomFieldValue keyed by entity + entityId. Tenant-scoped
+// (in SCOPED_MODELS). `entity` is a plain string ("project" | "task") so adding entity types later needs
+// no migration; the initial surface wires "project".
+model CustomFieldDef {
+  id        String   @id @default(uuid())
+  tenantId  String
+  entity    String   @default("project") // "project" | "task"
+  key       String // stable slug, unique per (tenant, entity)
+  label     String
+  type      String   @default("text") // text | number | date | boolean | select
+  options   Json? // string[] of choices when type = select
+  required  Boolean  @default(false)
+  sortOrder Int      @default(0)
+  archived  Boolean  @default(false) // hidden from forms but values retained
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  values CustomFieldValue[]
+
+  @@unique([tenantId, entity, key])
+  @@index([tenantId, entity])
+}
+
+// A custom-field value for one entity instance (entityId = projectId or taskId). Tenant-scoped; a value
+// is deleted when its definition is (cascade). value is stored as text and (de)serialized per def.type.
+model CustomFieldValue {
+  id       String  @id @default(uuid())
+  tenantId String
+  defId    String
+  def      CustomFieldDef @relation(fields: [defId], references: [id], onDelete: Cascade)
+  entityId String // projectId or taskId
+  value    String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([defId, entityId])
+  @@index([tenantId, entityId])
+}
+
+// A Program groups related projects for portfolio-level roll-up (Tier-3 hierarchy). Tenant-scoped
+// (in SCOPED_MODELS); tenantId is nullable + stamped by the tenant extension. manager is a plain user
+// id (no FK, kept light like other AI/light author fields). archivedAt hides it without deleting.
+model Program {
+  id            String    @id @default(uuid())
+  tenantId      String?
+  code          String?
+  name          String
+  description   String?   @db.Text
+  sponsor       String?
+  managerUserId String?
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects Project[]
+
+  @@index([tenantId])
+}
+
+// A cross-project schedule dependency (Tier-3): a task in one project depends on a task in another.
+// Kept DELIBERATELY SEPARATE from TaskDependency (which the per-project CPM/auto-schedule engine consumes
+// via `predecessor.projectId` filters) so a cross-project edge can never feed a broken node into the
+// single-project scheduler. Task ids are plain columns (no Prisma relation) to avoid perturbing the Task
+// model; the service resolves tasks tenant-scoped and skips any orphaned link. Tenant-scoped.
+model CrossProjectLink {
+  id                String         @id @default(uuid())
+  tenantId          String?
+  predecessorTaskId String
+  successorTaskId   String
+  type              DependencyType @default(FS)
+  lagDays           Int            @default(0)
+  createdAt         DateTime       @default(now())
+
+  @@unique([predecessorTaskId, successorTaskId])
+  @@index([tenantId])
+  @@index([successorTaskId])
+  @@index([predecessorTaskId])
+}
+
+// An org-defined role (Tier-3). A custom role is a workspace-specific NAME + description mapped onto one
+// built-in base role, whose permissions it inherits. Enforcement never reads this model — Membership.role
+// (set to baseRole on assignment) drives every guard — so custom roles add a governed role catalog with
+// zero change to the permission logic. Tenant-scoped.
+model CustomRole {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  name        String
+  description String?
+  baseRole    Role // the built-in role whose permissions this custom role inherits
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, name])
   @@index([tenantId])
 }
 

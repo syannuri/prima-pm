@@ -116,7 +116,18 @@ export interface TenantMember {
   email: string;
   isActive: boolean;
   role: Role;
+  // Optional org-defined role (Tier-3). `role` is always the effective built-in role; these carry the label.
+  customRoleId?: string | null;
+  customRoleName?: string | null;
   since: string;
+}
+
+// An org-defined role catalog entry (GET /custom-roles). Maps a workspace name onto a built-in base role.
+export interface CustomRole {
+  id: string;
+  name: string;
+  description: string | null;
+  baseRole: Role;
 }
 
 // Admin-only global audit trail (GET /admin/audit).
@@ -245,6 +256,8 @@ export interface Project {
   totalRevenueIdr: string | null;
   status: ProjectStatus;
   pmUserId: string | null;
+  // Optional grouping into a Program (Tier-3 portfolio hierarchy).
+  programId?: string | null;
   // When set, this is a personal (guest) project owned by that user — sandboxed + self-governed.
   personalOwnerId?: string | null;
   closedAt?: string | null;
