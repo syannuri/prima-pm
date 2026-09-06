@@ -649,6 +649,10 @@ model Project {
   mandaysPerPoint Decimal @default(1) @db.Decimal(6, 2)
   pmUserId  String?
   pm        User?         @relation("ProjectManager", fields: [pmUserId], references: [id])
+  // Optional grouping into a Program (Tier-3 portfolio hierarchy). A project belongs to at most one
+  // program; deleting the program detaches its projects (SET NULL).
+  programId String?
+  program   Program?      @relation(fields: [programId], references: [id])
   // (A guest's project is a PERSONAL sandbox — self-governed with no approval matrix. This is now
   // driven entirely by the guest's PERSONAL TENANT, not a per-project flag. The old
   // `personalOwnerId` column was dropped in Phase 5 / de-scatter.)
@@ -1373,6 +1377,26 @@ model CustomFieldValue {
 
   @@unique([defId, entityId])
   @@index([tenantId, entityId])
+}
+
+// A Program groups related projects for portfolio-level roll-up (Tier-3 hierarchy). Tenant-scoped
+// (in SCOPED_MODELS); tenantId is nullable + stamped by the tenant extension. manager is a plain user
+// id (no FK, kept light like other AI/light author fields). archivedAt hides it without deleting.
+model Program {
+  id            String    @id @default(uuid())
+  tenantId      String?
+  code          String?
+  name          String
+  description   String?   @db.Text
+  sponsor       String?
+  managerUserId String?
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects Project[]
+
+  @@index([tenantId])
 }
 
 enum IssueImpact {

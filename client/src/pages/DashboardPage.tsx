@@ -33,6 +33,7 @@ import ResourceCapacity from '../components/ResourceCapacity';
 // Customizable desktop portfolio widgets (show/hide + reorder) — rendered from the user's saved layout.
 import CustomizeDashboardModal from '../components/CustomizeDashboardModal';
 import { WIDGET_BY_KEY, resolveEnabledWidgets } from '../components/dashboardWidgets';
+import ProgramsPanel from '../components/ProgramsPanel';
 
 const STATUS_COLOR = PROJECT_STATUS_BADGE;
 
@@ -214,6 +215,7 @@ export default function DashboardPage() {
             const W = WIDGET_BY_KEY[key]?.Component;
             return W ? <W key={key} /> : null;
           })}
+          <ProgramsPanel />
         </>
       ))}
       {view === 'forecast' && <PortfolioForecast />}
