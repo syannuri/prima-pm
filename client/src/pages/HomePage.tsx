@@ -34,7 +34,7 @@ type Content = {
   security: { eyebrow: string; title: string; sub: string; items: [string, string][]; note: string };
   faq: { title: string; items: { q: string; a: string }[] };
   cta: { title: string; enter: string; note: string };
-  footer: { tagline: string; rights: string; cols: { product: string; approach: string; contact: string }; contactLabel: string; email: string };
+  footer: { tagline: string; rights: string; cols: { product: string; approach: string; contact: string }; contactLabel: string; email: string; legal: { title: string; terms: string; privacy: string; cookies: string; dpa: string } };
 };
 
 // Trust icons for the Security section (stroke-only, 24×24).
@@ -192,6 +192,7 @@ const COPY: Record<Lang, Content> = {
       cols: { product: 'Product', approach: 'Approach', contact: 'Contact' },
       contactLabel: 'Questions? Talk to us',
       email: 'support@prismatix.tech',
+      legal: { title: 'Legal', terms: 'Terms', privacy: 'Privacy', cookies: 'Cookies', dpa: 'DPA' },
     },
   },
   id: {
@@ -321,6 +322,7 @@ const COPY: Record<Lang, Content> = {
       cols: { product: 'Produk', approach: 'Pendekatan', contact: 'Kontak' },
       contactLabel: 'Ada pertanyaan? Hubungi kami',
       email: 'support@prismatix.tech',
+      legal: { title: 'Legal', terms: 'Ketentuan', privacy: 'Privasi', cookies: 'Cookie', dpa: 'DPA' },
     },
   },
 };
@@ -876,7 +878,12 @@ export default function HomePage() {
             </div>
             <div className="mt-12 flex flex-col items-center gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:justify-between">
               <p className="text-xs text-slate-500">{t.footer.rights}</p>
-              <p className="text-xs text-slate-400">{t.security.note}</p>
+              <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
+                <Link to="/legal/terms" className="text-xs text-slate-500 transition hover:text-slate-900">{t.footer.legal.terms}</Link>
+                <Link to="/legal/privacy" className="text-xs text-slate-500 transition hover:text-slate-900">{t.footer.legal.privacy}</Link>
+                <Link to="/legal/cookies" className="text-xs text-slate-500 transition hover:text-slate-900">{t.footer.legal.cookies}</Link>
+                <Link to="/legal/dpa" className="text-xs text-slate-500 transition hover:text-slate-900">{t.footer.legal.dpa}</Link>
+              </nav>
             </div>
           </div>
         </footer>

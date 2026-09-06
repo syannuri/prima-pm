@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import CookieConsent from './components/CookieConsent';
+import LegalPage from './pages/LegalPage';
 import Layout from './components/Layout';
 import AppShellSkeleton from './components/AppShellSkeleton';
 import { PanelLoading } from './components/ui';
@@ -42,6 +44,19 @@ const MessagesPage = lazy(() => import('./pages/MessagesPage'));
 
 export default function App() {
   const { user, loading } = useAuth();
+  const { pathname } = useLocation();
+
+  // Legal documents are public and must resolve identically whether or not someone is signed in (they're
+  // linked from the marketing footer, the login page, the cookie banner, and emails). Short-circuit here,
+  // before the loading / auth branches, so they render standalone (no app shell, no sign-in redirect).
+  if (pathname.startsWith('/legal/')) {
+    return (
+      <Routes>
+        <Route path="/legal/:doc" element={<LegalPage />} />
+        <Route path="*" element={<Navigate to="/legal/terms" replace />} />
+      </Routes>
+    );
+  }
 
   if (loading) {
     return <AppShellSkeleton />;
@@ -49,6 +64,7 @@ export default function App() {
 
   if (!user) {
     return (
+      <>
       <Routes>
         {/* On a tenant's own subdomain (acme.prismatix.tech) or custom domain (pm.acme.com) the root
             is the branded sign-in, not the public marketing homepage — that only fronts the bare base
@@ -62,6 +78,8 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      <CookieConsent />
+      </>
     );
   }
 
@@ -99,6 +117,7 @@ export default function App() {
       <OnboardingTour />
       <GuidedSetup />
       <GuidedCoachmark />
+      <CookieConsent />
      </GuidedSetupProvider>
     </OnboardingProvider>
   );
