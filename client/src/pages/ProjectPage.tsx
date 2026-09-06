@@ -36,6 +36,7 @@ import ActivationReviewModal from '../components/ActivationReviewModal';
 import EvmHealth from '../components/EvmHealth';
 import ProjectOverview from '../components/ProjectOverview';
 import ProjectCustomFieldsCard from '../components/ProjectCustomFieldsCard';
+import CrossDepsCard from '../components/CrossDepsCard';
 import MoreMenu, { MenuItem, MenuHeader, MenuGroupHeader, MenuDivider } from '../components/MoreMenu';
 import AgilePanel from './panels/AgilePanel';
 import { useAuth } from '../context/AuthContext';
@@ -269,6 +270,7 @@ export default function ProjectPage() {
         <div className="space-y-6">
           <ProjectOverview projectId={projectId} onJump={(t) => setTab(t as Tab)} />
           <ProjectCustomFieldsCard projectId={projectId} canEdit={user?.role !== 'VIEWER'} />
+          <CrossDepsCard projectId={projectId} canEdit={user?.role !== 'VIEWER'} />
         </div>
       )}
       {activeTab === 'Charter' && <CharterPanel projectId={projectId} approach={project.deliveryApproach} sponsor={project.sponsor} costBaselineIdr={project.costBaselineIdr} personalOwnerId={project.personalOwnerId ?? null} assignedPmId={project.pmUserId} assignedPmName={project.pm?.name ?? null} />}

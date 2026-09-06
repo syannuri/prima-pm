@@ -1399,6 +1399,26 @@ model Program {
   @@index([tenantId])
 }
 
+// A cross-project schedule dependency (Tier-3): a task in one project depends on a task in another.
+// Kept DELIBERATELY SEPARATE from TaskDependency (which the per-project CPM/auto-schedule engine consumes
+// via `predecessor.projectId` filters) so a cross-project edge can never feed a broken node into the
+// single-project scheduler. Task ids are plain columns (no Prisma relation) to avoid perturbing the Task
+// model; the service resolves tasks tenant-scoped and skips any orphaned link. Tenant-scoped.
+model CrossProjectLink {
+  id                String         @id @default(uuid())
+  tenantId          String?
+  predecessorTaskId String
+  successorTaskId   String
+  type              DependencyType @default(FS)
+  lagDays           Int            @default(0)
+  createdAt         DateTime       @default(now())
+
+  @@unique([predecessorTaskId, successorTaskId])
+  @@index([tenantId])
+  @@index([successorTaskId])
+  @@index([predecessorTaskId])
+}
+
 enum IssueImpact {
   LOW
   MEDIUM
