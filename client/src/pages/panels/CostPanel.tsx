@@ -5,6 +5,7 @@ import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../.
 import { Button, Card, FormError, Input, MoneyInput, Select, PanelLoading } from '../../components/ui';
 import BaselineSetupBar from '../../components/BaselineSetupBar';
 import RebaselineReminder from '../../components/RebaselineReminder';
+import CostSummaryPanel from '../../components/CostSummaryPanel';
 import { KpiIcon, accentSurface, type Accent, type IconName } from '../../components/KpiIcon';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -126,12 +127,8 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
 
   if (isLoading) return <PanelLoading />;
   const b = data?.baseline;
-  // Overall spend vs remaining across ALL costed lines (Direct + Indirect). Reserves
-  // (contingency/management) aren't spent per line, so the actionable "remaining budget"
-  // is measured against the Direct + Indirect baseline the actuals draw down.
-  const allLines = [...(data?.directCosts ?? []), ...(data?.indirectCosts ?? [])];
-  const totalSpent = allLines.reduce((s, l) => s + l.actualToDate, 0);
-  const totalRemaining = allLines.reduce((s, l) => s + l.remaining, 0);
+  // Budget composition + drawdown now live in <CostSummaryPanel> (it derives spend/remaining from the
+  // same summary), so this panel no longer computes those totals inline.
 
   return (
     <div className="space-y-5">
@@ -140,22 +137,10 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
       <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} />
       {/* Nudge to re-lock after a change opened the baseline (e.g. an approved CR). */}
       <RebaselineReminder projectId={projectId} />
-      {/* Baseline summary */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Direct" value={formatIdr(b?.directTotal)} icon="box" accent="blue" />
-        <Stat label="Indirect" value={formatIdr(b?.indirectTotal)} icon="layers" accent="violet" />
-        <Stat label="Contingency" value={formatIdr(b?.contingencyReserve)} hint="from Risk EMV" icon="shield" accent="amber" />
-        <Stat label="Mgmt Reserve" value={formatIdr(b?.managementReserve)} icon="lock" accent="slate" />
-        <Stat label="BAC (PMB)" value={formatIdr(b?.costBaseline)} hint="Budget at Completion = direct + indirect + contingency (excl. mgmt reserve)" strong icon="target" accent="emerald" />
-        <Stat label="Total Budget" value={formatIdr(b?.budgetAtCompletion)} hint="BAC + management reserve" icon="wallet" accent="sky" />
-      </div>
-      {/* Overall drawdown across Direct + Indirect: committed, spent, remaining (budget − spent),
-          and available (budget − spent − committed = truly free to commit). */}
-      <div data-cost-focus="spent" className={`grid grid-cols-2 gap-3 rounded-xl transition-all sm:grid-cols-4 ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
-        <Stat label="Committed" value={formatIdr(data?.committedTotal ?? 0)} hint="Awarded→delivered contracts charged to budget lines (Procurement). Obligated, not necessarily paid." icon="link" accent="indigo" />
-        <Stat label="Spent to date" value={formatIdr(totalSpent)} hint="Direct + Indirect actuals (manpower from timesheet)" icon="outflow" accent="orange" />
-        <Stat label="Remaining budget" value={formatIdr(totalRemaining)} hint="Direct + Indirect budget − spent (does not net open commitments)" valueClass={totalRemaining < 0 ? 'text-red-600 dark:text-red-400' : undefined} icon="coins" accent={totalRemaining < 0 ? 'rose' : 'emerald'} />
-        <Stat label="Available" value={formatIdr(data?.availableTotal ?? 0)} hint="Budget − spent − committed: what's still free to commit after open contracts/POs." strong valueClass={(data?.availableTotal ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} icon="check" accent={(data?.availableTotal ?? 0) < 0 ? 'rose' : 'teal'} />
+      {/* Budget composition + drawdown as two proportional bars (replaces the two KPI-tile grids).
+          Keeps the ?focus=spent deep-link anchor (now inside the panel's drawdown section). */}
+      <div className={`rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
+        <CostSummaryPanel summary={data!} projectId={projectId} />
       </div>
       {data?.highLevelCharterCost != null && b && (
         <div data-cost-focus="baseline" className={`rounded-xl transition-all ${flash === 'baseline' ? 'ring-2 ring-amber-400' : ''}`}><CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} /></div>
@@ -419,21 +404,6 @@ function UntouchedNote({ count, total, remaining, names }: { count: number; tota
       <span className="text-slate-300 dark:text-slate-600">·</span>
       <span>Remaining budget: <span className={`font-semibold ${remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>{formatIdr(remaining)}</span></span>
     </div>
-  );
-}
-
-function Stat({ label, value, hint, strong, valueClass, icon, accent }: { label: string; value: string; hint?: string; strong?: boolean; valueClass?: string; icon?: IconName; accent?: Accent }) {
-  return (
-    <Card className={`!p-3 ${accent ? accentSurface(accent) : ''}`}>
-      <div className="flex items-center gap-2">
-        {icon && accent && <KpiIcon name={icon} accent={accent} />}
-        <div className="min-w-0 text-xs font-bold text-slate-700 dark:text-slate-200">{label}</div>
-      </div>
-      <div className={`mt-1.5 ${strong ? 'text-base font-bold' : 'text-sm font-semibold'} ${valueClass ?? (strong ? 'text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-100')}`}>
-        {value}
-      </div>
-      {hint && <div className="mt-0.5 text-[10px] leading-tight text-slate-600 dark:text-slate-300">{hint}</div>}
-    </Card>
   );
 }
 
