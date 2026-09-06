@@ -11,7 +11,7 @@ import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
 import ImportCostModal from '../../components/ImportCostModal';
-import { formatDateInput, formatIdr, formatNum } from '../../lib/format';
+import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../../lib/format';
 
 // Sentinel description of the auto-derived "labour from timesheet" AC entry (mirrors the server).
 const LABOUR_AC_DESC = 'Labour actual (from timesheet)';
@@ -68,18 +68,35 @@ function flattenLeaves(nodes: GanttNode[]): GanttNode[] {
   return nodes.flatMap((n) => (n.children?.length ? flattenLeaves(n.children) : [n]));
 }
 
-// Accordion section header: chevron + title + line count on the left, total on the right.
-// Always visible; clicking it expands/collapses the section body.
-function AccordionHeader({ title, count, total, open, onToggle, icon, accent }: { title: string; count: number; total: string; open: boolean; onToggle: () => void; icon?: IconName; accent?: Accent }) {
+// Accordion section header: chevron + title + line count on the left, total on the right. When a
+// `spent`/`budget` pair is given, a thin spent-vs-budget mini-bar is shown beneath so a COLLAPSED
+// section still communicates its drawdown status at a glance. Always visible; clicking it toggles.
+function AccordionHeader({ title, count, total, open, onToggle, icon, accent, spent, budget }: { title: string; count: number; total: string; open: boolean; onToggle: () => void; icon?: IconName; accent?: Accent; spent?: number; budget?: number }) {
+  const showBar = typeof spent === 'number' && typeof budget === 'number' && budget > 0;
+  const pct = showBar ? Math.min(100, (spent! / budget!) * 100) : 0;
+  const over = showBar && spent! > budget!;
+  const fill = over ? 'bg-red-500' : pct >= 90 ? 'bg-amber-500' : 'bg-emerald-500';
   return (
-    <button onClick={onToggle} aria-expanded={open} className="-m-1 flex w-full items-center justify-between gap-3 rounded-lg p-1 text-left">
-      <span className="flex min-w-0 items-center gap-2">
-        <svg viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-        {icon && accent && <KpiIcon name={icon} accent={accent} className="h-6 w-6" />}
-        <span className="font-bold text-slate-900 dark:text-white">{title}</span>
-        <span className="text-xs text-slate-400">{count} {count === 1 ? 'line' : 'lines'}</span>
+    <button onClick={onToggle} aria-expanded={open} className="-m-1 flex w-full flex-col gap-1.5 rounded-lg p-1 text-left">
+      <span className="flex w-full items-center justify-between gap-3">
+        <span className="flex min-w-0 items-center gap-2">
+          <svg viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+          {icon && accent && <KpiIcon name={icon} accent={accent} className="h-6 w-6" />}
+          <span className="font-bold text-slate-900 dark:text-white">{title}</span>
+          <span className="text-xs text-slate-400">{count} {count === 1 ? 'line' : 'lines'}</span>
+        </span>
+        <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900 dark:text-white">{total}</span>
       </span>
-      <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900 dark:text-white">{total}</span>
+      {showBar && (
+        <span className="flex items-center gap-2 pl-6">
+          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <span className={`block h-full rounded-full ${fill}`} style={{ width: `${pct}%` }} />
+          </span>
+          <span className="shrink-0 text-[10px] tabular-nums text-slate-400" title={`Spent ${formatIdr(spent!)} of ${formatIdr(budget!)}`}>
+            {formatIdrShort(spent!)} spent{over ? ' · over' : ''}
+          </span>
+        </span>
+      )}
     </button>
   );
 }
@@ -596,7 +613,7 @@ function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc
 
   return (
     <Card className={accentSurface('blue')}>
-      <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} icon="box" accent="blue" />
+      <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} icon="box" accent="blue" spent={directSpent} budget={directTotal} />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Material (qty × unit cost) and Manpower (rate × mandays)</p>
       {/* Always-visible "add line" toolbar — one chip per family, so ANY family (incl. empty ones
@@ -1018,7 +1035,7 @@ function IndirectCosts({ data, base, projectId, onChange, open, onToggle, onBook
 
   return (
     <Card className={accentSurface('violet')}>
-      <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} icon="layers" accent="violet" />
+      <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} icon="layers" accent="violet" spent={indirectSpent} budget={indirectTotal} />
       {open && (<div className="mt-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-xs text-slate-500 dark:text-slate-400">Overhead: transport, accommodation, meals, communication, supplies, venue…</p>
