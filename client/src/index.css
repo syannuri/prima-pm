@@ -113,6 +113,56 @@ html.dark .prima-rows tbody tr:hover {
   background-color: rgb(30 41 59 / 0.45); /* slate-800 @ 45% */
 }
 
+/* Premium spreadsheet-style grid — full cell gridlines, shaded header band, zebra rows.
+   Usage: wrap <table class="prima-grid"> in a <div class="prima-grid-frame"> for the
+   rounded, clipped outer border (put an overflow-x-auto div in between for wide tables). */
+.prima-grid-frame {
+  border: 1px solid rgb(226 232 240);          /* slate-200 */
+  border-radius: 0.65rem;
+  overflow: hidden;                             /* clip the rounded corners */
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+html.dark .prima-grid-frame {
+  border-color: rgb(30 41 59);                  /* slate-800 */
+  box-shadow: none;
+}
+
+.prima-grid { border-collapse: collapse; width: 100%; }
+.prima-grid th,
+.prima-grid td {
+  padding: 0.5rem 0.7rem;
+  border-right: 1px solid rgb(241 245 249);     /* slate-100 hairline */
+  border-bottom: 1px solid rgb(241 245 249);
+}
+html.dark .prima-grid th,
+html.dark .prima-grid td {
+  border-right-color: rgb(30 41 59 / 0.7);
+  border-bottom-color: rgb(30 41 59 / 0.7);
+}
+.prima-grid th:last-child,
+.prima-grid td:last-child { border-right: 0; }  /* outer edge = frame */
+.prima-grid tbody tr:last-child td,
+.prima-grid tfoot tr:last-child td { border-bottom: 0; }
+
+/* Shaded, slightly stronger header band. */
+.prima-grid thead th {
+  background: rgb(248 250 252);                 /* slate-50 */
+  border-bottom: 1px solid rgb(226 232 240);    /* slate-200 */
+  font-weight: 600;
+}
+html.dark .prima-grid thead th {
+  background: rgb(15 23 42 / 0.6);              /* slate-900 */
+  border-bottom-color: rgb(30 41 59);
+}
+
+/* Zebra — only rows tagged .zebra stripe, so group-header / subtotal rows opt out. */
+.prima-grid tbody tr.zebra { background: rgb(248 250 252 / 0.6); }
+html.dark .prima-grid tbody tr.zebra { background: rgb(30 41 59 / 0.25); }
+
+/* Hover wins over zebra. */
+.prima-grid tbody tr:hover { background: rgb(241 245 249 / 0.9); }
+html.dark .prima-grid tbody tr:hover { background: rgb(30 41 59 / 0.5); }
+
 /* Minimal "pro" chart frame — soft panel + a faint dotted-grid backdrop for depth.
    Add class "chart-panel" to a chart's outer container (replaces the plain white card). */
 .chart-panel {

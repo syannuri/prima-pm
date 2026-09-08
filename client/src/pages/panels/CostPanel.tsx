@@ -149,16 +149,20 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
 
   return (
     <div className="space-y-5">
-      {/* Two-step baseline setup (① schedule → ② cost lock). Freezes cost lines / WBS / schedule
-          baseline (PMB/BAC). Shared bar rendered identically on the Schedule tab. */}
-      <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} />
+      {/* Top row — the two-step baseline setup (slim, left ~40%) beside the budget/drawdown summary
+          (hero, right ~60%) on wide screens; stacks on smaller ones. Baseline freezes cost lines /
+          WBS / schedule baseline (PMB/BAC) and is rendered identically on the Schedule tab; the
+          summary keeps the ?focus=spent deep-link anchor (inside its drawdown section). */}
+      <div className="grid gap-5 lg:grid-cols-5 lg:items-start">
+        <div className="lg:col-span-2">
+          <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} compact />
+        </div>
+        <div className={`lg:col-span-3 rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
+          <CostSummaryPanel summary={data!} projectId={projectId} />
+        </div>
+      </div>
       {/* Nudge to re-lock after a change opened the baseline (e.g. an approved CR). */}
       <RebaselineReminder projectId={projectId} />
-      {/* Budget composition + drawdown as two proportional bars (replaces the two KPI-tile grids).
-          Keeps the ?focus=spent deep-link anchor (now inside the panel's drawdown section). */}
-      <div className={`rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
-        <CostSummaryPanel summary={data!} projectId={projectId} />
-      </div>
       {data?.highLevelCharterCost != null && b && (
         <div data-cost-focus="baseline" className={`rounded-xl transition-all ${flash === 'baseline' ? 'ring-2 ring-amber-400' : ''}`}><CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} /></div>
       )}
@@ -302,12 +306,19 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle, target, 
         </div>
       )}
       {/* Desktop: table. Mobile (< sm): card list below. */}
-      <div className="hidden overflow-x-auto sm:block">
-      <table className="prima-rows w-full min-w-[28rem] text-sm">
+      <div className="hidden sm:block">
+       <div className="prima-grid-frame">
+        <div className="overflow-x-auto">
+        <table className="prima-grid w-full min-w-[28rem] text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+              <th>Date</th><th>Description</th><th className="text-right">Amount</th><th></th>
+            </tr>
+          </thead>
         <tbody>
-          {data.actualCosts.map((a) => (
-            <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800">
-              <td className="py-2 text-xs text-slate-500 dark:text-slate-400">{new Date(a.date).toLocaleDateString('en-GB')}</td>
+          {data.actualCosts.map((a, ai) => (
+            <tr key={a.id} className={ai % 2 === 1 ? 'zebra' : undefined}>
+              <td className="text-xs text-slate-500 dark:text-slate-400">{new Date(a.date).toLocaleDateString('en-GB')}</td>
               <td>
                 {a.description ?? '—'}
                 {a.description === LABOUR_AC_DESC
@@ -323,6 +334,8 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle, target, 
           {!data.actualCosts.length && <tr><td colSpan={4} className="py-3 text-center text-slate-500 dark:text-slate-400">No actual cost recorded yet.</td></tr>}
         </tbody>
       </table>
+        </div>
+       </div>
       </div>
 
       {/* Mobile card list — table hidden < sm. */}
@@ -707,11 +720,13 @@ function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc
         <UntouchedNote count={directUntouched.length} total={data.directCosts.length} remaining={directRemaining} names={directUntouched.map((d) => d.label)} />
       )}
       {/* Desktop: table. Mobile (< sm): a card list below (same handlers/state). */}
-      <div className="hidden overflow-x-auto sm:block">
-        <table className="prima-rows w-full text-sm">
+      <div className="hidden sm:block">
+       <div className="prima-grid-frame">
+        <div className="overflow-x-auto">
+        <table className="prima-grid w-full text-sm">
           <thead>
-            <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-              <th className="py-2">Type</th><th>Item</th><th>Detail</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th className="text-right" title="Budget − spent − committed">Available</th><th></th>
+            <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+              <th>Type</th><th>Item</th><th>Detail</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th className="text-right" title="Budget − spent − committed">Available</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -735,11 +750,11 @@ function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc
                     </div>
                   </td>
                 </tr>
-                {!famCollapsed && lines.map((d) => {
+                {!famCollapsed && lines.map((d, di) => {
               const editing = editId === d.id;
               const isMp = d.type === 'MANPOWER';
               return (
-              <tr key={d.id} draggable={!editing} onDragStart={() => setDragId(d.id)} onDragOver={(e) => { if (dragId) e.preventDefault(); }} onDrop={() => onRowDrop(d)} onDragEnd={() => setDragId(null)} className={`border-b border-slate-100 align-top dark:border-slate-800 ${dragId === d.id ? 'opacity-40' : ''} ${!editing ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+              <tr key={d.id} draggable={!editing} onDragStart={() => setDragId(d.id)} onDragOver={(e) => { if (dragId) e.preventDefault(); }} onDrop={() => onRowDrop(d)} onDragEnd={() => setDragId(null)} className={`align-top ${di % 2 === 1 ? 'zebra' : ''} ${dragId === d.id ? 'opacity-40' : ''} ${!editing ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                 <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
                   {editing && !isMp ? (
                     <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
@@ -862,6 +877,8 @@ function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc
             </tfoot>
           )}
         </table>
+        </div>
+       </div>
       </div>
 
       {/* Mobile card list — the table above is hidden < sm. Reuses the same edit/reassign/delete handlers. */}
@@ -1049,18 +1066,20 @@ function IndirectCosts({ data, base, projectId, onChange, open, onToggle, onBook
         <UntouchedNote count={indirectUntouched.length} total={data.indirectCosts.length} remaining={indirectRemaining} names={indirectUntouched.map((i) => i.description)} />
       )}
       {/* Desktop: table. Mobile (< sm): card list below (same edit/delete handlers). */}
-      <div className="hidden overflow-x-auto sm:block">
-        <table className="prima-rows w-full text-sm">
+      <div className="hidden sm:block">
+       <div className="prima-grid-frame">
+        <div className="overflow-x-auto">
+        <table className="prima-grid w-full text-sm">
           <thead>
-            <tr className="border-b text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-              <th className="py-2">Type</th><th>Description</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th className="text-right" title="Budget − spent − committed">Available</th><th></th>
+            <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+              <th>Type</th><th>Description</th><th className="text-right">Amount</th><th className="text-right">Spent</th><th className="text-right">Remaining</th><th className="text-right" title="Budget − spent − committed">Available</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {data.indirectCosts.map((i) => {
+            {data.indirectCosts.map((i, ii) => {
               const editing = editId === i.id;
               return (
-              <tr key={i.id} className="border-b border-slate-100 align-top dark:border-slate-800">
+              <tr key={i.id} className={`align-top ${ii % 2 === 1 ? 'zebra' : ''}`}>
                 <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
                   {editing ? (
                     <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
@@ -1116,6 +1135,8 @@ function IndirectCosts({ data, base, projectId, onChange, open, onToggle, onBook
             </tfoot>
           )}
         </table>
+        </div>
+       </div>
       </div>
 
       {/* Mobile card list — table hidden < sm. Reuses the same edit/delete handlers. */}
