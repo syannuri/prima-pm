@@ -22,14 +22,14 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
 function Hero({ value }: { value: string }) {
   const m = value.match(/^(Rp)\s*(.*)$/);
   return (
-    <p className="mt-1 flex items-baseline gap-1.5 text-slate-900 dark:text-white">
+    <p className="mt-0.5 flex items-baseline gap-1.5 text-slate-900 dark:text-white">
       {m ? (
         <>
-          <span className="text-lg font-semibold text-slate-400 dark:text-slate-500">{m[1]}</span>
-          <span className="text-[30px] font-bold leading-none tracking-tight tabular-nums">{m[2]}</span>
+          <span className="text-base font-semibold text-slate-400 dark:text-slate-500">{m[1]}</span>
+          <span className="text-2xl font-bold leading-none tracking-tight tabular-nums">{m[2]}</span>
         </>
       ) : (
-        <span className="text-[30px] font-bold tracking-tight tabular-nums">{value}</span>
+        <span className="text-2xl font-bold tracking-tight tabular-nums">{value}</span>
       )}
     </p>
   );
@@ -85,16 +85,16 @@ export default function CostSummaryPanel({ summary, projectId }: { summary: Cost
   ];
 
   return (
-    <Card className="relative overflow-hidden">
+    <Card className="relative overflow-hidden !p-4">
       {/* Faint health-tinted wash behind the hero for depth (very low opacity). */}
       <div aria-hidden className={`pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl ${health.dot} opacity-[0.06]`} />
 
       {/* Header: hero total + BAC on the left, spent-of-BAC ring + CPI verdict on the right */}
-      <div className="relative flex flex-wrap items-center justify-between gap-4">
+      <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total budget</p>
           <Hero value={formatIdrShort(total)} />
-          <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
             BAC (PMB) <span className="font-semibold text-slate-700 dark:text-slate-200" title={formatIdr(bac)}>{formatIdrShort(bac)}</span> · excl. mgmt reserve
           </p>
         </div>
@@ -108,14 +108,14 @@ export default function CostSummaryPanel({ summary, projectId }: { summary: Cost
       </div>
 
       {/* Budget composition (plan) */}
-      <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-800">
+      <div className="mt-3.5 border-t border-slate-100 pt-3.5 dark:border-slate-800">
         <GroupLabel>Budget (plan)</GroupLabel>
         <StackBar segs={budgetSegs} over={total} mounted={mounted} />
         <Legend segs={budgetSegs} />
       </div>
 
       {/* Actuals & drawdown — deep-link target for budget/overspend notifications (?focus=spent). */}
-      <div data-cost-focus="spent" className="mt-5">
+      <div data-cost-focus="spent" className="mt-3.5">
         <div className="mb-2 flex items-center justify-between">
           <GroupLabel>Actuals &amp; drawdown</GroupLabel>
           <span className={`text-[11px] font-semibold tabular-nums ${remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`} title={`Remaining budget: ${formatIdr(remaining)}`}>

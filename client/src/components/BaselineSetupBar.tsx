@@ -63,7 +63,7 @@ export default function BaselineSetupBar({ projectId, onNavigateTab, compact = f
   };
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-indigo-100/80 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-3 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
+    <div className="flex flex-col rounded-xl border border-indigo-100/80 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-3 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
       {/* Header: title + progress + revision history */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -79,9 +79,10 @@ export default function BaselineSetupBar({ projectId, onNavigateTab, compact = f
 
       {/* Two ordered steps. Compact (narrow column) keeps them stacked; otherwise they go
           side-by-side from sm up. */}
-      <div className={`flex flex-1 flex-col gap-2 ${compact ? '' : 'sm:flex-row sm:items-stretch'}`}>
+      <div className={`flex flex-col gap-2 ${compact ? '' : 'flex-1 sm:flex-row sm:items-stretch'}`}>
         {/* ① Schedule baseline */}
         <Step
+          compact={compact}
           n="1"
           title="Schedule baseline"
           done={scheduleDone}
@@ -100,6 +101,7 @@ export default function BaselineSetupBar({ projectId, onNavigateTab, compact = f
         {/* ② Cost baseline — reuse the existing lock widget (status pill + Lock/Unlock + modal + the
             ordering hint), so this step's own status stays a plain description, not a duplicate. */}
         <Step
+          compact={compact}
           n="2"
           title="Cost baseline"
           done={locked}
@@ -113,9 +115,9 @@ export default function BaselineSetupBar({ projectId, onNavigateTab, compact = f
   );
 }
 
-function Step({ n, title, done, status, onJump, children }: { n: string; title: string; done: boolean; status: string; onJump?: () => void; children?: React.ReactNode }) {
+function Step({ n, title, done, status, onJump, children, compact = false }: { n: string; title: string; done: boolean; status: string; onJump?: () => void; children?: React.ReactNode; compact?: boolean }) {
   return (
-    <div className="flex flex-1 flex-col gap-2 rounded-lg border border-white/70 bg-white/80 px-3 py-2.5 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/70 dark:ring-white/5">
+    <div className={`flex flex-col gap-2 rounded-lg border border-white/70 bg-white/80 px-3 py-2.5 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/70 dark:ring-white/5 ${compact ? '' : 'flex-1'}`}>
       {/* Title row: step badge + name, then a plain-text status/description below. */}
       <div className="flex items-start gap-2">
         <span
