@@ -149,15 +149,13 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
 
   return (
     <div className="space-y-5">
-      {/* Top row — the two-step baseline setup (slim, left ~40%) beside the budget/drawdown summary
-          (hero, right ~60%) on wide screens; stacks on smaller ones. Baseline freezes cost lines /
-          WBS / schedule baseline (PMB/BAC) and is rendered identically on the Schedule tab; the
-          summary keeps the ?focus=spent deep-link anchor (inside its drawdown section). */}
-      <div className="grid gap-5 lg:grid-cols-5 lg:items-start">
-        <div className="lg:col-span-2">
-          <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} compact />
-        </div>
-        <div className={`lg:col-span-3 rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
+      {/* Top row — the two-step baseline setup beside the budget/drawdown summary, EQUAL size on wide
+          screens (same width via a 2-col grid, same height via items-stretch); stacks on smaller ones.
+          Baseline freezes cost lines / WBS / schedule baseline (PMB/BAC) and is rendered identically on
+          the Schedule tab; the summary keeps the ?focus=spent deep-link anchor (in its drawdown section). */}
+      <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
+        <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} compact />
+        <div className={`rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
           <CostSummaryPanel summary={data!} projectId={projectId} />
         </div>
       </div>
