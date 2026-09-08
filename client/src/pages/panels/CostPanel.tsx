@@ -153,7 +153,7 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
           screens (same width via a 2-col grid, same height via items-stretch); stacks on smaller ones.
           Baseline freezes cost lines / WBS / schedule baseline (PMB/BAC) and is rendered identically on
           the Schedule tab; the summary keeps the ?focus=spent deep-link anchor (in its drawdown section). */}
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
+      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} compact />
         <div className={`rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
           <CostSummaryPanel summary={data!} projectId={projectId} />
