@@ -16,7 +16,7 @@ import BaselineHistory from './BaselineHistory';
 // (Cost) with two different verbs. This is presentation only: it reuses the SAME endpoints and
 // embeds the existing <BaselineLock> for step ②, so the EVM-sensitive lock/ordering/weight-freeze
 // logic stays in one place, untouched. onNavigateTab lets a step chip jump to the tab that owns it.
-export default function BaselineSetupBar({ projectId, onNavigateTab }: { projectId: string; onNavigateTab?: (tab: string) => void }) {
+export default function BaselineSetupBar({ projectId, onNavigateTab, compact = false }: { projectId: string; onNavigateTab?: (tab: string) => void; compact?: boolean }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
@@ -63,7 +63,7 @@ export default function BaselineSetupBar({ projectId, onNavigateTab }: { project
   };
 
   return (
-    <div className="rounded-xl border border-indigo-100/80 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-3 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
+    <div className="flex h-full flex-col rounded-xl border border-indigo-100/80 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-3 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
       {/* Header: title + progress + revision history */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -77,8 +77,9 @@ export default function BaselineSetupBar({ projectId, onNavigateTab }: { project
         <BaselineHistory projectId={projectId} />
       </div>
 
-      {/* Two ordered steps */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+      {/* Two ordered steps. Compact (narrow column) keeps them stacked; otherwise they go
+          side-by-side from sm up. */}
+      <div className={`flex flex-1 flex-col gap-2 ${compact ? '' : 'sm:flex-row sm:items-stretch'}`}>
         {/* ① Schedule baseline */}
         <Step
           n="1"
@@ -94,7 +95,7 @@ export default function BaselineSetupBar({ projectId, onNavigateTab }: { project
           )}
         </Step>
 
-        <div className="hidden self-center text-slate-300 dark:text-slate-600 sm:block" aria-hidden>→</div>
+        <div className={`self-center text-slate-300 dark:text-slate-600 ${compact ? 'hidden' : 'hidden sm:block'}`} aria-hidden>→</div>
 
         {/* ② Cost baseline — reuse the existing lock widget (status pill + Lock/Unlock + modal + the
             ordering hint), so this step's own status stays a plain description, not a duplicate. */}
