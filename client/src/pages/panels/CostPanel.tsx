@@ -252,8 +252,8 @@ function ActualCosts({ data, base, projectId, onChange, open, onToggle, target, 
   };
 
   return (
-    <Card className={accentSurface('orange')}>
-      <AccordionHeader title="Actual cost (AC)" count={data.actualCosts.length} total={formatIdr(data.actualCostTotal)} open={open} onToggle={onToggle} icon="outflow" accent="orange" />
+    <Card className={accentSurface('slate')}>
+      <AccordionHeader title="Actual cost (AC)" count={data.actualCosts.length} total={formatIdr(data.actualCostTotal)} open={open} onToggle={onToggle} icon="outflow" accent="slate" />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Real money spent — recorded here manually. It is NOT taken from % progress (that drives Earned Value). CPI = EV ÷ AC.</p>
 
@@ -625,8 +625,8 @@ function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc
   };
 
   return (
-    <Card className={accentSurface('blue')}>
-      <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} icon="box" accent="blue" spent={directSpent} budget={directTotal} />
+    <Card className={accentSurface('slate')}>
+      <AccordionHeader title="Direct cost" count={data.directCosts.length} total={formatIdr(directTotal)} open={open} onToggle={onToggle} icon="box" accent="slate" spent={directSpent} budget={directTotal} />
       {open && (<div className="mt-3">
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Material (qty × unit cost) and Manpower (rate × mandays)</p>
       {/* Always-visible "add line" toolbar — one chip per family, so ANY family (incl. empty ones
@@ -1051,8 +1051,8 @@ function IndirectCosts({ data, base, projectId, onChange, open, onToggle, onBook
   const addAmount = Number(amount || 0);
 
   return (
-    <Card className={accentSurface('violet')}>
-      <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} icon="layers" accent="violet" spent={indirectSpent} budget={indirectTotal} />
+    <Card className={accentSurface('slate')}>
+      <AccordionHeader title="Indirect cost" count={data.indirectCosts.length} total={formatIdr(indirectTotal)} open={open} onToggle={onToggle} icon="layers" accent="slate" spent={indirectSpent} budget={indirectTotal} />
       {open && (<div className="mt-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-xs text-slate-500 dark:text-slate-400">Overhead: transport, accommodation, meals, communication, supplies, venue…</p>
