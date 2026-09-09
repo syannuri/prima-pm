@@ -1601,7 +1601,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   ) : <span className="text-slate-300 dark:text-slate-600">✓</span>}
                 </th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 text-left align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
                 {/* Data columns — each hideable via right-click (restore in ⚙ Options → Columns). */}
                 {show('owner') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) — right-click to hide">Owner</th>}
                 {show('planDates') && (
@@ -1632,7 +1632,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each VISIBLE date group. */}
               {showDates && (
-                <tr className="text-center text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:px-2 [&>th]:text-center [&>th]:font-bold [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700 [&>th:last-child]:border-r-0">
+                <tr className="text-center text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:px-2 [&>th]:text-center [&>th]:font-bold [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700">
                   {show('planDates') && <><th>Start</th><th>Finish</th></>}
                   {show('actualDates') && <><th>Start</th><th>Finish</th></>}
                 </tr>
@@ -1758,7 +1758,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                           className={`absolute -bottom-2.5 z-30 grid h-5 w-5 place-items-center text-lg font-bold leading-none text-slate-600 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
                       )}
                     </td>
-                    {show('owner') && <td>{canEdit
+                    {show('owner') && <td className="!text-left">{canEdit
                       ? <OwnerPopover owners={orderedOwners(node)} node={node} editable resources={resources} container={modalContainer} onSave={(patch) => patchTask.mutate({ node, patch })} />
                       : <OwnerCell owners={orderedOwners(node)} />}</td>}
                     {show('planDates') && (
