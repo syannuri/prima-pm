@@ -4,16 +4,15 @@ import { Card, SectionTitle } from '../../components/ui';
 import { formatNum } from '../../lib/format';
 import WbsPanel from './WbsPanel';
 import CriticalPathPanel from './CriticalPathPanel';
-import BaselineSetupBar from '../../components/BaselineSetupBar';
 
-export default function SchedulePanel({ projectId, focusTaskId, focusKey, onNavigateTab }: { projectId: string; focusTaskId?: string | null; focusKey?: number; onNavigateTab?: (tab: string) => void }) {
+export default function SchedulePanel({ projectId, focusTaskId, focusKey }: { projectId: string; focusTaskId?: string | null; focusKey?: number; onNavigateTab?: (tab: string) => void }) {
   const base = `/projects/${projectId}/schedule`;
   const syncQ = useQuery({ queryKey: ['mp-sync', projectId], queryFn: () => api.get<{ rows: ManpowerSyncRow[] }>(`${base}/manpower-sync`) });
 
   return (
     <div className="space-y-5">
-      {/* Two-step baseline setup (① schedule → ② cost lock) — same bar as the Cost tab. */}
-      <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} />
+      {/* Baseline setup (① schedule → ② cost lock) now lives on the project-header gate chip, not here.
+          Step ① is also available natively in the WBS/Gantt "⚙ Options" menu. */}
       {/* Project Health (EVM) moved to its own Monitoring → Health tab + the header strip.
           Anchor ids let the header "More → Jump to" menu deep-link to these sections. */}
       <div id="section-wbs" className="scroll-mt-24"><WbsPanel projectId={projectId} focusTaskId={focusTaskId} focusKey={focusKey} /></div>

@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { CostSummary, DirectCost, Evm, GanttNode, ResourceItem } from '../../api/types';
 import { Button, Card, FormError, Input, MoneyInput, Select, PanelLoading } from '../../components/ui';
-import BaselineSetupBar from '../../components/BaselineSetupBar';
 import RebaselineReminder from '../../components/RebaselineReminder';
 import CostSummaryPanel from '../../components/CostSummaryPanel';
 import { KpiIcon, accentSurface, type Accent, type IconName } from '../../components/KpiIcon';
@@ -149,15 +148,11 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
 
   return (
     <div className="space-y-5">
-      {/* Top row — the two-step baseline setup beside the budget/drawdown summary, EQUAL size on wide
-          screens (same width via a 2-col grid, same height via items-stretch); stacks on smaller ones.
-          Baseline freezes cost lines / WBS / schedule baseline (PMB/BAC) and is rendered identically on
-          the Schedule tab; the summary keeps the ?focus=spent deep-link anchor (in its drawdown section). */}
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
-        <BaselineSetupBar projectId={projectId} onNavigateTab={onNavigateTab} compact />
-        <div className={`rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
-          <CostSummaryPanel summary={data!} projectId={projectId} />
-        </div>
+      {/* Budget/drawdown summary — full width. Baseline setup/lock moved to the project-header gate
+          chip; the summary carries a compact lock-status pill (near BAC/PMB) so "is the baseline
+          frozen?" is answerable while reading the budget. Keeps the ?focus=spent deep-link anchor. */}
+      <div className={`rounded-xl transition-all ${flash === 'spent' ? 'p-2 ring-2 ring-amber-400' : ''}`}>
+        <CostSummaryPanel summary={data!} projectId={projectId} />
       </div>
       {/* Nudge to re-lock after a change opened the baseline (e.g. an approved CR). */}
       <RebaselineReminder projectId={projectId} />
