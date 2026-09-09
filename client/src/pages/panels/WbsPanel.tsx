@@ -123,10 +123,10 @@ const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 // left-20 (5rem). Header cells sit above everything (z-30); body cells above normal cells (z-10)
 // but below the sticky header. Body cells carry an opaque bg + group-hover so the row highlight
 // still reads across the frozen boundary.
-// Header band: a faint brand tint across the whole header (frozen pane + scrolling
-// timeline share the SAME bg so there's no seam at the frozen edge). Opaque so scrolled
-// bars never bleed through the sticky header.
-const FROZEN_TH = 'sticky !z-30 bg-brand-50 dark:bg-slate-800';
+// Header band: a solid dark-slate tint across the whole header (frozen pane + scrolling
+// timeline share the SAME bg so there's no seam at the frozen edge) so the column titles read
+// firmly against the data rows. Opaque so scrolled bars never bleed through the sticky header.
+const FROZEN_TH = 'sticky !z-30 bg-slate-200 dark:bg-slate-800';
 const FROZEN_TD = 'sticky z-10'; // opaque zebra bg + group-hover are applied per-row (see rowBg)
 const FROZEN_EDGE = 'border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-3px_rgba(15,23,42,0.25)]';
 
@@ -491,14 +491,16 @@ function OptionsMenu({ container, children }: { container?: Element | null; chil
   }, [open]);
   return (
     <>
-      <button ref={btnRef} type="button" onClick={() => { if (!open) place(); setOpen((o) => !o); }} aria-expanded={open} title="View & schedule options" className={CTRL_BTN}>
-        ⚙ Options <span className="text-[9px]">▾</span>
+      <button ref={btnRef} type="button" onClick={() => { if (!open) place(); setOpen((o) => !o); }} aria-expanded={open} title="Menu — view, timeline, plan actions, export, columns" className={CTRL_BTN}>
+        {/* Hamburger/funnel glyph — the consolidated toolbar menu. */}
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+        Menu <span className="text-[9px]">▾</span>
       </button>
       {open && createPortal(
         <>
           <div className="fixed inset-0 z-[59]" onMouseDown={() => setOpen(false)} />
           <div ref={panelRef} role="menu" style={{ left: pos.left, top: pos.top }}
-            className="fixed z-[60] w-64 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            className="fixed z-[60] max-h-[80vh] w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-800">
             {children(() => setOpen(false))}
           </div>
         </>,
@@ -573,7 +575,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // narrow so the row-level header sticky doesn't re-freeze the columns horizontally.
   const isNarrow = useIsMobile();
   const stickyCol = !isNarrow;
-  const frozenTh = stickyCol ? FROZEN_TH : 'bg-brand-50 dark:bg-slate-800';
+  const frozenTh = stickyCol ? FROZEN_TH : 'bg-slate-200 dark:bg-slate-800';
   const frozenTd = stickyCol ? FROZEN_TD : '';
   const frozenEdge = stickyCol ? FROZEN_EDGE : '';
   const frozenLeft = (n: number, rest: CSSProperties = {}) => (stickyCol ? { left: n, ...rest } : rest);
@@ -798,7 +800,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // (the "can't add a task in full screen" bug). Outside fullscreen: default portal (undefined).
   const modalContainer = fullscreen ? fsRef.current : undefined;
   // Resizable Gantt box (normal view only) — drag the bottom handle to grow/shrink the timeline.
-  // null = default (max-h-[65vh]); a px height once the user drags. Persisted per project.
+  // null = default (max-h-[78vh]); a px height once the user drags. Persisted per project.
   const HKEY = `wbs-h:${projectId}`;
   const [panelH, setPanelH] = useState<number | null>(() => {
     const s = Number(localStorage.getItem(HKEY));
@@ -1317,110 +1319,100 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             one line instead of wrapping into 2–3 rows. */}
         <div className={`flex min-w-0 items-center gap-3 ${fullscreen ? 'w-full' : 'ml-auto flex-wrap'}`}>
         <div className={`flex min-w-0 items-center gap-2 ${fullscreen ? 'min-w-0 flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0' : 'flex-wrap'}`}>
-          {rows.length > 0 && (
-            <button onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen (Esc)' : 'View full screen'} className={CTRL_BTN}>
-              {fullscreen ? <><CollapseIcon /> Exit full screen</> : <><ExpandIcon /> Full screen</>}
-            </button>
-          )}
-          {rows.length > 0 && showGantt && axis?.todayPct != null && (
-            <button onClick={scrollToToday} title="Scroll the timeline to today" className={CTRL_BTN}>
-              ↦ Today
-            </button>
-          )}
-          {/* Timeline scale + zoom — promoted out of the Options popover to the toolbar, since a
-              scheduler changes zoom constantly. Fit/Auto pick a scale automatically; Day/Week/Month
-              are explicit and accept ± zoom. */}
-          {rows.length > 0 && showGantt && (
-            <div className="inline-flex items-center gap-1.5">
-              <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-700/60">
-                {SCALE_OPTS.map((s) => (
-                  <button key={s} type="button" onClick={() => { setScale(s); if (s !== 'fit' && s !== 'width') setZoom(1); }}
-                    title={s === 'width' ? 'Fit the whole timeline to the screen width' : s === 'fit' ? `Auto-pick a legible scale for the span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : `Scale: ${SCALE_LABEL[s]}`}
-                    className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white'}`}>
-                    {SCALE_LABEL[s]}
-                  </button>
-                ))}
-              </div>
-              <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-600">
-                <button type="button" onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-1.5 py-0.5 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700">−</button>
-                <button type="button" onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-1.5 py-0.5 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">+</button>
-              </div>
-            </div>
-          )}
-          {/* Row density — comfortable (default) vs compact for scanning many tasks at once. */}
-          {rows.length > 0 && (
-            <button onClick={() => setDensity((d) => (d === 'compact' ? 'comfortable' : 'compact'))} title={density === 'compact' ? 'Comfortable rows' : 'Compact rows'} className={CTRL_BTN}>
-              {density === 'compact' ? '≡ Comfortable' : '≣ Compact'}
-            </button>
-          )}
-          {/* Bulk-import tasks from a spreadsheet — only when the plan is editable (write + baseline unlocked). */}
-          {canPlan && (
-            <button onClick={() => setImportOpen(true)} title="Import tasks from Excel/CSV" className={CTRL_BTN}>
-              ⬆ Import
-            </button>
-          )}
-          {/* AI timeline generator — draft/append a WBS from the Project Charter (write + baseline unlocked). */}
+          {/* Standalone quick actions — Generate-AI + Select stay in the row; every other control
+              lives in the consolidated ☰ Menu (below) to keep this toolbar tidy. */}
           {canPlan && (
             <AiTimelineGenerate base={base} projectId={projectId} hasTasks={rows.length > 0} onApplied={invalidate} className={CTRL_BTN} />
           )}
-          {/* Undo / redo the last bulk-cleanup op(s). Enabled only when the server has a live entry. */}
-          {canPlan && (undoState?.canUndo || undoState?.canRedo) && (
-            <>
-              <button onClick={() => undo.mutate()} disabled={!undoState?.canUndo || undo.isPending} title={undoState?.undoLabel ? `Undo: ${undoState.undoLabel}` : 'Undo'} className={`${CTRL_BTN} disabled:opacity-40`}>
-                ↶ Undo
-              </button>
-              <button onClick={() => redo.mutate()} disabled={!undoState?.canRedo || redo.isPending} title={undoState?.redoLabel ? `Redo: ${undoState.redoLabel}` : 'Redo'} className={`${CTRL_BTN} disabled:opacity-40`}>
-                ↷ Redo
-              </button>
-            </>
-          )}
-          {/* Multi-select cleanup — pick several tasks to delete, or clear the whole timeline. */}
           {canPlan && rows.length > 0 && (
             <button onClick={() => (selectMode ? exitSelect() : setSelectMode(true))} title="Select multiple tasks to delete" className={`${CTRL_BTN} ${selectMode ? '!border-brand-400 !text-brand-700 dark:!text-brand-300' : ''}`}>
               ☑ {selectMode ? 'Selecting…' : 'Select'}
             </button>
-          )}
-          {canPlan && rows.length > 0 && (
-            <button
-              onClick={async () => { if (await confirm({ title: 'Clear the whole timeline?', message: <>Delete <strong>all {rows.length} rows</strong> from this schedule? This removes every task and dependency. This cannot be undone.</>, confirmLabel: 'Clear timeline', danger: true, container: modalContainer })) clearAll.mutate(); }}
-              title="Delete every task in this schedule" className={CTRL_BTN}>
-              🧹 Clear timeline
-            </button>
-          )}
-          {/* Phase-weight editor — steer the % roll-up from the top level (needs write + unlocked baseline). */}
-          {canPlan && rows.length > 0 && (
-            <button onClick={() => setWeightsOpen(true)} title="Set phase weights to steer the project %" className={CTRL_BTN}>
-              ⚖ Weights
-            </button>
-          )}
-          {/* Tidy schedule — recompute all dates against the dependency network (preview then apply).
-              Menu: settle links (push-only) vs compact (pull tasks earlier). */}
-          {canPlan && deps.length > 0 && (
-            <button onClick={(e) => setTidyMenu({ x: e.clientX, y: e.clientY })} disabled={rescheduleAll.isPending} title="Recompute dates against the dependency network" className={CTRL_BTN}>
-              🧹 Tidy schedule
-            </button>
-          )}
-          {/* Visual Gantt exports — the whole timeline charted horizontally as a PDF / Excel grid. */}
-          {rows.length > 0 && (
-            <>
-              <button onClick={() => exportGantt('pdf')} disabled={ganttExporting !== null} title="Export the Gantt as a PDF (visual, horizontal timeline)" className={CTRL_BTN}>
-                ⬇ {ganttExporting === 'pdf' ? 'PDF…' : 'Gantt PDF'}
-              </button>
-              <button onClick={() => exportGantt('excel')} disabled={ganttExporting !== null} title="Export the Gantt as an Excel grid (visual, horizontal timeline)" className={CTRL_BTN}>
-                ⬇ {ganttExporting === 'excel' ? 'Excel…' : 'Gantt Excel'}
-              </button>
-            </>
           )}
           {rows.length > 0 && (
             <OptionsMenu container={modalContainer}>
               {(close) => (
                 <>
                   <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">View</div>
+                  <button type="button" onClick={() => { close(); toggleFullscreen(); }} className={OPT_ROW}>
+                    <span aria-hidden>⛶</span><span className="flex-1 text-left">{fullscreen ? 'Exit full screen' : 'Full screen'}</span>
+                  </button>
+                  {showGantt && axis?.todayPct != null && (
+                    <button type="button" onClick={() => { close(); scrollToToday(); }} className={OPT_ROW}>
+                      <span aria-hidden>↦</span><span className="flex-1 text-left">Scroll to today</span>
+                    </button>
+                  )}
                   {allParentIds.length > 0 && (
                     <button type="button" onClick={() => setCollapsed((c) => (c.size > 0 ? new Set() : new Set(allParentIds)))} className={OPT_ROW}>
                       <span aria-hidden>{collapsed.size > 0 ? '⊞' : '⊟'}</span><span className="flex-1 text-left">{collapsed.size > 0 ? 'Expand all' : 'Collapse all'}</span>
                     </button>
                   )}
+                  {/* Timeline — scale + zoom + row density (kept open so several tweaks are one visit). */}
+                  {showGantt && (
+                    <>
+                      <div className="mb-1 mt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Timeline</div>
+                      <div className="flex flex-wrap items-center gap-1.5 px-1">
+                        <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-700/60">
+                          {SCALE_OPTS.map((s) => (
+                            <button key={s} type="button" onClick={() => { setScale(s); if (s !== 'fit' && s !== 'width') setZoom(1); }}
+                              title={s === 'width' ? 'Fit the whole timeline to the screen width' : s === 'fit' ? `Auto-pick a legible scale for the span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : `Scale: ${SCALE_LABEL[s]}`}
+                              className={`rounded-md px-2 py-1 text-xs font-medium transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white'}`}>
+                              {SCALE_LABEL[s]}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-600">
+                          <button type="button" onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700">−</button>
+                          <button type="button" onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">+</button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <button type="button" onClick={() => setDensity((d) => (d === 'compact' ? 'comfortable' : 'compact'))} className={OPT_ROW}>
+                    <span aria-hidden>{density === 'compact' ? '≡' : '≣'}</span><span className="flex-1 text-left">{density === 'compact' ? 'Comfortable rows' : 'Compact rows'}</span>
+                  </button>
+                  {/* Plan — edit actions (write + unlocked baseline). */}
+                  {canPlan && (
+                    <>
+                      <div className="mb-1 mt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Plan</div>
+                      <button type="button" onClick={() => { close(); setImportOpen(true); }} className={OPT_ROW}>
+                        <span aria-hidden>⬆</span><span className="flex-1 text-left">Import tasks…</span>
+                      </button>
+                      {(undoState?.canUndo || undoState?.canRedo) && (
+                        <>
+                          <button type="button" disabled={!undoState?.canUndo || undo.isPending} onClick={() => { close(); undo.mutate(); }} className={`${OPT_ROW} disabled:opacity-40`}>
+                            <span aria-hidden>↶</span><span className="flex-1 text-left">{undoState?.undoLabel ? `Undo: ${undoState.undoLabel}` : 'Undo'}</span>
+                          </button>
+                          <button type="button" disabled={!undoState?.canRedo || redo.isPending} onClick={() => { close(); redo.mutate(); }} className={`${OPT_ROW} disabled:opacity-40`}>
+                            <span aria-hidden>↷</span><span className="flex-1 text-left">{undoState?.redoLabel ? `Redo: ${undoState.redoLabel}` : 'Redo'}</span>
+                          </button>
+                        </>
+                      )}
+                      {rows.length > 0 && (
+                        <button type="button" onClick={() => setWeightsOpen(true)} className={OPT_ROW}>
+                          <span aria-hidden>⚖</span><span className="flex-1 text-left">Phase weights…</span>
+                        </button>
+                      )}
+                      {deps.length > 0 && (
+                        <button type="button" disabled={rescheduleAll.isPending} onClick={(e) => { const x = e.clientX, y = e.clientY; close(); setTidyMenu({ x, y }); }} className={`${OPT_ROW} disabled:opacity-40`}>
+                          <span aria-hidden>🧹</span><span className="flex-1 text-left">Tidy schedule…</span>
+                        </button>
+                      )}
+                      {rows.length > 0 && (
+                        <button type="button" onClick={async () => { close(); if (await confirm({ title: 'Clear the whole timeline?', message: <>Delete <strong>all {rows.length} rows</strong> from this schedule? This removes every task and dependency. This cannot be undone.</>, confirmLabel: 'Clear timeline', danger: true, container: modalContainer })) clearAll.mutate(); }} className={`${OPT_ROW} text-red-600 dark:text-red-400`}>
+                          <span aria-hidden>🗑</span><span className="flex-1 text-left">Clear timeline…</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {/* Export — the whole timeline charted horizontally. */}
+                  <div className="mb-1 mt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Export</div>
+                  <button type="button" disabled={ganttExporting !== null} onClick={() => { close(); exportGantt('pdf'); }} className={`${OPT_ROW} disabled:opacity-40`}>
+                    <span aria-hidden>⬇</span><span className="flex-1 text-left">{ganttExporting === 'pdf' ? 'Exporting PDF…' : 'Gantt PDF'}</span>
+                  </button>
+                  <button type="button" disabled={ganttExporting !== null} onClick={() => { close(); exportGantt('excel'); }} className={`${OPT_ROW} disabled:opacity-40`}>
+                    <span aria-hidden>⬇</span><span className="flex-1 text-left">{ganttExporting === 'excel' ? 'Exporting Excel…' : 'Gantt Excel'}</span>
+                  </button>
                   {/* Columns — show/hide each column (also: right-click a column header to hide it). */}
                   <div className="mb-1 mt-3 flex items-center justify-between px-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Columns</span>
@@ -1525,7 +1517,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             the timeline collapsed/stuck. */}
         <div ref={scrollRef}
           style={!fullscreen && panelH ? { height: panelH } : undefined}
-          className={`touch-pan-x touch-pan-y w-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'min-h-0 flex-1' : panelH ? '' : 'max-h-[65vh]'}`}>
+          className={`touch-pan-x touch-pan-y w-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'min-h-0 flex-1' : panelH ? '' : 'max-h-[78vh]'}`}>
           {linkFrom && (
             <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               <span>🔗 Linking <strong>{rows.find((x) => x.node.id === linkFrom)?.node.name}</strong> → click the successor task’s bar to create a Finish-to-Start dependency.</span>
@@ -1597,7 +1589,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               {/* Row 1 — ✓/WBS/Task are frozen (sticky-left). Plan & Actual groups + Dur/Budget
                   appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
                   then (rowSpan=hrs), 1 otherwise. */}
-              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3">
+              <tr className="text-left text-xs font-bold uppercase tracking-wide text-slate-800 dark:text-slate-100 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3 [&>th]:border-slate-300">
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title={selectMode ? 'Select all' : 'Mark task / subtask complete'}>
                   {selectMode ? (
                     <input
@@ -1613,10 +1605,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                 {/* Data columns — each hideable via right-click (restore in ⚙ Options → Columns). */}
                 {show('owner') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) — right-click to hide">Owner</th>}
                 {show('planDates') && (
-                  <th colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className="cursor-context-menu border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Planned (baseline plan) dates — right-click to hide">Plan</th>
+                  <th colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className="cursor-context-menu border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-800 dark:border-slate-800 dark:text-slate-100" title="Planned (baseline plan) dates — right-click to hide">Plan</th>
                 )}
                 {show('actualDates') && (
-                  <th colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className="cursor-context-menu border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300" title="Actual start & finish (tracking) — right-click to hide">Actual</th>
+                  <th colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className="cursor-context-menu border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-800 dark:border-slate-800 dark:text-slate-100" title="Actual start & finish (tracking) — right-click to hide">Actual</th>
                 )}
                 {show('dur') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className="cursor-context-menu border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Duration — right-click to hide">Dur</th>}
                 {show('budget') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className="cursor-context-menu border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (the EVM budget weight) — right-click to hide">Budget</th>}
@@ -1629,7 +1621,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   <th ref={timelineRef} rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('timeline', 'Timeline (Gantt)', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Timeline — right-click to hide">
                     <div className="relative h-4" style={{ width: axis?.width }}>
                       {axis?.ticks.map((t) => (
-                        <span key={t.key} className={`absolute -top-1 whitespace-nowrap normal-case ${t.major ? 'rounded bg-slate-100 px-1 py-px text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'top-0 text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
+                        <span key={t.key} className={`absolute -top-1 whitespace-nowrap normal-case ${t.major ? 'rounded bg-slate-300 px-1 py-px text-[10px] font-bold text-slate-800 dark:bg-slate-700 dark:text-slate-100' : 'top-0 text-[9px] font-medium text-slate-400 dark:text-slate-500'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
                       ))}
                       {axis?.todayPct != null && (
                         <span className="absolute -top-0.5 z-10 -translate-x-1/2 rounded bg-brand-600 px-1 text-[9px] font-semibold normal-case text-white" style={{ left: `${axis.todayPct}%` }}>Today</span>
@@ -1640,7 +1632,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each VISIBLE date group. */}
               {showDates && (
-                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-600 dark:text-slate-300 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-brand-50 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-200 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-semibold">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-bold">
                   {show('planDates') && <><th>Start</th><th>Finish</th></>}
                   {show('actualDates') && <><th>Start</th><th>Finish</th></>}
                 </tr>
