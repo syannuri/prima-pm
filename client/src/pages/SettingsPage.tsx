@@ -10,6 +10,7 @@ import ApiKeysCard from '../components/ApiKeysCard';
 import WebhooksCard from '../components/WebhooksCard';
 import AutomationsCard from '../components/AutomationsCard';
 import ApprovalWorkflowsCard from '../components/ApprovalWorkflowsCard';
+import IntakeScoringCard from '../components/IntakeScoringCard';
 import AiNarrativeCard from '../components/AiNarrativeCard';
 import AiActionOutcomesCard from '../components/AiActionOutcomesCard';
 import AiMemoryCard from '../components/AiMemoryCard';
@@ -74,6 +75,7 @@ export default function SettingsPage() {
           {isAdmin && (
             <SettingsSection title="Governance" sub="Workspace-wide — approval routing for change requests and AI features.">
               <ApprovalWorkflowsCard />
+              <IntakeScoringCard />
               <AiNarrativeCard />
               <AiActionOutcomesCard />
               <AiMemoryCard />
