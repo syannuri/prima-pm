@@ -35,6 +35,19 @@ router.get(
   }),
 );
 
+// Quantitative Monte-Carlo simulation of total risk exposure → percentiles + recommended reserve at
+// a chosen confidence level. Read-only (same access as the register). Query: iterations, confidence.
+router.get(
+  '/simulation',
+  canRead,
+  asyncHandler(async (req, res) => {
+    const iterations = req.query.iterations != null ? Number(req.query.iterations) : undefined;
+    const confidence = req.query.confidence != null ? Number(req.query.confidence) : undefined;
+    const result = await svc.getRiskSimulation(req.params.projectId, { iterations, confidence });
+    res.json(result);
+  }),
+);
+
 router.post(
   '/',
   ...canWrite,
