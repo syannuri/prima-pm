@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet } from '../context/LanguageContext';
@@ -15,6 +15,7 @@ import AvatarMenu from './AvatarMenu';
 import InstallPrompt from './InstallPrompt';
 import PageTransition from './PageTransition';
 import ImpersonationBanner from './ImpersonationBanner';
+import { SidebarContext, type SidebarContextValue } from '../context/SidebarContext';
 import TrialBanner from './TrialBanner';
 import UpgradeWall from './UpgradeWall';
 import { isPlatformRoute } from '../lib/platformConsole';
@@ -55,9 +56,29 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('prima_sidebar_collapsed') === '1');
+  // Mirror `collapsed` in a ref so the stable auto-collapse callbacks can read the live value without
+  // depending on it. `autoPrev` holds the state to restore while a temporary auto-collapse is active
+  // (null = not auto-collapsing → the state is the user's own manual/default choice).
+  const collapsedRef = useRef(collapsed);
+  useEffect(() => { collapsedRef.current = collapsed; }, [collapsed]);
+  const autoPrev = useRef<boolean | null>(null);
   useEffect(() => {
-    localStorage.setItem('prima_sidebar_collapsed', collapsed ? '1' : '0');
+    // Persist only genuine (manual/default) state — never the transient auto-collapse override, so a
+    // page reload while on the Schedule tab doesn't bake the temporary collapse into the preference.
+    if (autoPrev.current === null) localStorage.setItem('prima_sidebar_collapsed', collapsed ? '1' : '0');
   }, [collapsed]);
+  const toggle = useCallback(() => { autoPrev.current = null; setCollapsed((c) => !c); }, []);
+  const beginAuto = useCallback(() => {
+    if (autoPrev.current === null) autoPrev.current = collapsedRef.current; // remember the real choice once
+    setCollapsed(true);
+  }, []);
+  const endAuto = useCallback(() => {
+    if (autoPrev.current === null) return; // a manual toggle cancelled the auto-collapse → leave it be
+    const prev = autoPrev.current;
+    autoPrev.current = null;
+    setCollapsed(prev);
+  }, []);
+  const sidebarCtx = useMemo<SidebarContextValue>(() => ({ collapsed, toggle, beginAuto, endAuto }), [collapsed, toggle, beginAuto, endAuto]);
   // Global ⌘K / Ctrl-K opens the command palette.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -68,6 +89,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, []);
 
   return (
+    <SidebarContext.Provider value={sidebarCtx}>
     <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950">
       {/* Sidebar — fixed column on md+ (collapsible to an icon rail), slide-over on mobile. */}
       <aside className="hidden md:block">
@@ -124,7 +146,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <div className="min-w-0 truncate text-base font-semibold text-white md:hidden">{pageTitle}</div>
           )}
           <button
-            onClick={() => setCollapsed((c) => !c)}
+            onClick={toggle}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label="Toggle sidebar"
             className="hidden h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white md:grid"
@@ -215,5 +237,6 @@ export default function Layout({ children }: { children: ReactNode }) {
       <MobileTabBar />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
+    </SidebarContext.Provider>
   );
 }
