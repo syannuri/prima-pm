@@ -1244,3 +1244,41 @@ export interface MyApproval {
   // Stage C — present only for AI_ACTION requests: the proposed action's kind + the AI's rationale.
   aiAction?: { actionType: string | null; rationale: string | null } | null;
 }
+
+// Project Intake & Portfolio Selection — a pre-project idea/demand scored through a funnel and,
+// once approved, converted into a real Project (DRAFT). Decimals arrive as strings (Prisma Decimal).
+export type ProposalStatus = 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'DEFERRED' | 'CONVERTED';
+export interface Proposal {
+  id: string;
+  code: string;
+  title: string;
+  summary: string | null;
+  requestedByUserId: string | null;
+  sponsor: string | null;
+  clientName: string | null;
+  category: ProjectCategory | null;
+  categoryOther: string | null;
+  deliveryApproach: DeliveryApproach;
+  estCostIdr: string | null;
+  estRevenueIdr: string | null;
+  targetStart: string | null;
+  targetFinish: string | null;
+  programId: string | null;
+  scoreStrategic: number | null;
+  scoreValue: number | null;
+  scoreRisk: number | null;
+  scoreCost: number | null;
+  scoreUrgency: number | null;
+  weightedScore: string | null;
+  priorityRank: number | null;
+  status: ProposalStatus;
+  reviewedByUserId: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  convertedProjectId: string | null;
+  convertedAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface IntakeWeights { strategic: number; value: number; risk: number; cost: number; urgency: number; }
