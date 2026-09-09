@@ -590,6 +590,22 @@ export interface RiskAnalysis {
   reserve: { threatReserve: number; opportunityOffset: number; confidenceFactor: number; contingencyReserve: number };
 }
 
+// Monte-Carlo quantitative risk: distribution of total exposure → percentiles + a reserve at a
+// chosen confidence level. Money values in IDR; counts are trial tallies.
+export interface RiskSimulation {
+  iterations: number;
+  confidence: number;
+  riskCount: number;
+  mean: number;
+  min: number;
+  max: number;
+  percentiles: { p10: number; p50: number; p80: number; p90: number; p95: number };
+  recommendedReserve: number;
+  deterministicEmv: number;
+  probabilityOfZero: number;
+  histogram: { from: number; to: number; count: number }[];
+}
+
 export type IssueImpact = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type IssueStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 

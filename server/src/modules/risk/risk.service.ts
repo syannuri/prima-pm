@@ -11,6 +11,7 @@ import {
   summarizeRisks,
 } from './risk.helpers.js';
 import type { UpsertRiskInput } from './risk.schemas.js';
+import { simulateRiskExposure, seedFromString } from '../../calc/riskSimulation.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
   v == null ? 0 : Number(v);
@@ -141,4 +142,28 @@ export async function getRiskAnalysis(projectId: string) {
   );
 
   return { heatmap, ...summary };
+}
+
+// Quantitative Monte-Carlo: simulate the distribution of total risk exposure from the register's
+// probability × impact, so the reserve can be set at a chosen confidence level (P80…) rather than a
+// single expected value. Point-impact model; seeded per project for reproducibility. See
+// calc/riskSimulation.ts. Opts: iterations (1k–50k), confidence (0.5–0.99).
+export async function getRiskSimulation(
+  projectId: string,
+  opts: { iterations?: number; confidence?: number } = {},
+) {
+  const risks = await prisma.risk.findMany({
+    where: { projectId },
+    select: { kind: true, includeInReserve: true, probabilityPct: true, emv: true, residualEmv: true },
+  });
+  return simulateRiskExposure(
+    risks.map((r) => ({
+      kind: r.kind,
+      includeInReserve: r.includeInReserve,
+      probabilityPct: dec(r.probabilityPct),
+      emv: dec(r.emv),
+      residualEmv: r.residualEmv == null ? null : dec(r.residualEmv),
+    })),
+    { iterations: opts.iterations, confidence: opts.confidence, seed: seedFromString(projectId) },
+  );
 }

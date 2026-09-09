@@ -8,6 +8,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { formatIdr } from '../../lib/format';
 import Attachments from '../../components/Attachments';
 import AiRiskSuggest from '../../components/AiRiskSuggest';
+import RiskSimulationCard from '../../components/RiskSimulationCard';
 
 const SEV_COLOR: Record<string, string> = { LOW: 'green', MEDIUM: 'amber', HIGH: 'red', CRITICAL: 'red' };
 
@@ -88,6 +89,8 @@ export default function RiskPanel({ projectId, focusId, focusKey }: { projectId:
           )}
         </Card>
       </div>
+
+      <RiskSimulationCard projectId={projectId} />
 
       <Card>
         <SectionTitle sub="Identified risks with qualitative & quantitative analysis">Risk Register</SectionTitle>
