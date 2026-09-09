@@ -1588,7 +1588,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   <th ref={timelineRef} rowSpan={showDates ? 2 : 1} className="border-b border-slate-200 align-bottom dark:border-slate-800">
                     <div className="relative h-4" style={{ width: axis?.width }}>
                       {axis?.ticks.map((t) => (
-                        <span key={t.key} className={`absolute -top-0.5 normal-case ${t.major ? 'text-[10px] font-medium text-slate-500 dark:text-slate-400' : 'text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
+                        <span key={t.key} className={`absolute -top-1 whitespace-nowrap normal-case ${t.major ? 'rounded bg-slate-100 px-1 py-px text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'top-0 text-[9px] font-normal text-slate-300 dark:text-slate-600'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
                       ))}
                       {axis?.todayPct != null && (
                         <span className="absolute -top-0.5 z-10 -translate-x-1/2 rounded bg-brand-600 px-1 text-[9px] font-semibold normal-case text-white" style={{ left: `${axis.todayPct}%` }}>Today</span>
@@ -1982,21 +1982,30 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
           {/* Tracking-Gantt legend — outside the scroll box (kept in the card) so it stays visible
               without scrolling the table. Hidden in full view: it's tall (2 rows) and would steal
               the height the timeline needs on a landscape phone. */}
-          <div className={`mt-3 flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400 ${fullscreen ? 'hidden' : 'flex'}`}>
-            <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" />Baseline</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full bg-slate-300/50 ring-1 ring-inset ring-black/5 dark:bg-slate-600/40 dark:ring-white/10" />Plan</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-emerald-500" />Actual · done</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-amber-500" />In progress</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-red-500" />Late / overdue</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-brand-500" />Milestone</span>
-            <span className="flex items-center gap-1.5"><span className="h-[3px] w-5 rounded-full bg-red-500" />Slip vs baseline (red late · green early)</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full ring-2 ring-red-500/70" />Critical path</span>
-            <span className="flex items-center gap-1.5"><svg width="26" height="8" className="overflow-visible"><line x1="1" y1="4" x2="20" y2="4" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" markerEnd={`url(#arrow-${uid})`} /></svg>Dependency (FS)</span>
-            {canDrag && <span className="text-slate-400 dark:text-slate-500">· drag a bar to reschedule</span>}
-            {canPlan && <span className="text-slate-400 dark:text-slate-500">· use the ⛓ handle to link tasks</span>}
-            {canEdit && <span className="text-slate-400 dark:text-slate-500">· right-click a task (or ⋮) for subtask / indent / delete</span>}
-            {canPlan && baselinedAt && <span className="text-amber-600 dark:text-amber-400">· schedule baselined — reschedule via a change request</span>}
-            {baselineLocked && <span className="text-amber-600 dark:text-amber-400">· baseline locked — unlock to edit the schedule</span>}
+          {/* Two-tier legend: the visual KEY (colour swatches) reads as a tidy row; the interaction
+              TIPS + governance notes drop to a smaller, muted second line so the key isn't buried in
+              prose. Both hidden in full view (the immersive timeline keeps its chrome minimal). */}
+          <div className={`mt-3 border-t border-slate-100 pt-2.5 dark:border-slate-800 ${fullscreen ? 'hidden' : 'block'}`}>
+            <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" />Baseline</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full bg-slate-300/50 ring-1 ring-inset ring-black/5 dark:bg-slate-600/40 dark:ring-white/10" />Plan</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-emerald-500" />Actual · done</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-amber-500" />In progress</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-5 rounded-full bg-red-500" />Late / overdue</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-brand-500" />Milestone</span>
+              <span className="flex items-center gap-1.5"><span className="h-[3px] w-5 rounded-full bg-red-500" />Slip vs baseline</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-full ring-2 ring-red-500/70" />Critical path</span>
+              <span className="flex items-center gap-1.5"><svg width="26" height="8" className="overflow-visible"><line x1="1" y1="4" x2="20" y2="4" className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1.5" markerEnd={`url(#arrow-${uid})`} /></svg>Dependency</span>
+            </div>
+            {(canDrag || canPlan || canEdit || baselineLocked) && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-slate-400 dark:text-slate-500">
+                {canDrag && <span>Drag a bar to reschedule</span>}
+                {canPlan && <span>· ⛓ handle to link tasks</span>}
+                {canEdit && <span>· right-click a task (or ⋮) for subtask / indent / delete</span>}
+                {canPlan && baselinedAt && <span className="text-amber-600 dark:text-amber-400">· schedule baselined — reschedule via a change request</span>}
+                {baselineLocked && <span className="text-amber-600 dark:text-amber-400">· baseline locked — unlock to edit the schedule</span>}
+              </div>
+            )}
           </div>
         </>
       )}
