@@ -17,4 +17,5 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   'UatTestCase', 'KickoffMeeting', 'KickoffAttendee', 'KickoffActionItem', 'Requirement',
   'RequirementTaskLink', 'ProjectCommentary', 'AiBriefing', 'AiMemory', 'AiFeedback', 'AiUsage',
   'ProjectEmbedding', 'CustomFieldDef', 'CustomFieldValue', 'Program', 'CrossProjectLink', 'CustomRole',
+  'Proposal', // Project Intake & Portfolio Selection
 ]);

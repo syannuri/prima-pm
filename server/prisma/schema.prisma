@@ -326,6 +326,10 @@ model Tenant {
   lsVariantId        String?
   subscriptionStatus String?
   renewsAt           DateTime?
+  // Per-tenant intake scoring weights (Project Intake & Portfolio Selection). JSON of
+  // { strategic, value, risk, cost, urgency }; null = built-in defaults. Risk & cost are cost-type
+  // criteria (higher raw score = worse) and are inverted when the weighted total is computed.
+  intakeWeights      Json?
   endsAt             DateTime?
   // AI Status Narrative (first Claude-powered feature) — per-tenant opt-in. The feature is also
   // gated globally by ANTHROPIC_API_KEY (aiEnabled() reads process.env live). Both must be true:
@@ -2723,4 +2727,58 @@ model AppSetting {
   // One settings row per tenant (Phase 3c). The singleton id="singleton" PK stays for now (code
   // still reads by it); this makes the per-tenant scoping a real DB constraint.
   @@unique([tenantId])
+}
+
+// Project Intake & Portfolio Selection — a pre-project "Proposal" (idea/demand) that is scored
+// through a funnel and, once approved, CONVERTED into a real Project (DRAFT), carrying over its
+// sponsor / client / category / budget / delivery approach / program. Tenant-scoped; any member may
+// submit, ADMIN/PMO score & decide. `programId` is a plain id (no FK) — kept light, resolved on convert.
+enum ProposalStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  DEFERRED
+  CONVERTED
+}
+
+model Proposal {
+  id                String           @id @default(uuid())
+  tenantId          String?
+  code              String           // INT-YYYY-#### (unique per tenant)
+  title             String
+  summary           String?          @db.Text
+  requestedByUserId String?
+  sponsor           String?
+  clientName        String?
+  category          ProjectCategory?
+  categoryOther     String?
+  deliveryApproach  DeliveryApproach @default(PREDICTIVE)
+  estCostIdr        Decimal?         @db.Decimal(18, 2)
+  estRevenueIdr     Decimal?         @db.Decimal(18, 2)
+  targetStart       DateTime?
+  targetFinish      DateTime?
+  programId         String?          // optional Program grouping (plain id, resolved on convert)
+  // Five scoring criteria, each 1..5. Risk & cost are cost-type (higher = worse) and inverted when
+  // the weighted total is computed against the tenant's weights.
+  scoreStrategic    Int?
+  scoreValue        Int?
+  scoreRisk         Int?
+  scoreCost         Int?
+  scoreUrgency      Int?
+  weightedScore     Decimal?         @db.Decimal(8, 2) // Σ(weightᵢ · scoreᵢ'), stored for ranking/sort
+  priorityRank      Int?
+  status            ProposalStatus   @default(DRAFT)
+  reviewedByUserId  String?
+  decidedAt         DateTime?
+  decisionNote      String?          @db.Text
+  convertedProjectId String?         @unique // the Project created on approval → convert
+  convertedAt       DateTime?
+  archivedAt        DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
 }
