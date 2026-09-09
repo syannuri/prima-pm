@@ -7,6 +7,7 @@ import AwaitingClosure from './AwaitingClosure';
 import PendingApprovals from './PendingApprovals';
 import PortfolioSummary from './PortfolioSummary';
 import PortfolioEvmTrend from './PortfolioEvmTrend';
+import PipelineWidget from './PipelineWidget';
 
 // Registry of the customizable desktop portfolio widgets. `key` MUST match the server's
 // DASHBOARD_WIDGET_KEYS (auth.schemas.ts) — it's what dashboardLayout stores. Order here is the
@@ -29,6 +30,7 @@ export const DASHBOARD_WIDGETS: DashWidget[] = [
   { key: 'pendingApprovals', en: 'Pending approvals', id: 'Persetujuan tertunda', Component: PendingApprovals },
   { key: 'portfolioSummary', en: 'Portfolio summary', id: 'Ringkasan portfolio', Component: PortfolioSummary },
   { key: 'portfolioEvmTrend', en: 'Portfolio EVM trend', id: 'Tren EVM portfolio', Component: PortfolioEvmTrend },
+  { key: 'pipeline', en: 'Pipeline', id: 'Pipeline', Component: PipelineWidget },
 ];
 
 export const DEFAULT_WIDGET_ORDER: string[] = DASHBOARD_WIDGETS.map((w) => w.key);

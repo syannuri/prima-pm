@@ -67,7 +67,7 @@ export const switchTenantSchema = z.object({
 // The customizable desktop dashboard widgets (keys the client renders + the layout stores).
 export const DASHBOARD_WIDGET_KEYS = [
   'actionCenter', 'attention', 'planningReminders', 'awaitingActivation', 'awaitingClosure',
-  'pendingApprovals', 'portfolioSummary', 'portfolioEvmTrend',
+  'pendingApprovals', 'portfolioSummary', 'portfolioEvmTrend', 'pipeline',
 ] as const;
 
 // Self-service account preferences — all fields optional (a partial update). digestFrequency = emailed
