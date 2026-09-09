@@ -78,6 +78,9 @@ function Kpi({ label, value, warn }: { label: string; value: string; warn?: bool
 
 export default function ResourceCapacity() {
   const [granularity, setGranularity] = useState<Granularity>('month');
+  const [roleF, setRoleF] = useState('');
+  const [projF, setProjF] = useState('');
+  const [onlyOver, setOnlyOver] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['resource-capacity', granularity],
@@ -94,6 +97,12 @@ export default function ResourceCapacity() {
   if (!data) return <Card>Could not load resource capacity.</Card>;
 
   const { summary, periods, resources } = data;
+  const roles = Array.from(new Set(resources.map((r) => r.personnelRole).filter(Boolean))).sort() as string[];
+  const projectCodes = Array.from(new Set(resources.flatMap((r) => r.projects.map((p) => p.code)))).sort();
+  const filtered = resources.filter((r) =>
+    (!roleF || r.personnelRole === roleF) &&
+    (!projF || r.projects.some((p) => p.code === projF)) &&
+    (!onlyOver || r.overAllocated));
 
   return (
     <div className="space-y-4">
@@ -122,10 +131,34 @@ export default function ResourceCapacity() {
         </div>
       </div>
 
+      {/* Filters — role · project · only over-allocated (client-side over the fetched report). */}
+      {resources.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <select value={roleF} onChange={(e) => setRoleF(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
+            <option value="">All roles</option>
+            {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <select value={projF} onChange={(e) => setProjF(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
+            <option value="">All projects</option>
+            {projectCodes.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+            <input type="checkbox" checked={onlyOver} onChange={(e) => setOnlyOver(e.target.checked)} className="h-3.5 w-3.5 accent-brand-600" />Only over-allocated
+          </label>
+          {(roleF || projF || onlyOver) && <button onClick={() => { setRoleF(''); setProjF(''); setOnlyOver(false); }} className="text-xs text-brand-600 hover:underline dark:text-brand-400">Clear</button>}
+          <span className="ml-auto text-xs text-slate-400">{filtered.length} of {resources.length} resources</span>
+        </div>
+      )}
+
+      {/* Availability finder — who has free capacity in a chosen period (respects role/project filters). */}
+      {resources.length > 0 && <AvailabilityFinder resources={filtered} periods={periods} granularity={granularity} />}
+
       <Card>
-        {resources.length === 0 ? (
+        {filtered.length === 0 ? (
           <p className="py-6 text-center text-slate-500 dark:text-slate-400">
-            No scheduled manpower yet. Assign man-days to schedule tasks in the Cost &amp; Schedule tabs to see capacity.
+            {resources.length === 0
+              ? 'No scheduled manpower yet. Assign man-days to schedule tasks in the Cost & Schedule tabs to see capacity.'
+              : 'No resources match the current filters.'}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -142,7 +175,7 @@ export default function ResourceCapacity() {
                 </tr>
               </thead>
               <tbody>
-                {resources.map((r) => (
+                {filtered.map((r) => (
                   <tr key={r.key} className="align-top">
                     <td className="sticky left-0 z-10 max-w-[16rem] bg-white dark:bg-slate-900 py-2 pr-3">
                       <div className="flex items-center gap-2">
@@ -209,6 +242,44 @@ export default function ResourceCapacity() {
 
       <ResourceConflicts granularity={granularity} />
     </div>
+  );
+}
+
+// ---- Availability finder — who has spare capacity in a chosen period ----------------------------
+function AvailabilityFinder({ resources, periods, granularity }: { resources: ResourceRow[]; periods: string[]; granularity: Granularity }) {
+  const nowKey = new Date().toISOString().slice(0, 7);
+  const defP = periods.find((p) => p.startsWith(nowKey)) ?? periods.find((p) => p >= nowKey) ?? periods[0] ?? '';
+  const [period, setPeriod] = useState('');
+  if (periods.length === 0) return null;
+  const sel = periods.includes(period) ? period : defP;
+  const free = resources
+    .map((r) => { const c = r.cells.find((x) => x.period === sel); const cap = c?.capacity ?? 0; return { r, free: cap - (c?.allocated ?? 0), cap, util: c?.utilization ?? 0 }; })
+    .filter((x) => x.cap > 0 && x.free > 0.01)
+    .sort((a, b) => b.free - a.free);
+  return (
+    <Card>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Who&apos;s available?</h3>
+          <p className="text-[11px] text-slate-400">Spare capacity in the selected period (respects the filters above).</p>
+        </div>
+        <select value={sel} onChange={(e) => setPeriod(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
+          {periods.map((p) => <option key={p} value={p}>{periodLabel(p, granularity)}</option>)}
+        </select>
+      </div>
+      {free.length === 0 ? (
+        <p className="py-4 text-center text-xs text-slate-400">No spare capacity in {periodLabel(sel, granularity)} for the current filters.</p>
+      ) : (
+        <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          {free.slice(0, 10).map(({ r, free: f, util }) => (
+            <li key={r.key} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-2.5 py-1.5 text-sm dark:border-slate-800">
+              <span className="min-w-0 truncate"><span className="font-medium text-slate-700 dark:text-slate-200">{r.name}</span>{r.personnelRole && <span className="ml-1 text-[11px] text-slate-400">{r.personnelRole}</span>}</span>
+              <span className="shrink-0 text-xs"><b className="text-emerald-600 dark:text-emerald-400">{formatNum(f, 1)} md free</b> <span className="text-slate-400">({formatNum(util * 100, 0)}% used)</span></span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
