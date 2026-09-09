@@ -9,6 +9,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
 import { BACKLOG_STATUS_LABEL, BACKLOG_TYPE_BADGE } from '../../lib/labels';
 import AgileReports from './AgileReports';
+import { useSidebarAutoCollapse } from '../../context/SidebarContext';
 
 const TYPES: BacklogType[] = ['STORY', 'TASK', 'BUG', 'EPIC'];
 const STATUSES: BacklogStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
@@ -23,6 +24,9 @@ const SPRINT_STATUSES = ['PLANNED', 'ACTIVE', 'CLOSED'] as const;
 const sumPoints = (arr: BacklogItem[]) => arr.reduce((s, i) => s + (i.storyPoints ?? 0), 0);
 
 export default function AgilePanel({ projectId }: { projectId: string; approach?: string; chartered?: boolean }) {
+  // Same as the predictive Schedule tab: collapse the sidebar while the Kanban board is open (the
+  // three columns benefit from the width) and restore the prior state on leaving.
+  useSidebarAutoCollapse();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
