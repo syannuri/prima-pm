@@ -95,7 +95,9 @@ const OPT_ROW = 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm t
 // so a PM's chosen layout sticks. Collapse state is intentionally session-only — it's tied to
 // specific task ids that change as the WBS is edited.
 const WBS_PREFS_KEY = 'prima_wbs_prefs';
-type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean };
+// Row density — 'comfortable' (roomy, default) vs 'compact' (more rows on screen). Presentation only.
+type Density = 'comfortable' | 'compact';
+type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density };
 const readWbsPrefs = (): WbsPrefs => { try { return JSON.parse(localStorage.getItem(WBS_PREFS_KEY) || '{}'); } catch { return {}; } };
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
@@ -831,10 +833,12 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // Date/budget columns (Plan·Actual Start/Finish, Dur, Budget) show by DEFAULT — PMs expect the
   // full spreadsheet view up front; toggle off for a wider, bars-only timeline.
   const [showDates, setShowDates] = useState(() => readWbsPrefs().showDates ?? true);
-  // Remember the three view prefs across reloads.
+  // Row density (comfortable/compact) — drives the row vertical padding.
+  const [density, setDensity] = useState<Density>(() => readWbsPrefs().density ?? 'comfortable');
+  // Remember the view prefs across reloads.
   useEffect(() => {
-    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, showGantt, showDates })); } catch { /* ignore quota */ }
-  }, [scale, showGantt, showDates]);
+    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, showGantt, showDates, density })); } catch { /* ignore quota */ }
+  }, [scale, showGantt, showDates, density]);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
@@ -1288,6 +1292,32 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               ↦ Today
             </button>
           )}
+          {/* Timeline scale + zoom — promoted out of the Options popover to the toolbar, since a
+              scheduler changes zoom constantly. Fit/Auto pick a scale automatically; Day/Week/Month
+              are explicit and accept ± zoom. */}
+          {rows.length > 0 && showGantt && (
+            <div className="inline-flex items-center gap-1.5">
+              <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-700/60">
+                {SCALE_OPTS.map((s) => (
+                  <button key={s} type="button" onClick={() => { setScale(s); if (s !== 'fit' && s !== 'width') setZoom(1); }}
+                    title={s === 'width' ? 'Fit the whole timeline to the screen width' : s === 'fit' ? `Auto-pick a legible scale for the span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : `Scale: ${SCALE_LABEL[s]}`}
+                    className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white'}`}>
+                    {SCALE_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+              <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-600">
+                <button type="button" onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-1.5 py-0.5 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700">−</button>
+                <button type="button" onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-1.5 py-0.5 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">+</button>
+              </div>
+            </div>
+          )}
+          {/* Row density — comfortable (default) vs compact for scanning many tasks at once. */}
+          {rows.length > 0 && (
+            <button onClick={() => setDensity((d) => (d === 'compact' ? 'comfortable' : 'compact'))} title={density === 'compact' ? 'Comfortable rows' : 'Compact rows'} className={CTRL_BTN}>
+              {density === 'compact' ? '≡ Comfortable' : '≣ Compact'}
+            </button>
+          )}
           {/* Bulk-import tasks from a spreadsheet — only when the plan is editable (write + baseline unlocked). */}
           {canPlan && (
             <button onClick={() => setImportOpen(true)} title="Import tasks from Excel/CSV" className={CTRL_BTN}>
@@ -1361,26 +1391,6 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                     <button type="button" onClick={() => setCollapsed((c) => (c.size > 0 ? new Set() : new Set(allParentIds)))} className={OPT_ROW}>
                       <span aria-hidden>{collapsed.size > 0 ? '⊞' : '⊟'}</span><span className="flex-1 text-left">{collapsed.size > 0 ? 'Expand all' : 'Collapse all'}</span>
                     </button>
-                  )}
-                  {showGantt && (
-                    <>
-                      <div className="mb-1 mt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Timeline</div>
-                      <div className="flex flex-wrap items-center gap-1.5 px-1">
-                        <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-700/60">
-                          {SCALE_OPTS.map((s) => (
-                            <button key={s} type="button" onClick={() => { setScale(s); if (s !== 'fit' && s !== 'width') setZoom(1); }}
-                              title={s === 'width' ? 'Fit the whole timeline to the screen width' : s === 'fit' ? `Auto-pick a legible scale for the span${axis?.effScale ? ` (currently ${axis.effScale})` : ''}` : undefined}
-                              className={`rounded-md px-2 py-1 text-xs font-medium transition ${scale === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white'}`}>
-                              {SCALE_LABEL[s]}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-600">
-                          <button type="button" onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700">−</button>
-                          <button type="button" onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">+</button>
-                        </div>
-                      </div>
-                    </>
                   )}
                   <div className="mb-1 mt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Baseline</div>
                   <div className="flex items-center justify-between gap-2 px-1">
@@ -1665,7 +1675,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                       e.preventDefault();
                       openRowMenu(node, e.clientX, e.clientY);
                     }}
-                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 [&>td]:py-3 [&>td]:pr-3 [&>td]:transition-colors ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
+                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:pr-3 [&>td]:transition-colors ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         {selectMode ? (
