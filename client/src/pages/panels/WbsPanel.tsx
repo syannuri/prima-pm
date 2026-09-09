@@ -287,7 +287,7 @@ function InlineDate({ value, editable, onSave, title }: {
         // partial subfield edit, which would close the editor mid-edit and save half-changed dates).
         onBlur={(e) => { setEditing(false); const v = e.target.value || null; if (v !== (cur || null)) onSave(v); }}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setEditing(false); }}
-        className="w-[7.25rem] rounded border border-brand-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100"
+        className="w-[7.25rem] rounded border border-brand-300 bg-white px-1 py-0.5 text-center text-xs tabular-nums text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-brand-600 dark:bg-slate-800 dark:text-slate-100"
       />
     );
   }
@@ -295,7 +295,7 @@ function InlineDate({ value, editable, onSave, title }: {
     <button
       type="button" disabled={!editable} title={editable ? (title ?? 'Click to edit') : title}
       onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-      className={`w-full rounded px-1 py-0.5 text-right text-xs tabular-nums ${editable ? 'cursor-text text-slate-700 hover:bg-brand-50 dark:text-slate-200 dark:hover:bg-brand-900/20' : 'cursor-default text-slate-600 dark:text-slate-300'}`}
+      className={`w-full rounded px-1 py-0.5 text-center text-xs tabular-nums ${editable ? 'cursor-text text-slate-700 hover:bg-brand-50 dark:text-slate-200 dark:hover:bg-brand-900/20' : 'cursor-default text-slate-600 dark:text-slate-300'}`}
     >
       {value ? formatDate(new Date(value)) : <span className="text-slate-300 dark:text-slate-600">—</span>}
     </button>
@@ -1589,7 +1589,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               {/* Row 1 — ✓/WBS/Task are frozen (sticky-left). Plan & Actual groups + Dur/Budget
                   appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
                   then (rowSpan=hrs), 1 otherwise. */}
-              <tr className="text-left text-xs font-bold uppercase tracking-wide text-slate-800 dark:text-slate-100 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:pr-3 [&>th]:border-slate-300">
+              <tr className="text-center text-xs font-bold uppercase tracking-wide text-slate-800 dark:text-slate-100 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:px-2 [&>th]:border-slate-300 [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700 [&>th:last-child]:border-r-0">
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh}`} title={selectMode ? 'Select all' : 'Mark task / subtask complete'}>
                   {selectMode ? (
                     <input
@@ -1601,7 +1601,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   ) : <span className="text-slate-300 dark:text-slate-600">✓</span>}
                 </th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 text-left align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
                 {/* Data columns — each hideable via right-click (restore in ⚙ Options → Columns). */}
                 {show('owner') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) — right-click to hide">Owner</th>}
                 {show('planDates') && (
@@ -1610,12 +1610,12 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                 {show('actualDates') && (
                   <th colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className="cursor-context-menu border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-800 dark:border-slate-800 dark:text-slate-100" title="Actual start & finish (tracking) — right-click to hide">Actual</th>
                 )}
-                {show('dur') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className="cursor-context-menu border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Duration — right-click to hide">Dur</th>}
-                {show('budget') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className="cursor-context-menu border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Linked Direct Cost (the EVM budget weight) — right-click to hide">Budget</th>}
-                {show('weight') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className="cursor-context-menu border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Manual work-package weight steers the % roll-up — right-click to hide">Weight</th>}
-                {show('pct') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className="cursor-context-menu border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="% complete — right-click to hide">% </th>}
+                {show('dur') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Duration — right-click to hide">Dur</th>}
+                {show('budget') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Linked Direct Cost (the EVM budget weight) — right-click to hide">Budget</th>}
+                {show('weight') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Manual work-package weight steers the % roll-up — right-click to hide">Weight</th>}
+                {show('pct') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="% complete — right-click to hide">% </th>}
                 {show('status') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('status', 'Status', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Status — right-click to hide">Status</th>}
-                {show('var') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className="cursor-context-menu border-b border-slate-200 text-right align-bottom dark:border-slate-800" title="Finish variance vs baseline (days) — right-click to hide">Var</th>}
+                {show('var') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Finish variance vs baseline (days) — right-click to hide">Var</th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
                 {showGantt && (
                   <th ref={timelineRef} rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('timeline', 'Timeline (Gantt)', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Timeline — right-click to hide">
@@ -1632,7 +1632,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each VISIBLE date group. */}
               {showDates && (
-                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:pr-3 [&>th]:text-right [&>th]:font-bold">
+                <tr className="text-center text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:px-2 [&>th]:text-center [&>th]:font-bold [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700 [&>th:last-child]:border-r-0">
                   {show('planDates') && <><th>Start</th><th>Finish</th></>}
                   {show('actualDates') && <><th>Start</th><th>Finish</th></>}
                 </tr>
@@ -1706,7 +1706,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                       e.preventDefault();
                       openRowMenu(node, e.clientX, e.clientY);
                     }}
-                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:pr-3 [&>td]:transition-colors ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
+                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:px-2 [&>td]:text-center [&>td]:transition-colors ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         {selectMode ? (
@@ -1717,7 +1717,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                       </div>
                     </td>
                     <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-600 dark:text-slate-300 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>
-                    <td style={frozenLeft(88)} className={`${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
+                    <td style={frozenLeft(88)} className={`!text-left ${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         {hasKids && (
                           <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
@@ -1768,13 +1768,13 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                             frozen once a baseline exists (canDrag), but click-editing plan dates must
                             work after a change request unlocks the baseline — else an approved CR
                             can't actually be applied. */}
-                        <td className="whitespace-nowrap text-right">
+                        <td className="whitespace-nowrap text-center">
                           {r.isParent
                             ? <span className="text-xs text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
                             : <InlineDate value={node.planStart} editable={canPlan} onSave={(v) => v && editPlanStart(node, v)} title={canPlan ? 'Plan start — click to edit (keeps duration, shifts finish)' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                         {/* Plan Finish */}
-                        <td className="whitespace-nowrap text-right">
+                        <td className="whitespace-nowrap text-center">
                           {r.isParent
                             ? <span className="text-xs text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
                             : <InlineDate value={node.planEnd} editable={canPlan} onSave={(v) => v && editPlanEnd(node, v)} title={canPlan ? 'Plan finish — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
@@ -1784,28 +1784,28 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                     {show('actualDates') && (
                       <>
                         {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
-                        <td className="whitespace-nowrap text-right">
+                        <td className="whitespace-nowrap text-center">
                           {r.isParent
                             ? <span className="text-slate-300 dark:text-slate-600">—</span>
                             : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualStart: v } })} title="Actual start — click to set (blank to clear)" />}
                         </td>
                         {/* Actual Finish */}
-                        <td className="whitespace-nowrap text-right">
+                        <td className="whitespace-nowrap text-center">
                           {r.isParent
                             ? <span className="text-slate-300 dark:text-slate-600">—</span>
                             : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualFinish: v } })} title="Actual finish — click to set (blank to clear)" />}
                         </td>
                       </>
                     )}
-                    {show('dur') && <td className="text-right tabular-nums text-xs text-slate-600 dark:text-slate-300">{r.dur}d</td>}
+                    {show('dur') && <td className="text-center tabular-nums text-xs text-slate-600 dark:text-slate-300">{r.dur}d</td>}
                     {show('budget') && (
-                        <td className={`text-right tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
+                        <td className={`text-center tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
                           {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
                         </td>
                     )}
                     {show('weight') && (
                         /* Manual work-package weight (Model B) + the effective project share it resolves to. */
-                        <td className="whitespace-nowrap text-right">
+                        <td className="whitespace-nowrap text-center">
                           {canPlan ? (
                             <input
                               type="number" min={0} step="any" defaultValue={node.weight ?? ''} key={`w-${node.weight}`}
@@ -1817,7 +1817,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                                 if (v !== (node.weight ?? null)) patchTask.mutate({ node, patch: { weight: v } });
                               }}
                               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                              className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-right text-xs tabular-nums text-slate-700 transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600"
+                              className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-center text-xs tabular-nums text-slate-700 transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600"
                             />
                           ) : node.weight != null ? (
                             <span className="tabular-nums text-xs text-slate-600 dark:text-slate-300">{node.weight}</span>
@@ -1842,7 +1842,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                           aria-label={`Percent complete for ${node.name}`}
                           onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-right text-xs tabular-nums text-slate-700 transition hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:hover:border-slate-600"
+                          className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-center text-xs tabular-nums text-slate-700 transition hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:hover:border-slate-600"
                         />
                       ) : (
                         <span className={`tabular-nums text-xs ${r.isParent ? 'text-slate-500 dark:text-slate-400' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
@@ -1853,7 +1853,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                     )}
                     {show('status') && <td><Badge color={overdue ? 'red' : st.color}>{overdue ? 'Overdue' : st.label}</Badge></td>}
                     {show('var') && (
-                    <td className="text-right tabular-nums text-xs">
+                    <td className="text-center tabular-nums text-xs">
                       {varDays == null ? (
                         <span className="text-slate-300 dark:text-slate-600">—</span>
                       ) : (
