@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
 import { Badge, Card, Modal, Spinner } from '../components/ui';
+import BaselineGate from '../components/BaselineGate';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
 import { PROJECT_STATUS_BADGE } from '../lib/labels';
@@ -187,6 +188,9 @@ export default function ProjectPage() {
           <span className="flex items-center gap-2">
             <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'} solid>{project.status}</Badge>
             <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>
+            {/* Baseline phase-gate: state-adaptive chip + two-step popover. Relocated here from the
+                top of the Cost/Schedule tabs — baselining is a project lifecycle gate, not a tab control. */}
+            <BaselineGate projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} />
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* Primary stage action stays prominent; secondary actions tuck into "⋯ More". */}

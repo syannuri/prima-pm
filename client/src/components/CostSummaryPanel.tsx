@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { CostSummary, Evm } from '../api/types';
+import type { CostSummary, Evm, Project } from '../api/types';
 import { Card } from './ui';
 import { formatIdr, formatIdrShort, formatDateInput } from '../lib/format';
 import { StackBar, Legend, SpentRing, type Seg } from './budgetViz';
@@ -62,6 +62,14 @@ export default function CostSummaryPanel({ summary, projectId }: { summary: Cost
     queryKey: ['evm', scheduleBase, '', formatDateInput(new Date())],
     queryFn: () => api.get<Evm>(`${scheduleBase}/evm?statusDate=${formatDateInput(new Date())}`),
   });
+  // Baseline lock status — a read-only signal here (the setup/lock action lives on the header gate).
+  // Shares the ['project'] cache key, so no extra fetch.
+  const { data: projectData } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => api.get<{ project: Project }>(`/projects/${projectId}`),
+  });
+  const baselineLocked = !!projectData?.project?.baselineLockedAt;
+
   const cpi = evm?.cpi ?? null;
   const ac = evm?.ac ?? 0;
   const health = ac <= 0 || cpi == null
@@ -94,8 +102,18 @@ export default function CostSummaryPanel({ summary, projectId }: { summary: Cost
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total budget</p>
           <Hero value={formatIdrShort(total)} />
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            BAC (PMB) <span className="font-semibold text-slate-700 dark:text-slate-200" title={formatIdr(bac)}>{formatIdrShort(bac)}</span> · excl. mgmt reserve
+          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <span>BAC (PMB) <span className="font-semibold text-slate-700 dark:text-slate-200" title={formatIdr(bac)}>{formatIdrShort(bac)}</span> · excl. mgmt reserve</span>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                baselineLocked
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
+                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+              }`}
+              title={baselineLocked ? 'Cost lines & schedule baseline are frozen' : 'Baseline is editable — set it up from the header'}
+            >
+              {baselineLocked ? '🔒 Baseline locked' : '🔓 Baseline editable'}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-4">
