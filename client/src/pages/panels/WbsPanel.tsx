@@ -1845,7 +1845,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                           className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-center text-xs tabular-nums text-slate-700 transition hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:hover:border-slate-600"
                         />
                       ) : (
-                        <span className={`tabular-nums text-xs ${r.isParent ? 'text-slate-500 dark:text-slate-400' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
+                        <span className={`tabular-nums text-xs ${r.isParent ? 'font-bold text-slate-600 dark:text-slate-300' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
                           {r.pct}%{r.isParent && ' ∑'}
                         </span>
                       )}
