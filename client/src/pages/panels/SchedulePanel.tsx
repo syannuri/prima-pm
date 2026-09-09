@@ -4,8 +4,13 @@ import { Card, SectionTitle } from '../../components/ui';
 import { formatNum } from '../../lib/format';
 import WbsPanel from './WbsPanel';
 import CriticalPathPanel from './CriticalPathPanel';
+import { useSidebarAutoCollapse } from '../../context/SidebarContext';
 
 export default function SchedulePanel({ projectId, focusTaskId, focusKey }: { projectId: string; focusTaskId?: string | null; focusKey?: number; onNavigateTab?: (tab: string) => void }) {
+  // Collapse the workspace sidebar while the Timeline/Gantt is open (more horizontal room), then
+  // restore the user's previous sidebar state when they leave for another tab. This panel only mounts
+  // while the Schedule tab is active, so its mount/unmount is exactly the right lifecycle for that.
+  useSidebarAutoCollapse();
   const base = `/projects/${projectId}/schedule`;
   const syncQ = useQuery({ queryKey: ['mp-sync', projectId], queryFn: () => api.get<{ rows: ManpowerSyncRow[] }>(`${base}/manpower-sync`) });
 
