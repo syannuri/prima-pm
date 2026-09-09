@@ -31,6 +31,7 @@ const ICONS = {
   tenants: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z',
   billing: 'M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7zM2 10h20M6 15h4',
   approvals: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14l2 2 4-4',
+  pipeline: 'M3 4h18l-7 8v6l-4 2v-8z',
 };
 
 const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
@@ -151,6 +152,13 @@ export default function Sidebar({ collapsed = false, onNavigate, drawer = false 
             ) : (
               <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white">{pendingApprovals}</span>
             ))}
+          </NavLink>
+        )}
+        {/* Pipeline — project intake & portfolio selection (demand → score → convert). Any corporate
+            member captures ideas; ADMIN/PMO score & decide. Hidden for sandboxed guests. */}
+        {!!user && !isGuest && (
+          <NavLink to="/pipeline" onClick={onNavigate} aria-label="Pipeline" className={({ isActive }) => cx(isActive)}>
+            <Icon path={ICONS.pipeline} /> {!collapsed && 'Pipeline'}
           </NavLink>
         )}
         {/* Reports — PM status report (weekly/monthly); PMs run them, ADMIN/PMO oversee. A guest
