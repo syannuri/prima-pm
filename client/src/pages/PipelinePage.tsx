@@ -8,6 +8,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { PROJECT_CATEGORIES, DELIVERY_APPROACH_LABEL, categoryLabel } from '../lib/labels';
 import { formatIdrShort, formatDate } from '../lib/format';
+import PortfolioMatrix from '../components/PortfolioMatrix';
 
 // Project Intake & Portfolio Selection — the demand pipeline. Any member submits an idea; ADMIN/PMO
 // score (5 weighted criteria), decide (approve/reject/defer), and convert an approved idea into a
@@ -47,6 +48,7 @@ export default function PipelinePage() {
   const { user } = useAuth();
   const isPmo = user?.role === 'ADMIN' || user?.role === 'PMO';
   const qc = useQueryClient();
+  const [view, setView] = useState<'list' | 'portfolio'>('list');
   const [filter, setFilter] = useState<ProposalStatus | 'ALL'>('ALL');
   const [formFor, setFormFor] = useState<Proposal | 'new' | null>(null);
   const [detailFor, setDetailFor] = useState<Proposal | null>(null);
@@ -74,6 +76,21 @@ export default function PipelinePage() {
         </div>
       </header>
 
+      <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm dark:border-slate-800 dark:bg-slate-900">
+        {(['list', 'portfolio'] as const).map((v) => (
+          <button key={v} onClick={() => setView(v)}
+            className={`rounded-md px-3 py-1 font-medium transition ${view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}`}>
+            {v === 'list' ? '☰ List' : '▦ Portfolio'}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Spinner /></div>
+      ) : view === 'portfolio' ? (
+        <PortfolioMatrix proposals={data?.proposals ?? []} isPmo={isPmo} onChanged={invalidate} />
+      ) : (
+        <>
       <div className="flex flex-wrap gap-1.5">
         {(['ALL', ...STATUS.map((s) => s.value)] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)}
@@ -83,9 +100,7 @@ export default function PipelinePage() {
         ))}
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-16"><Spinner /></div>
-      ) : proposals.length === 0 ? (
+      {proposals.length === 0 ? (
         <Card><p className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">No proposals yet — capture the first idea with “+ New idea”.</p></Card>
       ) : (
         <Card className="!p-0 overflow-hidden">
@@ -114,6 +129,8 @@ export default function PipelinePage() {
             </tbody>
           </table>
         </Card>
+      )}
+        </>
       )}
 
       {formFor && <ProposalForm proposal={formFor === 'new' ? null : formFor} onClose={() => setFormFor(null)} onSaved={() => { invalidate(); setFormFor(null); }} />}
