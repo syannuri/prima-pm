@@ -93,6 +93,14 @@ export default function ProjectPage() {
   // "Jump to" (More menu) — switch tab and optionally deep-link to a section anchor within it.
   const [jump, setJump] = useState<string | null>(null);
   const goto = (t: Tab, sectionId?: string) => { setTab(t); setJump(sectionId ?? null); };
+  // Jump to a specific Schedule sub-view (Gantt / Critical Path / Resources). The Schedule tab reads
+  // ?sview and switches its segmented view accordingly (reactive even when already open).
+  const gotoScheduleView = (sview: 'gantt' | 'cpm' | 'resources') => {
+    setTab('Schedule');
+    const next = new URLSearchParams(searchParams);
+    next.set('sview', sview);
+    setSearchParams(next, { replace: true });
+  };
   useEffect(() => {
     if (!jump) return;
     const raf = requestAnimationFrame(() => {
@@ -220,13 +228,14 @@ export default function ProjectPage() {
                     {gTabs.map((t) => (
                       <Fragment key={t}>
                         {/* The Schedule tab is surfaced as "Timeline" in this Jump-to menu (the on-page
-                            tab label stays "Schedule"); its two sub-sections are Gantt Chart and the
-                            Manpower ↔ Schedule Sync. Critical Path stays on the page, just not listed here. */}
+                            tab label stays "Schedule"); it now has three segmented sub-views the menu
+                            deep-links into: Gantt, Critical Path, and Resources (manpower sync). */}
                         <MenuItem icon={TAB_ICONS[t]} active={t === activeTab} onClick={() => goto(t)}>{t === 'Schedule' ? 'Timeline' : t}</MenuItem>
                         {t === 'Schedule' && (
                           <>
-                            <MenuItem indent onClick={() => goto('Schedule', 'section-wbs')}>↳ Gantt Chart</MenuItem>
-                            <MenuItem indent onClick={() => goto('Schedule', 'section-manpower')}>↳ Manpower ↔ Schedule Sync</MenuItem>
+                            <MenuItem indent onClick={() => gotoScheduleView('gantt')}>↳ Gantt Chart</MenuItem>
+                            <MenuItem indent onClick={() => gotoScheduleView('cpm')}>↳ Critical Path</MenuItem>
+                            <MenuItem indent onClick={() => gotoScheduleView('resources')}>↳ Resources (Manpower)</MenuItem>
                           </>
                         )}
                       </Fragment>
