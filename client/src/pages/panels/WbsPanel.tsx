@@ -927,6 +927,35 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [showLegend, setShowLegend] = useState<boolean>(() => readWbsPrefs().showLegend ?? false);
   // Render the task name trailing its bar in the timeline (readable without the frozen name pane).
   const [showBarLabels, setShowBarLabels] = useState<boolean>(() => readWbsPrefs().showBarLabels ?? false);
+  // Snapshot the current timeline (WYSIWYG — honours zoom, filter, columns) to a PNG for decks.
+  const [exporting, setExporting] = useState(false);
+  const downloadGantt = async () => {
+    const node = wrapRef.current;
+    if (!node || exporting) return;
+    setExporting(true);
+    try {
+      const { toPng } = await import('html-to-image');
+      const dark = document.documentElement.classList.contains('dark');
+      const dataUrl = await toPng(node, {
+        backgroundColor: dark ? '#0f172a' : '#ffffff',
+        pixelRatio: 2,
+        width: node.scrollWidth,
+        height: node.scrollHeight,
+        cacheBust: true,
+        // hover-only affordances (resize/link handles) sit at opacity-0 already; skip anything
+        // explicitly flagged so a stray tooltip/menu never bleeds into the snapshot.
+        filter: (el) => !(el instanceof HTMLElement && el.dataset.exportHide === 'true'),
+      });
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `gantt-${new Date().toISOString().slice(0, 10)}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) {
+      console.error('Gantt image export failed', e);
+    } finally {
+      setExporting(false);
+    }
+  };
   // Row currently hovered — drives the dependency-chain highlight (its links pop, the rest dim).
   const [hoverRow, setHoverRow] = useState<string | null>(null);
   // Remember the view prefs across reloads.
@@ -1420,6 +1449,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   {showGantt && (
                     <button type="button" onClick={() => setShowLegend((v) => !v)} className={OPT_ROW}>
                       <span aria-hidden>🏷️</span><span className="flex-1 text-left">{showLegend ? 'Hide legend' : 'Show legend'}</span>
+                    </button>
+                  )}
+                  {showGantt && (
+                    <button type="button" disabled={exporting} onClick={() => { close(); downloadGantt(); }} className={`${OPT_ROW} disabled:opacity-50`}>
+                      <span aria-hidden>⬇</span><span className="flex-1 text-left">{exporting ? 'Rendering image…' : 'Download as image'}</span>
                     </button>
                   )}
                   {/* Timeline — scale + zoom + row density (kept open so several tweaks are one visit). */}
