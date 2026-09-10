@@ -113,7 +113,7 @@ const HIDEABLE_COLS: { key: ColKey; label: string }[] = [
   { key: 'var', label: 'Variance' },
   { key: 'timeline', label: 'Timeline (Gantt)' },
 ];
-type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[] };
+type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean };
 const readWbsPrefs = (): WbsPrefs => { try { return JSON.parse(localStorage.getItem(WBS_PREFS_KEY) || '{}'); } catch { return {}; } };
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
@@ -871,10 +871,15 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const showDates = show('planDates') || show('actualDates');
   // Row density (comfortable/compact) — drives the row vertical padding.
   const [density, setDensity] = useState<Density>(() => readWbsPrefs().density ?? 'comfortable');
+  // Isolate the critical path (dim non-critical bars) + show the timeline legend. Presentation only.
+  const [highlightCritical, setHighlightCritical] = useState<boolean>(() => readWbsPrefs().highlightCritical ?? false);
+  const [showLegend, setShowLegend] = useState<boolean>(() => readWbsPrefs().showLegend ?? false);
+  // Row currently hovered — drives the dependency-chain highlight (its links pop, the rest dim).
+  const [hoverRow, setHoverRow] = useState<string | null>(null);
   // Remember the view prefs across reloads.
   useEffect(() => {
-    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols] })); } catch { /* ignore quota */ }
-  }, [scale, density, hiddenCols]);
+    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend })); } catch { /* ignore quota */ }
+  }, [scale, density, hiddenCols, highlightCritical, showLegend]);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
@@ -1259,6 +1264,13 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     </div>
   ) : null;
 
+  // Dependency links touching the hovered row — those connectors pop (brand, thicker) while the
+  // rest fade, so a PM can trace a task's predecessors/successors at a glance.
+  const activeDepIds = hoverRow
+    ? new Set(deps.filter((d) => d.predecessorId === hoverRow || d.successorId === hoverRow).map((d) => d.id))
+    : null;
+  const isolateCritical = highlightCritical && criticalIds.size > 0;
+
   return (
     <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
     {/* In full view the card is a flex column: header stays put, the timeline gets ALL remaining
@@ -1352,6 +1364,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                       <span aria-hidden>{collapsed.size > 0 ? '⊞' : '⊟'}</span><span className="flex-1 text-left">{collapsed.size > 0 ? 'Expand all' : 'Collapse all'}</span>
                     </button>
                   )}
+                  {showGantt && (
+                    <button type="button" onClick={() => setShowLegend((v) => !v)} className={OPT_ROW}>
+                      <span aria-hidden>🏷️</span><span className="flex-1 text-left">{showLegend ? 'Hide legend' : 'Show legend'}</span>
+                    </button>
+                  )}
                   {/* Timeline — scale + zoom + row density (kept open so several tweaks are one visit). */}
                   {showGantt && (
                     <>
@@ -1371,6 +1388,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                           <button type="button" onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">+</button>
                         </div>
                       </div>
+                      {criticalIds.size > 0 && (
+                        <button type="button" onClick={() => setHighlightCritical((v) => !v)} className={`${OPT_ROW} ${highlightCritical ? '!text-red-600 dark:!text-red-400' : ''}`}>
+                          <span aria-hidden>🎯</span><span className="flex-1 text-left">{highlightCritical ? 'Show all tasks' : 'Isolate critical path'}</span>
+                        </button>
+                      )}
                     </>
                   )}
                   <button type="button" onClick={() => setDensity((d) => (d === 'compact' ? 'comfortable' : 'compact'))} className={OPT_ROW}>
@@ -1515,6 +1537,21 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         {/* Non-fullscreen shows the slip summary inline in the header row (above); in fullscreen the
             control row is a full-width scroll row, so keep it here above the timeline instead. */}
         {fullscreen && slipBanner && <div className="mb-2">{slipBanner}</div>}
+        {/* Timeline legend — a compact key for what the bars encode (toggle in ⚙ Options → View).
+            Keeps the dense tracking Gantt self-explanatory without a manual. */}
+        {showLegend && showGantt && (
+          <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-5 rounded-full bg-slate-300/70 ring-1 ring-inset ring-black/5 dark:bg-slate-600/50" />Plan track</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-5 rounded-full bg-gradient-to-b from-emerald-400 to-emerald-600" />Actual (on&nbsp;track)</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-5 rounded-full bg-gradient-to-b from-amber-300 to-amber-500" />In&nbsp;progress</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-5 rounded-full bg-gradient-to-b from-rose-400 to-red-600" />Late</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-1.5 w-5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" />Baseline</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-4 rounded-sm bg-slate-700 dark:bg-slate-200" />Summary</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-gradient-to-br from-brand-400 to-brand-600" />Milestone</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full ring-2 ring-inset ring-red-500/70" />Critical&nbsp;path</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-brand-500 shadow-[0_0_6px_rgba(59,130,246,0.55)]" />Today</span>
+          </div>
+        )}
         <div className={`relative w-full min-w-0 ${fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}`}>
         {/* w-full clamps the scroll box to the viewport so the wide table scrolls INSIDE it (never
             pushes the page); in full view flex-1/min-h-0 fills the remaining height robustly — a %
@@ -1543,9 +1580,17 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                     <path d="M0 0 L10 5 L0 10 z" className="fill-slate-400 dark:fill-slate-500" />
                   </marker>
                 </defs>
-                {arrows.map((a) => (
-                  <path key={a.id} d={a.d} markerEnd={`url(#arrow-${uid})`} className={`fill-none ${a.bad ? 'stroke-red-400' : 'stroke-slate-400 dark:stroke-slate-500'}`} strokeWidth={1.5} />
-                ))}
+                {arrows.map((a) => {
+                  const on = activeDepIds?.has(a.id);
+                  const stroke = a.bad
+                    ? 'stroke-red-400'
+                    : on
+                      ? 'stroke-brand-500 dark:stroke-brand-400'
+                      : activeDepIds
+                        ? 'stroke-slate-300/40 dark:stroke-slate-700/50'
+                        : 'stroke-slate-400 dark:stroke-slate-500';
+                  return <path key={a.id} d={a.d} markerEnd={`url(#arrow-${uid})`} className={`fill-none ${stroke} transition-colors`} strokeWidth={on ? 2.5 : 1.5} />;
+                })}
               </svg>
               {/* Edit handles — a small chip at each connector's midpoint. Click to open the
                   dependency editor (type FS/SS/FF/SF, lag, delete). Shows the current type. */}
@@ -1704,6 +1749,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   <Fragment key={node.id}>
                   <tr
                     data-task-row={node.id}
+                    onMouseEnter={() => setHoverRow(node.id)}
+                    onMouseLeave={() => setHoverRow((h) => (h === node.id ? null : h))}
                     onContextMenu={(e) => {
                       // Right-click a task row → the action menu. Skip when the target is a form field
                       // (date/owner/% inline editors) so their native context menu still works.
@@ -1879,7 +1926,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         data-left={node.isMilestone ? msLeft : leftPct}
                         data-width={node.isMilestone ? 0 : widthPct}
                         onClick={() => { if (linkFrom && linkFrom !== node.id) { addDep.mutate({ predecessorId: linkFrom, successorId: node.id }); setLinkFrom(null); } }}
-                        className={`group/bar relative h-8 ${linkFrom && linkFrom !== node.id ? 'cursor-crosshair rounded ring-1 ring-inset ring-brand-400/50 hover:bg-brand-500/5' : ''}`}
+                        className={`group/bar relative h-8 transition-opacity ${isolateCritical && !isCritical ? 'opacity-25' : ''} ${linkFrom && linkFrom !== node.id ? 'cursor-crosshair rounded ring-1 ring-inset ring-brand-400/50 hover:bg-brand-500/5' : ''}`}
                         style={{ width: axis?.width }}
                       >
                         {/* Weekend columns (day zoom only) — faint band behind bars/gridlines */}
@@ -1919,6 +1966,25 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                               title={r.pct >= 100 && node.actualFinish ? `Milestone reached · ${formatDate(new Date(node.actualFinish))}` : `Milestone (planned) · ${formatDate(new Date(r.end))}`}
                             />
                           </>
+                        ) : r.isParent ? (
+                          <>
+                            {/* Summary (parent/phase) bracket — MS-Project style: a slim charcoal
+                                spine spanning its children with down-turned end caps + an inner RAG
+                                progress fill. Instantly signals "rolled-up phase", not a work package. */}
+                            {baseLeft != null && baseWidth != null && (
+                              <div className="absolute top-2 h-1 rounded-full bg-slate-300/70 dark:bg-slate-600/60" style={{ left: `${baseLeft}%`, width: `${baseWidth}%` }} title={`Baseline: ${formatDate(new Date(r.baseStart!))} → ${formatDate(new Date(r.baseEnd!))}`} />
+                            )}
+                            <div
+                              className={`absolute top-[13px] h-[7px] overflow-hidden rounded-sm bg-slate-700 shadow-sm dark:bg-slate-200 ${SHEEN}`}
+                              style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                              title={`${node.name}: ${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))} · ${r.pct}%`}
+                            >
+                              <div className={`h-full ${overdue ? 'bg-red-500' : st.color === 'green' ? 'bg-emerald-500' : st.color === 'amber' ? 'bg-amber-500' : 'bg-slate-400 dark:bg-slate-500'}`} style={{ width: `${r.pct}%` }} />
+                            </div>
+                            {/* down-turned end caps (the classic summary "rooftop" tabs) */}
+                            <div aria-hidden className="pointer-events-none absolute top-[13px] h-[9px] w-[9px] bg-slate-700 dark:bg-slate-200" style={{ left: `${leftPct}%`, clipPath: 'polygon(0 0, 100% 0, 0 100%)' }} />
+                            <div aria-hidden className="pointer-events-none absolute top-[13px] h-[9px] w-[9px] -translate-x-full bg-slate-700 dark:bg-slate-200" style={{ left: `${leftPct + widthPct}%`, clipPath: 'polygon(100% 0, 0 0, 100% 100%)' }} />
+                          </>
                         ) : (
                           <>
                             {/* baseline (ghost) — thin pill on top */}
@@ -1932,8 +1998,6 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                               style={{ left: `${pLeft}%`, width: `${pWidth}%` }}
                               title={dragging ? 'Release to reschedule' : `Plan: ${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))}`}
                             >
-                              {/* summary (parent) rows show rolled progress inside the plan track */}
-                              {r.isParent && <div className={`h-full rounded-full ${SHEEN} ${bar.fill}`} style={{ width: `${r.pct}%` }} />}
                               {/* resize handles (leaf, editable) */}
                               {draggable && <span onPointerDown={(e) => startDrag(e, node, 'start')} className="absolute inset-y-0 left-0 w-2 cursor-ew-resize touch-none rounded-l-full bg-black/25 opacity-0 group-hover/track:opacity-100 dark:bg-white/25" />}
                               {draggable && <span onPointerDown={(e) => startDrag(e, node, 'end')} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize touch-none rounded-r-full bg-black/25 opacity-0 group-hover/track:opacity-100 dark:bg-white/25" />}
