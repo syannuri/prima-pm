@@ -113,7 +113,7 @@ const HIDEABLE_COLS: { key: ColKey; label: string }[] = [
   { key: 'var', label: 'Variance' },
   { key: 'timeline', label: 'Timeline (Gantt)' },
 ];
-type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean };
+type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean };
 const readWbsPrefs = (): WbsPrefs => { try { return JSON.parse(localStorage.getItem(WBS_PREFS_KEY) || '{}'); } catch { return {}; } };
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
@@ -701,6 +701,24 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     return flatten(ganttQ.data?.tree ?? []).filter((r) => keep.has(r.node.id));
   }, [filterActive, search, statusFilter, rows, rolled, ganttQ.data]);
 
+  // Project totals for the pinned footer — leaf work packages only (parents roll up; milestones
+  // are counted separately). Always over the FULL set, so the footer is a stable project summary.
+  const totals = useMemo(() => {
+    let count = 0, done = 0, late = 0, budget = 0, ms = 0;
+    for (const { node } of rows) {
+      const roll = rolled.get(node.id);
+      if (roll?.isParent) continue;
+      if (node.isMilestone) { ms++; continue; }
+      count++;
+      const pct = roll?.pct ?? node.progressPct;
+      const end = roll?.end ?? +new Date(node.planEnd);
+      if (pct >= 100) done++;
+      else if (Math.floor(end / day) < Math.floor(Date.now() / day)) late++;
+      budget += node.budgetCost ?? 0;
+    }
+    return { count, done, late, budget, ms };
+  }, [rows, rolled]);
+
   // Schedule-slip roll-up for the banner: how many baselined leaf tasks finish late vs baseline
   // and the worst slip (days). "Late" uses actual finish when done, else the current plan finish.
   const slip = useMemo(() => {
@@ -907,12 +925,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // Isolate the critical path (dim non-critical bars) + show the timeline legend. Presentation only.
   const [highlightCritical, setHighlightCritical] = useState<boolean>(() => readWbsPrefs().highlightCritical ?? false);
   const [showLegend, setShowLegend] = useState<boolean>(() => readWbsPrefs().showLegend ?? false);
+  // Render the task name trailing its bar in the timeline (readable without the frozen name pane).
+  const [showBarLabels, setShowBarLabels] = useState<boolean>(() => readWbsPrefs().showBarLabels ?? false);
   // Row currently hovered — drives the dependency-chain highlight (its links pop, the rest dim).
   const [hoverRow, setHoverRow] = useState<string | null>(null);
   // Remember the view prefs across reloads.
   useEffect(() => {
-    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend })); } catch { /* ignore quota */ }
-  }, [scale, density, hiddenCols, highlightCritical, showLegend]);
+    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels })); } catch { /* ignore quota */ }
+  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels]);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
@@ -1426,6 +1446,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                           <span aria-hidden>🎯</span><span className="flex-1 text-left">{highlightCritical ? 'Show all tasks' : 'Isolate critical path'}</span>
                         </button>
                       )}
+                      <button type="button" onClick={() => setShowBarLabels((v) => !v)} className={OPT_ROW}>
+                        <span aria-hidden>🔖</span><span className="flex-1 text-left">{showBarLabels ? 'Hide bar labels' : 'Show bar labels'}</span>
+                      </button>
                     </>
                   )}
                   <button type="button" onClick={() => setDensity((d) => (d === 'compact' ? 'comfortable' : 'compact'))} className={OPT_ROW}>
@@ -2037,6 +2060,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                               style={{ left: `${dragging ? msLeft + dShiftPct : msLeft}%` }}
                               title={r.pct >= 100 && node.actualFinish ? `Milestone reached · ${formatDate(new Date(node.actualFinish))}` : `Milestone (planned) · ${formatDate(new Date(r.end))}`}
                             />
+                            {/* milestone date label — a quiet marker so exec readers get the date without a hover */}
+                            <span className="pointer-events-none absolute top-1/2 z-[6] -translate-y-1/2 whitespace-nowrap text-[9px] font-medium tabular-nums text-slate-500 dark:text-slate-400" style={{ left: `calc(${Math.min(msLeft, 94)}% + 11px)` }}>
+                              {formatDate(new Date(msMs))}
+                            </span>
                           </>
                         ) : r.isParent ? (
                           <>
@@ -2090,6 +2117,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                             {started && inProgress && actWidth > 3 && (
                               <span className="pointer-events-none absolute top-[10px] z-[7] text-[9px] font-semibold leading-none tabular-nums text-slate-500 dark:text-slate-300" style={{ left: `calc(${Math.min(actLeft + actWidth, 92)}% + 12px)` }}>{r.pct}%</span>
                             )}
+                            {/* optional in-bar label — the task name trailing its bar, so the timeline
+                                reads on its own (toggle in ⚙ Options → Timeline → Bar labels). */}
+                            {showBarLabels && (
+                              <span className="pointer-events-none absolute top-1/2 z-[5] max-w-[38%] -translate-y-1/2 truncate whitespace-nowrap text-[10px] font-medium text-slate-600 dark:text-slate-300" style={{ left: `calc(${Math.min(leftPct + widthPct, 88)}% + ${started && inProgress ? 34 : 8}px)` }}>{node.name}</span>
+                            )}
                           </>
                         )}
                         {/* link handle — click to start a Finish→Start dependency from this task */}
@@ -2138,6 +2170,22 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                 );
               })}
             </tbody>
+            {/* Pinned totals footer — a stable, at-a-glance project roll-up that stays put while the
+                rows scroll. Sticky bottom so it reads like a spreadsheet summary bar. */}
+            {rows.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan={99} className="sticky bottom-0 z-20 border-t border-slate-300 bg-slate-100/95 px-3 py-1.5 text-left text-[11px] font-medium text-slate-600 backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-300">
+                    <span className="tabular-nums">{totals.count}</span> task{totals.count === 1 ? '' : 's'}
+                    <span className="mx-1.5 text-slate-300 dark:text-slate-600">·</span><span className="tabular-nums text-emerald-600 dark:text-emerald-400">{totals.done} done</span>
+                    {totals.late > 0 && <><span className="mx-1.5 text-slate-300 dark:text-slate-600">·</span><span className="tabular-nums text-red-600 dark:text-red-400">{totals.late} late</span></>}
+                    {totals.ms > 0 && <><span className="mx-1.5 text-slate-300 dark:text-slate-600">·</span><span className="tabular-nums">◆ {totals.ms} milestone{totals.ms === 1 ? '' : 's'}</span></>}
+                    {totals.budget > 0 && <><span className="mx-1.5 text-slate-300 dark:text-slate-600">·</span>Σ&nbsp;<span className="tabular-nums">{formatIdrShort(totals.budget)}</span></>}
+                    <span className="mx-1.5 text-slate-300 dark:text-slate-600">·</span>overall&nbsp;<span className="tabular-nums font-semibold text-slate-700 dark:text-slate-100">{Math.round(overallPct)}%</span>
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
           </div>
         </div>
