@@ -113,7 +113,7 @@ const HIDEABLE_COLS: { key: ColKey; label: string }[] = [
   { key: 'var', label: 'Variance' },
   { key: 'timeline', label: 'Timeline (Gantt)' },
 ];
-type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean };
+type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean; colWidths?: Record<string, number> };
 const readWbsPrefs = (): WbsPrefs => { try { return JSON.parse(localStorage.getItem(WBS_PREFS_KEY) || '{}'); } catch { return {}; } };
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
@@ -927,6 +927,34 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [showLegend, setShowLegend] = useState<boolean>(() => readWbsPrefs().showLegend ?? false);
   // Render the task name trailing its bar in the timeline (readable without the frozen name pane).
   const [showBarLabels, setShowBarLabels] = useState<boolean>(() => readWbsPrefs().showBarLabels ?? false);
+  // Per-column widths (px) — drag a header's right edge to resize. Pinned via width+min+max (the
+  // same technique the frozen columns use), so it works on this border-separate (non-fixed) table.
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => readWbsPrefs().colWidths ?? {});
+  const colResize = useRef<{ key: string; startX: number; startW: number } | null>(null);
+  const colStyle = (key: string, base: CSSProperties = {}): CSSProperties => {
+    const w = colWidths[key];
+    return w ? { ...base, width: w, minWidth: w, maxWidth: w } : base;
+  };
+  const startColResize = (key: string, e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).closest('th');
+    const startW = colWidths[key] ?? th?.getBoundingClientRect().width ?? 120;
+    colResize.current = { key, startX: e.clientX, startW };
+    const move = (ev: PointerEvent) => {
+      if (!colResize.current) return;
+      const w = Math.max(48, Math.min(640, Math.round(colResize.current.startW + (ev.clientX - colResize.current.startX))));
+      setColWidths((m) => ({ ...m, [colResize.current!.key]: w }));
+    };
+    const up = () => { colResize.current = null; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  // Reusable resize grip for a header cell (the cell must be position:relative).
+  const ColGrip = ({ col }: { col: string }) => (
+    <span onPointerDown={(e) => startColResize(col, e)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => setColWidths((m) => { const n = { ...m }; delete n[col]; return n; })}
+      data-export-hide="true" title="Drag to resize · double-click to reset"
+      className="absolute -right-px top-0 z-20 h-full w-1.5 cursor-col-resize touch-none select-none bg-transparent transition-colors hover:bg-brand-400/50" />
+  );
   // Snapshot the current timeline (WYSIWYG — honours zoom, filter, columns) to a PNG for decks.
   const [exporting, setExporting] = useState(false);
   const downloadGantt = async () => {
@@ -960,8 +988,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [hoverRow, setHoverRow] = useState<string | null>(null);
   // Remember the view prefs across reloads.
   useEffect(() => {
-    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels })); } catch { /* ignore quota */ }
-  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels]);
+    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels, colWidths })); } catch { /* ignore quota */ }
+  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels, colWidths]);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
@@ -1533,8 +1561,12 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   {/* Columns — show/hide each column (also: right-click a column header to hide it). */}
                   <div className="mb-1 mt-3 flex items-center justify-between px-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Columns</span>
-                    {hiddenCols.size > 0 && <button type="button" onClick={showAllCols} className="text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-400">Show all</button>}
+                    <span className="flex items-center gap-2">
+                      {Object.keys(colWidths).length > 0 && <button type="button" onClick={() => setColWidths({})} className="text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-400" title="Drag a header's right edge to resize; this resets them">Reset widths</button>}
+                      {hiddenCols.size > 0 && <button type="button" onClick={showAllCols} className="text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-400">Show all</button>}
+                    </span>
                   </div>
+                  <p className="px-1 pb-1 text-[10px] leading-tight text-slate-400 dark:text-slate-500">Tip: drag a column header's right edge to resize (double-click to reset).</p>
                   {HIDEABLE_COLS.map((c) => (
                     <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
                       <input type="checkbox" checked={show(c.key)} onChange={() => toggleCol(c.key)} className="h-3.5 w-3.5 accent-brand-600" />
@@ -1772,21 +1804,21 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   ) : <span className="text-slate-300 dark:text-slate-600">✓</span>}
                 </th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b border-slate-200 align-bottom dark:border-slate-800 ${frozenTh}`}>WBS</th>
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88)} className={`min-w-[14rem] border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task</th>
+                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88, colStyle('task'))} className={`relative ${colWidths.task ? '' : 'min-w-[14rem]'} border-b border-slate-200 text-center align-bottom dark:border-slate-800 ${frozenTh} ${frozenEdge}`}>Task<ColGrip col="task" /></th>
                 {/* Data columns — each hideable via right-click (restore in ⚙ Options → Columns). */}
-                {show('owner') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) — right-click to hide">Owner</th>}
+                {show('owner') && <th rowSpan={showDates ? 2 : 1} style={colStyle('owner')} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) — right-click to hide">Owner<ColGrip col="owner" /></th>}
                 {show('planDates') && (
                   <th colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className="cursor-context-menu border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-800 dark:border-slate-800 dark:text-slate-100" title="Planned (baseline plan) dates — right-click to hide">Plan</th>
                 )}
                 {show('actualDates') && (
                   <th colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className="cursor-context-menu border-b border-slate-200 !py-1 text-center text-[11px] font-bold tracking-wide text-slate-800 dark:border-slate-800 dark:text-slate-100" title="Actual start & finish (tracking) — right-click to hide">Actual</th>
                 )}
-                {show('dur') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Duration — right-click to hide">Dur</th>}
-                {show('budget') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Linked Direct Cost (the EVM budget weight) — right-click to hide">Budget</th>}
-                {show('weight') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Manual work-package weight steers the % roll-up — right-click to hide">Weight</th>}
-                {show('pct') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="% complete — right-click to hide">% </th>}
-                {show('status') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('status', 'Status', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Status — right-click to hide">Status</th>}
-                {show('var') && <th rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Finish variance vs baseline (days) — right-click to hide">Var</th>}
+                {show('dur') && <th rowSpan={showDates ? 2 : 1} style={colStyle('dur')} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Duration — right-click to hide">Dur<ColGrip col="dur" /></th>}
+                {show('budget') && <th rowSpan={showDates ? 2 : 1} style={colStyle('budget')} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Linked Direct Cost (the EVM budget weight) — right-click to hide">Budget<ColGrip col="budget" /></th>}
+                {show('weight') && <th rowSpan={showDates ? 2 : 1} style={colStyle('weight')} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Manual work-package weight steers the % roll-up — right-click to hide">Weight<ColGrip col="weight" /></th>}
+                {show('pct') && <th rowSpan={showDates ? 2 : 1} style={colStyle('pct')} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="% complete — right-click to hide">% <ColGrip col="pct" /></th>}
+                {show('status') && <th rowSpan={showDates ? 2 : 1} style={colStyle('status')} onContextMenu={(e) => openColMenu('status', 'Status', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Status — right-click to hide">Status<ColGrip col="status" /></th>}
+                {show('var') && <th rowSpan={showDates ? 2 : 1} style={colStyle('var')} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Finish variance vs baseline (days) — right-click to hide">Var<ColGrip col="var" /></th>}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
                 {showGantt && (
                   <th ref={timelineRef} rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('timeline', 'Timeline (Gantt)', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Timeline — right-click to hide">
