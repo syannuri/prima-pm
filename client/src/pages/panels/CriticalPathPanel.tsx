@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { CpmResult } from '../../api/types';
 import { Badge, Card, SectionTitle, Spinner } from '../../components/ui';
+import ScheduleSimulationCard from '../../components/ScheduleSimulationCard';
 
 // Critical Path Method view — derives the critical path & total float from the task
 // network (durations + FS/SS/FF/SF dependencies). Days are network offsets from t=0.
@@ -12,6 +13,7 @@ export default function CriticalPathPanel({ projectId }: { projectId: string }) 
   if (!cpm) return null;
 
   return (
+    <div className="space-y-5">
     <Card>
       <SectionTitle sub="The longest chain of dependent tasks — any slip here slips the project. Float is the slack before a task becomes critical.">Critical Path (CPM)</SectionTitle>
 
@@ -94,6 +96,8 @@ export default function CriticalPathPanel({ projectId }: { projectId: string }) 
         </>
       )}
     </Card>
+    <ScheduleSimulationCard projectId={projectId} />
+    </div>
   );
 }
 

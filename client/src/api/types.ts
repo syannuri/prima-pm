@@ -606,6 +606,32 @@ export interface RiskSimulation {
   histogram: { from: number; to: number; count: number }[];
 }
 
+// Schedule-risk Monte-Carlo: finish-date distribution (P50/P80/P90) + per-activity criticality
+// index. Day values are project-duration days; *Finish are ISO date strings.
+export interface ScheduleSimulation {
+  iterations: number;
+  confidence: number;
+  distribution: 'pert' | 'triangular';
+  optimisticPct: number;
+  pessimisticPct: number;
+  hasNetwork: boolean;
+  cyclic: boolean;
+  activityCount: number;
+  deterministicDays: number;
+  mean: number;
+  min: number;
+  max: number;
+  percentiles: { p10: number; p50: number; p80: number; p90: number; p95: number };
+  recommendedDays: number;
+  probabilityOnOrBeforePlan: number;
+  histogram: { from: number; to: number; count: number }[];
+  criticality: { id: string; index: number; name: string; wbsCode: string }[];
+  projectStart: string;
+  deterministicFinish: string;
+  recommendedFinish: string;
+  finishDates: { p10: string; p50: string; p80: string; p90: string; p95: string };
+}
+
 export type IssueImpact = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type IssueStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 

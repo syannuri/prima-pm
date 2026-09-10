@@ -31,6 +31,20 @@ router.get('/cpm', canRead, asyncHandler(async (req, res) => {
   res.json(await svc.getCpm(req.params.projectId));
 }));
 
+// Schedule-risk Monte-Carlo: finish-date distribution (P50/P80/P90) + per-activity criticality
+// index. Read-only. Query: iterations, confidence, optimisticPct, pessimisticPct, distribution.
+router.get('/simulation', canRead, asyncHandler(async (req, res) => {
+  const num = (v: unknown) => (v != null ? Number(v) : undefined);
+  const distribution = req.query.distribution === 'triangular' ? 'triangular' : req.query.distribution === 'pert' ? 'pert' : undefined;
+  res.json(await svc.getScheduleSimulation(req.params.projectId, {
+    iterations: num(req.query.iterations),
+    confidence: num(req.query.confidence),
+    optimisticPct: num(req.query.optimisticPct),
+    pessimisticPct: num(req.query.pessimisticPct),
+    distribution,
+  }));
+}));
+
 // Manpower <-> schedule reconciliation.
 router.get('/manpower-sync', canRead, asyncHandler(async (req, res) => {
   res.json({ rows: await svc.getManpowerSync(req.params.projectId) });
