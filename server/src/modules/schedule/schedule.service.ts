@@ -25,6 +25,7 @@ import {
   type AutoScheduleMode,
 } from './schedule.helpers.js';
 import type { DependencyInput, DependencyEditInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
+import { simulateSchedule, seedFromString, type SchedDistribution } from './scheduleSimulation.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
   v == null ? 0 : Number(v);
@@ -176,6 +177,57 @@ export async function getCpm(projectId: string) {
     criticalCount: cpm.criticalTaskIds.length,
     taskCount: leaves.length,
     tasks: rows,
+  };
+}
+
+const DAY_MS = 86_400_000;
+const addDays = (base: Date, days: number): Date => new Date(base.getTime() + Math.round(days) * DAY_MS);
+
+// Schedule-risk Monte-Carlo: sample each leaf activity's duration from a 3-point (PERT/triangular)
+// distribution around its planned duration and propagate through the dependency network (CPM) each
+// trial → distribution of the project finish (P50/P80/P90) + a per-activity criticality index.
+// Global uncertainty bands (no per-task data); seeded per project for reproducibility. See
+// scheduleSimulation.ts. Opts: iterations, confidence, optimisticPct, pessimisticPct, distribution.
+export async function getScheduleSimulation(
+  projectId: string,
+  opts: { iterations?: number; confidence?: number; optimisticPct?: number; pessimisticPct?: number; distribution?: SchedDistribution } = {},
+) {
+  const [tasks, deps] = await Promise.all([
+    prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true, name: true, wbsCode: true, planStart: true, planEnd: true } }),
+    prisma.taskDependency.findMany({ where: { predecessor: { projectId } }, select: { predecessorId: true, successorId: true, type: true, lagDays: true } }),
+  ]);
+  const parentIds = new Set(tasks.map((t) => t.parentTaskId).filter(Boolean) as string[]);
+  const leaves = tasks.filter((t) => !parentIds.has(t.id));
+
+  const projectStart = leaves.length
+    ? new Date(Math.min(...leaves.map((t) => t.planStart.getTime())))
+    : new Date();
+
+  const activities = leaves.map((t) => ({
+    id: t.id,
+    duration: durationDays(t.planStart, t.planEnd),
+    startOffset: Math.round((t.planStart.getTime() - projectStart.getTime()) / DAY_MS),
+  }));
+  const edges = deps.map((d) => ({ predecessorId: d.predecessorId, successorId: d.successorId, type: d.type as CpmDepType, lagDays: d.lagDays }));
+
+  const sim = simulateSchedule(activities, edges, { ...opts, seed: seedFromString(projectId) });
+
+  const nameById = new Map(leaves.map((t) => [t.id, { name: t.name, wbsCode: t.wbsCode }]));
+  return {
+    ...sim,
+    projectStart,
+    // Map day-durations from the project start onto calendar finish dates for the UI.
+    deterministicFinish: addDays(projectStart, sim.deterministicDays),
+    recommendedFinish: addDays(projectStart, sim.recommendedDays),
+    finishDates: {
+      p10: addDays(projectStart, sim.percentiles.p10),
+      p50: addDays(projectStart, sim.percentiles.p50),
+      p80: addDays(projectStart, sim.percentiles.p80),
+      p90: addDays(projectStart, sim.percentiles.p90),
+      p95: addDays(projectStart, sim.percentiles.p95),
+    },
+    // Top activities by criticality index, with names for the UI.
+    criticality: sim.criticality.slice(0, 12).map((c) => ({ ...c, name: nameById.get(c.id)?.name ?? '', wbsCode: nameById.get(c.id)?.wbsCode ?? '' })),
   };
 }
 
