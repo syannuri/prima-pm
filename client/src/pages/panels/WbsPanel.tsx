@@ -2255,8 +2255,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
           </table>
           </div>
         </div>
-        {/* Right-edge fade — hints that the timeline scrolls horizontally past the frozen pane. */}
-        {overflowX && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-white to-transparent dark:from-slate-900" />}
+        {/* Right-edge fade — dissolves any partially-scrolled column into the card edge so the
+            horizontal cut-off reads as intentional, not ragged. z-40 so it sits ABOVE the sticky
+            header (th are z-20/z-30) — otherwise the header column would clip hard while the body
+            faded. pointer-events-none so it never blocks the scrollbar or a bar drag. */}
+        {overflowX && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-40 w-16 rounded-r-xl bg-gradient-to-l from-white via-white/85 to-transparent dark:from-slate-900 dark:via-slate-900/85" />}
         </div>
           {/* Full-screen toggle placed directly BELOW the Gantt — a second, obvious entry point to
               the immersive timeline (the toolbar keeps its own compact toggle). */}
