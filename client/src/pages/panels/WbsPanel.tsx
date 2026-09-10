@@ -1846,7 +1846,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         />
                       ) : (
                         <span className={`tabular-nums text-xs ${r.isParent ? 'font-bold text-slate-600 dark:text-slate-300' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
-                          {r.pct}%{r.isParent && ' ∑'}
+                          {r.pct}%
                         </span>
                       )}
                     </td>
