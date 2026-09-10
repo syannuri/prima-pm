@@ -140,13 +140,13 @@ const SHOW_WBS_DICTIONARY = false;
 // Main-Task weights). With no manual weights that share equals the duration proportion,
 // so this stays identical to the old duration-weighted roll-up. The parent's % therefore
 // matches the authoritative project % from the EVM engine. Leaves keep their stored values.
-interface Roll { start: number; end: number; dur: number; wt: number; pct: number; budget: number; isParent: boolean; baseStart: number | null; baseEnd: number | null }
+interface Roll { start: number; end: number; dur: number; wt: number; pct: number; budget: number; isParent: boolean; baseStart: number | null; baseEnd: number | null; actualStart: number | null; actualFinish: number | null }
 const ts = (s: string | null) => (s ? +new Date(s) : null);
 function rollup(node: GanttNode, out: Map<string, Roll>): Roll {
   if (!node.children?.length) {
     // effectiveWeightPct may be 0 (or absent on a stale payload) → fall back to duration.
     const wt = node.effectiveWeightPct || node.durationDays || 0;
-    const r: Roll = { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, wt, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: ts(node.baselineStart), baseEnd: ts(node.baselineFinish) };
+    const r: Roll = { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, wt, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: ts(node.baselineStart), baseEnd: ts(node.baselineFinish), actualStart: ts(node.actualStart), actualFinish: ts(node.actualFinish) };
     out.set(node.id, r);
     return r;
   }
@@ -158,7 +158,12 @@ function rollup(node: GanttNode, out: Map<string, Roll>): Roll {
   const budget = kids.reduce((s, k) => s + k.budget, 0); // summary budget = Σ children
   const bs = kids.map((k) => k.baseStart).filter((x): x is number => x != null);
   const be = kids.map((k) => k.baseEnd).filter((x): x is number => x != null);
-  const r: Roll = { start, end, dur: Math.round((end - start) / day) + 1, wt: kids.reduce((s, k) => s + k.wt, 0), pct, budget, isParent: true, baseStart: bs.length ? Math.min(...bs) : null, baseEnd: be.length ? Math.max(...be) : null };
+  // Actual roll-up (MS-Project semantics): summary actual start = earliest child actual start;
+  // summary actual finish is only known once EVERY descendant has finished (else still open → null).
+  const as = kids.map((k) => k.actualStart).filter((x): x is number => x != null);
+  const af = kids.map((k) => k.actualFinish).filter((x): x is number => x != null);
+  const allFinished = kids.every((k) => k.actualFinish != null);
+  const r: Roll = { start, end, dur: Math.round((end - start) / day) + 1, wt: kids.reduce((s, k) => s + k.wt, 0), pct, budget, isParent: true, baseStart: bs.length ? Math.min(...bs) : null, baseEnd: be.length ? Math.max(...be) : null, actualStart: as.length ? Math.min(...as) : null, actualFinish: allFinished && af.length ? Math.max(...af) : null };
   out.set(node.id, r);
   return r;
 }
@@ -1640,7 +1645,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             </thead>
             <tbody>
               {rows.map(({ node, depth, wbs }, rowIdx) => {
-                const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, wt: node.effectiveWeightPct || node.durationDays || 0, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null };
+                const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, wt: node.effectiveWeightPct || node.durationDays || 0, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null, actualStart: ts(node.actualStart), actualFinish: ts(node.actualFinish) };
                 const st = statusOf(r.pct);
                 // Zebra striping — the opaque frozen cells carry the same bg so the stripe + hover
                 // read continuously across the frozen/scroll boundary.
@@ -1770,13 +1775,13 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                             can't actually be applied. */}
                         <td className="whitespace-nowrap text-center">
                           {r.isParent
-                            ? <span className="text-xs text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
+                            ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
                             : <InlineDate value={node.planStart} editable={canPlan} onSave={(v) => v && editPlanStart(node, v)} title={canPlan ? 'Plan start — click to edit (keeps duration, shifts finish)' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                         {/* Plan Finish */}
                         <td className="whitespace-nowrap text-center">
                           {r.isParent
-                            ? <span className="text-xs text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
+                            ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
                             : <InlineDate value={node.planEnd} editable={canPlan} onSave={(v) => v && editPlanEnd(node, v)} title={canPlan ? 'Plan finish — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
                         </td>
                       </>
@@ -1786,13 +1791,17 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
                         <td className="whitespace-nowrap text-center">
                           {r.isParent
-                            ? <span className="text-slate-300 dark:text-slate-600">—</span>
+                            ? (r.actualStart != null
+                                ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up: earliest actual start of subtasks">{formatDate(new Date(r.actualStart))}</span>
+                                : <span className="text-slate-300 dark:text-slate-600">—</span>)
                             : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualStart: v } })} title="Actual start — click to set (blank to clear)" />}
                         </td>
                         {/* Actual Finish */}
                         <td className="whitespace-nowrap text-center">
                           {r.isParent
-                            ? <span className="text-slate-300 dark:text-slate-600">—</span>
+                            ? (r.actualFinish != null
+                                ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up: latest actual finish (all subtasks complete)">{formatDate(new Date(r.actualFinish))}</span>
+                                : <span className="text-slate-300 dark:text-slate-600">—</span>)
                             : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualFinish: v } })} title="Actual finish — click to set (blank to clear)" />}
                         </td>
                       </>
