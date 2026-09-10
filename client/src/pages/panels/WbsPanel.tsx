@@ -1758,7 +1758,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                       e.preventDefault();
                       openRowMenu(node, e.clientX, e.clientY);
                     }}
-                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:px-2 [&>td]:text-center [&>td]:transition-colors ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
+                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:px-2 [&>td]:text-center [&>td]:transition-colors ${depth === 0 && rowIdx > 0 ? '[&>td]:!border-t-2 [&>td]:!border-t-slate-300 dark:[&>td]:!border-t-slate-700' : ''} ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         {selectMode ? (
@@ -1929,6 +1929,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         className={`group/bar relative h-8 transition-opacity ${isolateCritical && !isCritical ? 'opacity-25' : ''} ${linkFrom && linkFrom !== node.id ? 'cursor-crosshair rounded ring-1 ring-inset ring-brand-400/50 hover:bg-brand-500/5' : ''}`}
                         style={{ width: axis?.width }}
                       >
+                        {/* Past-shading — a whisper-faint wash over everything before Today so the
+                            "now" boundary reads instantly without hunting for the marker line. */}
+                        {axis?.todayPct != null && axis.todayPct > 0 && (
+                          <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 bg-slate-500/[0.035] dark:bg-slate-950/25" style={{ width: `${axis.todayPct}%` }} />
+                        )}
                         {/* Weekend columns (day zoom only) — faint band behind bars/gridlines */}
                         {axis?.weekends.map((w) => (
                           <div key={w.key} aria-hidden className="pointer-events-none absolute inset-y-0 bg-slate-200/45 dark:bg-slate-700/30" style={{ left: `${w.leftPct}%`, width: `${w.widthPct}%` }} />
