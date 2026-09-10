@@ -669,6 +669,38 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     return m;
   }, [ganttQ.data]);
 
+  // Row filter — a quick name search + a status chip. When active we flatten the WHOLE tree
+  // (ignoring collapse, so a match hidden inside a collapsed phase still surfaces) and keep every
+  // match plus its ancestors, so the hierarchy still reads. Inactive → the normal `rows`.
+  const [search, setSearch] = useState('');
+  type StatusFilter = 'all' | 'late' | 'active' | 'done' | 'todo';
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const filterActive = search.trim() !== '' || statusFilter !== 'all';
+  const visibleRows = useMemo(() => {
+    if (!filterActive) return rows;
+    const q = search.trim().toLowerCase();
+    const keep = new Set<string>();
+    const walk = (ns: GanttNode[], anc: string[]) => {
+      for (const n of ns) {
+        const roll = rolled.get(n.id);
+        const pct = roll?.pct ?? n.progressPct;
+        const end = roll?.end ?? +new Date(n.planEnd);
+        const overdue = pct < 100 && Math.floor(end / day) < Math.floor(Date.now() / day);
+        const statusOk =
+          statusFilter === 'all' ||
+          (statusFilter === 'late' && overdue) ||
+          (statusFilter === 'active' && pct > 0 && pct < 100) ||
+          (statusFilter === 'done' && pct >= 100) ||
+          (statusFilter === 'todo' && pct === 0);
+        const textOk = !q || (n.name ?? '').toLowerCase().includes(q);
+        if (statusOk && textOk) { keep.add(n.id); anc.forEach((a) => keep.add(a)); }
+        if (n.children?.length) walk(n.children, [...anc, n.id]);
+      }
+    };
+    walk(ganttQ.data?.tree ?? [], []);
+    return flatten(ganttQ.data?.tree ?? []).filter((r) => keep.has(r.node.id));
+  }, [filterActive, search, statusFilter, rows, rolled, ganttQ.data]);
+
   // Schedule-slip roll-up for the banner: how many baselined leaf tasks finish late vs baseline
   // and the worst slip (days). "Late" uses actual finish when done, else the current plan finish.
   const slip = useMemo(() => {
@@ -698,14 +730,15 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // chosen scale, plus a "today" marker. Bars are positioned by % of the span, so
   // changing the scale only restyles the axis and grows/shrinks the timeline width.
   const axis = useMemo(() => {
-    if (!rows.length) return null;
+    // Span the VISIBLE rows so an active filter zooms the timeline to the matches.
+    if (!visibleRows.length) return null;
     const now = Date.now();
     // Span covers plan + baseline + ACTUAL dates (a task that finished late/early must fit),
     // and extends to "today" when any leaf task is still in progress (its actual bar runs to now).
     let anyActive = false;
     const lo: number[] = [];
     const hi: number[] = [];
-    for (const r of rows) {
+    for (const r of visibleRows) {
       const x = rolled.get(r.node.id);
       const pStart = x?.start ?? +new Date(r.node.planStart);
       const pEnd = x?.end ?? +new Date(r.node.planEnd);
@@ -761,7 +794,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     const todayPct = now >= min && now <= max ? pct(now) : null;
     const minBarPct = (6 / width) * 100; // keep tiny tasks/milestones visible at any scale
     return { min, span, width, ticks, weekends, todayPct, minBarPct, effScale };
-  }, [rows, rolled, scale, zoom, fitW]);
+  }, [visibleRows, rolled, scale, zoom, fitW]);
   // Mirror the live axis into a ref so the (once-bound) wheel/zoom handlers never read a stale copy.
   axisRef.current = axis ? { width: axis.width, effScale: axis.effScale } : null;
 
@@ -1248,7 +1281,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
       out.push({ id: dp.id, d, bad: dp.type === 'FS' && b.x0 < a.x1 - 1, mx: (ax + bx) / 2, my: midY }); // FS violated if succ starts before pred finishes
     }
     setArrows(out);
-  }, [deps, rows, rolled, axis, scale, fullscreen, expanded, geomTick, drag]);
+  }, [deps, visibleRows, rolled, axis, scale, fullscreen, expanded, geomTick, drag]);
 
   if (ganttQ.isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
@@ -1552,6 +1585,37 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-brand-500 shadow-[0_0_6px_rgba(59,130,246,0.55)]" />Today</span>
           </div>
         )}
+        {/* Row filter — quick name search + status chips. Narrows long WBS lists; keeps ancestors
+            of matches so the hierarchy still reads (see visibleRows). */}
+        {rows.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">🔍</span>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search tasks…"
+                aria-label="Search tasks"
+                className="w-48 rounded-lg border border-slate-200 bg-white py-1 pl-7 pr-6 text-xs text-slate-700 placeholder:text-slate-400 focus:border-brand-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              />
+              {search && <button type="button" onClick={() => setSearch('')} aria-label="Clear search" className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200">×</button>}
+            </div>
+            <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-700/60">
+              {([['all', 'All'], ['late', 'Late'], ['active', 'Active'], ['done', 'Done'], ['todo', 'To-do']] as [StatusFilter, string][]).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setStatusFilter(k)}
+                  className={`rounded-md px-2 py-1 text-xs font-medium transition ${statusFilter === k ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {filterActive && (
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                {visibleRows.length} of {rows.length}
+                <button type="button" onClick={() => { setSearch(''); setStatusFilter('all'); }} className="ml-2 font-medium text-brand-600 hover:underline dark:text-brand-400">Clear</button>
+              </span>
+            )}
+          </div>
+        )}
         <div className={`relative w-full min-w-0 ${fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}`}>
         {/* w-full clamps the scroll box to the viewport so the wide table scrolls INSIDE it (never
             pushes the page); in full view flex-1/min-h-0 fills the remaining height robustly — a %
@@ -1644,8 +1708,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   {selectMode ? (
                     <input
                       type="checkbox" aria-label="Select all tasks"
-                      checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.node.id))}
-                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(rows.map((r) => r.node.id)) : new Set())}
+                      checked={visibleRows.length > 0 && visibleRows.every((r) => selectedIds.has(r.node.id))}
+                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(visibleRows.map((r) => r.node.id)) : new Set())}
                       className="h-4 w-4 accent-brand-600"
                     />
                   ) : <span className="text-slate-300 dark:text-slate-600">✓</span>}
@@ -1689,7 +1753,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               )}
             </thead>
             <tbody>
-              {rows.map(({ node, depth, wbs }, rowIdx) => {
+              {filterActive && visibleRows.length === 0 && (
+                <tr><td colSpan={99} className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">No tasks match your search / filter.</td></tr>
+              )}
+              {visibleRows.map(({ node, depth, wbs }, rowIdx) => {
                 const r = rolled.get(node.id) ?? { start: +new Date(node.planStart), end: +new Date(node.planEnd), dur: node.durationDays, wt: node.effectiveWeightPct || node.durationDays || 0, pct: node.progressPct, budget: node.budgetCost, isParent: false, baseStart: null, baseEnd: null, actualStart: ts(node.actualStart), actualFinish: ts(node.actualFinish) };
                 const st = statusOf(r.pct);
                 // Zebra striping — the opaque frozen cells carry the same bg so the stripe + hover
