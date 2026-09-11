@@ -7,7 +7,7 @@ import { signAccessToken } from '../../lib/jwt.js';
 import { runWithTenant } from '../../lib/tenant/context.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
-import { __setAiPort, type AiPort } from '../../lib/ai.js';
+import { __setAiPort, systemText, type AiPort } from '../../lib/ai.js';
 
 // Anett feedback (Fase 2): 👍/👎 capture + the deterministic learning loop — a 👎 with a note becomes
 // a GUIDANCE memory (TENANT for org-writers, USER otherwise) that later prompts honor.
@@ -23,7 +23,7 @@ const answerPort: AiPort = {
 const systemPort: AiPort = {
   async draftJson() { return null; },
   async draftNarrative() { return null; },
-  async runToolLoop({ system }) { return JSON.stringify({ system }); },
+  async runToolLoop({ system }) { return JSON.stringify({ system: systemText(system) }); },
 };
 
 let prevFlag: string | undefined;
@@ -102,7 +102,8 @@ describe('Anett feedback — /assistant/feedback', () => {
     __setAiPort(systemPort);
     const ask = await askSystem(pmToken);
     __setAiPort(answerPort);
-    const sys = (JSON.parse(ask.body.answer) as { system: string }).system;
+    // Smuggled system prompt trips the #1 groundedness caveat (real newline); parse just the JSON line.
+    const sys = (JSON.parse(ask.body.answer.split('\n')[0]) as { system: string }).system;
     expect(sys).toContain('Koreksi dari feedback sebelumnya');
     expect(sys).toContain(note);
   });

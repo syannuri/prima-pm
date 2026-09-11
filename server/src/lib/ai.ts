@@ -110,7 +110,9 @@ export interface AiPort {
   // call → tool_use → tool_result loop, bounded by maxSteps, and returns the final answer text
   // (null on refusal, empty output, or exceeding maxSteps).
   runToolLoop?(input: {
-    system: string;
+    // A plain string (one cached block) or ordered segments so a caller can cache the STABLE prefix
+    // across users/conversations while keeping the per-user tail on its own breakpoint (#2).
+    system: SystemPrompt;
     messages: { role: 'user' | 'assistant'; content: string }[];
     tools: AiToolDef[];
     executeTool: (name: string, input: unknown) => Promise<string>;
@@ -176,6 +178,37 @@ function withHistoryCache(msgs: Anthropic.MessageParam[]): Anthropic.MessagePara
   blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: { type: 'ephemeral' } } as Anthropic.ContentBlockParam;
   out[out.length - 1] = { ...last, content: blocks };
   return out;
+}
+
+// A system prompt built from ordered segments (#2 cross-conversation caching). The Q&A assistant's
+// prompt is a big STABLE preamble (base instructions + tool/how-to/PMI indexes — byte-identical for
+// every user of a language) followed by a small VOLATILE tail (the caller's accessible codes, memory
+// block, current-project context). Passing them as separate segments lets us put a `cache_control`
+// breakpoint on each: the stable segment then caches ACROSS users and conversations (a shared
+// ~0.1× prefix), while the volatile segment keeps its own per-user breakpoint (the within-conversation
+// hit). A bare string keeps the old single-block behavior.
+export type SystemSegment = { text: string; cache?: boolean };
+export type SystemPrompt = string | SystemSegment[];
+
+// Flatten a SystemPrompt back to plain text (for logging and test assertions).
+export function systemText(system: SystemPrompt): string {
+  return typeof system === 'string' ? system : system.map((s) => s.text).join('');
+}
+
+// Build the Anthropic `system` block array from a SystemPrompt, applying the redactor per segment and
+// a `cache_control` breakpoint wherever a segment asks for one. A bare string maps to one cached block
+// (unchanged). Empty segments are dropped so a breakpoint never lands on a zero-length block.
+export function toSystemBlocks(system: SystemPrompt, redact: (s: string) => string): Anthropic.TextBlockParam[] {
+  if (typeof system === 'string') {
+    return [{ type: 'text', text: redact(system), cache_control: { type: 'ephemeral' } }];
+  }
+  return system
+    .filter((s) => s.text.length > 0)
+    .map((s) => ({
+      type: 'text' as const,
+      text: redact(s.text),
+      ...(s.cache ? { cache_control: { type: 'ephemeral' as const } } : {}),
+    }));
 }
 
 // Dispatch every tool call from ONE assistant step. The model can emit several tool_use blocks in a
@@ -258,7 +291,7 @@ function liveAiPort(): AiPort {
           max_tokens: maxTokens,
           thinking: modern ? { type: 'adaptive', display: 'summarized' } : undefined,
           output_config: modern ? { effort: aiEffort() } : undefined,
-          system: [{ type: 'text', text: redactor.redact(system), cache_control: { type: 'ephemeral' } }],
+          system: toSystemBlocks(system, (s) => redactor.redact(s)),
           // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
           // the SDK's Tool shape whose InputSchema requires the literal `type`.
           tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[],

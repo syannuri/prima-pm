@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
-import { aiNotEnabledError, runToolCalls } from './ai.js';
+import { aiNotEnabledError, runToolCalls, toSystemBlocks, systemText } from './ai.js';
 import { bindTenantContext } from './tenant/context.js';
 
 // The AI gate message must be honest about who can act on it: a guest's personal sandbox can never
@@ -66,5 +66,31 @@ describe('runToolCalls', () => {
     const blocks = [{ type: 'text', text: 'just an answer' }] as unknown as Anthropic.ContentBlock[];
     const results = await runToolCalls(blocks, async () => 'unused', (s) => s);
     expect(results).toEqual([]);
+  });
+});
+
+// #2 cross-conversation caching: the system prompt splits into a STABLE prefix (shared across users)
+// and a VOLATILE tail; each segment can carry its own cache breakpoint. A bare string keeps the old
+// single-block behavior. toSystemBlocks also runs the redactor and drops empty segments.
+describe('toSystemBlocks / systemText', () => {
+  it('maps a bare string to one cached, redacted block', () => {
+    const blocks = toSystemBlocks('hello', (s) => `R:${s}`);
+    expect(blocks).toEqual([{ type: 'text', text: 'R:hello', cache_control: { type: 'ephemeral' } }]);
+  });
+
+  it('emits a breakpoint only where a segment asks for one, redacts each, and drops empties', () => {
+    const blocks = toSystemBlocks(
+      [{ text: 'stable', cache: true }, { text: '' }, { text: 'volatile' }],
+      (s) => `R:${s}`,
+    );
+    expect(blocks).toEqual([
+      { type: 'text', text: 'R:stable', cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: 'R:volatile' },
+    ]);
+  });
+
+  it('flattens a SystemPrompt back to plain text in order', () => {
+    expect(systemText('one')).toBe('one');
+    expect(systemText([{ text: 'a' }, { text: 'b', cache: true }])).toBe('ab');
   });
 });

@@ -2,7 +2,7 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { aiEnabled, aiConfig, getAiPort, type AiToolDef, aiNotEnabledError } from '../../lib/ai.js';
+import { aiEnabled, aiConfig, getAiPort, type AiToolDef, type SystemPrompt, aiNotEnabledError } from '../../lib/ai.js';
 import { type RawUsage } from '../../lib/aiUsage.js';
 import { estimateCostUsd } from '../../lib/aiPricing.js';
 import { gradeAnswer } from '../../lib/aiEval.js';
@@ -669,11 +669,20 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const navs: NavRef[] = [];
   const memories: MemoryRef[] = [];
   const tables: QueryTable[] = [];
-  // Seed the loop with a short, project-list-aware system prompt + the how-to topic index.
+  // Seed the loop with a project-list-aware system prompt split into two cache segments (#2):
+  //  · STABLE — base instructions + the how-to & PMI topic indexes. Byte-identical for every user of
+  //    a language, so its cache breakpoint is shared ACROSS users and conversations (~0.1× prefix).
+  //  · VOLATILE — this caller's action/memory notes, current-project context, remembered facts and
+  //    accessible project codes. Keeps its own breakpoint (within-conversation hit), but never
+  //    pollutes the shared prefix. Stable MUST come first so it forms the cacheable prefix.
   const accessibleCodes = [...byCode.keys()].join(', ');
-  const system = en
-    ? `${systemPromptFor('en')}${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.\n\nPMI/PMBOK advisory topics (pmi_guidance): ${pmiIndex()}.`
-    : `${systemPromptFor('id')}${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.\n\nTopik advisory PMI/PMBOK (pmi_guidance): ${pmiIndex()}.`;
+  const stableSystem = en
+    ? `${systemPromptFor('en')}\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.\n\nPMI/PMBOK advisory topics (pmi_guidance): ${pmiIndex()}.`
+    : `${systemPromptFor('id')}\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.\n\nTopik advisory PMI/PMBOK (pmi_guidance): ${pmiIndex()}.`;
+  const volatileSystem = en
+    ? `${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.`
+    : `${actionNote}${memoryNote}${contextNote}${memoryBlock}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.`;
+  const system: SystemPrompt = [{ text: stableSystem, cache: true }, { text: volatileSystem, cache: true }];
   // #5 cost meter: total this turn's tokens across every loop step (both the answer and any #1
   // regeneration) for a live per-conversation meter.
   const tok = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
