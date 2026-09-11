@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { useQueryClient } from '@tanstack/react-query';
 import { api, tokenStore, migrateLegacyTokens, setImpersonation } from '../api/client';
 import type { User, TenantSummary, Workspace, PlanFeature } from '../api/types';
+import { clearAnettChats } from '../lib/anettChat';
 
 interface AuthState {
   user: User | null;
@@ -116,16 +117,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Enter a tenant as a platform super-admin. Sets the override bearer token FIRST so the identity +
   // data refetch under the impersonated scope. If the token later expires, the api client auto-reverts
   // and calls back to end it (endImpersonation).
-  const endImpersonation = () => { setImpersonating(null); void reloadIdentity(); };
+  // Every impersonation transition swaps the effective identity → wipe cached Anett chats so the
+  // super-admin's and the impersonated tenant's conversations never bleed across the switch.
+  const endImpersonation = () => { setImpersonating(null); clearAnettChats(); void reloadIdentity(); };
   const impersonate = async (tenantId: string, name: string) => {
     const r = await api.post<{ accessToken: string; tenant: { id: string; name: string } }>(`/admin/tenants/${tenantId}/impersonate`);
     setImpersonation(r.accessToken, endImpersonation);
     setImpersonating({ tenantId, name: r.tenant.name || name });
+    clearAnettChats();
     await reloadIdentity();
   };
   const stopImpersonating = async () => {
     setImpersonation(null);
     setImpersonating(null);
+    clearAnettChats();
     await reloadIdentity();
   };
 
@@ -176,6 +181,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setImpersonating(null);
     api.post('/auth/logout').catch(() => {});
     tokenStore.clear();
+    // Anett's chat lives in sessionStorage (stateless server) and survives an in-tab logout → login.
+    // Wipe every account's cached chat so the next user can't read the previous one's history.
+    clearAnettChats();
     setUser(null);
     setTenants([]);
     setActiveTenantId(null);
