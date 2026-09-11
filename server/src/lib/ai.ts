@@ -178,6 +178,29 @@ function withHistoryCache(msgs: Anthropic.MessageParam[]): Anthropic.MessagePara
   return out;
 }
 
+// Dispatch every tool call from ONE assistant step. The model can emit several tool_use blocks in a
+// single step (e.g. get_project_details for three projects at once); awaiting them serially only adds
+// latency because the tools are independent server operations. Run them CONCURRENTLY via Promise.all
+// — JS is single-threaded so the shared redactor/context mutations stay race-free, and each call is
+// error-isolated so one failing tool can't sink the rest. The tool_result blocks preserve the exact
+// tool_use order the model emitted. `redact` is the loop's outbound privacy guard applied to output.
+export async function runToolCalls(
+  blocks: Anthropic.ContentBlock[],
+  executeTool: (name: string, input: unknown) => Promise<string>,
+  redact: (raw: string) => string,
+): Promise<Anthropic.ToolResultBlockParam[]> {
+  const uses = blocks.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+  return Promise.all(uses.map(async (block) => {
+    let out: string;
+    try {
+      out = await executeTool(block.name, block.input);
+    } catch {
+      out = JSON.stringify({ error: 'Tool gagal dijalankan.' });
+    }
+    return { type: 'tool_result', tool_use_id: block.id, content: redact(out) } as Anthropic.ToolResultBlockParam;
+  }));
+}
+
 function liveAiPort(): AiPort {
   return {
     async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride, feature }) {
@@ -253,20 +276,10 @@ function liveAiPort(): AiPort {
           // The text streamed this step (if any) was preamble before a tool call — tell the client to
           // discard it; only the final end_turn text is the real answer.
           onTextReset?.();
-          // Echo the assistant turn (with its tool_use blocks) then run each tool and feed results back.
+          // Echo the assistant turn (with its tool_use blocks) then run every tool CONCURRENTLY and
+          // feed the results back (see runToolCalls — order-preserving, error-isolated).
           msgs.push({ role: 'assistant', content: res.content });
-          const toolResults: Anthropic.ToolResultBlockParam[] = [];
-          for (const block of res.content) {
-            if (block.type === 'tool_use') {
-              let out: string;
-              try {
-                out = await executeTool(block.name, block.input);
-              } catch {
-                out = JSON.stringify({ error: 'Tool gagal dijalankan.' });
-              }
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: redactor.redact(out) });
-            }
-          }
+          const toolResults = await runToolCalls(res.content, executeTool, (s) => redactor.redact(s));
           msgs.push({ role: 'user', content: toolResults });
           continue;
         }
