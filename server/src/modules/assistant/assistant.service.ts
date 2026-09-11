@@ -390,7 +390,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
   }
 }
 
-function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; memoryEnabled: boolean; en: boolean; emitStep?: (label: string) => void; projectsSummary: ProjectSummary[] }) {
+function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; memoryEnabled: boolean; en: boolean; emitStep?: (label: string) => void; projectsSummary: ProjectSummary[] }) {
   return async (name: string, input: unknown): Promise<string> => {
     const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string; question?: string };
     // Stream a live "thinking" step for this tool call (best-effort; SSE only).
@@ -573,7 +573,7 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
         }
       }
       case 'search_projects': {
-        const { mode, hits } = await searchProjectsDetailed(typeof args.query === 'string' ? args.query : '', [...accessibleByCode.values()]);
+        const { mode, hits } = await searchProjectsDetailed(typeof args.query === 'string' ? args.query : '', ctx.projectsSummary.map((p) => p.id));
         // Pilot observability (#4): record which engine served each search so semantic-vs-FTS usage is
         // measurable in prod logs once Voyage is armed.
         logger.info({ userId: ctx.userId, mode, count: hits.length }, '[assistant] project search');
@@ -644,10 +644,8 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
 
   // Pre-compute the accessible project set (same rule the user sees elsewhere) → the security scope.
   const projects = await listProjects(userId, role);
-  const byCode = new Map<string, string>();
   const projectsSummary: ProjectSummary[] = [];
   for (const p of projects.slice(0, 200)) {
-    byCode.set(p.code, p.id);
     projectsSummary.push({ id: p.id, code: p.code, name: p.name, status: p.status, bac: p.costBaseline?.budgetAtCompletion == null ? 0 : Number(p.costBaseline.budgetAtCompletion) });
   }
 
@@ -693,7 +691,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   //  · VOLATILE — this caller's action/memory notes, current-project context, remembered facts and
   //    accessible project codes. Keeps its own breakpoint (within-conversation hit), but never
   //    pollutes the shared prefix. Stable MUST come first so it forms the cacheable prefix.
-  const accessibleCodes = [...byCode.keys()].join(', ');
+  const accessibleCodes = projectsSummary.map((p) => p.code).join(', ');
   const stableSystem = en
     ? `${systemPromptFor('en')}\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.\n\nPMI/PMBOK advisory topics (pmi_guidance): ${pmiIndex()}.`
     : `${systemPromptFor('id')}\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.\n\nTopik advisory PMI/PMBOK (pmi_guidance): ${pmiIndex()}.`;
@@ -715,7 +713,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // #5: collect the tool outputs this turn so the quality-judge can VERIFY the answer's facts against
   // the data Anett actually fetched (fair groundedness), instead of scoring data-heavy answers blind.
   const toolOutputs: string[] = [];
-  const baseExecuteTool = makeExecuteTool(byCode, { userId, role, proposals, navs, memories, tables, memoryEnabled, en, emitStep, projectsSummary });
+  const baseExecuteTool = makeExecuteTool({ userId, role, proposals, navs, memories, tables, memoryEnabled, en, emitStep, projectsSummary });
   const executeTool = async (name: string, input: unknown): Promise<string> => {
     const out = await baseExecuteTool(name, input);
     toolOutputs.push(out);
@@ -746,7 +744,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // (no LLM). On a hit: optionally regenerate once (AI_GROUNDEDNESS_REGEN), then, if still flagged,
   // append a transparent caveat so the user isn't silently misled. The noisier tab-name grader stays
   // in the offline eval gate (#4) to avoid false caveats on ordinary prose.
-  const accessibleCodeList = [...byCode.keys()];
+  const accessibleCodeList = projectsSummary.map((p) => p.code);
   let grade = gradeAnswer(answer, { accessibleCodes: accessibleCodeList });
   if (!grade.ok) {
     logger.warn({ userId, issues: grade.issues }, '[assistant] groundedness guard flagged an answer');
