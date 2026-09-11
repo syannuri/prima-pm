@@ -156,6 +156,28 @@ function supportsModernThinking(model: string): boolean {
   return /claude-(opus-4-(6|7|8)|sonnet-4-6|fable-5|mythos-5|mythos-preview)/.test(model);
 }
 
+// Prompt-cache the growing conversation prefix in the Q&A tool loop. Each loop STEP (and each new
+// chat TURN) re-sends the entire prior message history — the fetched project data lives in those
+// tool_result blocks. Placing an ephemeral `cache_control` breakpoint on the LAST block of the LAST
+// message means every subsequent request reads that prefix from cache (~0.1× cost) instead of
+// reprocessing it at full price. The breakpoint always rides the newest tail (the standard
+// incremental multi-turn pattern), so hits accrue as the loop/conversation grows. The system prompt
+// keeps its own breakpoint (which also caches the tool definitions), so a request carries at most two
+// breakpoints — well under the 4-per-request limit. Returns a shallow copy; the caller's `msgs` stays
+// marker-free so exactly one message breakpoint exists per request regardless of history length.
+function withHistoryCache(msgs: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  if (msgs.length === 0) return msgs;
+  const out = msgs.slice();
+  const last = out[out.length - 1];
+  const blocks: Anthropic.ContentBlockParam[] = typeof last.content === 'string'
+    ? [{ type: 'text', text: last.content }]
+    : last.content.slice();
+  if (blocks.length === 0) return msgs;
+  blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: { type: 'ephemeral' } } as Anthropic.ContentBlockParam;
+  out[out.length - 1] = { ...last, content: blocks };
+  return out;
+}
+
 function liveAiPort(): AiPort {
   return {
     async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride, feature }) {
@@ -217,7 +239,8 @@ function liveAiPort(): AiPort {
           // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
           // the SDK's Tool shape whose InputSchema requires the literal `type`.
           tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[],
-          messages: msgs,
+          // Cache the accumulated project-context prefix (tool results + prior turns); see withHistoryCache.
+          messages: withHistoryCache(msgs),
         });
         if (onText) stream.on('text', (delta) => onText(delta));
         if (onThinking) stream.on('thinking', (delta) => onThinking(delta));
