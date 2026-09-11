@@ -16,6 +16,7 @@ import AiActionOutcomesCard from '../components/AiActionOutcomesCard';
 import AiMemoryCard from '../components/AiMemoryCard';
 import AiFeedbackInboxCard from '../components/AiFeedbackInboxCard';
 import AiUsageCard from '../components/AiUsageCard';
+import AiJudgeTrendCard from '../components/AiJudgeTrendCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
 import CustomFieldsAdminCard from '../components/CustomFieldsAdminCard';
@@ -80,6 +81,7 @@ export default function SettingsPage() {
               <AiActionOutcomesCard />
               <AiMemoryCard />
               <AiFeedbackInboxCard />
+              <AiJudgeTrendCard />
               <AiUsageCard />
             </SettingsSection>
           )}
