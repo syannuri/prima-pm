@@ -59,6 +59,10 @@ beforeAll(async () => {
     await prisma.task.create({ data: { projectId: mine1.id, wbsCode: '1.1', name: 'Late task', planStart: past, planEnd: past, progressPct: 50 } });
     await prisma.task.create({ data: { projectId: mine2.id, wbsCode: '1.1', name: 'On track', planStart: past, planEnd: future, progressPct: 20 } });
     await prisma.changeRequest.create({ data: { projectId: mine1.id, type: 'SCOPE', title: 'Add scope', description: 'More work', requestedBy: pm.id, status: 'SUBMITTED' } });
+    // MINE-1 cost structure: one direct (material) line partly spent, one indirect line.
+    const dLine = await prisma.costItemDirect.create({ data: { projectId: mine1.id, type: 'SOFTWARE_LICENSE', label: 'CI Tool', qty: 1, unitCost: 300, amount: 300, sortOrder: 0 } });
+    await prisma.costItemIndirect.create({ data: { projectId: mine1.id, type: 'TRANSPORTATION', description: 'Site travel', amount: 100 } });
+    await prisma.actualCostEntry.create({ data: { projectId: mine1.id, date: past, amount: 120, category: 'DIRECT', directLineId: dLine.id, description: 'partial spend' } });
   });
 });
 
@@ -122,6 +126,24 @@ describe('Anett data query — query_data', () => {
     expect(out.byName.project?.code).toBe('MINE-2');
     expect(out.byPartial.project?.code).toBe('MINE-1');
     expect(out.unknown.error).toBeTruthy(); // unresolvable ref → friendly error, no leak
+  });
+
+  it('get_project_costs returns per-line budget/actual/remaining; an inaccessible project → friendly error, no leak', async () => {
+    __setAiPort(scriptPort(async (ex) => ({
+      mine: JSON.parse(await ex('get_project_costs', { project_code: 'MINE-1' })),
+      unknown: JSON.parse(await ex('get_project_costs', { project_code: 'OTHER-1' })), // real code, not accessible
+    })));
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    const out = JSON.parse(res.body.answer) as {
+      mine: { direct: { label: string; budget: number; actualToDate: number; remaining: number }[]; indirect: { description: string }[]; summary: { directActual: number } };
+      unknown: { error?: string };
+    };
+    const line = out.mine.direct.find((d) => d.label === 'CI Tool');
+    expect(line).toMatchObject({ budget: 300, actualToDate: 120, remaining: 180 });
+    expect(out.mine.indirect.map((i) => i.description)).toContain('Site travel');
+    expect(out.mine.summary.directActual).toBe(120);
+    expect(out.unknown.error).toBeTruthy(); // OTHER-1 not in the caller's accessible set → no leak
   });
 
   it('tool path: query_data surfaces a `tables` payload; a bad spec returns an error, no table', async () => {

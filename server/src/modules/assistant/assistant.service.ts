@@ -12,6 +12,7 @@ import { logger } from '../../lib/observability.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
+import { getCostSummary } from '../cost/cost.service.js';
 import { listMyApprovals } from '../approval/approval.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { getActionEffectiveness } from '../aiActions/aiActionOutcomes.service.js';
@@ -104,6 +105,18 @@ const TOOLS: AiToolDef[] = [
   {
     name: 'list_project_risks',
     description: 'Daftar risiko sebuah proyek (kode, judul, jenis, severity, status, skor, EMV). Argumen: project_code dari list_projects.',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string' } },
+      required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_project_costs',
+    description:
+      'Struktur biaya sebuah proyek per baris: biaya langsung (label, tipe, anggaran, actual, sisa, committed) dan tidak langsung, plus ringkasan per kategori (actual langsung/tidak langsung, committed, tersedia, BAC). Pakai untuk "rincian/breakdown biaya", "cost line mana yang boros", "sisa anggaran untuk X". Argumen: project_code dari list_projects. '
+      + 'EN: Per-line cost structure of a project — direct lines (label, type, budget, actual, remaining, committed) and indirect lines, plus a per-category summary (direct/indirect actual, committed, available, BAC). Use for "cost breakdown", "which cost line overspends", "budget left for X". Arg: project_code from list_projects.',
     input_schema: {
       type: 'object',
       properties: { project_code: { type: 'string' } },
@@ -357,6 +370,40 @@ function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
   };
 }
 
+// Compact the full cost engine output (getCostSummary) into a per-line structure Anett can reason
+// over cheaply. Drops verbose manpower internals (rateCard/resource ids); keeps budget vs actual vs
+// remaining vs committed per line + a category rollup. Lines capped defensively to keep tokens low.
+function compactCosts(c: Awaited<ReturnType<typeof getCostSummary>>) {
+  const direct = c.directCosts.slice(0, 60).map((d) => ({
+    label: d.label,
+    type: d.type,
+    budget: Number(d.type === 'MANPOWER' ? d.manpowerCost ?? 0 : d.amount ?? 0),
+    ...(d.type === 'MANPOWER' ? { planMandays: Number(d.planMandays ?? 0) } : {}),
+    actualToDate: d.actualToDate,
+    remaining: d.remaining,
+    committed: d.committed,
+  }));
+  const indirect = c.indirectCosts.slice(0, 60).map((i) => ({
+    description: i.description,
+    type: i.type,
+    budget: Number(i.amount),
+    actualToDate: i.actualToDate,
+    remaining: i.remaining,
+    committed: i.committed,
+  }));
+  return {
+    direct,
+    indirect,
+    summary: {
+      bac: c.baseline?.budgetAtCompletion == null ? null : Number(c.baseline.budgetAtCompletion),
+      directActual: c.directActual,
+      indirectActual: c.indirectActual,
+      committedTotal: c.committedTotal,
+      availableTotal: c.availableTotal,
+    },
+  };
+}
+
 // Build the executeTool callback bound to the caller's accessible project set. Returns a JSON string
 // per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
 // the model can tell the user rather than crash the loop.
@@ -371,6 +418,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'list_projects': return en ? 'Reading your project list' : 'Membaca daftar proyek';
     case 'get_project_details': return en ? `Analyzing${c} health` : `Menganalisis kesehatan${c}`;
     case 'list_project_risks': return en ? `Reviewing${c} risks` : `Meninjau risiko${c}`;
+    case 'get_project_costs': return en ? `Reviewing${c} cost breakdown` : `Meninjau rincian biaya${c}`;
     case 'get_portfolio_summary': return en ? 'Summarizing your portfolio' : 'Merangkum portofolio Anda';
     case 'list_my_approvals': return en ? 'Checking your approvals' : 'Memeriksa persetujuan Anda';
     case 'get_resource_conflicts': return en ? 'Checking resource over-allocation' : 'Memeriksa kelebihan beban resource';
@@ -431,6 +479,12 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
           code: r.code, title: r.title, kind: r.kind, severity: r.severity, status: r.status,
           riskScore: r.riskScore, emv: Number(r.emv),
         })));
+      }
+      case 'get_project_costs': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const cost = await getCostSummary(id);
+        return JSON.stringify(compactCosts(cost));
       }
       case 'get_portfolio_summary': {
         const byStatus: Record<string, number> = {};
