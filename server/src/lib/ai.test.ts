@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
-import { aiNotEnabledError, runToolCalls, toSystemBlocks, systemText } from './ai.js';
+import { aiNotEnabledError, runToolCalls, toSystemBlocks, systemText, driveToolLoop, type LoopStep } from './ai.js';
 import { bindTenantContext } from './tenant/context.js';
 
 // The AI gate message must be honest about who can act on it: a guest's personal sandbox can never
@@ -92,5 +92,70 @@ describe('toSystemBlocks / systemText', () => {
   it('flattens a SystemPrompt back to plain text in order', () => {
     expect(systemText('one')).toBe('one');
     expect(systemText([{ text: 'a' }, { text: 'b', cache: true }])).toBe('ab');
+  });
+});
+
+// #3 best-effort partial: driveToolLoop is the pure control flow of the Q&A tool loop. A scripted
+// callStep lets us exercise every branch — including the maxSteps-exhaustion fallback that makes ONE
+// final tool-less synthesis call instead of returning null (which would surface as a 502).
+describe('driveToolLoop', () => {
+  const textBlock = (t: string) => [{ type: 'text', text: t }] as unknown as Anthropic.ContentBlock[];
+  const toolBlock = () => [{ type: 'tool_use', id: 't1', name: 'x', input: {} }] as unknown as Anthropic.ContentBlock[];
+  // A callStep driven by a queue of scripted steps; records the opts of every call it received.
+  const scripted = (steps: LoopStep[]) => {
+    const calls: { withTools: boolean; synthesis: boolean }[] = [];
+    const fn = async (_m: Anthropic.MessageParam[], opts: { withTools: boolean; synthesis: boolean }) => {
+      calls.push(opts);
+      return steps.shift()!;
+    };
+    return { fn, calls };
+  };
+  const base = (callStep: ReturnType<typeof scripted>['fn']) => ({
+    msgs: [] as Anthropic.MessageParam[],
+    callStep,
+    dispatch: async () => [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] as Anthropic.ToolResultBlockParam[],
+    extractText: (c: Anthropic.ContentBlock[]) => (c[0] && c[0].type === 'text' ? c[0].text : null),
+  });
+
+  it('returns the final answer on a plain end_turn (no tools, no synthesis)', async () => {
+    const s = scripted([{ stopReason: 'end_turn', content: textBlock('done') }]);
+    const out = await driveToolLoop({ ...base(s.fn), maxSteps: 6 });
+    expect(out).toBe('done');
+    expect(s.calls).toEqual([{ withTools: true, synthesis: false }]);
+  });
+
+  it('short-circuits to null on a refusal without any synthesis call', async () => {
+    const s = scripted([{ stopReason: 'refusal', content: [] }]);
+    const out = await driveToolLoop({ ...base(s.fn), maxSteps: 6 });
+    expect(out).toBeNull();
+    expect(s.calls).toEqual([{ withTools: true, synthesis: false }]);
+  });
+
+  it('dispatches tools, resets streamed preamble, then returns the end_turn answer', async () => {
+    let resets = 0;
+    const s = scripted([
+      { stopReason: 'tool_use', content: toolBlock() },
+      { stopReason: 'end_turn', content: textBlock('after tools') },
+    ]);
+    const out = await driveToolLoop({ ...base(s.fn), maxSteps: 6, onTextReset: () => { resets++; } });
+    expect(out).toBe('after tools');
+    expect(resets).toBe(1);
+    expect(s.calls).toEqual([{ withTools: true, synthesis: false }, { withTools: true, synthesis: false }]);
+  });
+
+  it('makes ONE tool-less synthesis call when maxSteps is exhausted, and returns its text', async () => {
+    const s = scripted([
+      { stopReason: 'tool_use', content: toolBlock() },
+      { stopReason: 'tool_use', content: toolBlock() },
+      { stopReason: 'end_turn', content: textBlock('best effort') }, // the #3 synthesis call
+    ]);
+    const out = await driveToolLoop({ ...base(s.fn), maxSteps: 2 });
+    expect(out).toBe('best effort');
+    // 2 tool steps (withTools) + 1 synthesis step (no tools, synthesis flag set).
+    expect(s.calls).toEqual([
+      { withTools: true, synthesis: false },
+      { withTools: true, synthesis: false },
+      { withTools: false, synthesis: true },
+    ]);
   });
 });

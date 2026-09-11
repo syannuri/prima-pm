@@ -234,6 +234,54 @@ export async function runToolCalls(
   }));
 }
 
+// #3 best-effort partial: when the loop reaches its tool-call limit, tell the model to conclude from
+// what it already gathered instead of asking for more tools. Appended (uncached) to the system prompt
+// for the FINAL synthesis call only — the stable/volatile cache segments (#2) keep their breakpoints.
+const SYNTHESIS_NUDGE =
+  '\n\nYou have reached the tool-call limit. Give your best answer NOW using only the information the '
+  + 'tools have already returned — do not ask for more tools. If something is missing, say what you '
+  + 'could not determine.';
+function appendSynthesisNudge(system: SystemPrompt): SystemPrompt {
+  const base: SystemSegment[] = typeof system === 'string' ? [{ text: system, cache: true }] : system;
+  return [...base, { text: SYNTHESIS_NUDGE }];
+}
+
+export type LoopStep = { stopReason: string | null; content: Anthropic.ContentBlock[] };
+
+// Pure orchestration of the agentic Q&A tool loop, split out so the control flow — including the #3
+// maxSteps-exhaustion fallback — is unit-testable without the Anthropic SDK. The SDK call, streaming,
+// usage recording and redaction all live in the injected `callStep`/`dispatch`/`extractText` closures
+// (see liveAiPort.runToolLoop). Each step: refusal → null; tool_use → dispatch the tools and loop;
+// any other stop → return the step's text. If maxSteps is reached without a final answer, make ONE
+// tool-less synthesis call (callStep with synthesis:true) so the model must answer from the context it
+// built — a best-effort partial beats the old hard `null` (which surfaced to the user as a 502 that
+// discarded every tool result already fetched). `msgs` is mutated in place (the growing transcript).
+export async function driveToolLoop(input: {
+  msgs: Anthropic.MessageParam[];
+  maxSteps: number;
+  callStep: (msgs: Anthropic.MessageParam[], opts: { withTools: boolean; synthesis: boolean }) => Promise<LoopStep>;
+  dispatch: (content: Anthropic.ContentBlock[]) => Promise<Anthropic.ToolResultBlockParam[]>;
+  extractText: (content: Anthropic.ContentBlock[]) => string | null;
+  onTextReset?: () => void;
+}): Promise<string | null> {
+  const { msgs, maxSteps, callStep, dispatch, extractText, onTextReset } = input;
+  for (let step = 0; step < maxSteps; step++) {
+    const res = await callStep(msgs, { withTools: true, synthesis: false });
+    if (res.stopReason === 'refusal') return null;
+    if (res.stopReason === 'tool_use') {
+      // Any text streamed this step was preamble before a tool call — tell the client to discard it.
+      onTextReset?.();
+      msgs.push({ role: 'assistant', content: res.content });
+      msgs.push({ role: 'user', content: await dispatch(res.content) });
+      continue;
+    }
+    return extractText(res.content);
+  }
+  // Exhausted the tool budget → one final tool-less call so the model concludes from context (#3).
+  const finalRes = await callStep(msgs, { withTools: false, synthesis: true });
+  return extractText(finalRes.content);
+}
+
 function liveAiPort(): AiPort {
   return {
     async draftJson({ system, user, jsonSchema, maxTokens, model: modelOverride, feature }) {
@@ -281,52 +329,51 @@ function liveAiPort(): AiPort {
       const redactor = createRedactor(); // #2 privacy guard (identity unless AI_REDACT); one map for the whole loop
       const msgs: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: redactor.redact(m.content) }));
       const modern = supportsModernThinking(model); // 4.6+ only: adaptive thinking + effort (omit on Haiku etc)
-      for (let step = 0; step < maxSteps; step++) {
-        // Stream so answer text can be forwarded token-by-token (improvement #2). `display: 'summarized'`
-        // exposes Anett's reasoning as thinking deltas (#D): `on('text')` fires for the visible answer,
-        // `on('thinking')` for the reasoning summary. Effort is the env-tunable knob (#D). Both are
-        // 4.6+-only, so a routed cheap model (#3) runs without them.
+      // One streaming model call → normalized step. Stream so answer text is forwarded token-by-token
+      // (improvement #2); `display: 'summarized'` exposes reasoning as thinking deltas (#D). Both are
+      // 4.6+-only, so a routed cheap model (#3) runs without them. `withTools:false` (the #3 final
+      // synthesis) omits tools so the model can't emit tool_use and MUST answer; `synthesis:true`
+      // appends the tool-limit nudge (uncached — the cache segments keep their breakpoints).
+      const callStep = async (m: Anthropic.MessageParam[], { withTools, synthesis }: { withTools: boolean; synthesis: boolean }): Promise<LoopStep> => {
+        const sys = synthesis ? appendSynthesisNudge(system) : system;
         const stream = client.messages.stream({
           model,
           max_tokens: maxTokens,
           thinking: modern ? { type: 'adaptive', display: 'summarized' } : undefined,
           output_config: modern ? { effort: aiEffort() } : undefined,
-          system: toSystemBlocks(system, (s) => redactor.redact(s)),
+          system: toSystemBlocks(sys, (s) => redactor.redact(s)),
           // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
           // the SDK's Tool shape whose InputSchema requires the literal `type`.
-          tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[],
+          tools: withTools ? (tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[]) : undefined,
           // Cache the accumulated project-context prefix (tool results + prior turns); see withHistoryCache.
-          messages: withHistoryCache(msgs),
+          messages: withHistoryCache(m),
         });
         if (onText) stream.on('text', (delta) => onText(delta));
         if (onThinking) stream.on('thinking', (delta) => onThinking(delta));
         const res = await stream.finalMessage();
-        // Record every step of the loop (each is a billed API call).
+        // Record every step of the loop (each is a billed API call), incl. the #3 synthesis call.
         await recordAiUsage({ feature: feature ?? 'assistant_qa', model, usage: res.usage });
         onUsage?.(res.usage as RawUsage); // #5 cost meter: surface this step's tokens to the caller
-        if (res.stop_reason === 'refusal') return null;
-        if (res.stop_reason === 'tool_use') {
-          // The text streamed this step (if any) was preamble before a tool call — tell the client to
-          // discard it; only the final end_turn text is the real answer.
-          onTextReset?.();
-          // Echo the assistant turn (with its tool_use blocks) then run every tool CONCURRENTLY and
-          // feed the results back (see runToolCalls — order-preserving, error-isolated).
-          msgs.push({ role: 'assistant', content: res.content });
-          const toolResults = await runToolCalls(res.content, executeTool, (s) => redactor.redact(s));
-          msgs.push({ role: 'user', content: toolResults });
-          continue;
-        }
-        // end_turn (or any non-tool stop) → return the concatenated text answer, restoring any
-        // tokenised value. (Streamed onText deltas are best-effort un-restored; the final answer —
-        // what clients render as the settled message — is authoritative and fully restored.)
-        const text = res.content
+        return { stopReason: res.stop_reason, content: res.content };
+      };
+      // Return the concatenated text answer, restoring any tokenised value. (Streamed onText deltas are
+      // best-effort un-restored; the settled final answer is authoritative and fully restored.)
+      const extractText = (content: Anthropic.ContentBlock[]): string | null => {
+        const text = content
           .filter((b): b is Anthropic.TextBlock => b.type === 'text')
           .map((b) => b.text)
           .join('\n')
           .trim();
         return text ? redactor.restore(text) : null;
-      }
-      return null; // exceeded maxSteps
+      };
+      return driveToolLoop({
+        msgs,
+        maxSteps,
+        callStep,
+        dispatch: (content) => runToolCalls(content, executeTool, (s) => redactor.redact(s)),
+        extractText,
+        onTextReset,
+      });
     },
     async submitBatch({ requests }) {
       const { apiKey, model: defaultModel } = aiConfig();
