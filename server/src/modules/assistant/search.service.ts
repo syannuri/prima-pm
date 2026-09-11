@@ -1,8 +1,10 @@
 import { createHash } from 'crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
+import { Forbidden } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
 import { embeddingsEnabled, embeddingModel, getEmbedder, cosine } from '../../lib/embeddings.js';
+import { canWriteTenantScope } from './memory.service.js';
 
 // Cross-project full-text search (the "semantic search v1" — lexical, no embeddings). Builds a per-
 // project searchable document from the project's text (name, client, charter narrative, risk / change-
@@ -27,17 +29,38 @@ const MAX_RESULTS = 8;
 // weakly-related project. Tunable without a code change.
 const SEMANTIC_MIN_SCORE = Number(process.env.SEMANTIC_MIN_SCORE) || 0.35;
 
-// Public entry point. Uses embeddings (semantic, meaning-based) when Voyage is armed; otherwise —
-// and on any embedding error — falls back to the lexical FTS below, so search never breaks.
-export async function searchProjects(query: string, projectIds: string[]): Promise<SearchHit[]> {
+// Which engine actually served a search — the pilot's key observability signal (#4). `semantic` means
+// Voyage embeddings ranked the hits; `fts` means the lexical fallback ran (Voyage disabled OR errored).
+export type SearchMode = 'semantic' | 'fts';
+
+// Public entry point (mode-aware). Uses embeddings (semantic, meaning-based) when Voyage is armed;
+// otherwise — and on any embedding error — falls back to the lexical FTS below, so search never breaks.
+// The returned `mode` reflects what ACTUALLY ran (semantic success vs FTS fallback), so a pilot can see
+// whether the Voyage key is really being exercised without changing behavior.
+export async function searchProjectsDetailed(query: string, projectIds: string[]): Promise<{ mode: SearchMode; hits: SearchHit[] }> {
   if (embeddingsEnabled()) {
     try {
-      return await semanticSearchProjects(query, projectIds);
+      return { mode: 'semantic', hits: await semanticSearchProjects(query, projectIds) };
     } catch {
-      // Voyage outage / rate-limit / bad response → degrade to lexical search.
+      // Voyage outage / rate-limit / bad response → degrade to lexical search (mode falls to 'fts').
     }
   }
-  return ftsSearchProjects(query, projectIds);
+  return { mode: 'fts', hits: await ftsSearchProjects(query, projectIds) };
+}
+
+// Back-compat thin wrapper: callers that only want the hits (e.g. existing tests) keep working.
+export async function searchProjects(query: string, projectIds: string[]): Promise<SearchHit[]> {
+  return (await searchProjectsDetailed(query, projectIds)).hits;
+}
+
+// Pilot status probe (#4): is semantic search armed, on which model, and how many project vectors are
+// already cached for this tenant? ADMIN/PMO only (reuses the governance-role rule). Lets an operator
+// confirm arming worked (enabled:true) and watch the cache warm up, without spending on a search.
+export async function getSearchStatus(caller: { role: Role }): Promise<{ enabled: boolean; model: string; cachedVectors: number }> {
+  if (!canWriteTenantScope(caller.role)) throw Forbidden('Hanya admin/PMO yang dapat melihat status pencarian.');
+  // projectEmbedding is a tenant-scoped model → count is auto-filtered to the caller's tenant.
+  const cachedVectors = await prisma.projectEmbedding.count();
+  return { enabled: embeddingsEnabled(), model: embeddingModel(), cachedVectors };
 }
 
 async function ftsSearchProjects(query: string, projectIds: string[]): Promise<SearchHit[]> {

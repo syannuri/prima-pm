@@ -9,6 +9,7 @@ import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantB
 import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { recordFeedback, listFeedbackInbox, analyzeFeedback, adoptFeedbackSuggestion, feedbackDistillEnabled } from './feedback.service.js';
 import { distillConversation, autoDistillEnabled } from './memoryDistill.service.js';
+import { getSearchStatus } from './search.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -139,6 +140,12 @@ router.get('/feedback/inbox', asyncHandler(async (req, res) => {
   const rating = req.query.rating === 'UP' || req.query.rating === 'DOWN' ? req.query.rating : undefined;
   const rows = await listFeedbackInbox({ role: req.user!.role }, { rating });
   res.json({ feedback: rows, distillAvailable: feedbackDistillEnabled() });
+}));
+
+// Semantic-search pilot status (#4): is Voyage armed, on which model, and how many project vectors are
+// cached for this tenant? ADMIN/PMO only (guard in the service). Lets an operator confirm the pilot.
+router.get('/search/status', asyncHandler(async (req, res) => {
+  res.json(await getSearchStatus({ role: req.user!.role }));
 }));
 
 // Feedback → auto prompt-improvement (#2): distill recurring 👎 into suggested GUIDANCE rules (ADMIN/PMO).
