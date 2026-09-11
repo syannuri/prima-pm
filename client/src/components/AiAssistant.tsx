@@ -7,6 +7,8 @@ import AnettChartCard from './AnettChartCard';
 import { onOpenAnett } from '../lib/anettBus';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { useLang } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { anettChatKey } from '../lib/anettChat';
 
 // Portfolio AI assistant — Q&A over the projects the user can access, and (Stage C) able to PROPOSE
 // actions that a human approves. Launcher sits bottom-RIGHT, stacked ABOVE the DM ChatWidget bubble.
@@ -19,8 +21,6 @@ interface Turn { role: 'user' | 'assistant'; content: string; proposals?: Propos
 interface TurnUsage { inputTokens: number; outputTokens: number; costUsd: number } // #5 cost meter
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 interface ApprovalItem { id: string; actionLabel: string; stepName: string; project: { code: string; name: string } | null }
-
-const CHAT_KEY = 'anett-chat';
 
 // All of Anett's UI copy, bilingual — follows the app's language toggle (useLang) like the rest of
 // the app. `en` is the default for non-Indonesian locales, so every visible string has both.
@@ -296,13 +296,16 @@ function stripMarkdown(s: string): string {
 export default function AiAssistant() {
   const reduce = usePrefersReducedMotion();
   const { lang } = useLang();
+  const { user } = useAuth();
   const L = STRINGS[lang];
   const ACTION_LABELS = L.actionLabels;
+  // Per-user storage key so one account never reads another's chat in a shared tab (see anettChat.ts).
+  const chatKey = anettChatKey(user?.id);
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false); // drives the open transition (mount → next frame → in)
   // Conversation survives close/reopen and an accidental reload within the tab (sessionStorage).
   const [turns, setTurns] = useState<Turn[]>(() => {
-    try { return JSON.parse(sessionStorage.getItem(CHAT_KEY) || '[]') as Turn[]; } catch { return []; }
+    try { return JSON.parse(sessionStorage.getItem(anettChatKey(user?.id)) || '[]') as Turn[]; } catch { return []; }
   });
   const [input, setInput] = useState('');
   const [expanded, setExpanded] = useState(false); // larger panel (not fullscreen)
@@ -478,7 +481,17 @@ export default function AiAssistant() {
     distilledCountRef.current = real.length;
     void api.post('/assistant/memory/distill', { turns: real.slice(-24).map(({ role, content }) => ({ role, content })) }).catch(() => {});
   }, [open, autoDistill]);
-  useEffect(() => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
+  // Persist on every turn change. Depends on `turns` ONLY (not chatKey): on an in-tab identity change
+  // (impersonation) the reload effect below swaps `turns` first, so this never writes one user's chat
+  // into another's key.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { try { sessionStorage.setItem(chatKey, JSON.stringify(turns)); } catch { /* quota */ } }, [turns]);
+  // Identity changed in the same tab (login of a different account, or impersonation start/stop) →
+  // drop the previous user's in-memory conversation and load the new user's own (if any).
+  useEffect(() => {
+    try { setTurns(JSON.parse(sessionStorage.getItem(chatKey) || '[]') as Turn[]); } catch { setTurns([]); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   // #2 depth: recompute the scroll-edge state (top/bottom) from the scroll container.
   const updateScrollEdges = () => {
     const el = scrollRef.current; if (!el) return;
@@ -706,7 +719,7 @@ export default function AiAssistant() {
     void runAskStream(base);
   };
 
-  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); setSessionCost({ costUsd: 0, tokens: 0 }); spokenRef.current = -1; cancelSpeak(); try { sessionStorage.removeItem(CHAT_KEY); } catch { /* noop */ } inputRef.current?.focus(); };
+  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); setSessionCost({ costUsd: 0, tokens: 0 }); spokenRef.current = -1; cancelSpeak(); try { sessionStorage.removeItem(chatKey); } catch { /* noop */ } inputRef.current?.focus(); };
 
   // Stop + release the waveform mic stream.
   const stopMic = () => setMicStream((s) => { s?.getTracks().forEach((t) => t.stop()); return null; });
