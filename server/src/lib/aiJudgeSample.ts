@@ -29,8 +29,10 @@ export function shouldSampleJudge(): boolean {
 // written, false when the judge declined/failed. Must run inside a tenant context (the create is
 // tenant-scoped). `tenantId` is passed explicitly too — the extension injects the same value under
 // context; explicit covers the no-context path (mirrors recordAiUsage).
-export async function recordJudgeSample(input: { question: string; answer: string; feature?: string; userId?: string; tenantId?: string | null }): Promise<boolean> {
-  const score = await judgeAnswer({ question: input.question, answer: input.answer });
+export async function recordJudgeSample(input: { question: string; answer: string; context?: string; feature?: string; userId?: string; tenantId?: string | null }): Promise<boolean> {
+  // Pass the tool-gathered context so the judge can VERIFY facts (fair groundedness) instead of scoring
+  // data-heavy answers blind. Context is used transiently by the judge; it is NOT stored on the row.
+  const score = await judgeAnswer({ question: input.question, answer: input.answer, context: input.context });
   if (!score) return false;
   await prisma.aiJudgeSample.create({
     data: {
@@ -55,7 +57,7 @@ export async function recordJudgeSample(input: { question: string; answer: strin
 // it (best-effort, like recordAiUsage). The tenant id is captured synchronously and re-bound for the
 // detached work so the judge's own usage-recording + the DB write stay tenant-scoped after the request
 // handler returns. No-op unless shouldSampleJudge() passes.
-export function sampleAnswerQuality(input: { question: string; answer: string; feature?: string; userId?: string }): void {
+export function sampleAnswerQuality(input: { question: string; answer: string; context?: string; feature?: string; userId?: string }): void {
   if (!shouldSampleJudge()) return;
   if (!input.question.trim() || !input.answer.trim()) return;
   const tenantId = getTenantStore()?.tenantId ?? null;

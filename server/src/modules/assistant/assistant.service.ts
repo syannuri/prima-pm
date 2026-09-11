@@ -698,13 +698,22 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   };
   // #3 smart model routing: pick the model for this turn (cheap for a clear lookup, capable otherwise).
   const chosenModel = routeModel(messages);
+  // #5: collect the tool outputs this turn so the quality-judge can VERIFY the answer's facts against
+  // the data Anett actually fetched (fair groundedness), instead of scoring data-heavy answers blind.
+  const toolOutputs: string[] = [];
+  const baseExecuteTool = makeExecuteTool(byCode, { userId, role, proposals, navs, memories, tables, memoryEnabled, en, emitStep, projectsSummary });
+  const executeTool = async (name: string, input: unknown): Promise<string> => {
+    const out = await baseExecuteTool(name, input);
+    toolOutputs.push(out);
+    return out;
+  };
   // Run the tool loop. `streaming` gates the live callbacks so a silent #1 regeneration doesn't
   // re-stream tokens to the client (the corrected final answer replaces the first via the answer event).
   const runLoop = (msgs: AssistantTurn[], streaming: boolean) => port.runToolLoop!({
     system,
     messages: msgs,
     tools: [...tools, ...memoryTools],
-    executeTool: makeExecuteTool(byCode, { userId, role, proposals, navs, memories, tables, memoryEnabled, en, emitStep, projectsSummary }),
+    executeTool,
     maxSteps: 6,
     maxTokens: 1500,
     feature: 'assistant_qa',
@@ -744,9 +753,11 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const costUsd = estimateCostUsd({ model: chosenModel, inputTokens: tok.input, outputTokens: tok.output, cacheCreationTokens: tok.cacheCreation, cacheReadTokens: tok.cacheRead });
   const usage: TurnUsage = { inputTokens: tok.input, outputTokens: tok.output, costUsd };
   // #5 quality-trend sampling: with probability AI_JUDGE_SAMPLE_RATE (dormant by default), judge this
-  // live answer in the BACKGROUND and store the score. Fire-and-forget — never blocks the reply.
+  // live answer in the BACKGROUND and store the score. Fire-and-forget — never blocks the reply. The
+  // tool outputs are passed (bounded) as context so the judge grades groundedness against real data.
   const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
-  sampleAnswerQuality({ question: lastUserMsg, answer, feature: 'assistant_qa', userId });
+  const judgeContext = toolOutputs.length ? toolOutputs.join('\n').slice(0, 3000) : undefined;
+  sampleAnswerQuality({ question: lastUserMsg, answer, context: judgeContext, feature: 'assistant_qa', userId });
   return { answer, proposals, navigate: navs, memories, tables, usage, grounded: grade.ok };
 }
 

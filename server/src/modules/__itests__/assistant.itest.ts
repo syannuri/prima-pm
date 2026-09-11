@@ -171,6 +171,9 @@ describe('AI portfolio assistant — /assistant', () => {
 
   it('MODEL ROUTING (#3): a clear lookup goes to the cheap model, analysis to the capable one', async () => {
     const prev = process.env.AI_MODEL_ROUTING; process.env.AI_MODEL_ROUTING = '1';
+    // Pin the capable model so this test is deterministic regardless of an ambient AI_MODEL in .env
+    // (e.g. a box running Anett on Haiku): routing to "capable" means aiConfig().model, not literally opus.
+    const prevModel = process.env.AI_MODEL; process.env.AI_MODEL = 'claude-opus-4-8';
     let captured = '';
     __setAiPort({
       async draftJson() { return null; },
@@ -182,6 +185,7 @@ describe('AI portfolio assistant — /assistant', () => {
     await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'mengapa proyek ini berisiko terlambat? tolong analisis dan beri rekomendasi.' }] });
     expect(captured).toContain('opus'); // analytical → capable model
     if (prev === undefined) delete process.env.AI_MODEL_ROUTING; else process.env.AI_MODEL_ROUTING = prev;
+    if (prevModel === undefined) delete process.env.AI_MODEL; else process.env.AI_MODEL = prevModel;
     __setAiPort(answerPort);
   });
 
