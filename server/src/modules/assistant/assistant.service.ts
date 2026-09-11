@@ -20,7 +20,7 @@ import { findGuide, guideIndex } from './processGuide.js';
 import { findPmiTopic, pmiIndex, PMI_DISCLAIMER_ID, PMI_DISCLAIMER_EN } from './pmiKnowledge.js';
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
-import { searchProjects } from './search.service.js';
+import { searchProjectsDetailed } from './search.service.js';
 
 // Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
 // projects the CALLER can access, via a server-side manual tool loop. The API key and all data
@@ -558,8 +558,11 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
         }
       }
       case 'search_projects': {
-        const hits = await searchProjects(typeof args.query === 'string' ? args.query : '', [...accessibleByCode.values()]);
-        return JSON.stringify({ count: hits.length, results: hits.map((h) => ({ code: h.code, name: h.name, snippet: h.snippet })) });
+        const { mode, hits } = await searchProjectsDetailed(typeof args.query === 'string' ? args.query : '', [...accessibleByCode.values()]);
+        // Pilot observability (#4): record which engine served each search so semantic-vs-FTS usage is
+        // measurable in prod logs once Voyage is armed.
+        logger.info({ userId: ctx.userId, mode, count: hits.length }, '[assistant] project search');
+        return JSON.stringify({ mode, count: hits.length, results: hits.map((h) => ({ code: h.code, name: h.name, snippet: h.snippet })) });
       }
       case 'remember': {
         if (!ctx.memoryEnabled) return JSON.stringify({ error: 'Memori AI tidak aktif untuk workspace ini.' });

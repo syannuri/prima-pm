@@ -4,7 +4,7 @@ import { runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
 import { __setEmbedder } from '../../lib/embeddings.js';
-import { searchProjects } from '../assistant/search.service.js';
+import { searchProjects, searchProjectsDetailed, getSearchStatus } from '../assistant/search.service.js';
 
 // Semantic search v2 (#1): a deterministic fake embedder maps text → a 3-dim keyword-count vector, so
 // cosine ranking is predictable without a network/Voyage key. Verifies meaning-based ranking, the
@@ -72,5 +72,28 @@ describe('semanticSearchProjects (#1)', () => {
     const hits = await runWithTenant(tid, () => searchProjects('alpha', [idA, idB]));
     expect(embedCalls).toBe(0); // never called the embedder
     expect(hits.some((h) => h.code === 'SM-A')).toBe(true); // FTS matches 'alpha' in clientName
+  });
+
+  // #4 pilot observability: the returned mode reflects which engine actually ran.
+  it('reports mode "semantic" when armed and "fts" when disabled', async () => {
+    process.env.VOYAGE_API_KEY = 'test-key';
+    const armed = await runWithTenant(tid, () => searchProjectsDetailed('alpha', [idA, idB]));
+    expect(armed.mode).toBe('semantic');
+    delete process.env.VOYAGE_API_KEY;
+    const off = await runWithTenant(tid, () => searchProjectsDetailed('alpha', [idA, idB]));
+    expect(off.mode).toBe('fts');
+  });
+
+  it('status probe reflects the armed state + cached vector count, and is ADMIN/PMO-only', async () => {
+    process.env.VOYAGE_API_KEY = 'test-key';
+    await runAsSystem(() => prisma.projectEmbedding.deleteMany({}));
+    await runWithTenant(tid, () => searchProjects('alpha', [idA, idB])); // warms 2 vectors
+    const status = await runWithTenant(tid, () => getSearchStatus({ role: 'ADMIN' }));
+    expect(status).toMatchObject({ enabled: true, model: 'voyage-3', cachedVectors: 2 });
+    // A non-governance role is refused.
+    await expect(runWithTenant(tid, () => getSearchStatus({ role: 'VIEWER' }))).rejects.toThrow();
+    delete process.env.VOYAGE_API_KEY;
+    const off = await runWithTenant(tid, () => getSearchStatus({ role: 'ADMIN' }));
+    expect(off.enabled).toBe(false);
   });
 });
