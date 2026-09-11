@@ -86,4 +86,16 @@ describe('AiJudgeSample (#5 quality-trend sampling)', () => {
     expect(empty.totalSamples).toBe(0);
     expect(empty.passRate).toBe(0);
   });
+
+  it('passes the tool context to the judge so groundedness is graded against real data', async () => {
+    let capturedUser = '';
+    __setAiPort({
+      async draftJson({ user }) { capturedUser = String(user); return { groundedness: 5, helpfulness: 5, clarity: 5, rationale: 'ok' }; },
+      async draftNarrative() { return null; },
+      async runToolLoop() { return 'ok'; },
+    });
+    await runWithTenant(tidA, () => recordJudgeSample({ question: 'status?', answer: 'green', context: 'SPI=0.92 CPI=1.16 BAC=3089' }));
+    expect(capturedUser).toContain('Context:');
+    expect(capturedUser).toContain('SPI=0.92 CPI=1.16 BAC=3089'); // the judge can now verify the numbers
+  });
 });
