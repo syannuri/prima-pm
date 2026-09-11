@@ -7,7 +7,7 @@ import { signAccessToken } from '../../lib/jwt.js';
 import { runWithTenant } from '../../lib/tenant/context.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
-import { __setAiPort, type AiPort } from '../../lib/ai.js';
+import { __setAiPort, systemText, type AiPort } from '../../lib/ai.js';
 
 // Portfolio Q&A assistant (Phase 4) — server-side manual tool loop via an injectable port. Exercises
 // the two gates (env + per-tenant opt-in), the availability probe, and — critically — the security
@@ -106,7 +106,7 @@ describe('AI portfolio assistant — /assistant', () => {
     __setAiPort({
       async draftJson() { return null; },
       async draftNarrative() { return null; },
-      async runToolLoop({ system }) { captured = system; return 'ok'; },
+      async runToolLoop({ system }) { captured = systemText(system); return 'ok'; },
     });
 
     await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'How is my project?' }], lang: 'en' });
@@ -125,7 +125,7 @@ describe('AI portfolio assistant — /assistant', () => {
       async draftJson() { return null; },
       async draftNarrative() { return null; },
       async runToolLoop({ system, executeTool }) {
-        captured = system;
+        captured = systemText(system);
         const evm = await executeTool('pmi_guidance', { topic: 'earned value SPI behind schedule' });
         const missing = await executeTool('pmi_guidance', { topic: 'zzzznotarealtopic' });
         return JSON.stringify({ evm, missing });
@@ -383,7 +383,7 @@ describe('AI portfolio assistant — /assistant', () => {
         const portfolio = await executeTool('get_portfolio_summary', {});
         const tasks = await executeTool('list_project_tasks', { project_code: 'MINE-1' });
         const foreign = await executeTool('list_project_tasks', { project_code: 'OTHER-1' });
-        return JSON.stringify({ system, portfolio, tasks, foreign });
+        return JSON.stringify({ system: systemText(system), portfolio, tasks, foreign });
       },
     });
     // Viewing MINE-1 → "proyek ini" must resolve to it in the prompt.

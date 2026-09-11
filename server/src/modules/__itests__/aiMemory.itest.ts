@@ -7,7 +7,7 @@ import { signAccessToken } from '../../lib/jwt.js';
 import { runWithTenant } from '../../lib/tenant/context.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
-import { __setAiPort, type AiPort } from '../../lib/ai.js';
+import { __setAiPort, systemText, type AiPort } from '../../lib/ai.js';
 
 // Anett cross-session memory (Fase 1): the per-tenant opt-in gate, the remember/forget tools, prompt
 // injection, USER-vs-TENANT scoping + governance, and the Settings CRUD routes.
@@ -25,7 +25,7 @@ const answerPort: AiPort = {
 const scriptPort = (script: (executeTool: (n: string, i: unknown) => Promise<string>, system: string) => Promise<unknown>): AiPort => ({
   async draftJson() { return null; },
   async draftNarrative() { return null; },
-  async runToolLoop({ executeTool, system }) { return JSON.stringify(await script(executeTool, system)); },
+  async runToolLoop({ executeTool, system }) { return JSON.stringify(await script(executeTool, systemText(system))); },
 });
 
 let prevFlag: string | undefined;
@@ -73,7 +73,9 @@ describe('Anett cross-session memory — /assistant memory', () => {
     const res = await ask(pmToken);
     __setAiPort(answerPort);
     expect(res.status).toBe(200);
-    const out = JSON.parse(res.body.answer) as { system: string; remember: string };
+    // The smuggled system prompt carries an example backtick code, so the #1 groundedness guard
+    // appends a caveat on a real newline (JSON.stringify never emits one) — parse just the JSON line.
+    const out = JSON.parse(res.body.answer.split('\n')[0]) as { system: string; remember: string };
     expect(out.system).not.toContain('memori jangka panjang');
     expect(out.remember).toContain('tidak aktif');
     expect(res.body.memories).toEqual([]);
@@ -99,7 +101,7 @@ describe('Anett cross-session memory — /assistant memory', () => {
     __setAiPort(scriptPort(async (_e, system) => ({ system })));
     const res = await ask(pmToken);
     __setAiPort(answerPort);
-    const out = JSON.parse(res.body.answer) as { system: string };
+    const out = JSON.parse(res.body.answer.split('\n')[0]) as { system: string };
     expect(out.system).toContain('Yang Anda ingat');
     expect(out.system).toContain('Pengguna lebih suka jawaban ringkas');
     expect(out.system).toContain('memori jangka panjang'); // the capability note
