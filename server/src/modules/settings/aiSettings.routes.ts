@@ -8,6 +8,7 @@ import { getTenantStore } from '../../lib/tenant/context.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
 import { getActionEffectiveness, listRecentOutcomes } from '../aiActions/aiActionOutcomes.service.js';
+import { getJudgeTrend } from '../assistant/judgeTrend.service.js';
 
 // Per-tenant AI Status Narrative opt-in — self-serve for the tenant's own ADMIN (distinct from the
 // deployment-global /settings, which is super-admin only). `configured` reflects the global env gate
@@ -66,6 +67,16 @@ router.get(
   asyncHandler(async (req, res) => {
     const take = Math.min(Math.max(Number(req.query.take) || 20, 1), 100);
     res.json({ outcomes: await listRecentOutcomes({ take }) });
+  }),
+);
+
+// #5 quality-trend: daily buckets of the LLM judge's scores over sampled live answers, for the
+// Settings → Governance "AI answer quality" card. Tenant-scoped (auto via the Prisma extension).
+router.get(
+  '/judge-trend',
+  asyncHandler(async (req, res) => {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    res.json(await getJudgeTrend({ role: req.user!.role }, { days }));
   }),
 );
 

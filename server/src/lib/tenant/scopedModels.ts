@@ -18,4 +18,5 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   'RequirementTaskLink', 'ProjectCommentary', 'AiBriefing', 'AiMemory', 'AiFeedback', 'AiUsage',
   'ProjectEmbedding', 'CustomFieldDef', 'CustomFieldValue', 'Program', 'CrossProjectLink', 'CustomRole',
   'Proposal', // Project Intake & Portfolio Selection
+  'AiJudgeSample', // round-6 #5: quality-trend sampling
 ]);

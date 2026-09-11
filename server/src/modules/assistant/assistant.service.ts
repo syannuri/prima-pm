@@ -5,6 +5,7 @@ import { getTenantStore } from '../../lib/tenant/context.js';
 import { aiEnabled, aiConfig, getAiPort, type AiToolDef, type SystemPrompt, aiNotEnabledError } from '../../lib/ai.js';
 import { type RawUsage } from '../../lib/aiUsage.js';
 import { estimateCostUsd } from '../../lib/aiPricing.js';
+import { sampleAnswerQuality } from '../../lib/aiJudgeSample.js';
 import { gradeAnswer } from '../../lib/aiEval.js';
 import { logger } from '../../lib/observability.js';
 import { listProjects } from '../projects/projects.service.js';
@@ -742,6 +743,10 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
 
   const costUsd = estimateCostUsd({ model: chosenModel, inputTokens: tok.input, outputTokens: tok.output, cacheCreationTokens: tok.cacheCreation, cacheReadTokens: tok.cacheRead });
   const usage: TurnUsage = { inputTokens: tok.input, outputTokens: tok.output, costUsd };
+  // #5 quality-trend sampling: with probability AI_JUDGE_SAMPLE_RATE (dormant by default), judge this
+  // live answer in the BACKGROUND and store the score. Fire-and-forget — never blocks the reply.
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  sampleAnswerQuality({ question: lastUserMsg, answer, feature: 'assistant_qa', userId });
   return { answer, proposals, navigate: navs, memories, tables, usage, grounded: grade.ok };
 }
 
