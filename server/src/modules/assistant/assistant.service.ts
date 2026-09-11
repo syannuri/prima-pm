@@ -7,6 +7,7 @@ import { type RawUsage } from '../../lib/aiUsage.js';
 import { estimateCostUsd } from '../../lib/aiPricing.js';
 import { sampleAnswerQuality } from '../../lib/aiJudgeSample.js';
 import { gradeAnswer } from '../../lib/aiEval.js';
+import { verifyCitedValues } from '../../lib/citationCheck.js';
 import { logger } from '../../lib/observability.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
@@ -750,15 +751,28 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     }
   }
 
+  // Tool data gathered this turn — used by the #6 value check and (bounded) as judge context (#5).
+  const judgeContext = toolOutputs.length ? toolOutputs.join('\n').slice(0, 3000) : undefined;
+
+  // #6 deterministic citation-value verification: catch monetary magnitude/unit slips (e.g. Miliar vs
+  // Juta) that the LLM judge misses — compare the Rp figures in the answer against the real tool data.
+  // Free, conservative (only a clean ~1000× mismatch fires). Appends a transparent caveat + logs.
+  const valueCheck = verifyCitedValues(answer, judgeContext);
+  if (!valueCheck.ok) {
+    logger.warn({ userId, issues: valueCheck.issues }, '[assistant] citation-value check flagged a figure');
+    answer += en
+      ? '\n\n_⚠️ Note: a rupiah figure above may be off by ~1000× (e.g. million vs billion) — please verify against the project’s Cost tab._'
+      : '\n\n_⚠️ Catatan: ada angka rupiah di atas yang mungkin meleset ~1000× (mis. Juta vs Miliar) — mohon verifikasi di tab Biaya proyek._';
+  }
+
   const costUsd = estimateCostUsd({ model: chosenModel, inputTokens: tok.input, outputTokens: tok.output, cacheCreationTokens: tok.cacheCreation, cacheReadTokens: tok.cacheRead });
   const usage: TurnUsage = { inputTokens: tok.input, outputTokens: tok.output, costUsd };
   // #5 quality-trend sampling: with probability AI_JUDGE_SAMPLE_RATE (dormant by default), judge this
   // live answer in the BACKGROUND and store the score. Fire-and-forget — never blocks the reply. The
   // tool outputs are passed (bounded) as context so the judge grades groundedness against real data.
   const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
-  const judgeContext = toolOutputs.length ? toolOutputs.join('\n').slice(0, 3000) : undefined;
   sampleAnswerQuality({ question: lastUserMsg, answer, context: judgeContext, feature: 'assistant_qa', userId });
-  return { answer, proposals, navigate: navs, memories, tables, usage, grounded: grade.ok };
+  return { answer, proposals, navigate: navs, memories, tables, usage, grounded: grade.ok && valueCheck.ok };
 }
 
 // Deterministic (NO LLM, NO cost) briefing for the assistant's proactive open-state: what needs the
