@@ -13,6 +13,10 @@ import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
 import { getCostSummary } from '../cost/cost.service.js';
+import { getCpm } from '../schedule/schedule.service.js';
+import { listIssues } from '../issue/issue.service.js';
+import { listAssumptions, listDependencies } from '../raid/raid.service.js';
+import { listRequirements } from '../requirement/requirement.service.js';
 import { listMyApprovals } from '../approval/approval.service.js';
 import { proposeAction, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { getActionEffectiveness } from '../aiActions/aiActionOutcomes.service.js';
@@ -117,6 +121,42 @@ const TOOLS: AiToolDef[] = [
     description:
       'Struktur biaya sebuah proyek per baris: biaya langsung (label, tipe, anggaran, actual, sisa, committed) dan tidak langsung, plus ringkasan per kategori (actual langsung/tidak langsung, committed, tersedia, BAC). Pakai untuk "rincian/breakdown biaya", "cost line mana yang boros", "sisa anggaran untuk X". Argumen: project_code dari list_projects. '
       + 'EN: Per-line cost structure of a project — direct lines (label, type, budget, actual, remaining, committed) and indirect lines, plus a per-category summary (direct/indirect actual, committed, available, BAC). Use for "cost breakdown", "which cost line overspends", "budget left for X". Arg: project_code from list_projects.',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string' } },
+      required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_schedule_detail',
+    description:
+      'Detail jadwal sebuah proyek dari jaringan dependensi (CPM): per aktivitas (WBS) durasi, total float/slack, dan apakah di JALUR KRITIS; plus ringkasan (durasi proyek, jumlah aktivitas kritis, apakah jaringan ada/siklik). Pakai untuk "apa yang di critical path", "aktivitas mana yang tak punya float", "kenapa proyek mundur". Argumen: project_code dari list_projects. '
+      + 'EN: A project\'s schedule detail from the dependency network (CPM): per activity (WBS) duration, total float/slack, and whether it is on the CRITICAL PATH; plus a summary (project duration, critical-activity count, whether a network exists / is cyclic). Use for "what is on the critical path", "which activities have no float", "why is the project slipping". Arg: project_code from list_projects.',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string' } },
+      required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_project_raid',
+    description:
+      'Register RAID sebuah proyek — Asumsi, Isu, dan Dependensi (untuk RISIKO pakai list_project_risks). Tiap item: kode, ringkasan, status, dampak, pemilik. Pakai untuk "isu yang terbuka", "asumsi proyek", "dependensi ke tim/vendor lain". Argumen: project_code dari list_projects. '
+      + 'EN: A project\'s RAID register — Assumptions, Issues, and Dependencies (for RISKS use list_project_risks). Each item: code, summary, status, impact, owner. Use for "open issues", "project assumptions", "dependencies on other teams/vendors". Arg: project_code from list_projects.',
+    input_schema: {
+      type: 'object',
+      properties: { project_code: { type: 'string' } },
+      required: ['project_code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_requirements',
+    description:
+      'Daftar requirement (kebutuhan) sebuah proyek: kode, judul, kategori, prioritas (MUST/SHOULD/…), status, apakah sudah TERCOVER oleh task WBS (traceability), plus ringkasan coverage (total/tercover/belum/terverifikasi). Pakai untuk "requirement mana yang belum tercover", "kebutuhan MUST yang belum diverifikasi". Argumen: project_code dari list_projects. '
+      + 'EN: A project\'s requirements: code, title, category, priority (MUST/SHOULD/…), status, whether it is COVERED by a WBS task (traceability), plus a coverage summary (total/covered/uncovered/verified). Use for "which requirements are uncovered" (scope gaps), "MUST requirements not yet verified". Arg: project_code from list_projects.',
     input_schema: {
       type: 'object',
       properties: { project_code: { type: 'string' } },
@@ -404,6 +444,44 @@ function compactCosts(c: Awaited<ReturnType<typeof getCostSummary>>) {
   };
 }
 
+// Compact the CPM output (getCpm) into a per-activity schedule view. Keeps the network summary
+// and, per leaf activity, duration + total float + critical flag + planned dates. Critical-path
+// activities first (so a token-bounded slice still surfaces what matters), then by early start.
+function compactSchedule(s: Awaited<ReturnType<typeof getCpm>>) {
+  const tasks = [...s.tasks]
+    .sort((a, b) => Number(b.critical) - Number(a.critical) || a.es - b.es)
+    .slice(0, 60)
+    .map((t) => ({ wbs: t.wbsCode, name: t.name, duration: t.duration, totalFloat: t.totalFloat, critical: t.critical, planStart: t.planStart, planEnd: t.planEnd }));
+  return {
+    summary: { hasNetwork: s.hasNetwork, cyclic: s.cyclic, projectDuration: s.projectDuration, criticalCount: s.criticalCount, taskCount: s.taskCount },
+    tasks,
+  };
+}
+
+// Compact the three RAID registers Anett otherwise can't read (risks use list_project_risks).
+function compactRaid(
+  issues: Awaited<ReturnType<typeof listIssues>>,
+  assumptions: Awaited<ReturnType<typeof listAssumptions>>,
+  dependencies: Awaited<ReturnType<typeof listDependencies>>,
+) {
+  return {
+    issues: issues.slice(0, 40).map((i) => ({ code: i.code, title: i.title, category: i.category, impact: i.impact, status: i.status, owner: i.owner?.name ?? null, raisedAt: i.raisedAt, resolvedAt: i.resolvedAt })),
+    assumptions: assumptions.slice(0, 40).map((a) => ({ code: a.code, statement: a.statement, category: a.category, status: a.status, impact: a.impact, owner: a.owner?.name ?? null })),
+    dependencies: dependencies.slice(0, 40).map((d) => ({ code: d.code, description: d.description, direction: d.direction, counterparty: d.counterparty, status: d.status, impact: d.impact, dueDate: d.dueDate, owner: d.owner?.name ?? null })),
+  };
+}
+
+// Compact requirements + coverage/traceability rollup (reuses listRequirements).
+function compactRequirements(r: Awaited<ReturnType<typeof listRequirements>>) {
+  return {
+    requirements: r.requirements.slice(0, 60).map((q) => ({
+      code: q.code, title: q.title, category: q.category, priority: q.priority, status: q.status,
+      covered: q.taskLinks.length > 0, linkedWbs: q.taskLinks.map((l) => l.task.wbsCode),
+    })),
+    coverage: r.coverage,
+  };
+}
+
 // Build the executeTool callback bound to the caller's accessible project set. Returns a JSON string
 // per tool call. Unknown/inaccessible project_code → a friendly error object (not an exception), so
 // the model can tell the user rather than crash the loop.
@@ -419,6 +497,9 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'get_project_details': return en ? `Analyzing${c} health` : `Menganalisis kesehatan${c}`;
     case 'list_project_risks': return en ? `Reviewing${c} risks` : `Meninjau risiko${c}`;
     case 'get_project_costs': return en ? `Reviewing${c} cost breakdown` : `Meninjau rincian biaya${c}`;
+    case 'get_schedule_detail': return en ? `Analyzing${c} critical path` : `Menganalisis jalur kritis${c}`;
+    case 'get_project_raid': return en ? `Reviewing${c} RAID register` : `Meninjau register RAID${c}`;
+    case 'list_requirements': return en ? `Checking${c} requirements` : `Memeriksa requirement${c}`;
     case 'get_portfolio_summary': return en ? 'Summarizing your portfolio' : 'Merangkum portofolio Anda';
     case 'list_my_approvals': return en ? 'Checking your approvals' : 'Memeriksa persetujuan Anda';
     case 'get_resource_conflicts': return en ? 'Checking resource over-allocation' : 'Memeriksa kelebihan beban resource';
@@ -485,6 +566,24 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
         if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
         const cost = await getCostSummary(id);
         return JSON.stringify(compactCosts(cost));
+      }
+      case 'get_schedule_detail': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const cpm = await getCpm(id);
+        return JSON.stringify(compactSchedule(cpm));
+      }
+      case 'get_project_raid': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const [issues, assumptions, dependencies] = await Promise.all([listIssues(id), listAssumptions(id), listDependencies(id)]);
+        return JSON.stringify(compactRaid(issues, assumptions, dependencies));
+      }
+      case 'list_requirements': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const reqs = await listRequirements(id);
+        return JSON.stringify(compactRequirements(reqs));
       }
       case 'get_portfolio_summary': {
         const byStatus: Record<string, number> = {};

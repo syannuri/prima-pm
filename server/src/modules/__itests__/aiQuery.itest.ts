@@ -56,13 +56,22 @@ beforeAll(async () => {
     await prisma.evmSnapshot.create({ data: { projectId: mine1.id, statusDate: past, bac: 1000, pv: 500, ev: 400, ac: 360, spi: 0.8, cpi: 1.11, weightedProgress: 0.4 } });
     await prisma.evmSnapshot.create({ data: { projectId: mine2.id, statusDate: past, bac: 800, pv: 400, ev: 400, ac: 400, spi: 1.0, cpi: 1.0, weightedProgress: 0.5 } });
     // MINE-1: one overdue task + one pending CR.
-    await prisma.task.create({ data: { projectId: mine1.id, wbsCode: '1.1', name: 'Late task', planStart: past, planEnd: past, progressPct: 50 } });
+    const t1 = await prisma.task.create({ data: { projectId: mine1.id, wbsCode: '1.1', name: 'Late task', planStart: past, planEnd: past, progressPct: 50 } });
     await prisma.task.create({ data: { projectId: mine2.id, wbsCode: '1.1', name: 'On track', planStart: past, planEnd: future, progressPct: 20 } });
     await prisma.changeRequest.create({ data: { projectId: mine1.id, type: 'SCOPE', title: 'Add scope', description: 'More work', requestedBy: pm.id, status: 'SUBMITTED' } });
     // MINE-1 cost structure: one direct (material) line partly spent, one indirect line.
     const dLine = await prisma.costItemDirect.create({ data: { projectId: mine1.id, type: 'SOFTWARE_LICENSE', label: 'CI Tool', qty: 1, unitCost: 300, amount: 300, sortOrder: 0 } });
     await prisma.costItemIndirect.create({ data: { projectId: mine1.id, type: 'TRANSPORTATION', description: 'Site travel', amount: 100 } });
     await prisma.actualCostEntry.create({ data: { projectId: mine1.id, date: past, amount: 120, category: 'DIRECT', directLineId: dLine.id, description: 'partial spend' } });
+    // MINE-1 schedule network: a second (on-track) task + a FS dependency → a CPM network with a critical path.
+    const t2 = await prisma.task.create({ data: { projectId: mine1.id, wbsCode: '1.2', name: 'Build', planStart: past, planEnd: future, progressPct: 10 } });
+    await prisma.taskDependency.create({ data: { predecessorId: t1.id, successorId: t2.id, type: 'FS' } });
+    // MINE-1 RAID registers (assumption / issue / cross-team dependency) + a requirement traced to a task.
+    await prisma.issue.create({ data: { projectId: mine1.id, code: 'ISS-001', title: 'Vendor delay', impact: 'HIGH', status: 'OPEN' } });
+    await prisma.assumption.create({ data: { projectId: mine1.id, code: 'ASM-001', statement: 'Test env ready by May', status: 'OPEN', impact: 'MEDIUM' } });
+    await prisma.projectDependency.create({ data: { projectId: mine1.id, code: 'DEP-001', description: 'API from platform team', direction: 'INBOUND', counterparty: 'Platform', status: 'PENDING', impact: 'HIGH' } });
+    const req = await prisma.requirement.create({ data: { projectId: mine1.id, code: 'REQ-001', title: 'Single sign-on', category: 'FUNCTIONAL', priority: 'MUST', status: 'APPROVED' } });
+    await prisma.requirementTaskLink.create({ data: { requirementId: req.id, taskId: t2.id } });
   });
 });
 
@@ -144,6 +153,57 @@ describe('Anett data query — query_data', () => {
     expect(out.mine.indirect.map((i) => i.description)).toContain('Site travel');
     expect(out.mine.summary.directActual).toBe(120);
     expect(out.unknown.error).toBeTruthy(); // OTHER-1 not in the caller's accessible set → no leak
+  });
+
+  it('get_schedule_detail returns the CPM network with a critical path; inaccessible → friendly error', async () => {
+    __setAiPort(scriptPort(async (ex) => ({
+      mine: JSON.parse(await ex('get_schedule_detail', { project_code: 'MINE-1' })),
+      unknown: JSON.parse(await ex('get_schedule_detail', { project_code: 'OTHER-1' })),
+    })));
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    const out = JSON.parse(res.body.answer) as {
+      mine: { summary: { taskCount: number; hasNetwork: boolean; criticalCount: number }; tasks: { wbs: string; critical: boolean; totalFloat: number }[] };
+      unknown: { error?: string };
+    };
+    expect(out.mine.summary.taskCount).toBe(2);
+    expect(out.mine.summary.hasNetwork).toBe(true);
+    expect(out.mine.tasks.some((t) => t.critical)).toBe(true); // at least one activity on the critical path
+    expect(out.mine.tasks.map((t) => t.wbs)).toEqual(expect.arrayContaining(['1.1', '1.2']));
+    expect(out.unknown.error).toBeTruthy();
+  });
+
+  it('get_project_raid returns issues + assumptions + dependencies; inaccessible → friendly error', async () => {
+    __setAiPort(scriptPort(async (ex) => ({
+      mine: JSON.parse(await ex('get_project_raid', { project_code: 'MINE-1' })),
+      unknown: JSON.parse(await ex('get_project_raid', { project_code: 'OTHER-1' })),
+    })));
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    const out = JSON.parse(res.body.answer) as {
+      mine: { issues: { code: string; status: string }[]; assumptions: { code: string }[]; dependencies: { code: string; counterparty: string | null }[] };
+      unknown: { error?: string };
+    };
+    expect(out.mine.issues).toMatchObject([{ code: 'ISS-001', status: 'OPEN' }]);
+    expect(out.mine.assumptions.map((a) => a.code)).toEqual(['ASM-001']);
+    expect(out.mine.dependencies).toMatchObject([{ code: 'DEP-001', counterparty: 'Platform' }]);
+    expect(out.unknown.error).toBeTruthy();
+  });
+
+  it('list_requirements returns requirements with coverage/traceability; inaccessible → friendly error', async () => {
+    __setAiPort(scriptPort(async (ex) => ({
+      mine: JSON.parse(await ex('list_requirements', { project_code: 'MINE-1' })),
+      unknown: JSON.parse(await ex('list_requirements', { project_code: 'OTHER-1' })),
+    })));
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    const out = JSON.parse(res.body.answer) as {
+      mine: { requirements: { code: string; priority: string; covered: boolean; linkedWbs: string[] }[]; coverage: { total: number; covered: number } };
+      unknown: { error?: string };
+    };
+    expect(out.mine.requirements).toMatchObject([{ code: 'REQ-001', priority: 'MUST', covered: true, linkedWbs: ['1.2'] }]);
+    expect(out.mine.coverage).toMatchObject({ total: 1, covered: 1 });
+    expect(out.unknown.error).toBeTruthy();
   });
 
   it('tool path: query_data surfaces a `tables` payload; a bad spec returns an error, no table', async () => {
