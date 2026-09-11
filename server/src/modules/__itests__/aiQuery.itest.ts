@@ -95,6 +95,35 @@ describe('Anett data query — query_data', () => {
     expect(table.rows[0].project).toBe('MINE-1');
   });
 
+  it('list_projects returns code + name (not just codes) so a named project can map to a code', async () => {
+    __setAiPort(scriptPort(async (ex) => JSON.parse(await ex('list_projects', {}))));
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    const out = JSON.parse(res.body.answer) as { count: number; projects: { code: string; name: string }[] };
+    expect(out.projects.map((p) => p.code).sort()).toEqual(['MINE-1', 'MINE-2']); // OTHER-1 not accessible
+    const nameByCode = Object.fromEntries(out.projects.map((p) => [p.code, p.name]));
+    expect(nameByCode['MINE-2']).toBe('Healthy');
+  });
+
+  it('get_project_details resolves a project by NAME and by a partial word — not only by code', async () => {
+    __setAiPort(scriptPort(async (ex) => ({
+      byCode: JSON.parse(await ex('get_project_details', { project_code: 'mine-2' })),   // case-insensitive code
+      byName: JSON.parse(await ex('get_project_details', { project_code: 'Healthy' })),  // exact name → MINE-2
+      byPartial: JSON.parse(await ex('get_project_details', { project_code: 'behind' })), // word from "Behind & CR" → MINE-1
+      unknown: JSON.parse(await ex('get_project_details', { project_code: 'no such project' })),
+    })));
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    const out = JSON.parse(res.body.answer) as {
+      byCode: { project?: { code: string } }; byName: { project?: { code: string } };
+      byPartial: { project?: { code: string } }; unknown: { error?: string };
+    };
+    expect(out.byCode.project?.code).toBe('MINE-2');
+    expect(out.byName.project?.code).toBe('MINE-2');
+    expect(out.byPartial.project?.code).toBe('MINE-1');
+    expect(out.unknown.error).toBeTruthy(); // unresolvable ref → friendly error, no leak
+  });
+
   it('tool path: query_data surfaces a `tables` payload; a bad spec returns an error, no table', async () => {
     __setAiPort(scriptPort(async (ex) => ({
       ok: await ex('query_data', { entity: 'projects', filters: [{ field: 'overdueTasks', op: 'gt', value: 0 }] }),

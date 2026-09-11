@@ -96,7 +96,7 @@ const TOOLS: AiToolDef[] = [
     description: 'Ringkasan kesehatan sebuah proyek: EVM (BAC/EV/AC/SPI/CPI/% selesai), forecast (EAC, perkiraan selesai, varians hari), dan tugas (total/selesai/overdue). Argumen: project_code dari list_projects.',
     input_schema: {
       type: 'object',
-      properties: { project_code: { type: 'string', description: 'Kode proyek, mis. "AI-1"' } },
+      properties: { project_code: { type: 'string', description: 'Kode proyek (mis. "AI-1"); nama proyek atau sebagian namanya juga diterima.' } },
       required: ['project_code'],
       additionalProperties: false,
     },
@@ -395,14 +395,27 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
     const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string; question?: string };
     // Stream a live "thinking" step for this tool call (best-effort; SSE only).
     ctx.emitStep?.(stepLabel(name, typeof args.project_code === 'string' ? args.project_code.trim() : '', ctx.en));
+    // Resolve a project reference the model passes as `project_code`. It's often not a clean code:
+    // the user may name the project (or a word from its name), or the case/spacing differs. Try, in
+    // order: exact code (case-insensitive) → exact name (case-insensitive) → a UNIQUE partial match
+    // on code or name. Ambiguous partials return null (safer to say "not found" than guess wrong).
     const resolveId = (): string | null => {
-      const code = typeof args.project_code === 'string' ? args.project_code.trim() : '';
-      return accessibleByCode.get(code) ?? null;
+      const raw = typeof args.project_code === 'string' ? args.project_code.trim() : '';
+      if (!raw) return null;
+      const q = raw.toLowerCase();
+      const byCodeExact = ctx.projectsSummary.find((p) => p.code.toLowerCase() === q);
+      if (byCodeExact) return byCodeExact.id;
+      const byNameExact = ctx.projectsSummary.filter((p) => p.name.toLowerCase() === q);
+      if (byNameExact.length === 1) return byNameExact[0].id;
+      const partial = ctx.projectsSummary.filter((p) => p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q));
+      return partial.length === 1 ? partial[0].id : null;
     };
     switch (name) {
       case 'list_projects': {
-        const list = [...accessibleByCode.keys()];
-        return JSON.stringify({ count: list.length, projectCodes: list });
+        // Return code + NAME + status (not just codes) so the model can map a project the user
+        // referred to by name — or a word from its name — back to a code for the other tools.
+        const list = ctx.projectsSummary.map((p) => ({ code: p.code, name: p.name, status: p.status }));
+        return JSON.stringify({ count: list.length, projects: list });
       }
       case 'get_project_details': {
         const id = resolveId();
@@ -539,9 +552,9 @@ function makeExecuteTool(accessibleByCode: Map<string, string>, ctx: { userId: s
         }
       }
       case 'get_action_effectiveness': {
-        const code = typeof args.project_code === 'string' ? args.project_code.trim() : '';
-        const projectId = code ? accessibleByCode.get(code) : undefined;
-        if (code && !projectId) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        const codeProvided = typeof args.project_code === 'string' && args.project_code.trim() !== '';
+        const projectId = resolveId() ?? undefined; // optional narrowing — same name/partial resolution
+        if (codeProvided && !projectId) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
         const stats = await getActionEffectiveness(projectId ? { projectId } : {});
         return JSON.stringify({
           note: 'Correlational, not causal — many factors move SPI. Do not over-claim, especially with a small sample. improvedRate is null below the sample floor.',
