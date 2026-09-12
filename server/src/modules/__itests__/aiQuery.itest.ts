@@ -102,6 +102,12 @@ describe('Anett data query — query_data', () => {
     expect(table.rows[0]).toMatchObject({ code: 'MINE-1', pendingCRs: 1, overdueTasks: 1 });
   });
 
+  it('projects: server-computed money `sums` over all matching rows (so the model never hand-sums rupiah)', async () => {
+    const table = await runWithTenant(tid, () => runQuery({ entity: 'projects', columns: ['code', 'ev', 'ac'] }, pmId, 'PROJECT_MANAGER'));
+    // MINE-1 (ev 400, ac 360) + MINE-2 (ev 400, ac 400); OTHER-1 not accessible.
+    expect(table.sums).toMatchObject({ ev: 800, ac: 760 });
+  });
+
   it('tasks: filter overdue=true across accessible projects', async () => {
     const table = await runWithTenant(tid, () => runQuery({ entity: 'tasks', filters: [{ field: 'overdue', op: 'eq', value: true }] }, pmId, 'PROJECT_MANAGER'));
     expect(table.rows.map((r) => r.name)).toEqual(['Late task']);

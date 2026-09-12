@@ -50,6 +50,7 @@ const SYSTEM_PROMPT_ID = [
   '- Anda bersifat READ-ONLY: Anda tidak dapat mengubah data. Jika diminta melakukan aksi, jelaskan langkahnya secara ringkas namun jangan mengklaim sudah melakukannya.',
   '- Jika data tidak cukup untuk menjawab, katakan dengan jujur.',
   '- JANGAN ASAL MENGALAH (anti-sycophancy): Jika pengguna menyanggah sebuah fakta/angka yang berasal dari data tool, JANGAN langsung membenarkan sanggahan atau membalik jawaban. Verifikasi ulang dulu ke data (panggil lagi tool bila perlu). Bila data mendukung jawaban semula, PERTAHANKAN dan jelaskan asal angkanya; koreksi hanya bila data memang menunjukkan kesalahan. Khusus SATUAN/magnitudo (ribu/juta/miliar/triliun), hitung ulang dari angka tool — jangan sekadar mengganti kata satuannya, dan pastikan rasio/persentase tetap konsisten.',
+  '- TOTAL/JUMLAH RUPIAH: JANGAN menjumlah atau mengonversi rupiah lintas proyek secara manual (sumber utama salah satuan juta/miliar/triliun). Untuk total budget/BAC/EV/AC beberapa proyek, pakai query_data dan kutip angka dari `sums` (total IDR yang dihitung server); untuk seluruh portofolio pakai `totalBacIdr` dari get_portfolio_summary. Ingat konversi: 1 miliar = 1.000 juta; 1 triliun = 1.000 miliar. Angka IDR mentah 4.789.000.000 = Rp 4,789 miliar (BUKAN triliun).',
   '- Jawab ringkas dan langsung; sertakan angka kunci bila relevan.',
   '- Untuk pertanyaan CARA/PROSES ("bagaimana cara…", "apa yang harus saya lakukan untuk…", "di mana menu…"), GUNAKAN tool get_process_guide lalu sampaikan langkah ringkas + JALUR MENU persis (mis. Proyek → tab Cost → Baseline → Lock). JANGAN mengarang nama menu/tab; jika topik tak ada di panduan, katakan dan sarankan yang terdekat.',
   '- Untuk REKOMENDASI/BEST-PRACTICE manajemen proyek ("apa rekomendasinya", "menurut standar/PMI sebaiknya bagaimana", saran menghadapi slip/overrun/risiko), GUNAKAN tool pmi_guidance dan dasarkan saran pada hasilnya + sebutkan prinsip/domain PMI yang relevan. JANGAN mengarang nomor bab/kutipan PMBOK di luar hasil tool. Sertakan disclaimer advisory dari tool. Tetap kaitkan dengan angka proyek nyata bila ada.',
@@ -77,6 +78,7 @@ const SYSTEM_PROMPT_EN = [
   '- You are READ-ONLY: you cannot change data. If asked to perform an action, explain the steps briefly but never claim you have done it.',
   '- If the data is not enough to answer, say so honestly.',
   '- DO NOT REFLEXIVELY CONCEDE (anti-sycophancy): If the user disputes a fact/number that came from tool data, do NOT immediately agree or flip your answer. Re-verify against the data first (call the tool again if needed). If the data supports your original answer, STAND BY it and explain where the figure came from; only correct it if the data actually shows an error. For UNITS/magnitude especially (thousand/million/billion/trillion — ribu/juta/miliar/triliun), recompute from the tool figures — do not just swap the unit word, and keep the ratios/percentages consistent.',
+  '- RUPIAH TOTALS: Do NOT hand-sum or rescale rupiah across projects (the main source of million/billion/trillion slips). For a total budget/BAC/EV/AC over several projects, use query_data and quote the `sums` value (server-computed total in IDR); for the whole portfolio use `totalBacIdr` from get_portfolio_summary. Remember: 1 billion = 1,000 million; 1 trillion = 1,000 billion. Raw IDR 4,789,000,000 = Rp 4.789 billion (NOT trillion).',
   '- Answer concisely and directly; include key numbers when relevant.',
   '- For HOW-TO / PROCESS questions ("how do I…", "what should I do to…", "where is the menu…"), USE the get_process_guide tool then give the brief steps + the EXACT MENU PATH (e.g. Project → Cost tab → Baseline → Lock). Do NOT invent menu/tab names; if the topic is not in the guide, say so and suggest the closest one.',
   '- For RECOMMENDATIONS / BEST-PRACTICE project-management questions ("what do you recommend", "what does PMI/the standard suggest", advice on slip/overrun/risk), USE the pmi_guidance tool and base the advice on its result + name the relevant PMI principle/domain. Do NOT invent PMBOK section numbers or quotes beyond the tool result. Include the advisory disclaimer from the tool. Still tie the advice to the real project numbers when available.',
@@ -245,6 +247,7 @@ const TOOLS: AiToolDef[] = [
       'entity + field yang tersedia: ' + queryCatalog() + '.',
       'op: eq, ne, gt, gte, lt, lte, contains, in. Contoh: {entity:"projects", filters:[{field:"spi",op:"lt",value:0.9},{field:"pendingCRs",op:"gt",value:0}], sort:{field:"spi",dir:"asc"}, limit:20}.',
       'Tanggal ISO (YYYY-MM-DD). Gunakan untuk "proyek dengan …", "tugas telat …", "5 teratas menurut …".',
+      'TOTAL RUPIAH: untuk "berapa total budget/BAC/EV/AC dari proyek X, Y, …", panggil query_data (filter code in [...] atau sesuai kriteria, sertakan kolom bac/ev/ac). Hasil memuat `sums` = total (IDR mentah) yang DIHITUNG SERVER atas semua baris cocok. Kutip angka dari `sums` itu — JANGAN menjumlah/mengonversi rupiah sendiri.',
     ].join('\n'),
     input_schema: {
       type: 'object',
@@ -723,8 +726,9 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
           const table = await runQuery((input ?? {}) as QuerySpec, ctx.userId, ctx.role);
           ctx.tables.push(table);
           // The model gets a compact preview (headers + first rows + total) to summarize; the client
-          // renders the full table from ctx.tables.
-          return JSON.stringify({ ok: true, entity: table.entity, total: table.total, columns: table.columns.map((c) => c.key), rows: table.rows.slice(0, 10), note: table.total > table.rows.length ? `Menampilkan ${table.rows.length} dari ${table.total} baris ke pengguna.` : undefined });
+          // renders the full table from ctx.tables. `sums` = server-computed money totals (raw IDR) over
+          // ALL matching rows — the model MUST quote these for a rupiah total, never hand-sum/rescale.
+          return JSON.stringify({ ok: true, entity: table.entity, total: table.total, columns: table.columns.map((c) => c.key), rows: table.rows.slice(0, 10), sums: table.sums, note: table.total > table.rows.length ? `Menampilkan ${table.rows.length} dari ${table.total} baris ke pengguna.` : undefined });
         } catch (err) {
           return JSON.stringify({ error: err instanceof AppError ? err.message : 'Query gagal dijalankan.' });
         }
