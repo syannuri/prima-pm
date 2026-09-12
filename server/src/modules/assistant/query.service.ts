@@ -24,7 +24,13 @@ export interface QueryTable {
   rows: Record<string, string | number | boolean | null>[];
   total: number;
   limit: number;
+  // Server-computed sums (in raw IDR) of money columns over ALL matching rows — so the model quotes an
+  // exact total instead of hand-summing/rescaling rupiah (a recurring source of Juta/Miliar/Triliun slips).
+  sums?: Record<string, number>;
 }
+
+// Columns whose sum is a meaningful money total. Others (spi/cpi/%/counts) are not summed.
+const MONEY_FIELDS = new Set(['bac', 'ev', 'ac']);
 
 type FieldType = 'string' | 'number' | 'boolean' | 'date' | 'enum';
 interface FieldDef { type: FieldType; label: string }
@@ -219,5 +225,15 @@ export async function runQuery(spec: QuerySpec, userId: string, role: Role): Pro
     for (const c of columns) o[c.key] = serialize(r[c.key]);
     return o;
   });
-  return { entity: norm.entity, columns, rows: out, total, limit: norm.limit };
+  // Sum money columns over ALL matching rows (not just the displayed slice) so the model can quote an
+  // exact rupiah total. Only when >1 row matches — a single-row "total" is just that row's value.
+  let sums: Record<string, number> | undefined;
+  if (rows.length > 1) {
+    for (const k of norm.columns) {
+      if (!MONEY_FIELDS.has(k)) continue;
+      const s = rows.reduce((acc, r) => acc + (typeof r[k] === 'number' ? (r[k] as number) : 0), 0);
+      (sums ??= {})[k] = s;
+    }
+  }
+  return { entity: norm.entity, columns, rows: out, total, limit: norm.limit, sums };
 }

@@ -30,6 +30,12 @@ describe('candidateValues', () => {
     const cands = candidateValues('[{"bac":4940000000},{"bac":154600000}]');
     expect(cands).toContain(5_094_600_000); // Σ BAC = the portfolio total
   });
+
+  it('includes the full rollup sum of 3+ money values', () => {
+    // Asset Mgmt 700jt + DC Phase1 1miliar + DRC 3,089miliar → Σ = 4,789 miliar
+    const cands = candidateValues('[{"bac":700000000},{"bac":1000000000},{"bac":3089000000}]');
+    expect(cands).toContain(4_789_000_000);
+  });
 });
 
 describe('verifyCitedValues', () => {
@@ -78,5 +84,12 @@ describe('verifyCitedValues', () => {
     const portfolio = '[{"bac":4940000000},{"bac":154600000}]';
     expect(verifyCitedValues('Total BAC Rp 5,0946 Miliar.', portfolio).ok).toBe(true);   // sum of the two BACs
     expect(verifyCitedValues('Total BAC Rp 5,0946 Triliun.', portfolio).ok).toBe(false); // ×1000 off the sum
+  });
+
+  // The reported case: total of THREE projects flipped to Triliun (pairwise sums alone would miss it).
+  it('flags a ×1000 flip of a 3-project total (full rollup sum)', () => {
+    const three = '[{"bac":700000000},{"bac":1000000000},{"bac":3089000000}]';
+    expect(verifyCitedValues('TOTAL Rp 4,789 Miliar.', three).ok).toBe(true);   // Σ of the three BACs
+    expect(verifyCitedValues('TOTAL Rp 4,789 Triliun.', three).ok).toBe(false); // ×1000 off the Σ
   });
 });

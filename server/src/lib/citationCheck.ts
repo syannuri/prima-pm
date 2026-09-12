@@ -60,8 +60,15 @@ export function candidateValues(context: string): number[] {
     for (let j = i + 1; j < top.length; j++) {
       const d = Math.abs(top[i] - top[j]);
       if (d >= 1e5) derived.push(d);
-      derived.push(top[i] + top[j]); // portfolio-style rollups (Σ across projects)
+      derived.push(top[i] + top[j]); // pairwise rollups (Σ of two projects)
     }
+  }
+  // Full rollup: Σ of ALL money values in the context — the total of 3+ projects (e.g. "total budget of
+  // A + B + C"), which pairwise sums miss. Covers the common case where the context holds exactly the
+  // projects being totalled.
+  if (top.length > 2) {
+    const fullSum = top.reduce((a, b) => a + b, 0);
+    if (fullSum >= 1e5) derived.push(fullSum);
   }
   return [...new Set([...uniq, ...derived])];
 }
