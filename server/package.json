@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.build.json && node scripts/gen-version.mjs",
+    "build:fast": "prisma generate && node scripts/build-fast.mjs && node scripts/gen-version.mjs",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "start": "node dist/server.js",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
