@@ -313,13 +313,20 @@ function InlineDate({ value, editable, onSave, title }: {
       />
     );
   }
+  // A set date reads as a recessed grey pill (rounded + inset shadow for depth); an empty cell stays a
+  // plain dash so not-started rows don't fill with boxes.
+  const boxed = !!value;
   return (
     <button
       type="button" disabled={!editable} title={editable ? (title ?? 'Click to edit') : title}
       onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-      className={`w-full rounded px-1 py-0.5 text-center text-xs tabular-nums ${editable ? 'cursor-text text-slate-700 hover:bg-brand-50 dark:text-slate-200 dark:hover:bg-brand-900/20' : 'cursor-default text-slate-600 dark:text-slate-300'}`}
+      className={`px-1.5 py-0.5 text-center text-xs tabular-nums transition ${
+        boxed
+          ? 'inline-block rounded-lg border border-slate-200/80 bg-slate-100/90 text-slate-700 shadow-[inset_0_1px_2px_rgba(15,23,42,0.10)] dark:border-slate-700/80 dark:bg-slate-800/70 dark:text-slate-200'
+          : 'w-full rounded text-slate-300 dark:text-slate-600'
+      } ${editable ? 'cursor-text hover:border-slate-300 hover:bg-slate-200/80 dark:hover:border-slate-600 dark:hover:bg-slate-700/70' : 'cursor-default'}`}
     >
-      {value ? formatDate(new Date(value)) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+      {value ? formatDate(new Date(value)) : '—'}
     </button>
   );
 }
