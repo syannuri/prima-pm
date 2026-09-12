@@ -48,6 +48,23 @@ function statusOf(pct: number): { label: string; color: string } {
   return { label: 'Not started', color: 'slate' };
 }
 
+// Live progress-fill background for the editable "% complete" cell: a left→right fill proportional
+// to the value over a faint track, so the box reads as a mini progress bar you can watch fill while
+// typing. Colour follows the same RAG semantics as the Gantt bars (emerald done · amber active ·
+// red just-started). rgba stays translucent so the centred number is legible on both themes.
+function pctFillColor(pct: number): string {
+  if (pct >= 100) return 'rgba(16,185,129,0.34)';  // emerald-500 — complete
+  if (pct >= 34) return 'rgba(245,158,11,0.32)';   // amber-500  — in progress
+  if (pct > 0) return 'rgba(244,63,94,0.30)';      // rose-500   — just started
+  return 'transparent';
+}
+function pctFillBg(pct: number): string {
+  const p = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0));
+  const fill = pctFillColor(p);
+  const track = 'rgba(148,163,184,0.16)'; // slate-400, faint unfilled track
+  return `linear-gradient(to right, ${fill} 0%, ${fill} ${p}%, ${track} ${p}%, ${track} 100%)`;
+}
+
 // Gantt bar palette: a soft status-tinted reference track + a vivid, gently GRADIENT
 // progress fill (top-lit → deeper base) so bars read with depth, not flat colour —
 // "colourful yet elegant". Colour still encodes RAG (green on-track · amber active ·
@@ -2052,9 +2069,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         <input
                           type="number" min={0} max={100} defaultValue={node.progressPct} key={node.progressPct}
                           aria-label={`Percent complete for ${node.name}`}
-                          onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
+                          style={{ background: pctFillBg(node.progressPct) }}
+                          onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); e.currentTarget.style.background = pctFillBg(v); }}
+                          onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); e.currentTarget.style.background = pctFillBg(v); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-center text-xs tabular-nums text-slate-700 transition hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:hover:border-slate-600"
+                          className="w-16 rounded-lg border border-slate-200/70 px-1 py-0.5 text-center text-xs font-medium tabular-nums text-slate-700 shadow-[inset_0_1px_2px_rgba(15,23,42,0.12)] transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/50 dark:border-slate-700 dark:text-slate-100"
                         />
                       ) : (
                         <span className={`tabular-nums text-xs ${r.isParent ? 'font-bold text-slate-600 dark:text-slate-300' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
