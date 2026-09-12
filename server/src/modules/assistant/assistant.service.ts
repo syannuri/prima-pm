@@ -7,7 +7,7 @@ import { type RawUsage } from '../../lib/aiUsage.js';
 import { estimateCostUsd } from '../../lib/aiPricing.js';
 import { sampleAnswerQuality } from '../../lib/aiJudgeSample.js';
 import { gradeAnswer } from '../../lib/aiEval.js';
-import { verifyCitedValues } from '../../lib/citationCheck.js';
+import { verifyCitedValues, normalizeRupiahText, formatIdrHuman } from '../../lib/citationCheck.js';
 import { logger } from '../../lib/observability.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
@@ -50,7 +50,8 @@ const SYSTEM_PROMPT_ID = [
   '- Anda bersifat READ-ONLY: Anda tidak dapat mengubah data. Jika diminta melakukan aksi, jelaskan langkahnya secara ringkas namun jangan mengklaim sudah melakukannya.',
   '- Jika data tidak cukup untuk menjawab, katakan dengan jujur.',
   '- JANGAN ASAL MENGALAH (anti-sycophancy): Jika pengguna menyanggah sebuah fakta/angka yang berasal dari data tool, JANGAN langsung membenarkan sanggahan atau membalik jawaban. Verifikasi ulang dulu ke data (panggil lagi tool bila perlu). Bila data mendukung jawaban semula, PERTAHANKAN dan jelaskan asal angkanya; koreksi hanya bila data memang menunjukkan kesalahan. Khusus SATUAN/magnitudo (ribu/juta/miliar/triliun), hitung ulang dari angka tool — jangan sekadar mengganti kata satuannya, dan pastikan rasio/persentase tetap konsisten.',
-  '- TOTAL/JUMLAH RUPIAH: JANGAN menjumlah atau mengonversi rupiah lintas proyek secara manual (sumber utama salah satuan juta/miliar/triliun). Untuk total budget/BAC/EV/AC beberapa proyek, pakai query_data dan kutip angka dari `sums` (total IDR yang dihitung server); untuk seluruh portofolio pakai `totalBacIdr` dari get_portfolio_summary. Ingat konversi: 1 miliar = 1.000 juta; 1 triliun = 1.000 miliar. Angka IDR mentah 4.789.000.000 = Rp 4,789 miliar (BUKAN triliun).',
+  '- TOTAL/JUMLAH RUPIAH: JANGAN menjumlah atau mengonversi rupiah lintas proyek secara manual (sumber utama salah satuan juta/miliar/triliun). Tool sudah menyediakan STRING SIAP-KUTIP: `totalBacText` dari get_portfolio_summary dan `sumsText` dari query_data (mis. "Rp 6,8 miliar"). KUTIP string itu PERSIS — JANGAN menghitung ulang miliar/juta dari angka mentah `totalBacIdr`/`sums` sendiri (di situlah slip 1000× terjadi: 6.796.500.200 = Rp 6,8 miliar, BUKAN Rp 6,8 triliun). Ingat konversi: 1 miliar = 1.000 juta; 1 triliun = 1.000 miliar.',
+  '- FORMAT ANGKA RUPIAH (locale Indonesia): desimal pakai KOMA, ribuan pakai TITIK — JANGAN pakai titik sebagai desimal. Tulis "Rp 5,1 miliar", "Rp 154,55 juta", "Rp 4,94 miliar" (maksimal 2 desimal). JANGAN tulis "Rp 5.096 miliar": dengan titik, pembaca Indonesia membacanya sebagai 5.096 (lima ribu sembilan puluh enam) miliar ≈ Rp 5 triliun — keliru 1000×.',
   '- Jawab ringkas dan langsung; sertakan angka kunci bila relevan.',
   '- Untuk pertanyaan CARA/PROSES ("bagaimana cara…", "apa yang harus saya lakukan untuk…", "di mana menu…"), GUNAKAN tool get_process_guide lalu sampaikan langkah ringkas + JALUR MENU persis (mis. Proyek → tab Cost → Baseline → Lock). JANGAN mengarang nama menu/tab; jika topik tak ada di panduan, katakan dan sarankan yang terdekat.',
   '- Untuk REKOMENDASI/BEST-PRACTICE manajemen proyek ("apa rekomendasinya", "menurut standar/PMI sebaiknya bagaimana", saran menghadapi slip/overrun/risiko), GUNAKAN tool pmi_guidance dan dasarkan saran pada hasilnya + sebutkan prinsip/domain PMI yang relevan. JANGAN mengarang nomor bab/kutipan PMBOK di luar hasil tool. Sertakan disclaimer advisory dari tool. Tetap kaitkan dengan angka proyek nyata bila ada.',
@@ -78,7 +79,8 @@ const SYSTEM_PROMPT_EN = [
   '- You are READ-ONLY: you cannot change data. If asked to perform an action, explain the steps briefly but never claim you have done it.',
   '- If the data is not enough to answer, say so honestly.',
   '- DO NOT REFLEXIVELY CONCEDE (anti-sycophancy): If the user disputes a fact/number that came from tool data, do NOT immediately agree or flip your answer. Re-verify against the data first (call the tool again if needed). If the data supports your original answer, STAND BY it and explain where the figure came from; only correct it if the data actually shows an error. For UNITS/magnitude especially (thousand/million/billion/trillion — ribu/juta/miliar/triliun), recompute from the tool figures — do not just swap the unit word, and keep the ratios/percentages consistent.',
-  '- RUPIAH TOTALS: Do NOT hand-sum or rescale rupiah across projects (the main source of million/billion/trillion slips). For a total budget/BAC/EV/AC over several projects, use query_data and quote the `sums` value (server-computed total in IDR); for the whole portfolio use `totalBacIdr` from get_portfolio_summary. Remember: 1 billion = 1,000 million; 1 trillion = 1,000 billion. Raw IDR 4,789,000,000 = Rp 4.789 billion (NOT trillion).',
+  '- RUPIAH TOTALS: Do NOT hand-sum or rescale rupiah across projects (the main source of million/billion/trillion slips). The tools already provide a READY-TO-QUOTE string: `totalBacText` from get_portfolio_summary and `sumsText` from query_data (e.g. "Rp 6,8 miliar"). Quote that string VERBATIM — do NOT re-derive miliar/juta from the raw `totalBacIdr`/`sums` integers yourself (that hand-scaling is where the 1000× slip happens: 6,796,500,200 = Rp 6,8 miliar, NOT Rp 6,8 trillion). Remember: 1 billion = 1,000 million; 1 trillion = 1,000 billion.',
+  '- RUPIAH NUMBER FORMAT: when replying in Indonesian, use Indonesian locale — comma for the decimal, period for thousands. Write "Rp 5,1 miliar", "Rp 154,55 juta" (≤2 decimals). NEVER write "Rp 5.096 miliar": with a period an Indonesian reader parses it as 5,096 (five thousand) miliar ≈ Rp 5 trillion — a 1000× error.',
   '- Answer concisely and directly; include key numbers when relevant.',
   '- For HOW-TO / PROCESS questions ("how do I…", "what should I do to…", "where is the menu…"), USE the get_process_guide tool then give the brief steps + the EXACT MENU PATH (e.g. Project → Cost tab → Baseline → Lock). Do NOT invent menu/tab names; if the topic is not in the guide, say so and suggest the closest one.',
   '- For RECOMMENDATIONS / BEST-PRACTICE project-management questions ("what do you recommend", "what does PMI/the standard suggest", advice on slip/overrun/risk), USE the pmi_guidance tool and base the advice on its result + name the relevant PMI principle/domain. Do NOT invent PMBOK section numbers or quotes beyond the tool result. Include the advisory disclaimer from the tool. Still tie the advice to the real project numbers when available.',
@@ -606,6 +608,9 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
           totalProjects: ctx.projectsSummary.length,
           byStatus,
           totalBacIdr: totalBac,
+          // Ready-to-quote Indonesian string — quote this VERBATIM. Do NOT re-derive miliar/juta from
+          // totalBacIdr by hand (that hand-conversion is the recurring 1000× slip).
+          totalBacText: formatIdrHuman(totalBac),
           projectsWithOverdueTasks: overdue.map((o) => ({ code: codeById.get(o.projectId), overdueTasks: o._count._all })),
         });
       }
@@ -922,6 +927,12 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
         : '\n\n_⚠️ Catatan: sebagian jawaban ini mungkin merujuk data di luar akses Anda atau salah menyebut indeks kinerja — mohon verifikasi lewat tab proyek terkait._';
     }
   }
+
+  // Rupiah locale normalization: rewrite "<n> <scale>" figures to Indonesian form (comma decimal) BEFORE the
+  // #6 value check runs. "Rp 5.096 miliar" — which an Indonesian reader parses as 5096 miliar (~5 triliun), a
+  // 1000× illusion the value check can't catch (it reads the '.' as a decimal, so the figure matches) — becomes
+  // "Rp 5,1 miliar". Fixes the presentation at the source instead of relying on the model to format correctly.
+  answer = normalizeRupiahText(answer);
 
   // Tool data gathered this turn — used by the #6 value check and (bounded) as judge context (#5).
   const judgeContext = toolOutputs.length ? toolOutputs.join('\n').slice(0, 3000) : undefined;

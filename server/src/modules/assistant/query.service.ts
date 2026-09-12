@@ -2,6 +2,7 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/errors.js';
 import { listProjects } from '../projects/projects.service.js';
+import { formatIdrHuman } from '../../lib/citationCheck.js';
 
 // Natural-language data query engine for Anett (see docs/AI-NL-QUERY-PLAN.md). The AI emits a
 // STRUCTURED spec (never SQL); this validates it against a per-entity whitelist and runs it
@@ -27,6 +28,9 @@ export interface QueryTable {
   // Server-computed sums (in raw IDR) of money columns over ALL matching rows — so the model quotes an
   // exact total instead of hand-summing/rescaling rupiah (a recurring source of Juta/Miliar/Triliun slips).
   sums?: Record<string, number>;
+  // Same sums pre-rendered as ready-to-quote Indonesian strings ("Rp 6,8 miliar") — quote VERBATIM. The
+  // model must NOT convert the raw `sums` integers to miliar/juta itself (that hand-scaling slips 1000×).
+  sumsText?: Record<string, string>;
 }
 
 // Columns whose sum is a meaningful money total. Others (spi/cpi/%/counts) are not summed.
@@ -228,12 +232,14 @@ export async function runQuery(spec: QuerySpec, userId: string, role: Role): Pro
   // Sum money columns over ALL matching rows (not just the displayed slice) so the model can quote an
   // exact rupiah total. Only when >1 row matches — a single-row "total" is just that row's value.
   let sums: Record<string, number> | undefined;
+  let sumsText: Record<string, string> | undefined;
   if (rows.length > 1) {
     for (const k of norm.columns) {
       if (!MONEY_FIELDS.has(k)) continue;
       const s = rows.reduce((acc, r) => acc + (typeof r[k] === 'number' ? (r[k] as number) : 0), 0);
       (sums ??= {})[k] = s;
+      (sumsText ??= {})[k] = formatIdrHuman(s);
     }
   }
-  return { entity: norm.entity, columns, rows: out, total, limit: norm.limit, sums };
+  return { entity: norm.entity, columns, rows: out, total, limit: norm.limit, sums, sumsText };
 }
