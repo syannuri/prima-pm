@@ -47,22 +47,23 @@ export function extractMoneyIDR(text: string): number[] {
 }
 
 // Candidate "true" values from the tool-data context: every number of money-like magnitude, plus the
-// pairwise absolute differences of the largest few (so a stated saving = BAC − AC can be validated even
-// when saving isn't a raw field). Bounded to keep it cheap.
+// pairwise absolute differences AND sums of the largest few — so a stated saving (BAC − AC) or a rolled-up
+// total (Σ BAC across projects) can be validated even when it isn't a raw field. Bounded to keep it cheap.
 export function candidateValues(context: string): number[] {
   const raw = (context.match(/-?\d+(?:\.\d+)?/g) ?? [])
     .map(Number)
     .filter((n) => Number.isFinite(n) && Math.abs(n) >= 1e5); // money-ish only
   const uniq = [...new Set(raw)];
   const top = uniq.slice().sort((a, b) => Math.abs(b) - Math.abs(a)).slice(0, 15);
-  const diffs: number[] = [];
+  const derived: number[] = [];
   for (let i = 0; i < top.length; i++) {
     for (let j = i + 1; j < top.length; j++) {
       const d = Math.abs(top[i] - top[j]);
-      if (d >= 1e5) diffs.push(d);
+      if (d >= 1e5) derived.push(d);
+      derived.push(top[i] + top[j]); // portfolio-style rollups (Σ across projects)
     }
   }
-  return [...new Set([...uniq, ...diffs])];
+  return [...new Set([...uniq, ...derived])];
 }
 
 const REL_TOL = 0.02; // 2% — matches rounding like "3,09 Miliar" vs 3,089,000,000
@@ -71,11 +72,17 @@ const near = (a: number, b: number): boolean => Math.abs(a - b) <= REL_TOL * Mat
 export interface ValueCheck { ok: boolean; issues: string[] }
 
 // Flag any answer money figure that is a power-of-1000 off from a real value but not itself a real value.
-export function verifyCitedValues(answer: string, context?: string): ValueCheck {
-  if (!context) return { ok: true, issues: [] };
+// `context` = this turn's tool data. `priorAnswer` = the previous assistant answer (its stated Rp figures
+// are added as reference), so a magnitude FLIP between turns is caught even when this turn made no tool
+// call and therefore has no tool context — the exact case where a "you're right, I meant triliun" ×1000
+// slip slips through otherwise.
+export function verifyCitedValues(answer: string, context?: string, priorAnswer?: string): ValueCheck {
   const figures = extractMoneyIDR(answer);
   if (figures.length === 0) return { ok: true, issues: [] };
-  const cands = candidateValues(context);
+  const cands = [
+    ...(context ? candidateValues(context) : []),
+    ...(priorAnswer ? extractMoneyIDR(priorAnswer) : []),
+  ];
   if (cands.length === 0) return { ok: true, issues: [] };
   const factors = [1e3, 1e6, 1e9, 1 / 1e3, 1 / 1e6, 1 / 1e9];
   const issues: string[] = [];
