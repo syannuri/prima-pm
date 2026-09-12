@@ -12,7 +12,7 @@ import { logger } from '../../lib/observability.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
-import { getCostSummary } from '../cost/cost.service.js';
+import { getCostSummary, getPortfolioActualCosts } from '../cost/cost.service.js';
 import { getCpm } from '../schedule/schedule.service.js';
 import { listIssues } from '../issue/issue.service.js';
 import { listAssumptions, listDependencies } from '../raid/raid.service.js';
@@ -52,7 +52,7 @@ const SYSTEM_PROMPT_ID = [
   '- JANGAN ASAL MENGALAH (anti-sycophancy): Jika pengguna menyanggah sebuah fakta/angka yang berasal dari data tool, JANGAN langsung membenarkan sanggahan atau membalik jawaban. Verifikasi ulang dulu ke data (panggil lagi tool bila perlu). Bila data mendukung jawaban semula, PERTAHANKAN dan jelaskan asal angkanya; koreksi hanya bila data memang menunjukkan kesalahan. Khusus SATUAN/magnitudo (ribu/juta/miliar/triliun), hitung ulang dari angka tool — jangan sekadar mengganti kata satuannya, dan pastikan rasio/persentase tetap konsisten.',
   '- TOTAL/JUMLAH RUPIAH: JANGAN menjumlah atau mengonversi rupiah lintas proyek secara manual (sumber utama salah satuan juta/miliar/triliun). Tool sudah menyediakan STRING SIAP-KUTIP: `totalBacText` dari get_portfolio_summary dan `sumsText` dari query_data (mis. "Rp 6,8 miliar"). KUTIP string itu PERSIS — JANGAN menghitung ulang miliar/juta dari angka mentah `totalBacIdr`/`sums` sendiri (di situlah slip 1000× terjadi: 6.796.500.200 = Rp 6,8 miliar, BUKAN Rp 6,8 triliun). Ingat konversi: 1 miliar = 1.000 juta; 1 triliun = 1.000 miliar.',
   '- FORMAT ANGKA RUPIAH (locale Indonesia): desimal pakai KOMA, ribuan pakai TITIK — JANGAN pakai titik sebagai desimal. Tulis "Rp 5,1 miliar", "Rp 154,55 juta", "Rp 4,94 miliar" (maksimal 2 desimal). JANGAN tulis "Rp 5.096 miliar": dengan titik, pembaca Indonesia membacanya sebagai 5.096 (lima ribu sembilan puluh enam) miliar ≈ Rp 5 triliun — keliru 1000×.',
-  '- BIAYA AKTUAL / "SUDAH DIKELUARKAN": untuk pertanyaan berapa actual cost yang sudah dikeluarkan sebuah/beberapa proyek, panggil get_project_costs dan pakai directActual + indirectActual (biaya LIVE sampai kini). JANGAN pakai kolom `ac` dari query_data untuk ini — `ac` adalah AC dari SNAPSHOT EVM TERAKHIR (nilai point-in-time per status date), yang basi bila ada biaya dicatat setelah snapshot. Untuk beberapa proyek, panggil get_project_costs per proyek lalu jumlahkan directActual+indirectActual-nya (bukan kolom ac).',
+  '- BIAYA AKTUAL / "SUDAH DIKELUARKAN": untuk SATU proyek, panggil get_project_costs dan pakai directActual + indirectActual (biaya LIVE sampai kini). Untuk SEMUA/BEBERAPA proyek ("total actual cost semua proyek"), panggil get_portfolio_costs (server sudah menjumlah) dan kutip `totals.actualTotalText` PERSIS — JANGAN menjumlah get_project_costs per proyek secara manual. JANGAN pakai kolom `ac` dari query_data untuk biaya aktual — `ac` adalah AC dari SNAPSHOT EVM TERAKHIR (point-in-time per status date), yang basi bila ada biaya dicatat setelah snapshot.',
   '- Jawab ringkas dan langsung; sertakan angka kunci bila relevan.',
   '- Untuk pertanyaan CARA/PROSES ("bagaimana cara…", "apa yang harus saya lakukan untuk…", "di mana menu…"), GUNAKAN tool get_process_guide lalu sampaikan langkah ringkas + JALUR MENU persis (mis. Proyek → tab Cost → Baseline → Lock). JANGAN mengarang nama menu/tab; jika topik tak ada di panduan, katakan dan sarankan yang terdekat.',
   '- Untuk REKOMENDASI/BEST-PRACTICE manajemen proyek ("apa rekomendasinya", "menurut standar/PMI sebaiknya bagaimana", saran menghadapi slip/overrun/risiko), GUNAKAN tool pmi_guidance dan dasarkan saran pada hasilnya + sebutkan prinsip/domain PMI yang relevan. JANGAN mengarang nomor bab/kutipan PMBOK di luar hasil tool. Sertakan disclaimer advisory dari tool. Tetap kaitkan dengan angka proyek nyata bila ada.',
@@ -82,7 +82,7 @@ const SYSTEM_PROMPT_EN = [
   '- DO NOT REFLEXIVELY CONCEDE (anti-sycophancy): If the user disputes a fact/number that came from tool data, do NOT immediately agree or flip your answer. Re-verify against the data first (call the tool again if needed). If the data supports your original answer, STAND BY it and explain where the figure came from; only correct it if the data actually shows an error. For UNITS/magnitude especially (thousand/million/billion/trillion — ribu/juta/miliar/triliun), recompute from the tool figures — do not just swap the unit word, and keep the ratios/percentages consistent.',
   '- RUPIAH TOTALS: Do NOT hand-sum or rescale rupiah across projects (the main source of million/billion/trillion slips). The tools already provide a READY-TO-QUOTE string: `totalBacText` from get_portfolio_summary and `sumsText` from query_data (e.g. "Rp 6,8 miliar"). Quote that string VERBATIM — do NOT re-derive miliar/juta from the raw `totalBacIdr`/`sums` integers yourself (that hand-scaling is where the 1000× slip happens: 6,796,500,200 = Rp 6,8 miliar, NOT Rp 6,8 trillion). Remember: 1 billion = 1,000 million; 1 trillion = 1,000 billion.',
   '- RUPIAH NUMBER FORMAT: when replying in Indonesian, use Indonesian locale — comma for the decimal, period for thousands. Write "Rp 5,1 miliar", "Rp 154,55 juta" (≤2 decimals). NEVER write "Rp 5.096 miliar": with a period an Indonesian reader parses it as 5,096 (five thousand) miliar ≈ Rp 5 trillion — a 1000× error.',
-  '- ACTUAL COST / "SPENT TO DATE": for how much actual cost a project (or several) has spent, call get_project_costs and use directActual + indirectActual (the LIVE cost to date). Do NOT use query_data\'s `ac` column for this — `ac` is the AC from the LAST EVM SNAPSHOT (a point-in-time value as of its status date), which goes stale once costs are recorded after that snapshot. For several projects, call get_project_costs per project and sum their directActual+indirectActual (not the `ac` column).',
+  '- ACTUAL COST / "SPENT TO DATE": for a SINGLE project, call get_project_costs and use directActual + indirectActual (the LIVE cost to date). For ALL/SEVERAL projects ("total actual cost across all projects"), call get_portfolio_costs (the server already sums it) and quote `totals.actualTotalText` VERBATIM — do NOT hand-sum per-project get_project_costs. Never use query_data\'s `ac` column for actual cost — `ac` is the AC from the LAST EVM SNAPSHOT (point-in-time as of its status date), which goes stale once costs are recorded after that snapshot.',
   '- Answer concisely and directly; include key numbers when relevant.',
   '- For HOW-TO / PROCESS questions ("how do I…", "what should I do to…", "where is the menu…"), USE the get_process_guide tool then give the brief steps + the EXACT MENU PATH (e.g. Project → Cost tab → Baseline → Lock). Do NOT invent menu/tab names; if the topic is not in the guide, say so and suggest the closest one.',
   '- For RECOMMENDATIONS / BEST-PRACTICE project-management questions ("what do you recommend", "what does PMI/the standard suggest", advice on slip/overrun/risk), USE the pmi_guidance tool and base the advice on its result + name the relevant PMI principle/domain. Do NOT invent PMBOK section numbers or quotes beyond the tool result. Include the advisory disclaimer from the tool. Still tie the advice to the real project numbers when available.',
@@ -177,6 +177,11 @@ const TOOLS: AiToolDef[] = [
   {
     name: 'get_portfolio_summary',
     description: 'Ringkasan portofolio proyek yang dapat diakses pengguna: jumlah per status, total anggaran (BAC), dan proyek yang punya tugas telat (overdue). Panggil untuk pertanyaan "bagaimana portofolio saya".',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'get_portfolio_costs',
+    description: 'BIAYA AKTUAL LIVE lintas SEMUA proyek yang dapat diakses: biaya langsung + tidak langsung per proyek dan TOTAL keseluruhan, dihitung server (bukan snapshot EVM). Panggil untuk "berapa total actual cost / biaya yang sudah dikeluarkan semua proyek". Kutip `totals.actualTotalText` PERSIS — JANGAN menjumlah rupiah sendiri. Ini pengganti memanggil get_project_costs satu per satu lalu dijumlah manual.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -513,6 +518,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'get_project_raid': return en ? `Reviewing${c} RAID register` : `Meninjau register RAID${c}`;
     case 'list_requirements': return en ? `Checking${c} requirements` : `Memeriksa requirement${c}`;
     case 'get_portfolio_summary': return en ? 'Summarizing your portfolio' : 'Merangkum portofolio Anda';
+    case 'get_portfolio_costs': return en ? 'Totalling actual cost across projects' : 'Menjumlahkan biaya aktual lintas proyek';
     case 'list_my_approvals': return en ? 'Checking your approvals' : 'Memeriksa persetujuan Anda';
     case 'get_resource_conflicts': return en ? 'Checking resource over-allocation' : 'Memeriksa kelebihan beban resource';
     case 'run_what_if': return en ? 'Running a what-if simulation' : 'Menjalankan simulasi bagaimana-jika';
@@ -615,6 +621,31 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
           // totalBacIdr by hand (that hand-conversion is the recurring 1000× slip).
           totalBacText: formatIdrHuman(totalBac),
           projectsWithOverdueTasks: overdue.map((o) => ({ code: codeById.get(o.projectId), overdueTasks: o._count._all })),
+        });
+      }
+      case 'get_portfolio_costs': {
+        // Live actual cost across the portfolio. Skip DRAFTs (no real spend) and bound the fan-out —
+        // each project is ~8 queries via getCostSummary. Reuses the SAME source as get_project_costs so
+        // the total matches per-project figures exactly (never the stale EVM snapshot AC).
+        const MAX = 80;
+        const scoped = ctx.projectsSummary.filter((p) => p.status !== 'DRAFT');
+        const truncated = scoped.length > MAX;
+        const chosen = scoped.slice(0, MAX);
+        const byId = new Map(chosen.map((p) => [p.id, p]));
+        const roll = await getPortfolioActualCosts(chosen.map((p) => p.id));
+        return JSON.stringify({
+          projects: roll.projects.map((r) => {
+            const p = byId.get(r.projectId);
+            return { code: p?.code, name: p?.name, directActual: r.directActual, indirectActual: r.indirectActual, actualTotal: r.actualTotal, actualTotalText: formatIdrHuman(r.actualTotal) };
+          }),
+          totals: {
+            directActual: roll.totals.directActual,
+            indirectActual: roll.totals.indirectActual,
+            actualTotalIdr: roll.totals.actualTotal,
+            // Quote this VERBATIM for "total actual cost spent across all projects".
+            actualTotalText: formatIdrHuman(roll.totals.actualTotal),
+          },
+          ...(truncated ? { note: `Hanya ${MAX} proyek non-DRAFT teratas dihitung (dari ${scoped.length}).` } : {}),
         });
       }
       case 'list_my_approvals': {
