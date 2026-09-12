@@ -83,7 +83,9 @@ describe('templates', () => {
     expect(m.html).toContain(url);
     expect(m.text).toContain(url);
     expect(m.html).toContain('Budi');
-    expect(m.subject).toMatch(/aktivasi/i);
+    // Template subjects are English across the board (see mail/templates.ts); the old /aktivasi/i
+    // assertion predated that and never matched the shipped 'Activate your Prismatix account'.
+    expect(m.subject).toMatch(/activate/i);
   });
   it('orgApprovedMail names the org and carries the login url', () => {
     const m = orgApprovedMail({ name: 'Sinta', orgName: 'Acme', loginUrl: 'https://acme.prismatix.tech/login' });
