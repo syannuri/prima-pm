@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractMoneyIDR, candidateValues, verifyCitedValues } from './citationCheck.js';
+import { extractMoneyIDR, candidateValues, verifyCitedValues, normalizeRupiahText, formatIdrHuman } from './citationCheck.js';
 
 // #6 deterministic citation-value verification. Motivated by a real LAN case: Anett said the DRC saving
 // was "Rp 423,5 Miliar" when the actual BAC−AC was ~423 Juta (a 1000× unit slip the LLM judge passed).
@@ -13,6 +13,44 @@ describe('extractMoneyIDR', () => {
   it('ignores figures without a scale word (ambiguous grouping)', () => {
     expect(extractMoneyIDR('Rp 2.665.500.000')).toEqual([]);
     expect(extractMoneyIDR('progress 92,5% selesai')).toEqual([]);
+  });
+});
+
+// Reported LAN/VPS case: Anett answered "Rp 5.096 miliar" — a period-as-decimal that an Indonesian reader
+// parses as 5096 miliar ≈ Rp 5 triliun (a 1000× optical slip). Normalize to Indonesian locale at the source.
+describe('normalizeRupiahText', () => {
+  it('rewrites period-decimal scale figures to Indonesian comma format (rounded ≤2 decimals)', () => {
+    expect(normalizeRupiahText('Total Rp 5.096 miliar')).toBe('Total Rp 5,1 miliar');
+    expect(normalizeRupiahText('BAC Rp 4.941731 miliar')).toBe('BAC Rp 4,94 miliar');
+    expect(normalizeRupiahText('Rp 154.55 juta')).toBe('Rp 154,55 juta');
+  });
+  it('handles figures without an Rp prefix', () => {
+    expect(normalizeRupiahText('totalnya 5.096 miliar saja')).toBe('totalnya 5,1 miliar saja');
+  });
+  it('leaves already-correct Indonesian figures unchanged', () => {
+    expect(normalizeRupiahText('Rp 154,55 juta')).toBe('Rp 154,55 juta');
+    expect(normalizeRupiahText('Rp 1.234,5 juta')).toBe('Rp 1.234,5 juta');
+  });
+  it('leaves bare grouped figures (no scale word) and non-money prose alone', () => {
+    expect(normalizeRupiahText('Rp 5.096.281.028')).toBe('Rp 5.096.281.028');
+    expect(normalizeRupiahText('progres 92,5% selesai')).toBe('progres 92,5% selesai');
+  });
+  it('normalizes every figure in a multi-figure answer', () => {
+    expect(normalizeRupiahText('IOS Rp 4.941731 miliar dan PRJ Rp 154.55 juta, total Rp 5.096 miliar'))
+      .toBe('IOS Rp 4,94 miliar dan PRJ Rp 154,55 juta, total Rp 5,1 miliar');
+  });
+});
+
+// The deterministic scale-word conversion the model must NOT do by hand. Reported LAN case: totalBacIdr
+// 6_796_500_200 (Rp 6,8 miliar) was hand-rendered by the model as "6.796,5 miliar" = Rp 6,8 triliun (1000×).
+describe('formatIdrHuman', () => {
+  it('renders raw IDR as the correct Indonesian scale-word string', () => {
+    expect(formatIdrHuman(6_796_500_200)).toBe('Rp 6,8 miliar');   // the reported case — miliar, NOT triliun
+    expect(formatIdrHuman(4_789_000_000)).toBe('Rp 4,79 miliar');
+    expect(formatIdrHuman(154_550_000)).toBe('Rp 154,55 juta');
+    expect(formatIdrHuman(5_096_281_028)).toBe('Rp 5,1 miliar');
+    expect(formatIdrHuman(6_796_500_200_000)).toBe('Rp 6,8 triliun');
+    expect(formatIdrHuman(250_000)).toBe('Rp 250.000');            // below juta → grouped rupiah
   });
 });
 

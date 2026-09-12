@@ -32,6 +32,37 @@ function parseScaledNumber(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Re-emit every "<number> <scale-word>" figure in Indonesian locale (comma = decimal, period = thousands)
+// so a period is never left standing as a decimal point — where an Indonesian reader parses it as a THOUSANDS
+// separator. "Rp 5.096 miliar" reads to us as 5096 miliar (~5 triliun): a 1000× optical slip the ×1000 value
+// check misses, because parseScaledNumber (correctly, for *its* job) reads the lone '.' as the decimal and so
+// the figure matches the real total. Normalizing the output to "Rp 5,1 miliar" removes the ambiguity at the
+// source. parseScaledNumber recovers the value the model meant; toLocaleString('id-ID') re-renders it. Rounds
+// to ≤2 decimals ("5,1", "154,55", "4,94") — the human-readable precision the assistant should present.
+const SCALE_WORDS = 'ribu|rb|juta|jt|miliar|milyar|triliun|triliyun';
+export function normalizeRupiahText(text: string): string {
+  const re = new RegExp(`(rp\\.?\\s*)?(\\d[\\d.,]*\\d|\\d)\\s*(${SCALE_WORDS})\\b`, 'gi');
+  return text.replace(re, (whole, rp: string | undefined, num: string, scale: string) => {
+    const n = parseScaledNumber(num);
+    if (n == null) return whole;
+    return `${rp ?? ''}${n.toLocaleString('id-ID', { maximumFractionDigits: 2 })} ${scale}`;
+  });
+}
+
+// Render a raw IDR amount as the ready-to-quote Indonesian human string ("Rp 6,8 miliar", "Rp 154,55 juta").
+// This is the DETERMINISTIC scale-word conversion the model must NOT do by hand — hand-converting a raw
+// integer to miliar/juta is the recurring 1000× slip (e.g. 6_796_500_200 mis-rendered as "6.796,5 miliar"
+// = 6,8 triliun instead of 6,8 miliar). Tool outputs carry this string so the model can quote it verbatim.
+export function formatIdrHuman(n: number): string {
+  if (!Number.isFinite(n)) return 'Rp 0';
+  const abs = Math.abs(n);
+  const fmt = (v: number, unit: string) => `Rp ${v.toLocaleString('id-ID', { maximumFractionDigits: 2 })}${unit}`;
+  if (abs >= 1e12) return fmt(n / 1e12, ' triliun');
+  if (abs >= 1e9) return fmt(n / 1e9, ' miliar');
+  if (abs >= 1e6) return fmt(n / 1e6, ' juta');
+  return `Rp ${Math.round(n).toLocaleString('id-ID')}`;
+}
+
 // Monetary figures in the answer, normalized to IDR. Only "Rp <number> <scale-word>" is parsed — the
 // unambiguous, human-readable form the assistant produces. Bare grouped figures ("Rp 2.665.500.000")
 // are intentionally skipped (their separators are ambiguous and they rarely carry the unit error).
