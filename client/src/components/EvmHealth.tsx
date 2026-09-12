@@ -59,6 +59,18 @@ export default function EvmHealth({
             <HeroMetric label="Budget (BAC)" value={formatIdr(e.bac)} title="Budget at Completion = the Performance Measurement Baseline (direct + indirect + contingency; excludes management reserve)." />
             <HeroMetric label="Forecast (EAC)" value={formatIdr(e.eac)} warn={e.eac > e.bac} title="Estimate at Completion — projected final cost." />
           </div>
+          {/* CPI-optimism hint: AC here is the posted ledger; when logged timesheet labour hasn't been
+              posted yet, live spend is higher and CPI (= EV/AC) reads optimistically low. Only shown
+              when the gap is material (≥ Rp 500k and ≥ 1% of AC) to avoid rounding noise. */}
+          {typeof e.acUnposted === 'number' && e.acUnposted >= Math.max(500_000, e.ac * 0.01) && (
+            <div
+              className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300/60 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+              title="Actual Cost (AC) here is the posted ledger (ACWP). Live spend to date (Cost tab) is higher, so CPI = EV / AC reads optimistically low until this labour is posted."
+            >
+              <span aria-hidden>⚠</span>
+              <span><strong>{formatIdr(e.acUnposted)}</strong> of logged timesheet labour isn&rsquo;t posted to the AC ledger yet — CPI may read optimistically. Reconcile from the Cost tab.</span>
+            </div>
+          )}
           {/* Detailed figures — collapsed by default to keep the panel scannable. */}
           <button
             onClick={() => setShowAll((s) => !s)}

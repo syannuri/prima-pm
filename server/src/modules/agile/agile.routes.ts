@@ -4,6 +4,7 @@ import { requireProjectGovernance, requireProjectAccess } from '../../middleware
 import { sprintSchema, sprintUpdateSchema, backlogItemSchema, backlogItemUpdateSchema, agileSettingsSchema } from './agile.schemas.js';
 import { evmQuerySchema } from '../schedule/schedule.schemas.js';
 import * as svc from './agile.service.js';
+import { actualCostBasis } from '../cost/cost.service.js';
 
 const router = Router({ mergeParams: true });
 
@@ -19,7 +20,9 @@ router.get('/', canRead, asyncHandler(async (req, res) => {
 // panel (AGILE → points-EVM, HYBRID → blended WBS+points).
 router.get('/evm', canRead, asyncHandler(async (req, res) => {
   const q = evmQuerySchema.parse(req.query);
-  res.json(await svc.getProjectEvm(req.params.projectId, q.actualCost, q.statusDate ?? new Date()));
+  const evm = await svc.getProjectEvm(req.params.projectId, q.actualCost, q.statusDate ?? new Date());
+  const basis = q.actualCost === undefined ? await actualCostBasis(req.params.projectId, evm.ac) : { acLive: evm.ac, acUnposted: 0 };
+  res.json({ ...evm, ...basis });
 }));
 
 // Sprints

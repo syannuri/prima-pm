@@ -888,6 +888,11 @@ export interface Evm {
   baselineFinish: string | null;
   currentFinish: string | null;
   finishVarianceDays: number | null;
+  // Live actual cost (Cost-tab basis: timesheet labour + attributed AC) vs the posted-ledger AC above.
+  // acUnposted = max(0, acLive − ac): logged spend (usually timesheet labour) not yet posted to the AC
+  // ledger, so CPI reads optimistically. Absent when the caller overrode AC. See EvmHealth.
+  acLive?: number;
+  acUnposted?: number;
 }
 
 export interface Forecast {

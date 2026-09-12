@@ -6,6 +6,7 @@ import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { ApplyScheduleDraftSchema, generateScheduleDraft, applyScheduleDraft } from './scheduleSuggest.service.js';
+import { actualCostBasis } from '../cost/cost.service.js';
 
 const router = Router({ mergeParams: true });
 
@@ -54,7 +55,10 @@ router.get('/manpower-sync', canRead, asyncHandler(async (req, res) => {
 router.get('/evm', canRead, asyncHandler(async (req, res) => {
   const q = evmQuerySchema.parse(req.query);
   const evm = await svc.getEvm(req.params.projectId, q.actualCost, q.statusDate ?? new Date());
-  res.json(evm);
+  // Augment with the live-vs-posted actual-cost basis so the client can flag an optimistic CPI when
+  // logged timesheet labour isn't posted to the AC ledger yet. Skip when the caller overrides AC.
+  const basis = q.actualCost === undefined ? await actualCostBasis(req.params.projectId, evm.ac) : { acLive: evm.ac, acUnposted: 0 };
+  res.json({ ...evm, ...basis });
 }));
 
 // Tasks.
