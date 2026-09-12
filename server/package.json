@@ -19,7 +19,7 @@
     "eval:live": "AI_EVAL=1 npm run test:integration -- --run aiEval.live.itest",
     "eval:judge": "AI_EVAL=1 npm run test:integration -- --run aiJudge.live",
     "test:integration:setup": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' prisma migrate deploy",
-    "test:integration": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' MULTITENANCY_ENFORCE=false JWT_ACCESS_SECRET=test-access JWT_REFRESH_SECRET=test-refresh GUEST_SIGNUP_ENABLED=true NODE_ENV=test vitest run --config vitest.integration.config.ts"
+    "test:integration": "DATABASE_URL='postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public' MULTITENANCY_ENFORCE=false JWT_ACCESS_SECRET=test-access JWT_REFRESH_SECRET=test-refresh GUEST_SIGNUP_ENABLED=true ANTHROPIC_API_KEY= OPENAI_API_KEY= ELEVENLABS_API_KEY= NODE_ENV=test vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
