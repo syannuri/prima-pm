@@ -603,3 +603,29 @@ export async function getCostSummary(projectId: string) {
     autoPostLabourAc: project?.autoPostLabourAc ?? false,
   };
 }
+
+export interface PortfolioActualRow { projectId: string; directActual: number; indirectActual: number; actualTotal: number }
+export interface PortfolioActuals { projects: PortfolioActualRow[]; totals: { directActual: number; indirectActual: number; actualTotal: number } }
+
+// Live actual-cost rollup across several projects. Deliberately reuses getCostSummary per project so
+// each figure — and the total — matches EXACTLY what get_project_costs reports (never the stale EVM
+// snapshot AC, and never a re-derived formula that could drift). getCostSummary is ~8 queries each, so
+// we bound the fan-out with a small concurrency window; the caller caps how many projectIds it passes.
+export async function getPortfolioActualCosts(projectIds: string[]): Promise<PortfolioActuals> {
+  const CONCURRENCY = 6;
+  const projects: PortfolioActualRow[] = [];
+  for (let i = 0; i < projectIds.length; i += CONCURRENCY) {
+    const batch = await Promise.all(projectIds.slice(i, i + CONCURRENCY).map(async (projectId) => {
+      const c = await getCostSummary(projectId);
+      const directActual = c.directActual ?? 0;
+      const indirectActual = c.indirectActual ?? 0;
+      return { projectId, directActual, indirectActual, actualTotal: round2(directActual + indirectActual) };
+    }));
+    projects.push(...batch);
+  }
+  const totals = projects.reduce(
+    (a, r) => ({ directActual: a.directActual + r.directActual, indirectActual: a.indirectActual + r.indirectActual, actualTotal: a.actualTotal + r.actualTotal }),
+    { directActual: 0, indirectActual: 0, actualTotal: 0 },
+  );
+  return { projects, totals: { directActual: round2(totals.directActual), indirectActual: round2(totals.indirectActual), actualTotal: round2(totals.actualTotal) } };
+}
