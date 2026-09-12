@@ -1832,10 +1832,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                 {/* Data columns — each hideable via right-click (restore in ⚙ Options → Columns). */}
                 {show('owner') && <th rowSpan={showDates ? 2 : 1} style={colStyle('owner')} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Owner (PIC) — right-click to hide">Owner<ColGrip col="owner" /></th>}
                 {show('planDates') && (
-                  <th colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className="cursor-context-menu border-b-2 border-slate-300 bg-slate-100 !py-1 text-center text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-slate-600 dark:bg-slate-800/60 dark:text-slate-300" title="Planned (baseline plan) dates — right-click to hide">Plan</th>
+                  <th colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className="cursor-context-menu border-b-2 border-slate-800 !bg-slate-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-slate-900 dark:!bg-slate-700" title="Planned (baseline plan) dates — right-click to hide">Plan</th>
                 )}
                 {show('actualDates') && (
-                  <th colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className="cursor-context-menu border-b-2 border-emerald-300 bg-emerald-50 !py-1 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300" title="Actual start & finish (tracking) — right-click to hide">Actual</th>
+                  <th colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className="cursor-context-menu border-b-2 border-emerald-800 !bg-emerald-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-emerald-900 dark:!bg-emerald-700" title="Actual start & finish (tracking) — right-click to hide">Actual</th>
                 )}
                 {show('dur') && <th rowSpan={showDates ? 2 : 1} style={colStyle('dur')} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Duration — right-click to hide">Dur<ColGrip col="dur" /></th>}
                 {show('budget') && <th rowSpan={showDates ? 2 : 1} style={colStyle('budget')} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className="relative cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Linked Direct Cost (the EVM budget weight) — right-click to hide">Budget<ColGrip col="budget" /></th>}
@@ -1860,8 +1860,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               {/* Row 2 — the Start/Finish sub-labels under each VISIBLE date group. */}
               {showDates && (
                 <tr className="text-center text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:px-2 [&>th]:text-center [&>th]:font-bold [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700">
-                  {show('planDates') && <><th className="!bg-slate-100 !text-slate-500 dark:!bg-slate-800/60 dark:!text-slate-400">Start</th><th className="!bg-slate-100 !text-slate-500 dark:!bg-slate-800/60 dark:!text-slate-400">Finish</th></>}
-                  {show('actualDates') && <><th className="!bg-emerald-50 !text-emerald-600 dark:!bg-emerald-500/10 dark:!text-emerald-300">Start</th><th className="!bg-emerald-50 !text-emerald-600 dark:!bg-emerald-500/10 dark:!text-emerald-300">Finish</th></>}
+                  {show('planDates') && <><th className="!bg-slate-600 !text-slate-100 dark:!bg-slate-600 dark:!text-slate-100">Start</th><th className="!bg-slate-600 !text-slate-100 dark:!bg-slate-600 dark:!text-slate-100">Finish</th></>}
+                  {show('actualDates') && <><th className="!bg-emerald-600 !text-emerald-50 dark:!bg-emerald-600 dark:!text-emerald-50">Start</th><th className="!bg-emerald-600 !text-emerald-50 dark:!bg-emerald-600 dark:!text-emerald-50">Finish</th></>}
                 </tr>
               )}
             </thead>
