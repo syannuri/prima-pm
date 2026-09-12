@@ -2073,7 +2073,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                           onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); e.currentTarget.style.background = pctFillBg(v); }}
                           onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); e.currentTarget.style.background = pctFillBg(v); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          className="w-16 rounded-lg border border-slate-200/70 px-1 py-0.5 text-center text-xs font-medium tabular-nums text-slate-700 shadow-[inset_0_1px_2px_rgba(15,23,42,0.12)] transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/50 dark:border-slate-700 dark:text-slate-100"
+                          className="w-16 rounded-lg border border-slate-200/70 px-1 py-0.5 text-center text-xs font-normal tabular-nums text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.12)] transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/50 dark:border-slate-700 dark:text-white"
                         />
                       ) : (
                         <span className={`tabular-nums text-xs ${r.isParent ? 'font-bold text-slate-600 dark:text-slate-300' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
