@@ -249,7 +249,7 @@ export default function PortfolioSummary() {
         {([
           { label: 'Total BAC', value: formatIdrShort(t.bac), title: formatIdr(t.bac) },
           { label: 'Earned Value', value: formatIdrShort(t.ev), title: formatIdr(t.ev) },
-          { label: 'Actual Cost', value: formatIdrShort(t.ac), title: formatIdr(t.ac) },
+          { label: 'Actual Cost', value: formatIdrShort(t.ac), title: `${formatIdr(t.ac)} — EVM Actual Cost (ACWP): cost posted to the ledger to date, the basis EVM/CPI is computed on. The Cost tab & the AI assistant report LIVE spend (incl. logged timesheet labour), which can be higher until that labour is posted.` },
           { label: 'Schedule slip', value: t.baselinedCount === 0 ? '—' : t.slippedCount > 0 ? `${t.slippedCount} late · ${t.worstSlipDays}d` : 'On schedule', warn: t.slippedCount > 0 },
           { label: 'Changes', value: String(totalChanges) },
           { label: 'Contingency', value: formatIdrShort(t.contingencyReserve), title: formatIdr(t.contingencyReserve) },
