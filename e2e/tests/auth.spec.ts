@@ -8,7 +8,8 @@ test.describe('Authentication & RBAC', () => {
     await page.reload();
 
     await page.getByLabel('Email').fill(ACCOUNTS['Project Manager'].email);
-    await page.getByLabel('Password').fill('wrong-password');
+    // `exact` avoids matching the "Show password" toggle button (aria-label substring-matches "Password").
+    await page.getByLabel('Password', { exact: true }).fill('wrong-password');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
     // Generous timeout: the login round-trip can be slow on a cold dev server.

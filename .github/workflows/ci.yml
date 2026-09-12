@@ -43,6 +43,13 @@ jobs:
         run: npm run build
       - name: Unit tests
         run: npm test
+        env:
+          # src/config/env.ts requires these at import time, and unit tests import server modules —
+          # without them every env-touching test file fails to even collect. Unit tests don't query
+          # the DB (the migrate step runs after this), so any value satisfies the presence check.
+          DATABASE_URL: postgresql://prima:prima@localhost:5432/prima_pm_test?schema=public
+          JWT_ACCESS_SECRET: ci-unit-access
+          JWT_REFRESH_SECRET: ci-unit-refresh
       - name: Migrate test database
         run: npx prisma migrate deploy
         env:

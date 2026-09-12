@@ -26,7 +26,9 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   // Login form is ready (the brand wordmark is no longer a heading, so wait on the field).
   await expect(page.getByLabel('Email')).toBeVisible();
   await page.getByLabel('Email').fill(acct.email);
-  await page.getByLabel('Password').fill(acct.password);
+  // `exact` so we hit the password field, not the "Show password" toggle button — the redesigned
+  // form added an eye toggle whose aria-label ("Show password") also substring-matches "Password".
+  await page.getByLabel('Password', { exact: true }).fill(acct.password);
   // The redesigned form gates "Sign in" behind `canSubmit` (valid email + password);
   // wait for it to enable so a fast fill→click doesn't hit a still-disabled button.
   const signIn = page.getByRole('button', { name: 'Sign in' });
