@@ -832,22 +832,27 @@ export default function AiAssistant() {
           style={docked ? { height: '100dvh', maxHeight: '100dvh' } : { maxHeight: expanded ? 'min(90vh, 52rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(85vh, 46rem)' : undefined }}
         >
           {/* Header — gradient identity band with avatar + status */}
-          <div className={`relative flex items-center gap-2.5 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-3 py-2.5 dark:border-slate-800 dark:from-violet-900/20 dark:to-fuchsia-900/10 ${uiV2 ? 'anett-aurora' : ''}`}>
-            <AnettAvatar className="h-9 w-9" icon="h-6 w-6" />
+          {/* Dark "Deep Amethyst" header — always-on prismatix aurora + animated prism underline. Dark in
+              both themes (a cockpit app-bar), so its controls use light-on-dark variants throughout. */}
+          <div className="anett-aurora anett-header-prism relative flex items-center gap-2.5 border-b border-white/10 bg-gradient-to-r from-violet-950 via-violet-900 to-fuchsia-900 px-3 py-2.5">
+            <AnettAvatar className="h-9 w-9 anett-breathe" icon="h-6 w-6" />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">Anett AI Assistant</div>
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" /> {canPropose ? L.subtitlePropose : L.subtitleRead}
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-semibold text-white">Anett AI Assistant</span>
+                <kbd className="hidden shrink-0 rounded border border-white/20 bg-white/10 px-1.5 py-px text-[10px] font-medium text-white/70 md:inline-block">⌘K</kbd>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-violet-200/80">
+                <span className="anett-live-dot inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> {canPropose ? L.subtitlePropose : L.subtitleRead}
               </div>
             </div>
-            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? L.shrink : L.enlarge} title={expanded ? L.shrink : L.enlarge} className="hidden h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-white/60 hover:text-violet-600 md:grid dark:text-slate-400 dark:hover:bg-slate-800">
+            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? L.shrink : L.enlarge} title={expanded ? L.shrink : L.enlarge} className="hidden h-7 w-7 place-items-center rounded-lg text-white/70 hover:bg-white/15 hover:text-white md:grid">
               <ResizeIcon expanded={expanded} />
             </button>
             {/* ⋮ overflow menu — New Chat + voice toggles (kept out of the header row) */}
             {/* Always render the ⋮ menu — it always offers at least the "New look" toggle. */}
             {true && (
               <div className="relative">
-                <button onClick={() => setMenuOpen((v) => !v)} aria-label={L.menuAria} title={L.menuAria} aria-haspopup="menu" aria-expanded={menuOpen} className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-white/60 hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800">
+                <button onClick={() => setMenuOpen((v) => !v)} aria-label={L.menuAria} title={L.menuAria} aria-haspopup="menu" aria-expanded={menuOpen} className="grid h-7 w-7 place-items-center rounded-lg text-white/70 hover:bg-white/15 hover:text-white">
                   <KebabIcon className="h-5 w-5" />
                 </button>
                 {menuOpen && (
@@ -882,7 +887,7 @@ export default function AiAssistant() {
                 )}
               </div>
             )}
-            <button onClick={() => setOpen(false)} aria-label={L.close} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800">✕</button>
+            <button onClick={() => setOpen(false)} aria-label={L.close} className="grid h-7 w-7 place-items-center rounded-lg text-white/60 hover:bg-white/15 hover:text-white">✕</button>
           </div>
 
           {/* Voice picker — pick the natural voice for spoken answers (shown when the speaker is on) */}

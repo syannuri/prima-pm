@@ -324,14 +324,27 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 .anett-glass { background: rgba(255, 255, 255, 0.80); -webkit-backdrop-filter: blur(14px) saturate(1.35); backdrop-filter: blur(14px) saturate(1.35); }
 .dark .anett-glass { background: rgba(15, 23, 42, 0.74); }
 
-/* Subtle refraction sweep across the header. */
+/* Refraction sweep across the header. Opacities tuned to read over the dark "Deep Amethyst" gradient. */
 .anett-aurora::before {
   content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(115deg, transparent 20%, rgba(168, 85, 247, 0.10) 40%, rgba(217, 70, 239, 0.12) 55%, rgba(99, 102, 241, 0.10) 70%, transparent 85%);
+  background: linear-gradient(115deg, transparent 18%, rgba(192, 132, 252, 0.22) 38%, rgba(232, 121, 249, 0.28) 54%, rgba(129, 140, 248, 0.22) 70%, transparent 86%);
   background-size: 220% 100%;
   animation: anett-aurora 9s ease-in-out infinite;
 }
 @keyframes anett-aurora { 0%, 100% { background-position: 0% 0; } 50% { background-position: 100% 0; } }
+
+/* Animated prism underline along the header's bottom edge — violet→fuchsia→cyan panning slowly. */
+.anett-header-prism::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1.5px; pointer-events: none;
+  background: linear-gradient(90deg, transparent 0%, #8b5cf6 25%, #d946ef 50%, #22d3ee 75%, transparent 100%);
+  background-size: 200% 100%;
+  animation: anett-prism-line 6s linear infinite;
+}
+@keyframes anett-prism-line { to { background-position: -200% 0; } }
+
+/* "Online" status dot — a soft emerald radar-ping. */
+.anett-live-dot { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); animation: anett-live 2.4s ease-out infinite; }
+@keyframes anett-live { 70% { box-shadow: 0 0 0 5px rgba(52, 211, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } }
 
 /* Prismatic glow behind the launcher; brighter while Anett is processing. */
 .anett-glow-v2::after {
@@ -369,5 +382,6 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 
 @media (prefers-reduced-motion: reduce) {
   .anett-halo::before, .anett-thinking .anett-rays line, .anett-breathe,
-  .anett-aurora::before, .anett-glow-v2::after, .anett-orb { animation: none; }
+  .anett-aurora::before, .anett-glow-v2::after, .anett-orb,
+  .anett-header-prism::after, .anett-live-dot { animation: none; }
 }
