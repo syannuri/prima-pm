@@ -607,6 +607,17 @@ export async function getCostSummary(projectId: string) {
 export interface PortfolioActualRow { projectId: string; directActual: number; indirectActual: number; actualTotal: number }
 export interface PortfolioActuals { projects: PortfolioActualRow[]; totals: { directActual: number; indirectActual: number; actualTotal: number } }
 
+// Compare a project's LIVE actual cost (getCostSummary: manpower from timesheet + attributed AC —
+// the same basis as the Cost tab & the AI assistant) against the EVM AC it was given (actualCostAsOf =
+// posted ActualCostEntry ledger). `acUnposted` is the slack — typically logged timesheet labour that
+// hasn't been posted to the ledger yet — which makes CPI (= EV/AC) read optimistically low on cost.
+// Used to surface a "CPI may be optimistic" hint on the Health panel; does NOT change the EVM math.
+export async function actualCostBasis(projectId: string, evmAc: number): Promise<{ acLive: number; acUnposted: number }> {
+  const c = await getCostSummary(projectId);
+  const acLive = round2((c.directActual ?? 0) + (c.indirectActual ?? 0));
+  return { acLive, acUnposted: Math.max(0, round2(acLive - evmAc)) };
+}
+
 // Live actual-cost rollup across several projects. Deliberately reuses getCostSummary per project so
 // each figure — and the total — matches EXACTLY what get_project_costs reports (never the stale EVM
 // snapshot AC, and never a re-derived formula that could drift). getCostSummary is ~8 queries each, so
