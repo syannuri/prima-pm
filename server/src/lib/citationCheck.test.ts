@@ -25,6 +25,11 @@ describe('candidateValues', () => {
     expect(cands).toContain(423_500_000); // BAC − AC (the real saving)
     expect(cands).not.toContain(0.92); // below the money threshold
   });
+
+  it('includes pairwise sums (portfolio rollups across projects)', () => {
+    const cands = candidateValues('[{"bac":4940000000},{"bac":154600000}]');
+    expect(cands).toContain(5_094_600_000); // Σ BAC = the portfolio total
+  });
 });
 
 describe('verifyCitedValues', () => {
@@ -51,5 +56,27 @@ describe('verifyCitedValues', () => {
 
   it('does not flag an unrelated figure that matches no real value at any scale', () => {
     expect(verifyCitedValues('Biaya lisensi Rp 77 Juta.', ctx).ok).toBe(true);
+  });
+
+  // Regression: Anett reported a correct portfolio total, then under user pushback "corrected" every
+  // figure ×1000 to Triliun on a turn that made NO tool call — so it had no tool context and the guard
+  // was skipped. The previous answer's figures are now used as reference to catch the flip.
+  it('flags a ×1000 flip against the previous answer even with no tool context this turn', () => {
+    const prior = 'Total portofolio Rp 5,096 Miliar; Network Rp 4,94 Miliar.';
+    const flipped = 'Anda betul — maksud saya Rp 5,096 Triliun; Network Rp 4,94 Triliun.';
+    const res = verifyCitedValues(flipped, undefined, prior);
+    expect(res.ok).toBe(false);
+    expect(res.issues.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not flag when the follow-up restates the same figures as the previous answer', () => {
+    const prior = 'Total portofolio Rp 5,096 Miliar.';
+    expect(verifyCitedValues('Benar, totalnya Rp 5,096 Miliar.', undefined, prior).ok).toBe(true);
+  });
+
+  it('validates (and flags a flip of) a portfolio total as the sum of per-project values', () => {
+    const portfolio = '[{"bac":4940000000},{"bac":154600000}]';
+    expect(verifyCitedValues('Total BAC Rp 5,0946 Miliar.', portfolio).ok).toBe(true);   // sum of the two BACs
+    expect(verifyCitedValues('Total BAC Rp 5,0946 Triliun.', portfolio).ok).toBe(false); // ×1000 off the sum
   });
 });

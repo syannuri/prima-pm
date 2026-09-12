@@ -925,7 +925,11 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // #6 deterministic citation-value verification: catch monetary magnitude/unit slips (e.g. Miliar vs
   // Juta) that the LLM judge misses — compare the Rp figures in the answer against the real tool data.
   // Free, conservative (only a clean ~1000× mismatch fires). Appends a transparent caveat + logs.
-  const valueCheck = verifyCitedValues(answer, judgeContext);
+  // Also pass the PREVIOUS assistant answer so a ×1000 flip under user pushback is caught even on a turn
+  // that made no tool call (no tool context of its own).
+  const priorAssistant = [...messages].reverse().find((m) => m.role === 'assistant')?.content;
+  const priorAnswer = typeof priorAssistant === 'string' ? priorAssistant : undefined;
+  const valueCheck = verifyCitedValues(answer, judgeContext, priorAnswer);
   if (!valueCheck.ok) {
     logger.warn({ userId, issues: valueCheck.issues }, '[assistant] citation-value check flagged a figure');
     answer += en
