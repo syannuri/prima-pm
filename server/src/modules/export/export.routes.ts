@@ -8,6 +8,7 @@ import { buildProjectPdf } from './build.pdf.js';
 import { gatherGanttExport } from './export.gantt.data.js';
 import { buildGanttPdf } from './build.gantt.pdf.js';
 import { buildGanttWorkbook } from './build.gantt.excel.js';
+import { gatherProjectBundle } from './export.bundle.data.js';
 
 const router = Router({ mergeParams: true });
 
@@ -70,6 +71,19 @@ router.get(
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${safeName(data.project.code, 'xlsx', 'gantt')}"`);
     res.send(buffer);
+  }),
+);
+
+// Full-project JSON bundle: a self-contained snapshot of every domain component, for a faithful
+// round-trip via the bundle importer (clone / backup / migrate). See export.bundle.data.ts.
+router.get(
+  '/bundle',
+  canRead,
+  asyncHandler(async (req, res) => {
+    const bundle = await gatherProjectBundle(req.params.projectId);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName(bundle.exportedFrom.code, 'json', 'bundle')}"`);
+    res.send(JSON.stringify(bundle, null, 2));
   }),
 );
 
