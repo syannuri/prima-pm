@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import type { DeliveryApproach, Project, ProjectCategory } from '../api/types';
+import type { DeliveryApproach, Project, ProjectCategory, User } from '../api/types';
 import { Button, Field, Input, Modal, MoneyInput, Select } from './ui';
 import type { InputState } from './ui';
 import { DELIVERY_APPROACH_LABEL, PROJECT_CATEGORIES } from '../lib/labels';
@@ -36,7 +36,15 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
   const [deliveryApproach, setDeliveryApproach] = useState<DeliveryApproach>(project.deliveryApproach);
   const [costBaseline, setCostBaseline] = useState(project.costBaselineIdr ?? '');
   const [revenue, setRevenue] = useState(project.totalRevenueIdr ?? '');
+  const [pmUserId, setPmUserId] = useState(project.pmUserId ?? '');
   const [err, setErr] = useState('');
+
+  // Assignable users for the PM picker (GUESTS excluded server-side). Loaded only while open.
+  const directoryQ = useQuery({
+    queryKey: ['directory'],
+    queryFn: () => api.get<{ users: User[] }>('/users/directory'),
+    enabled: open,
+  });
   // Per-field validation surfacing (same pattern as the Charter / New Project forms).
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showAllErrors, setShowAllErrors] = useState(false);
@@ -58,6 +66,7 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
     setDeliveryApproach(project.deliveryApproach);
     setCostBaseline(project.costBaselineIdr ?? '');
     setRevenue(project.totalRevenueIdr ?? '');
+    setPmUserId(project.pmUserId ?? '');
     setErr('');
     setTouched({});
     setShowAllErrors(false);
@@ -90,6 +99,7 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
       deliveryApproach,
       costBaselineIdr: costBaseline === '' ? null : Number(costBaseline),
       totalRevenueIdr: revenue === '' ? null : Number(revenue),
+      pmUserId: pmUserId || null,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['project', project.id] });
@@ -123,6 +133,12 @@ export default function EditProjectModal({ project, open: openProp, onOpenChange
                 </Field>
                 <Field label="Sponsor">
                   <Input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="e.g. CISO Office" />
+                </Field>
+                <Field label="Project Manager" hint="Assign or reassign the owning PM">
+                  <Select value={pmUserId} onChange={(e) => setPmUserId(e.target.value)} disabled={directoryQ.isLoading}>
+                    <option value="">— unassigned —</option>
+                    {directoryQ.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                  </Select>
                 </Field>
                 <Field label="Project category" error={categoryOtherError}>
                   <Select value={category} onChange={(e) => setCategory(e.target.value as ProjectCategory | '')}>
