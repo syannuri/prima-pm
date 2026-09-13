@@ -1,10 +1,12 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireRole, requireProjectAccess, requireProjectGovernance } from '../../middleware/rbac.js';
 import { createProjectSchema, updateProjectSchema, reassignPmSchema } from './projects.schemas.js';
 import { z } from 'zod';
 import * as svc from './projects.service.js';
+import { parseBundle, commitBundleImport } from '../import/projectBundle.service.js';
 import { setBaselineLock, listBaselineVersions, getBaselineVersion, restoreBaselineVersion } from './baseline.service.js';
 import { getClosureReadiness } from './closure.js';
 import { getActivationReadiness, getActivationReview, notifyActivationReady } from './activation.js';
@@ -81,6 +83,33 @@ router.get(
       pmUserId: typeof q.pmUserId === 'string' && q.pmUserId ? q.pmUserId : undefined,
     });
     res.json({ projects });
+  }),
+);
+
+// Import a full-project JSON bundle as a BRAND-NEW project (clone). dryRun (default) parses +
+// validates + returns a preview (counts + warnings) WITHOUT writing; without it, commits inside one
+// transaction and returns the new project's id/code. ADMIN/PMO only (it creates a corporate project).
+// Registered before '/:id' so "import" isn't read as a project id.
+const bundleUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // a full project graph can be sizeable
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.json$/i.test(file.originalname) || /json|octet-stream/i.test(file.mimetype);
+    if (!ok) { cb(BadRequest('Only a .json bundle is accepted')); return; }
+    cb(null, true);
+  },
+});
+router.post(
+  '/import/bundle',
+  requireRole('ADMIN', 'PMO'),
+  bundleUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw BadRequest('file is required (field "file")');
+    const { bundle, preview } = await parseBundle(req.file.buffer.toString('utf8'));
+    const dryRun = req.query.dryRun !== 'false';
+    if (dryRun) { res.json({ dryRun: true, preview }); return; }
+    const result = await commitBundleImport(bundle, req.user!.id, req.user!.role);
+    res.status(201).json({ dryRun: false, ...result });
   }),
 );
 

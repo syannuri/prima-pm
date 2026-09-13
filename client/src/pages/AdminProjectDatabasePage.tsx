@@ -7,6 +7,7 @@ import { Badge, Button, Card, Input, SectionTitle, Select, Spinner, EmptyState }
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import EditProjectModal from '../components/EditProjectModal';
+import ImportProjectBundleModal from '../components/ImportProjectBundleModal';
 import { DELIVERY_APPROACH_LABEL, PROJECT_STATUS_BADGE, categoryLabel } from '../lib/labels';
 import { formatIdrShort } from '../lib/format';
 import { projectAccent } from '../lib/projectColor';
@@ -39,6 +40,7 @@ export default function AdminProjectDatabasePage() {
   const [sortKey, setSortKey] = useState<SortKey>('code');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [editing, setEditing] = useState<Project | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const archived = tab === 'archived';
   const projectsQ = useQuery({
@@ -127,6 +129,14 @@ export default function AdminProjectDatabasePage() {
     </th>
   );
 
+  const exportBundle = async (p: Project) => {
+    try {
+      await api.download(`/projects/${p.id}/export/bundle`, `${p.code}_bundle.json`);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Could not export project');
+    }
+  };
+
   const clearFilters = () => { setQ(''); setStatus(''); setYear(''); setPmId(''); };
   const hasFilters = !!(q || status || year || pmId);
 
@@ -136,7 +146,9 @@ export default function AdminProjectDatabasePage() {
         <SectionTitle sub="Manage every corporate project — filter, sort, edit, archive or delete. Archived projects are hidden from the dashboard and the main list.">
           Project Database
         </SectionTitle>
-        <div className="inline-flex rounded-lg border border-slate-300 p-0.5 dark:border-slate-700">
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => setImporting(true)}>Import project</Button>
+          <div className="inline-flex rounded-lg border border-slate-300 p-0.5 dark:border-slate-700">
           {(['active', 'archived'] as const).map((t) => (
             <button
               key={t}
@@ -146,6 +158,7 @@ export default function AdminProjectDatabasePage() {
               {t === 'active' ? 'Database' : 'Archive'}
             </button>
           ))}
+          </div>
         </div>
       </div>
 
@@ -207,6 +220,7 @@ export default function AdminProjectDatabasePage() {
                     <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-slate-800 dark:text-slate-100">{p.costBaseline ? formatIdrShort(p.costBaseline.budgetAtCompletion) : '—'}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       <div className="inline-flex gap-1">
+                        <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => exportBundle(p)} title="Download a full-project JSON bundle (all phases)">Export</Button>
                         <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setEditing(p)}>Edit</Button>
                         {archived ? (
                           <Button variant="secondary" className="px-2 py-1 text-xs" disabled={unarchive.isPending} onClick={() => unarchive.mutate(p.id)}>Restore</Button>
@@ -226,6 +240,12 @@ export default function AdminProjectDatabasePage() {
 
       {editing && (
         <EditProjectModal project={editing} open onOpenChange={(v) => { if (!v) setEditing(null); }} />
+      )}
+      {importing && (
+        <ImportProjectBundleModal
+          onClose={() => setImporting(false)}
+          onImported={() => qc.invalidateQueries({ queryKey: ['projects'] })}
+        />
       )}
     </div>
   );
