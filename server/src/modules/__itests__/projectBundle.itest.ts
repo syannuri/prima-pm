@@ -30,6 +30,8 @@ async function seedFullProject(): Promise<string> {
     projectId: pid, description: 'desc', goals: 'goals', category: 'APP_DEV',
     hiScope: 'scope', hiCostIdr: 1000, hiScheduleStart: new Date('2026-01-01'), hiScheduleEnd: new Date('2026-06-01'),
     hiDeliverables: 'deliverables', pmUserId: adminId,
+    // Source charter is LOCKED (project active) — the clone must come back UNLOCKED (it is DRAFT).
+    locked: true, committedAt: new Date('2026-01-05'), committedBy: adminId,
   } });
 
   const parent = await prisma.task.create({ data: { projectId: pid, wbsCode: '1', name: 'Phase', planStart: new Date('2026-01-01'), planEnd: new Date('2026-03-01'), sortOrder: 0 } });
@@ -59,6 +61,10 @@ async function seedFullProject(): Promise<string> {
   await prisma.lessonLearned.create({ data: { projectId: pid, category: 'RECOMMENDATION', title: 'Lesson' } });
   await prisma.acceptanceSignoff.create({ data: { projectId: pid, party: 'Sponsor', decision: 'ACCEPTED' } });
 
+  // v2: frozen cost baseline (reserves + BAC) + cross-project dependency register.
+  await prisma.costBaseline.create({ data: { projectId: pid, directTotal: 500, indirectTotal: 100, contingencyReserve: 60, managementReserve: 40, costBaseline: 660, budgetAtCompletion: 700 } });
+  await prisma.projectDependency.create({ data: { projectId: pid, code: 'DEP-001', description: 'Vendor API ready', direction: 'INBOUND', status: 'PENDING', impact: 'HIGH', ownerUserId: adminId } });
+
   return pid;
 }
 
@@ -79,7 +85,7 @@ describe('Project bundle export (Phase 1)', () => {
     expect(res.headers['content-disposition']).toContain('BND-1_bundle.json');
     const b = res.body;
 
-    expect(b.formatVersion).toBe(1);
+    expect(b.formatVersion).toBe(2);
     expect(b.exportedFrom.code).toBe('BND-1');
     expect(b.project.name).toBe('Bundle Source');
     expect(b.project.costBaselineIdr).toBe(1000);
@@ -127,6 +133,14 @@ describe('Project bundle export (Phase 1)', () => {
     expect(b.requirements[0].taskLocalIds).toContain(child.localId);
     expect(b.risks[0].ownerEmail).toBe('bnd-admin@corp.test');
     expect(b.agile.backlog[0].assigneeEmail).toBe('bnd-admin@corp.test');
+
+    // v2 sections.
+    expect(b.costBaseline.budgetAtCompletion).toBe(700);
+    expect(b.costBaseline.managementReserve).toBe(40);
+    expect(b.projectDependencies.length).toBe(1);
+    expect(b.projectDependencies[0].code).toBe('DEP-001');
+    expect(b.projectDependencies[0].ownerEmail).toBe('bnd-admin@corp.test');
+    expect(b.charter.locked).toBe(true); // source is locked…
   });
 });
 
@@ -208,6 +222,24 @@ describe('Project bundle import — round-trip clone (Phase 2)', () => {
     const backlog = await prisma.backlogItem.findFirstOrThrow({ where: { projectId: newId } });
     expect(backlog.assigneeUserId).toBe(adminId);
     expect(backlog.sprintId).not.toBeNull(); // backlog→sprint remapped
+
+    // v2: cost baseline (reserves + BAC) reproduced, cross-project dep carried.
+    const cb = await prisma.costBaseline.findUniqueOrThrow({ where: { projectId: newId } });
+    expect(Number(cb.budgetAtCompletion)).toBe(700);
+    expect(Number(cb.managementReserve)).toBe(40);
+    const pdep = await prisma.projectDependency.findFirstOrThrow({ where: { projectId: newId } });
+    expect(pdep.code).toBe('DEP-001');
+    expect(pdep.ownerUserId).toBe(adminId);
+
+    // Coherence: source charter was locked, but the DRAFT clone's charter must be UNLOCKED.
+    const clonedCharter = await prisma.projectCharter.findUniqueOrThrow({ where: { projectId: newId } });
+    expect(clonedCharter.locked).toBe(false);
+    expect(clonedCharter.committedAt).toBeNull();
+
+    // Reconciliation report is returned and every component fully imported (imported === expected).
+    const recon = res.body.reconciliation as Record<string, { expected: number; imported: number }>;
+    expect(recon).toBeTruthy();
+    for (const [, r] of Object.entries(recon)) expect(r.imported).toBeGreaterThanOrEqual(r.expected);
   });
 
   it('rejects a non-JSON file and a bad format version', async () => {

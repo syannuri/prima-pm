@@ -10,7 +10,12 @@ import { prisma } from '../../lib/prisma.js';
 import { NotFound } from '../../lib/errors.js';
 import { Prisma } from '@prisma/client';
 
-export const BUNDLE_FORMAT_VERSION = 1;
+// v2 added: costBaseline (frozen EVM baseline + reserves), scheduleBaselinedAt, projectDependencies
+// (cross-project register), customFieldValues (Tier-3, project + task). The importer still reads v1
+// bundles — the new sections just default to empty/null.
+export const BUNDLE_FORMAT_VERSION = 2;
+// Versions this server's importer can read.
+export const SUPPORTED_BUNDLE_VERSIONS = [1, 2];
 
 // Prisma Decimal → plain number (or null), so the JSON carries numbers, not Decimal strings.
 const dec = (v: Prisma.Decimal | number | null | undefined): number | null =>
@@ -26,7 +31,7 @@ export async function gatherProjectBundle(projectId: string) {
   const [
     charter, tasks, deps, costDirect, costIndirect, actualCosts, mandayEntries,
     risks, issues, stakeholders, requirements, reqLinks, procurement, assumptions,
-    uat, sprints, backlog, lessons, acceptances,
+    uat, sprints, backlog, lessons, acceptances, costBaseline, projectDeps,
   ] = await Promise.all([
     prisma.projectCharter.findUnique({ where: { projectId } }),
     prisma.task.findMany({
@@ -51,7 +56,17 @@ export async function gatherProjectBundle(projectId: string) {
     prisma.backlogItem.findMany({ where: { projectId }, orderBy: { sortOrder: 'asc' } }),
     prisma.lessonLearned.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' } }),
     prisma.acceptanceSignoff.findMany({ where: { projectId }, orderBy: { signedAt: 'asc' } }),
+    prisma.costBaseline.findUnique({ where: { projectId } }),
+    prisma.projectDependency.findMany({ where: { projectId }, orderBy: { code: 'asc' } }),
   ]);
+
+  // Tier-3 custom-field values for this project + its tasks (entityId = projectId or taskId), with
+  // their definition so the importer can resolve/create the def in the target tenant.
+  const taskIds = tasks.map((t) => t.id);
+  const customFieldValues = await prisma.customFieldValue.findMany({
+    where: { entityId: { in: [projectId, ...taskIds] } },
+    include: { def: { select: { entity: true, key: true, label: true, type: true, options: true, required: true, sortOrder: true } } },
+  });
 
   // --- Resolve referenced Resources → a lookup table keyed by their original id. ---
   const resourceIds = new Set<string>();
@@ -75,6 +90,7 @@ export async function gatherProjectBundle(projectId: string) {
   assumptions.forEach((a) => addUser(a.ownerUserId));
   backlog.forEach((b) => addUser(b.assigneeUserId));
   costDirect.forEach((c) => addUser(c.resourceUserId));
+  projectDeps.forEach((d) => addUser(d.ownerUserId));
   const userRows = userIds.size
     ? await prisma.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, email: true } })
     : [];
@@ -103,8 +119,19 @@ export async function gatherProjectBundle(projectId: string) {
       deliveryApproach: project.deliveryApproach,
       costBaselineIdr: dec(project.costBaselineIdr),
       totalRevenueIdr: dec(project.totalRevenueIdr),
+      mandaysPerPoint: dec(project.mandaysPerPoint),
+      autoPostLabourAc: project.autoPostLabourAc,
+      scheduleBaselinedAt: project.scheduleBaselinedAt,
     },
     pm: project.pm ? { email: project.pm.email, name: project.pm.name } : null,
+
+    // Frozen cost baseline (PMB): reserves are entered, not derivable from cost lines — so EVM/BAC
+    // only reproduces in a clone if this is carried.
+    costBaseline: costBaseline && {
+      directTotal: dec(costBaseline.directTotal), indirectTotal: dec(costBaseline.indirectTotal),
+      contingencyReserve: dec(costBaseline.contingencyReserve), managementReserve: dec(costBaseline.managementReserve),
+      costBaseline: dec(costBaseline.costBaseline), budgetAtCompletion: dec(costBaseline.budgetAtCompletion),
+    },
 
     resources: resourceRows.map((r) => ({
       ref: r.id,
@@ -219,6 +246,19 @@ export async function gatherProjectBundle(projectId: string) {
     })),
     acceptances: acceptances.map((a) => ({
       party: a.party, decision: a.decision, signedByName: a.signedByName, comments: a.comments, signedAt: a.signedAt,
+    })),
+    // Cross-project dependency register (INBOUND/OUTBOUND external deps).
+    projectDependencies: projectDeps.map((d) => ({
+      code: d.code, description: d.description, direction: d.direction, counterparty: d.counterparty,
+      dueDate: d.dueDate, status: d.status, impact: d.impact, ownerEmail: userRef(d.ownerUserId), notes: d.notes,
+    })),
+    // Tier-3 custom-field values (project- and task-scoped). Carries the def so the importer can
+    // resolve or create it by (entity, key) in the target tenant. taskLocalId set for task-scoped.
+    customFieldValues: customFieldValues.map((v) => ({
+      entity: v.def.entity, key: v.def.key, label: v.def.label, type: v.def.type,
+      options: v.def.options, required: v.def.required, sortOrder: v.def.sortOrder,
+      value: v.value,
+      taskLocalId: v.def.entity === 'task' ? v.entityId : null, // task-scoped points at the task's localId
     })),
   };
 }
