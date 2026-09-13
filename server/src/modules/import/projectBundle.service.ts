@@ -5,7 +5,7 @@
 // Resources match an existing tenant resource by name (+email) or are created; Rate cards match by
 // role name or are dropped (amounts are stored, so cost integrity holds). All-or-nothing.
 import { z } from 'zod';
-import type { Prisma, Role } from '@prisma/client';
+import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { BadRequest } from '../../lib/errors.js';
 import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
@@ -343,5 +343,5 @@ export async function commitBundleImport(
     }
 
     return { projectId: pid, code, warnings };
-  }, { timeout: 60_000, maxWait: 10_000 } as Prisma.TransactionOptions);
+  }, { timeout: 60_000, maxWait: 10_000 });
 }
