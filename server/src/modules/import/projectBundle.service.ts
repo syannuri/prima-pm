@@ -9,7 +9,7 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { BadRequest } from '../../lib/errors.js';
 import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
-import { BUNDLE_FORMAT_VERSION } from '../export/export.bundle.data.js';
+import { SUPPORTED_BUNDLE_VERSIONS } from '../export/export.bundle.data.js';
 
 // Lenient shape check: we validate the envelope + that a project name exists, and default every
 // component array to []. Field-level typos surface as a transaction error (→ 400) at commit.
@@ -38,6 +38,10 @@ const bundleSchema = z.object({
   agile: z.object({ sprints: arr(obj), backlog: arr(obj) }).default({ sprints: [], backlog: [] }),
   lessons: arr(obj),
   acceptances: arr(obj),
+  // v2 additions (absent in v1 bundles → default empty/null).
+  costBaseline: obj.nullable().optional(),
+  projectDependencies: arr(obj),
+  customFieldValues: arr(obj),
 }).passthrough();
 
 export type ParsedBundle = z.infer<typeof bundleSchema>;
@@ -64,8 +68,8 @@ export async function parseBundle(raw: unknown): Promise<{ bundle: ParsedBundle;
     throw BadRequest(`This does not look like a project bundle: ${res.error.issues[0]?.message ?? 'invalid shape'}.`);
   }
   const bundle = res.data;
-  if (bundle.formatVersion !== BUNDLE_FORMAT_VERSION) {
-    throw BadRequest(`Unsupported bundle version ${bundle.formatVersion} (this server reads version ${BUNDLE_FORMAT_VERSION}).`);
+  if (!SUPPORTED_BUNDLE_VERSIONS.includes(bundle.formatVersion)) {
+    throw BadRequest(`Unsupported bundle version ${bundle.formatVersion} (this server reads version ${SUPPORTED_BUNDLE_VERSIONS.join(', ')}).`);
   }
 
   const warnings: string[] = [];
@@ -118,6 +122,9 @@ export async function parseBundle(raw: unknown): Promise<{ bundle: ParsedBundle;
     lessons: bundle.lessons.length,
     acceptances: bundle.acceptances.length,
     resources: bundle.resources.length,
+    projectDependencies: bundle.projectDependencies.length,
+    customFieldValues: bundle.customFieldValues.length,
+    costBaseline: bundle.costBaseline ? 1 : 0,
   };
 
   return {
@@ -138,8 +145,10 @@ export async function commitBundleImport(
   bundle: ParsedBundle,
   actorId: string,
   actorRole?: Role,
-): Promise<{ projectId: string; code: string; warnings: string[] }> {
+): Promise<{ projectId: string; code: string; warnings: string[]; reconciliation: Record<string, { expected: number; imported: number }> }> {
   const warnings: string[] = [];
+  let resourcesCreated = 0;
+  let customDefsCreated = 0;
   const year = new Date().getFullYear();
   const p = bundle.project as Record<string, any>;
 
@@ -156,6 +165,9 @@ export async function commitBundleImport(
 
     // PM: bundle email → user, else the importing actor (a valid ADMIN/PMO).
     const pmUserId = (await resolveEmail(bundle.pm?.email)) ?? actorId;
+    if (bundle.pm?.email && pmUserId === actorId && emailCache.get(bundle.pm.email) == null) {
+      warnings.push(`PM "${bundle.pm.email}" not found — you were assigned as PM.`);
+    }
 
     // --- new project code (highest existing seq for the year + 1, with a small retry margin). ---
     const existingCodes = await tx.project.findMany({ where: { code: { startsWith: `PRJ-${year}-` } }, select: { code: true } });
@@ -167,10 +179,26 @@ export async function commitBundleImport(
         category: p.category ?? null, categoryOther: p.category === 'OTHER' ? (p.categoryOther ?? null) : null,
         deliveryApproach: p.deliveryApproach ?? 'PREDICTIVE',
         costBaselineIdr: p.costBaselineIdr ?? null, totalRevenueIdr: p.totalRevenueIdr ?? null,
+        mandaysPerPoint: p.mandaysPerPoint ?? 1, autoPostLabourAc: p.autoPostLabourAc ?? false,
+        // The clone is always DRAFT and editable, so it is NOT baseline-locked. We still carry the
+        // schedule-baseline "captured" stamp (task baseline dates are imported) so EVM PV lines up.
+        scheduleBaselinedAt: d(p.scheduleBaselinedAt),
         status: 'DRAFT', pmUserId,
       },
     });
     const pid = project.id;
+
+    // Frozen cost baseline (reserves + BAC): carried so EVM/BAC reproduces (v2 bundles).
+    if (bundle.costBaseline) {
+      const cb = bundle.costBaseline as Record<string, any>;
+      await tx.costBaseline.create({
+        data: {
+          projectId: pid, directTotal: cb.directTotal ?? 0, indirectTotal: cb.indirectTotal ?? 0,
+          contingencyReserve: cb.contingencyReserve ?? 0, managementReserve: cb.managementReserve ?? 0,
+          costBaseline: cb.costBaseline ?? 0, budgetAtCompletion: cb.budgetAtCompletion ?? 0,
+        },
+      });
+    }
 
     // --- Resources: match by name (+email) or create. ref → new/existing id. ---
     const resourceMap = new Map<string, string>();
@@ -198,6 +226,7 @@ export async function commitBundleImport(
         select: { id: true },
       });
       resourceMap.set(r.ref, created.id);
+      resourcesCreated++;
     }
     const mapRes = (ref: unknown): string | null => (typeof ref === 'string' ? resourceMap.get(ref) ?? null : null);
 
@@ -211,7 +240,9 @@ export async function commitBundleImport(
           hiScope: c.hiScope ?? '', hiCostIdr: c.hiCostIdr ?? 0,
           hiScheduleStart: dReq(c.hiScheduleStart ?? new Date()), hiScheduleEnd: dReq(c.hiScheduleEnd ?? new Date()),
           hiDeliverables: c.hiDeliverables ?? '', hiResources: c.hiResources ?? null,
-          version: c.version ?? 1, locked: c.locked ?? false, committedAt: d(c.committedAt), pmUserId,
+          // Coherence: the clone is a DRAFT project, so its charter must NOT be locked/committed
+          // (charter.locked means "project active"). Ignore the source's locked/committedAt.
+          version: c.version ?? 1, locked: false, committedAt: null, pmUserId,
         },
       });
     }
@@ -342,6 +373,79 @@ export async function commitBundleImport(
       await tx.backlogItem.create({ data: { projectId: pid, sprintId: sid, type: b.type ?? 'STORY', title: b.title ?? '', description: b.description ?? null, acceptanceCriteria: b.acceptanceCriteria ?? null, storyPoints: b.storyPoints ?? null, priority: b.priority ?? 0, status: b.status ?? 'TODO', assigneeUserId: await resolveEmail(b.assigneeEmail), sortOrder: b.sortOrder ?? 0 } });
     }
 
-    return { projectId: pid, code, warnings };
+    // --- Cross-project dependency register (v2). ---
+    for (const dp of bundle.projectDependencies as Record<string, any>[]) {
+      await tx.projectDependency.create({ data: { projectId: pid, code: dp.code ?? '', description: dp.description ?? '', direction: dp.direction ?? 'INBOUND', counterparty: dp.counterparty ?? null, dueDate: d(dp.dueDate), status: dp.status ?? 'PENDING', impact: dp.impact ?? 'MEDIUM', ownerUserId: await resolveEmail(dp.ownerEmail), notes: dp.notes ?? null } });
+    }
+
+    // --- Tier-3 custom-field values (v2): resolve/create the def by (entity, key), then the value
+    // against the new project id (project-scoped) or the remapped task id (task-scoped). CustomFieldDef
+    // / CustomFieldValue carry a non-null tenantId, so we set it from the (tenant-scoped) new project.
+    // Skipped only when there is no tenant context (e.g. the tenant-less test harness). ---
+    const cfTenantId = project.tenantId;
+    if (cfTenantId && (bundle.customFieldValues as unknown[]).length) {
+      const defCache = new Map<string, string>(); // `${entity}:${key}` → defId
+      for (const cf of bundle.customFieldValues as Record<string, any>[]) {
+        const entity = cf.entity === 'task' ? 'task' : 'project';
+        const key = String(cf.key ?? '').trim();
+        if (!key) continue;
+        const cacheKey = `${entity}:${key}`;
+        let defId = defCache.get(cacheKey);
+        if (!defId) {
+          const existing = await tx.customFieldDef.findFirst({ where: { entity, key }, select: { id: true } });
+          if (existing) defId = existing.id;
+          else {
+            const createdDef = await tx.customFieldDef.create({ data: { tenantId: cfTenantId, entity, key, label: cf.label ?? key, type: cf.type ?? 'text', options: cf.options ?? undefined, required: cf.required ?? false, sortOrder: cf.sortOrder ?? 0 }, select: { id: true } });
+            defId = createdDef.id;
+            customDefsCreated++;
+          }
+          defCache.set(cacheKey, defId);
+        }
+        const entityId = entity === 'task' ? mapTask(cf.taskLocalId) : pid;
+        if (!entityId) continue; // task-scoped value whose task didn't map — skip
+        if (cf.value != null) await tx.customFieldValue.create({ data: { tenantId: cfTenantId, defId, entityId, value: String(cf.value) } });
+      }
+    }
+
+    // --- Reconciliation: expected (from bundle) vs actually imported (counted in the new project),
+    // so any silent drop surfaces. Plus soft warnings for lossy resolutions. ---
+    const unresolvedEmails = [...emailCache.values()].filter((v) => v == null).length;
+    const rateCardsDropped = [...rateCardCache.entries()].filter(([k, v]) => k && v == null).length;
+    if (resourcesCreated) warnings.push(`${resourcesCreated} resource(s) created in this workspace.`);
+    if (rateCardsDropped) warnings.push(`${rateCardsDropped} rate card(s) not found — left blank (amounts kept).`);
+    if (customDefsCreated) warnings.push(`${customDefsCreated} custom-field definition(s) created.`);
+    // Owner/assignee emails that fell through to null (excludes the PM, already reported).
+    const ownerNulls = unresolvedEmails - (bundle.pm?.email && emailCache.get(bundle.pm.email) == null ? 1 : 0);
+    if (ownerNulls > 0) warnings.push(`${ownerNulls} owner/assignee reference(s) not found — left blank.`);
+
+    const reconciliation: Record<string, { expected: number; imported: number }> = {
+      tasks: { expected: bundle.tasks.length, imported: await tx.task.count({ where: { projectId: pid } }) },
+      taskDependencies: { expected: bundle.taskDependencies.length, imported: await tx.taskDependency.count({ where: { predecessor: { projectId: pid } } }) },
+      costDirect: { expected: bundle.costDirect.length, imported: await tx.costItemDirect.count({ where: { projectId: pid } }) },
+      costIndirect: { expected: bundle.costIndirect.length, imported: await tx.costItemIndirect.count({ where: { projectId: pid } }) },
+      actualCosts: { expected: bundle.actualCosts.length, imported: await tx.actualCostEntry.count({ where: { projectId: pid } }) },
+      mandayEntries: { expected: bundle.mandayEntries.length, imported: await tx.mandayEntry.count({ where: { projectId: pid } }) },
+      risks: { expected: bundle.risks.length, imported: await tx.risk.count({ where: { projectId: pid } }) },
+      issues: { expected: bundle.issues.length, imported: await tx.issue.count({ where: { projectId: pid } }) },
+      stakeholders: { expected: bundle.stakeholders.length, imported: await tx.stakeholder.count({ where: { projectId: pid } }) },
+      requirements: { expected: bundle.requirements.length, imported: await tx.requirement.count({ where: { projectId: pid } }) },
+      procurement: { expected: bundle.procurement.length, imported: await tx.procurement.count({ where: { projectId: pid } }) },
+      assumptions: { expected: bundle.assumptions.length, imported: await tx.assumption.count({ where: { projectId: pid } }) },
+      uat: { expected: bundle.uat.length, imported: await tx.uatTestCase.count({ where: { projectId: pid } }) },
+      sprints: { expected: bundle.agile.sprints.length, imported: await tx.sprint.count({ where: { projectId: pid } }) },
+      backlog: { expected: bundle.agile.backlog.length, imported: await tx.backlogItem.count({ where: { projectId: pid } }) },
+      lessons: { expected: bundle.lessons.length, imported: await tx.lessonLearned.count({ where: { projectId: pid } }) },
+      acceptances: { expected: bundle.acceptances.length, imported: await tx.acceptanceSignoff.count({ where: { projectId: pid } }) },
+      projectDependencies: { expected: bundle.projectDependencies.length, imported: await tx.projectDependency.count({ where: { projectId: pid } }) },
+      customFieldValues: { expected: bundle.customFieldValues.length, imported: await tx.customFieldValue.count({ where: { entityId: { in: [pid, ...taskMap.values()] } } }) },
+      costBaseline: { expected: bundle.costBaseline ? 1 : 0, imported: await tx.costBaseline.count({ where: { projectId: pid } }) },
+    };
+
+    // Any component where fewer rows landed than expected is worth flagging.
+    for (const [name, { expected, imported }] of Object.entries(reconciliation)) {
+      if (imported < expected) warnings.push(`${name}: ${imported}/${expected} imported (${expected - imported} skipped).`);
+    }
+
+    return { projectId: pid, code, warnings, reconciliation };
   }, { timeout: 60_000, maxWait: 10_000 });
 }
