@@ -9,6 +9,7 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { BadRequest } from '../../lib/errors.js';
 import { generateProjectCode, nextProjectSeq } from '../charter/charter.helpers.js';
+import { recomputeBaseline } from '../cost/cost.service.js';
 import { SUPPORTED_BUNDLE_VERSIONS } from '../export/export.bundle.data.js';
 
 // Lenient shape check: we validate the envelope + that a project name exists, and default every
@@ -406,6 +407,13 @@ export async function commitBundleImport(
         if (cf.value != null) await tx.customFieldValue.create({ data: { tenantId: cfTenantId, defId, entityId, value: String(cf.value) } });
       }
     }
+
+    // CostBaseline (directTotal/indirect/contingency/costBaseline/BAC) is a DERIVED value that the
+    // app recomputes after every cost/risk mutation. Bulk-importing cost lines + risks bypasses that,
+    // and the carried snapshot can be 0/stale — so recompute it now from the imported data (this
+    // preserves the managementReserve seeded above). Without this, BAC=0 → EVM/Overview/S-curve show
+    // no cost and 0% progress even though the lines/progress imported fine.
+    await recomputeBaseline(pid, tx);
 
     // --- Reconciliation: expected (from bundle) vs actually imported (counted in the new project),
     // so any silent drop surfaces. Plus soft warnings for lossy resolutions. ---
