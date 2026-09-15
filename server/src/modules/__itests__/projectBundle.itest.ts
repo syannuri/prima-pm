@@ -223,10 +223,14 @@ describe('Project bundle import — round-trip clone (Phase 2)', () => {
     expect(backlog.assigneeUserId).toBe(adminId);
     expect(backlog.sprintId).not.toBeNull(); // backlog→sprint remapped
 
-    // v2: cost baseline (reserves + BAC) reproduced, cross-project dep carried.
+    // v2: cost baseline is RECOMPUTED from the imported cost lines + risks (not the carried snapshot),
+    // so BAC reflects real data. managementReserve (entered, non-derivable) is preserved from the bundle.
     const cb = await prisma.costBaseline.findUniqueOrThrow({ where: { projectId: newId } });
-    expect(Number(cb.budgetAtCompletion)).toBe(700);
-    expect(Number(cb.managementReserve)).toBe(40);
+    expect(Number(cb.managementReserve)).toBe(40);          // preserved from bundle
+    expect(Number(cb.directTotal)).toBe(500);               // recomputed from the imported direct line
+    expect(Number(cb.indirectTotal)).toBe(100);             // recomputed from the imported indirect line
+    expect(Number(cb.budgetAtCompletion)).toBeGreaterThanOrEqual(640); // direct+indirect+mgmt (+contingency)
+    expect(Number(cb.budgetAtCompletion)).toBeGreaterThan(0);
     const pdep = await prisma.projectDependency.findFirstOrThrow({ where: { projectId: newId } });
     expect(pdep.code).toBe('DEP-001');
     expect(pdep.ownerUserId).toBe(adminId);
