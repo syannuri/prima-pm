@@ -162,57 +162,66 @@ describe('Stage C — AI-proposed actions', () => {
     expect(await prisma.risk.count({ where: { projectId, title: 'Should not exist' } })).toBe(0);
   });
 
-  // ---- Fase 2: Gantt-editing actions --------------------------------------------------------------
+  // ---- Fase 2/3: Gantt-editing actions + adaptive gate --------------------------------------------
+  // Baseline UNLOCKED → the schedule-editing family applies DIRECTLY (applied=true, no approval row).
 
-  it('proposes RESCHEDULE_TASK and moves the task on approval (duration preserved)', async () => {
+  it('RESCHEDULE_TASK applies directly on an unlocked baseline (duration preserved)', async () => {
     const before = await prisma.task.findUnique({ where: { id: taskId } });
     const durMs = before!.planEnd.getTime() - before!.planStart.getTime();
-    const newStart = new Date('2030-03-04T00:00:00.000Z');
-    const { id } = await proposeAction({ projectId, actionType: 'RESCHEDULE_TASK', params: { taskId, startDate: '2030-03-04' } }, pmId);
-    // Nothing moved yet.
-    expect((await prisma.task.findUnique({ where: { id: taskId } }))?.planStart.getTime()).toBe(before!.planStart.getTime());
-    const req = await reqFor(id);
-    await decideApproval(req!.id, adminId, 'APPROVED');
+    const { id, applied, routed } = await proposeAction({ projectId, actionType: 'RESCHEDULE_TASK', params: { taskId, startDate: '2030-03-04' } }, pmId);
+    expect(applied).toBe(true);
+    expect(routed).toBe(false);
+    // No approval request was created — it was applied outright.
+    expect(await reqFor(id)).toBeNull();
     const after = await prisma.task.findUnique({ where: { id: taskId } });
-    expect(after?.planStart.toISOString().slice(0, 10)).toBe(newStart.toISOString().slice(0, 10));
+    expect(after?.planStart.toISOString().slice(0, 10)).toBe('2030-03-04');
     // Only startDate given → the original duration is preserved.
     expect(after!.planEnd.getTime() - after!.planStart.getTime()).toBe(durMs);
     expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
   });
 
-  it('proposes CREATE_TASK and creates the work package on approval', async () => {
-    const { id } = await proposeAction({ projectId, actionType: 'CREATE_TASK', params: { name: 'AI-created UAT', startDate: '2030-05-01', durationDays: 3 } }, pmId);
-    expect(await prisma.task.count({ where: { projectId, name: 'AI-created UAT' } })).toBe(0);
-    const req = await reqFor(id);
-    await decideApproval(req!.id, adminId, 'APPROVED');
+  it('CREATE_TASK applies directly on an unlocked baseline', async () => {
+    const { id, applied } = await proposeAction({ projectId, actionType: 'CREATE_TASK', params: { name: 'AI-created UAT', startDate: '2030-05-01', durationDays: 3 } }, pmId);
+    expect(applied).toBe(true);
     const created = await prisma.task.findFirst({ where: { projectId, name: 'AI-created UAT' } });
     expect(created).toBeTruthy();
     expect(created!.planEnd.getTime() - created!.planStart.getTime()).toBe(3 * 86_400_000);
     expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
   });
 
-  it('proposes EDIT_DEPENDENCY (add by task pair) and links the tasks on approval', async () => {
+  it('EDIT_DEPENDENCY (add by task pair) applies directly on an unlocked baseline', async () => {
     const a = await prisma.task.create({ data: { projectId, wbsCode: 'D-A', name: 'Dep A', planStart: new Date('2030-06-01'), planEnd: new Date('2030-06-05'), progressPct: 0 } });
     const b = await prisma.task.create({ data: { projectId, wbsCode: 'D-B', name: 'Dep B', planStart: new Date('2030-06-06'), planEnd: new Date('2030-06-10'), progressPct: 0 } });
-    const { id } = await proposeAction({ projectId, actionType: 'EDIT_DEPENDENCY', params: { op: 'add', predecessorTaskId: a.id, successorTaskId: b.id, type: 'FS', lagDays: 1 } }, pmId);
-    expect(await prisma.taskDependency.count({ where: { predecessorId: a.id, successorId: b.id } })).toBe(0);
-    const req = await reqFor(id);
-    await decideApproval(req!.id, adminId, 'APPROVED');
+    const { id, applied } = await proposeAction({ projectId, actionType: 'EDIT_DEPENDENCY', params: { op: 'add', predecessorTaskId: a.id, successorTaskId: b.id, type: 'FS', lagDays: 1 } }, pmId);
+    expect(applied).toBe(true);
     const dep = await prisma.taskDependency.findFirst({ where: { predecessorId: a.id, successorId: b.id } });
     expect(dep?.type).toBe('FS');
     expect(dep?.lagDays).toBe(1);
     expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
   });
 
-  it('RESCHEDULE_TASK fails cleanly on a locked baseline (nothing moved)', async () => {
+  it('a schedule edit on a LOCKED baseline routes to approval instead of applying directly', async () => {
     await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: new Date() } });
     const before = await prisma.task.findUnique({ where: { id: taskId } });
-    const { id } = await proposeAction({ projectId, actionType: 'RESCHEDULE_TASK', params: { taskId, startDate: '2031-01-01' } }, pmId);
+    const { id, applied, routed } = await proposeAction({ projectId, actionType: 'RESCHEDULE_TASK', params: { taskId, startDate: '2031-01-01' } }, pmId);
+    expect(applied).toBe(false);
+    expect(routed).toBe(true); // human-in-the-loop, not direct
+    // Nothing moved while it awaits a decision.
+    expect((await prisma.task.findUnique({ where: { id: taskId } }))?.planStart.getTime()).toBe(before!.planStart.getTime());
+    // Approving still can't move a locked schedule → the executor blocks and the proposal FAILS.
     const req = await reqFor(id);
     await decideApproval(req!.id, adminId, 'APPROVED');
     expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('FAILED');
     expect((await prisma.task.findUnique({ where: { id: taskId } }))?.planStart.getTime()).toBe(before!.planStart.getTime());
     await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null } });
+  });
+
+  it('a non-schedule action (CREATE_RISK) still routes to approval even when unlocked', async () => {
+    const { applied, routed } = await proposeAction({ projectId, actionType: 'CREATE_RISK', params: { title: 'Gate scope check', probabilityScore: 2, impactScore: 2 } }, pmId);
+    expect(applied).toBe(false);
+    expect(routed).toBe(true);
+    // Not applied outright — no risk row until an approver clears it.
+    expect(await prisma.risk.count({ where: { projectId, title: 'Gate scope check' } })).toBe(0);
   });
 
   // ---- Fase 1: requester visibility ---------------------------------------------------------------
@@ -244,7 +253,8 @@ describe('Stage C — AI-proposed actions', () => {
       .set(bearer(pmToken))
       .send({ actionType: 'TIDY_SCHEDULE', params: { mode: 'push' }, rationale: 'dependencies drifted' });
     expect(res.status).toBe(201);
-    expect(res.body.routed).toBe(true);
+    // Unlocked baseline → TIDY_SCHEDULE is a schedule-editing action, applied directly.
+    expect(res.body.applied).toBe(true);
     expect(await prisma.aiActionProposal.count({ where: { projectId, actionType: 'TIDY_SCHEDULE' } })).toBe(1);
   });
 

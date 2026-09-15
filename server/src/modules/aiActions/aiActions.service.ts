@@ -364,11 +364,24 @@ async function ensureAiActionWorkflow(actorId: string): Promise<void> {
 // ---- Propose ------------------------------------------------------------------------------------
 
 export interface ProposeInput { projectId: string; actionType: string; params: unknown; rationale?: string | null; confidence?: string | null }
+export interface ProposeResult { id: string; routed: boolean; applied: boolean }
 
-// Validate + persist a proposal, then route it into the approval engine. Returns the proposal id and
-// whether it landed in an approver's inbox (routed=false ⇒ no approver resolvable — proposal stays
-// PENDING and a human must configure a workflow with a reachable approver).
-export async function proposeAction(input: ProposeInput, actorId: string): Promise<{ id: string; routed: boolean }> {
+// Fase 3 — the schedule-editing family applies DIRECTLY when the baseline is unlocked (an edit the
+// requester could make by hand, done for them on their explicit ask). A locked baseline keeps the
+// human-in-the-loop approval route, so a controlled schedule change still goes through a decision.
+const DIRECT_APPLY_WHEN_UNLOCKED = new Set<AiActionType>(['RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'TIDY_SCHEDULE']);
+
+async function isBaselineLocked(projectId: string): Promise<boolean> {
+  const p = await prisma.project.findFirst({ where: { id: projectId }, select: { baselineLockedAt: true } });
+  return Boolean(p?.baselineLockedAt);
+}
+
+// Validate + persist a proposal, then either apply it directly (schedule-editing family on an
+// unlocked baseline) or route it into the approval engine. Returns the proposal id plus:
+//   applied=true  → the write already happened (baseline was unlocked)
+//   routed=true   → it landed in an approver's inbox (awaiting a human decision)
+//   both false    → stored PENDING but no approver was resolvable (a human must fix the workflow)
+export async function proposeAction(input: ProposeInput, actorId: string): Promise<ProposeResult> {
   await assertActionsEnabled(input.projectId);
   const def = actionDef(input.actionType);
   const parsed = def.schema.safeParse(input.params);
@@ -386,6 +399,16 @@ export async function proposeAction(input: ProposeInput, actorId: string): Promi
     },
   });
 
+  // Direct-apply path — reuse finalizeProposal so the write, APPLIED/FAILED stamping, outcome
+  // baseline and failure notice are identical to the approve path. A failed execution surfaces its
+  // real reason to the caller (Anett relays it) rather than leaving a silent FAILED row.
+  if (DIRECT_APPLY_WHEN_UNLOCKED.has(input.actionType as AiActionType) && !(await isBaselineLocked(input.projectId))) {
+    await finalizeProposal(proposal.id, input.projectId, 'APPROVED', actorId);
+    const final = await prisma.aiActionProposal.findUnique({ where: { id: proposal.id }, select: { status: true, failureNote: true } });
+    if (final?.status === 'FAILED') throw BadRequest(final.failureNote ?? 'Could not apply the AI action');
+    return { id: proposal.id, routed: false, applied: true };
+  }
+
   const payload = { actionType: input.actionType, params: parsed.data, rationale: input.rationale ?? null, requestedById: actorId };
   let started = await startApproval({ entityType: 'AI_ACTION', entityId: proposal.id, projectId: input.projectId, payload }, actorId);
   if (!started) {
@@ -393,7 +416,7 @@ export async function proposeAction(input: ProposeInput, actorId: string): Promi
     await ensureAiActionWorkflow(actorId);
     started = await startApproval({ entityType: 'AI_ACTION', entityId: proposal.id, projectId: input.projectId, payload }, actorId);
   }
-  return { id: proposal.id, routed: Boolean(started) };
+  return { id: proposal.id, routed: Boolean(started), applied: false };
 }
 
 // Recent proposals for a project (any status) — drives a small "AI actions" history/status surface.

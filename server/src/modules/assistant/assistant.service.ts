@@ -306,7 +306,7 @@ const PROPOSE_ACTION_TOOL: AiToolDef = {
     '- EDIT_DEPENDENCY: { op "add"|"update"|"remove", predecessorTaskId?, successorTaskId?, dependencyId?, type? "FS"|"SS"|"FF"|"SF", lagDays? } — add butuh predecessorTaskId+successorTaskId; update/remove pakai dependencyId ATAU pasangan predecessor+successor. Ambil taskId dari get_schedule_detail.',
     '- CREATE_TASK: { name, startDate (YYYY-MM-DD), endDate? , durationDays?, parentTaskId?, isMilestone? } — tambah task/milestone baru. Milestone: end = start.',
     'project_code dari list_projects. rationale = alasan singkat mengapa aksi ini diusulkan.',
-    'CATATAN: RESCHEDULE_TASK/EDIT_DEPENDENCY/CREATE_TASK memerlukan baseline jadwal BELUM terkunci; pada proyek aktif/terkunci ajukan CREATE_CHANGE_REQUEST (impactAreas ["SCHEDULE"]) sebagai gantinya.',
+    'CATATAN GERBANG: RESCHEDULE_TASK/EDIT_DEPENDENCY/CREATE_TASK/TIDY_SCHEDULE — bila baseline jadwal BELUM terkunci, perubahan DITERAPKAN LANGSUNG (tak perlu approval); bila SUDAH terkunci, ajukan CREATE_CHANGE_REQUEST (impactAreas ["SCHEDULE"]) sebagai gantinya. Tetap konfirmasi ke pengguna sebelum memanggil.',
   ].join('\n'),
   input_schema: {
     type: 'object',
@@ -410,7 +410,7 @@ export async function assistantActionsAvailable(): Promise<boolean> {
 
 // A proposal Anett staged during a turn (surfaced to the client so it can show a "view in Approvals"
 // card). Kept minimal — the full detail lives in the approvals inbox.
-export interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
+export interface ProposedRef { actionType: string; projectCode: string; routed: boolean; applied?: boolean }
 
 // A grounded in-app navigation target the process guide surfaced (id-less top-level route only) — the
 // client renders it as a real router-Link button so "buka Reports" actually navigates.
@@ -723,11 +723,14 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
           return JSON.stringify({ error: `action_type tidak dikenal. Pilih salah satu: ${AI_ACTION_TYPES.join(', ')}.` });
         }
         try {
-          const { routed } = await proposeAction({ projectId: id, actionType, params: args.params, rationale: args.rationale ?? null }, ctx.userId);
-          ctx.proposals.push({ actionType, projectCode: (typeof args.project_code === 'string' ? args.project_code.trim() : ''), routed });
-          return JSON.stringify({ ok: true, routed, message: routed
-            ? 'Usulan aksi telah diajukan untuk approval. Aksi hanya berjalan setelah disetujui.'
-            : 'Usulan tersimpan namun belum ada approver yang bisa dituju — minta admin mengatur workflow AI action.' });
+          const { routed, applied } = await proposeAction({ projectId: id, actionType, params: args.params, rationale: args.rationale ?? null }, ctx.userId);
+          ctx.proposals.push({ actionType, projectCode: (typeof args.project_code === 'string' ? args.project_code.trim() : ''), routed, applied });
+          const message = applied
+            ? 'Aksi diterapkan langsung ke proyek (baseline jadwal belum terkunci) — perubahan sudah tersimpan.'
+            : routed
+              ? 'Usulan aksi telah diajukan untuk approval. Aksi hanya berjalan setelah disetujui.'
+              : 'Usulan tersimpan namun belum ada approver yang bisa dituju — minta admin mengatur workflow AI action.';
+          return JSON.stringify({ ok: true, applied, routed, message });
         } catch (err) {
           const msg = err instanceof AppError ? err.message : 'Gagal mengajukan usulan aksi.';
           return JSON.stringify({ error: msg });
