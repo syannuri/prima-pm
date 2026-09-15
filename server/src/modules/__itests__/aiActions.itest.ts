@@ -67,6 +67,7 @@ beforeEach(async () => {
   await prisma.risk.deleteMany({});
   await prisma.changeRequest.deleteMany({});
   await prisma.task.update({ where: { id: taskId }, data: { progressPct: 0 } });
+  await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null } });
 });
 
 const reqFor = (proposalId: string) => prisma.approvalRequest.findFirst({ where: { entityId: proposalId } });
@@ -159,6 +160,59 @@ describe('Stage C — AI-proposed actions', () => {
     expect(res.status).toBe('REJECTED');
     expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('REJECTED');
     expect(await prisma.risk.count({ where: { projectId, title: 'Should not exist' } })).toBe(0);
+  });
+
+  // ---- Fase 2: Gantt-editing actions --------------------------------------------------------------
+
+  it('proposes RESCHEDULE_TASK and moves the task on approval (duration preserved)', async () => {
+    const before = await prisma.task.findUnique({ where: { id: taskId } });
+    const durMs = before!.planEnd.getTime() - before!.planStart.getTime();
+    const newStart = new Date('2030-03-04T00:00:00.000Z');
+    const { id } = await proposeAction({ projectId, actionType: 'RESCHEDULE_TASK', params: { taskId, startDate: '2030-03-04' } }, pmId);
+    // Nothing moved yet.
+    expect((await prisma.task.findUnique({ where: { id: taskId } }))?.planStart.getTime()).toBe(before!.planStart.getTime());
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    const after = await prisma.task.findUnique({ where: { id: taskId } });
+    expect(after?.planStart.toISOString().slice(0, 10)).toBe(newStart.toISOString().slice(0, 10));
+    // Only startDate given → the original duration is preserved.
+    expect(after!.planEnd.getTime() - after!.planStart.getTime()).toBe(durMs);
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
+  });
+
+  it('proposes CREATE_TASK and creates the work package on approval', async () => {
+    const { id } = await proposeAction({ projectId, actionType: 'CREATE_TASK', params: { name: 'AI-created UAT', startDate: '2030-05-01', durationDays: 3 } }, pmId);
+    expect(await prisma.task.count({ where: { projectId, name: 'AI-created UAT' } })).toBe(0);
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    const created = await prisma.task.findFirst({ where: { projectId, name: 'AI-created UAT' } });
+    expect(created).toBeTruthy();
+    expect(created!.planEnd.getTime() - created!.planStart.getTime()).toBe(3 * 86_400_000);
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
+  });
+
+  it('proposes EDIT_DEPENDENCY (add by task pair) and links the tasks on approval', async () => {
+    const a = await prisma.task.create({ data: { projectId, wbsCode: 'D-A', name: 'Dep A', planStart: new Date('2030-06-01'), planEnd: new Date('2030-06-05'), progressPct: 0 } });
+    const b = await prisma.task.create({ data: { projectId, wbsCode: 'D-B', name: 'Dep B', planStart: new Date('2030-06-06'), planEnd: new Date('2030-06-10'), progressPct: 0 } });
+    const { id } = await proposeAction({ projectId, actionType: 'EDIT_DEPENDENCY', params: { op: 'add', predecessorTaskId: a.id, successorTaskId: b.id, type: 'FS', lagDays: 1 } }, pmId);
+    expect(await prisma.taskDependency.count({ where: { predecessorId: a.id, successorId: b.id } })).toBe(0);
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    const dep = await prisma.taskDependency.findFirst({ where: { predecessorId: a.id, successorId: b.id } });
+    expect(dep?.type).toBe('FS');
+    expect(dep?.lagDays).toBe(1);
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
+  });
+
+  it('RESCHEDULE_TASK fails cleanly on a locked baseline (nothing moved)', async () => {
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: new Date() } });
+    const before = await prisma.task.findUnique({ where: { id: taskId } });
+    const { id } = await proposeAction({ projectId, actionType: 'RESCHEDULE_TASK', params: { taskId, startDate: '2031-01-01' } }, pmId);
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('FAILED');
+    expect((await prisma.task.findUnique({ where: { id: taskId } }))?.planStart.getTime()).toBe(before!.planStart.getTime());
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null } });
   });
 
   // ---- Fase 1: requester visibility ---------------------------------------------------------------

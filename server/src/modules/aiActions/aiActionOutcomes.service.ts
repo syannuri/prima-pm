@@ -35,6 +35,9 @@ const SCORED_METRIC: Record<AiActionType, 'SPI' | null> = {
   TIDY_SCHEDULE: 'SPI',
   UPDATE_TASK_PROGRESS: 'SPI',
   REASSIGN_MANPOWER: 'SPI', // relieving a resource bottleneck should help the schedule
+  RESCHEDULE_TASK: 'SPI', // a direct Gantt move — its effect on schedule performance is measurable
+  EDIT_DEPENDENCY: 'SPI', // re-linking the network reshapes the critical path
+  CREATE_TASK: null, // adding scope isn't a schedule-improvement lever — no verdict
   CREATE_RISK: null,
   CREATE_CHANGE_REQUEST: null,
 };

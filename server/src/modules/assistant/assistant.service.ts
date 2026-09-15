@@ -302,7 +302,11 @@ const PROPOSE_ACTION_TOOL: AiToolDef = {
     '- CREATE_CHANGE_REQUEST: { title, description (>=5 char), impactAreas: ["SCOPE"?...] salah satu dari CHARTER/COST/SCHEDULE/RESOURCE/QUALITY/RISK, magnitude "MINOR"|"MAJOR"?, chargeable? , amountIdr? }',
     '- TIDY_SCHEDULE: { mode "push"|"asap"? } — rapikan jadwal mengikuti dependensi.',
     '- REASSIGN_MANPOWER: { costItemId, toResourceId } — pindahkan alokasi manpower sebuah task ke resource lain (redakan over-allocation). Ambil costItemId & toResourceId dari get_resource_conflicts.',
+    '- RESCHEDULE_TASK: { taskId, startDate? (YYYY-MM-DD), endDate? , durationDays? , propagate? } — geser/ubah durasi sebuah task di Gantt. Beri minimal salah satu dari startDate/endDate/durationDays; kalau hanya startDate, durasi lama dipertahankan. propagate (default true) menggeser task penerus mengikuti dependensi. Ambil taskId dari get_schedule_detail.',
+    '- EDIT_DEPENDENCY: { op "add"|"update"|"remove", predecessorTaskId?, successorTaskId?, dependencyId?, type? "FS"|"SS"|"FF"|"SF", lagDays? } — add butuh predecessorTaskId+successorTaskId; update/remove pakai dependencyId ATAU pasangan predecessor+successor. Ambil taskId dari get_schedule_detail.',
+    '- CREATE_TASK: { name, startDate (YYYY-MM-DD), endDate? , durationDays?, parentTaskId?, isMilestone? } — tambah task/milestone baru. Milestone: end = start.',
     'project_code dari list_projects. rationale = alasan singkat mengapa aksi ini diusulkan.',
+    'CATATAN: RESCHEDULE_TASK/EDIT_DEPENDENCY/CREATE_TASK memerlukan baseline jadwal BELUM terkunci; pada proyek aktif/terkunci ajukan CREATE_CHANGE_REQUEST (impactAreas ["SCHEDULE"]) sebagai gantinya.',
   ].join('\n'),
   input_schema: {
     type: 'object',
