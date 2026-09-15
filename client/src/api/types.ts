@@ -1292,6 +1292,20 @@ export interface MyApproval {
   aiAction?: { actionType: string | null; rationale: string | null } | null;
 }
 
+// An AI action the signed-in user RAISED (via Anett) — their own tracking row on the approvals page,
+// visible regardless of who the approval was routed to. Status follows the proposal's lifecycle.
+export interface MyRaisedProposal {
+  id: string;
+  actionType: string;
+  label: string;
+  rationale: string | null;
+  status: 'PENDING' | 'APPLIED' | 'REJECTED' | 'FAILED';
+  failureNote: string | null;
+  createdAt: string;
+  appliedAt: string | null;
+  project: { id: string; name: string; code: string } | null;
+}
+
 // Project Intake & Portfolio Selection — a pre-project idea/demand scored through a funnel and,
 // once approved, converted into a real Project (DRAFT). Decimals arrive as strings (Prisma Decimal).
 export type ProposalStatus = 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'DEFERRED' | 'CONVERTED';

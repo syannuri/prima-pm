@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
-import type { ApprovalDelegation, MyApproval } from '../api/types';
+import type { ApprovalDelegation, MyApproval, MyRaisedProposal } from '../api/types';
 import { Badge, Button, Card, Field, Input, Select, Spinner, Textarea } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { formatDate } from '../lib/format';
@@ -38,7 +38,63 @@ export default function ApprovalsPage() {
           {approvals.map((a) => <ApprovalRow key={a.id} a={a} focused={a.id === focusId} />)}
         </div>
       )}
+
+      <RaisedByMe />
     </div>
+  );
+}
+
+// AI actions the signed-in user staged through Anett — shown so a self-raised proposal is always
+// visible here, even when the approval notice went to the project PM / an admin. Read-only: the
+// approve/reject controls live on the approver's rows above.
+function RaisedByMe() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['my-raised-proposals'],
+    queryFn: () => api.get<{ proposals: MyRaisedProposal[] }>('/approvals/mine/raised'),
+    refetchInterval: 60_000,
+  });
+  const proposals = data?.proposals ?? [];
+  if (isLoading || proposals.length === 0) return null;
+
+  const statusBadge = (s: MyRaisedProposal['status']) => {
+    const map: Record<MyRaisedProposal['status'], { color: 'amber' | 'green' | 'red' | 'slate'; text: string }> = {
+      PENDING: { color: 'amber', text: 'Awaiting approval' },
+      APPLIED: { color: 'green', text: 'Applied' },
+      REJECTED: { color: 'slate', text: 'Rejected' },
+      FAILED: { color: 'red', text: 'Failed' },
+    };
+    return map[s];
+  };
+
+  return (
+    <section className="space-y-3 pt-2">
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Raised by me (Anett)</h2>
+      <div className="space-y-2">
+        {proposals.map((p) => {
+          const b = statusBadge(p.status);
+          return (
+            <Card key={p.id} className="space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge color="violet">🤖 AI action</Badge>
+                  <span className="text-sm font-medium capitalize text-slate-800 dark:text-slate-100">{p.label}</span>
+                </div>
+                <Badge color={b.color}>{b.text}</Badge>
+              </div>
+              {p.project && (
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  <Link to={`/projects/${p.project.id}`} className="hover:underline">{p.project.name}{p.project.code ? ` (${p.project.code})` : ''}</Link>
+                  <span className="text-slate-400"> · raised {formatDate(p.createdAt)}</span>
+                </div>
+              )}
+              {p.status === 'FAILED' && p.failureNote && (
+                <p className="text-xs text-red-600 dark:text-red-400">Could not apply: {p.failureNote}</p>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

@@ -167,6 +167,24 @@ function actionDef(actionType: string): ActionDef<unknown> {
   return def;
 }
 
+// A DB-free human label for a stored proposal — used for list surfaces where doing per-row name
+// lookups (as the richer REGISTRY.describe does) would fan out into many queries. Best-effort: an
+// unrecognised type or bad params degrades to a generic phrase.
+function describeRow(actionType: string, params: unknown): string {
+  const def = REGISTRY[actionType as AiActionType];
+  const parsed = def?.schema.safeParse(params);
+  if (!def || !parsed?.success) return 'an AI-proposed action';
+  const p = parsed.data as Record<string, unknown>;
+  switch (actionType as AiActionType) {
+    case 'CREATE_RISK': return `create risk "${p.title}" (P${p.probabilityScore}×I${p.impactScore})`;
+    case 'UPDATE_TASK_PROGRESS': return `set a task's progress to ${p.progressPct}%`;
+    case 'CREATE_CHANGE_REQUEST': return `draft change request "${p.title}"`;
+    case 'TIDY_SCHEDULE': return `tidy the schedule (${p.mode === 'asap' ? 'compact/ASAP' : 'push-only'})`;
+    case 'REASSIGN_MANPOWER': return 'reassign a task\'s manpower to another resource';
+    default: return 'an AI-proposed action';
+  }
+}
+
 // ---- Gating -------------------------------------------------------------------------------------
 
 // Env + per-tenant aiActionsEnabled. Drives the client's show/hide of the propose buttons.
@@ -258,6 +276,33 @@ export async function listProjectProposals(projectId: string) {
     take: 50,
     select: { id: true, actionType: true, params: true, rationale: true, confidence: true, status: true, failureNote: true, createdAt: true, appliedAt: true },
   });
+}
+
+// The proposals the current user RAISED (via Anett), across every project they can access — the
+// requester's own tracking surface on the approvals page. AiActionProposal is tenant-scoped, so this
+// is auto-bounded to the active workspace. Human label is derived from the row (no extra query).
+export async function listMyRaisedProposals(userId: string) {
+  const rows = await prisma.aiActionProposal.findMany({
+    where: { proposedById: userId },
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    select: {
+      id: true, actionType: true, params: true, rationale: true, status: true, failureNote: true,
+      createdAt: true, appliedAt: true,
+      project: { select: { id: true, name: true, code: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    actionType: r.actionType,
+    label: describeRow(r.actionType, r.params),
+    rationale: r.rationale,
+    status: r.status,
+    failureNote: r.failureNote,
+    createdAt: r.createdAt,
+    appliedAt: r.appliedAt,
+    project: r.project,
+  }));
 }
 
 // ---- Finalize (called by approval.finalize on the terminal decision) ----------------------------

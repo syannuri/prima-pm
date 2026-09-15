@@ -161,6 +161,27 @@ describe('Stage C — AI-proposed actions', () => {
     expect(await prisma.risk.count({ where: { projectId, title: 'Should not exist' } })).toBe(0);
   });
 
+  // ---- Fase 1: requester visibility ---------------------------------------------------------------
+
+  it('notifies the requester too when they are also an AI-action approver (no silent self-proposal)', async () => {
+    await prisma.notification.deleteMany({});
+    // PM proposes; PM is a PROJECT_PM approver on the seeded default step → must still be notified.
+    await proposeAction({ projectId, actionType: 'CREATE_RISK', params: { title: 'Self-raised', probabilityScore: 2, impactScore: 2 } }, pmId);
+    const mine = await prisma.notification.count({ where: { userId: pmId, type: 'APPROVAL_PENDING' } });
+    expect(mine).toBeGreaterThanOrEqual(1);
+  });
+
+  it('GET /approvals/mine/raised lists the caller\'s own raised proposals with a label + status', async () => {
+    await proposeAction({ projectId, actionType: 'CREATE_CHANGE_REQUEST', params: { title: 'Shift schedule', description: 'Move milestone', impactAreas: ['SCHEDULE'] }, rationale: 'client request' }, pmId);
+    const res = await request(app).get(api('/approvals/mine/raised')).set(bearer(pmToken));
+    expect(res.status).toBe(200);
+    const cr = res.body.proposals.find((p: { actionType: string }) => p.actionType === 'CREATE_CHANGE_REQUEST');
+    expect(cr).toBeTruthy();
+    expect(cr.status).toBe('PENDING');
+    expect(cr.label).toContain('Shift schedule');
+    expect(cr.project.code).toBe('AIA-1');
+  });
+
   // ---- HTTP surface -------------------------------------------------------------------------------
 
   it('POST /ai-actions/propose stages a proposal (201) for the owning PM', async () => {

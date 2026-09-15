@@ -281,6 +281,12 @@ async function routeFrom(
   fromOrder: number,
   actorId: string,
   opts: FinalizeOpts = {},
+  // Normally the person who triggered this routing (the requester on start, or the approver who
+  // just cleared a step) is excluded from the "approval needed" notice — they either just acted or
+  // are the requester and get their own receipt. For AI-proposed actions the requester IS the
+  // human-in-the-loop approver, so on the initial routing we notify them too (they get no
+  // separate receipt, and the whole point is that their click executes the AI's draft).
+  includeActorInNotify = false,
 ): Promise<'PENDING' | 'APPROVED'> {
   for (const step of workflow.steps) {
     if (step.order < fromOrder) continue;
@@ -289,7 +295,7 @@ async function routeFrom(
     // Set (or clear) the SLA deadline for the new current step, and reset the escalation flag.
     const dueAt = step.slaHours ? new Date(Date.now() + step.slaHours * 3_600_000) : null;
     await prisma.approvalRequest.update({ where: { id: ref.id }, data: { currentOrder: step.order, dueAt, escalatedAt: null } });
-    await notifyStepApprovers(ref, step, actorId);
+    await notifyStepApprovers(ref, step, includeActorInNotify ? null : actorId);
     return 'PENDING';
   }
   await finalize(ref, 'APPROVED', actorId, opts);
@@ -409,7 +415,9 @@ export async function startApproval(
   });
   await writeAudit({ projectId: ref.projectId, userId: actorId, entity: 'ApprovalRequest', entityId: req.id, action: 'CREATE', after: { workflow: workflow.name, entityType: ref.entityType, entityId: ref.entityId } });
   const entityRef: EntityRef = { id: req.id, entityType: ref.entityType, entityId: ref.entityId, projectId: ref.projectId };
-  const status = await routeFrom(entityRef, workflow, 1, actorId);
+  // AI actions: the requester is also the intended approver, so include them in the "approval
+  // needed" notice — otherwise a self-proposed action lands silently and looks like nothing happened.
+  const status = await routeFrom(entityRef, workflow, 1, actorId, {}, ref.entityType === 'AI_ACTION');
   // Receipt to the requester that their item is now under review (only if it didn't auto-approve).
   if (status === 'PENDING') await emailRequesterUnderReview(entityRef, actorId);
   return req;
