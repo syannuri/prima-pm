@@ -6,6 +6,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
 import { Forbidden } from '../../lib/errors.js';
 import * as service from './approval.service.js';
+import { listMyRaisedProposals } from '../aiActions/aiActions.service.js';
 
 const roleEnum = z.enum(['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER']);
 const magnitudeEnum = z.enum(['MINOR', 'MAJOR']);
@@ -84,6 +85,12 @@ inboxRouter.get('/mine', asyncHandler(async (req, res) => {
 
 inboxRouter.get('/mine/count', asyncHandler(async (req, res) => {
   res.json({ count: await service.countMyApprovals(req.user!.id) });
+}));
+
+// AI-proposed actions the caller RAISED (via Anett) — their own tracking surface, so a self-raised
+// proposal is visible even when the approver notice went to the project PM / an admin.
+inboxRouter.get('/mine/raised', asyncHandler(async (req, res) => {
+  res.json({ proposals: await listMyRaisedProposals(req.user!.id) });
 }));
 
 inboxRouter.post('/:id/decide', validateBody(decideSchema), asyncHandler(async (req, res) => {

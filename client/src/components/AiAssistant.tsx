@@ -13,7 +13,7 @@ import { anettChatKey } from '../lib/anettChat';
 // Portfolio AI assistant — Q&A over the projects the user can access, and (Stage C) able to PROPOSE
 // actions that a human approves. Launcher sits bottom-RIGHT, stacked ABOVE the DM ChatWidget bubble.
 // Dormant unless AI is available (env + tenant). Persona: "Anett".
-interface ProposedRef { actionType: string; projectCode: string; routed: boolean }
+interface ProposedRef { actionType: string; projectCode: string; routed: boolean; applied?: boolean }
 interface NavRef { label: string; path: string }
 interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
 interface QueryTable { entity: string; columns: { key: string; label: string }[]; rows: Record<string, string | number | boolean | null>[]; total: number; limit: number }
@@ -30,7 +30,7 @@ interface AnettStrings {
   enlarge: string; shrink: string;
   greetPre: string; greetPost: string; greetPropose: string;
   needAttention: string; approvalsWaiting: (n: number) => string; overdue: (code: string, n: number) => string; overduePrompt: (code: string) => string;
-  proposalsTitle: string; waitingApprover: string; reviewInApprovals: string;
+  proposalsTitle: string; waitingApprover: string; appliedSuffix: string; reviewInApprovals: string;
   remembering: string; teamSuffix: string;
   thanksUp: string; thanksDown: string; notePlaceholder: string; send: string; skip: string;
   likeTitle: string; likeAria: string; dislikeTitle: string; dislikeAria: string;
@@ -54,7 +54,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     newChat: 'New Chat', newChatTitle: 'Percakapan baru', close: 'Tutup', enlarge: 'Perbesar', shrink: 'Perkecil',
     greetPre: 'Halo, saya ', greetPost: '. Saya bantu memantau proyek Anda', greetPropose: ' — dan bisa mengusulkan aksi (perlu persetujuan)',
     needAttention: 'Perlu perhatian', approvalsWaiting: (n) => `${n} approval menunggu`, overdue: (c, n) => `${c}: ${n} telat`, overduePrompt: (c) => `Tugas apa saja yang telat di ${c}?`,
-    proposalsTitle: '🤖 Usulan aksi diajukan', waitingApprover: ' (menunggu approver)', reviewInApprovals: 'Tinjau di Approvals →',
+    proposalsTitle: '🤖 Usulan aksi diajukan', waitingApprover: ' (menunggu approver)', appliedSuffix: ' (diterapkan langsung)', reviewInApprovals: 'Tinjau di Approvals →',
     remembering: 'Mengingat', teamSuffix: ' (tim)',
     thanksUp: '👍 Terima kasih atas masukannya.', thanksDown: '👎 Terima kasih — Anett akan mengingatnya.', notePlaceholder: 'Apa yang kurang tepat? / seharusnya bagaimana?', send: 'Kirim', skip: 'Lewati',
     likeTitle: 'Jawaban ini membantu', likeAria: 'Suka', dislikeTitle: 'Jawaban ini kurang tepat', dislikeAria: 'Tidak suka',
@@ -66,7 +66,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     needsApproval: (n) => `Menunggu persetujuan Anda (${n})`, approve: 'Setujui', reject: 'Tolak', viewAllApprovals: (n) => `+${n} lainnya di Approvals →`, approvedToast: 'Disetujui', rejectedToast: 'Ditolak',
     exportCsv: 'Ekspor CSV', rowsShown: (n, total) => `${n} dari ${total} baris`,
     footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
-    actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal' },
+    actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal', REASSIGN_MANPOWER: 'Pindah alokasi manpower', RESCHEDULE_TASK: 'Ubah jadwal tugas', EDIT_DEPENDENCY: 'Ubah dependensi', CREATE_TASK: 'Tambah tugas' },
     chips: (proj, propose) => proj
       ? ['Ringkas kesehatan proyek ini', 'Tugas apa saja yang telat di sini?', propose ? 'Usulkan mitigasi untuk proyek ini' : 'Apa risiko tertinggi di proyek ini?']
       : ['Proyek mana yang paling di belakang jadwal?', 'Ringkas kesehatan portofolio saya', propose ? 'Usulkan mitigasi untuk proyek paling berisiko' : 'Apa risiko tertinggi di proyek saya?'],
@@ -80,7 +80,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     newChat: 'New Chat', newChatTitle: 'New conversation', close: 'Close', enlarge: 'Enlarge', shrink: 'Shrink',
     greetPre: "Hi, I'm ", greetPost: '. I help you monitor your projects', greetPropose: ' — and can propose actions (needs approval)',
     needAttention: 'Needs attention', approvalsWaiting: (n) => `${n} approval${n === 1 ? '' : 's'} waiting`, overdue: (c, n) => `${c}: ${n} overdue`, overduePrompt: (c) => `Which tasks are overdue in ${c}?`,
-    proposalsTitle: '🤖 Action proposals submitted', waitingApprover: ' (awaiting approver)', reviewInApprovals: 'Review in Approvals →',
+    proposalsTitle: '🤖 Action proposals submitted', waitingApprover: ' (awaiting approver)', appliedSuffix: ' (applied directly)', reviewInApprovals: 'Review in Approvals →',
     remembering: 'Remembering', teamSuffix: ' (team)',
     thanksUp: '👍 Thanks for the feedback.', thanksDown: "👎 Thanks — Anett will remember this.", notePlaceholder: 'What was off? / what should it be?', send: 'Send', skip: 'Skip',
     likeTitle: 'This answer helped', likeAria: 'Like', dislikeTitle: 'This answer was off', dislikeAria: 'Dislike',
@@ -92,7 +92,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     needsApproval: (n) => `Awaiting your approval (${n})`, approve: 'Approve', reject: 'Reject', viewAllApprovals: (n) => `+${n} more in Approvals →`, approvedToast: 'Approved', rejectedToast: 'Rejected',
     exportCsv: 'Export CSV', rowsShown: (n, total) => `${n} of ${total} rows`,
     footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
-    actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule' },
+    actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule', REASSIGN_MANPOWER: 'Reassign manpower', RESCHEDULE_TASK: 'Reschedule task', EDIT_DEPENDENCY: 'Edit dependency', CREATE_TASK: 'Add task' },
     chips: (proj, propose) => proj
       ? ['Summarize this project’s health', 'Which tasks are overdue here?', propose ? 'Propose mitigations for this project' : "What's the top risk in this project?"]
       : ['Which project is most behind schedule?', 'Summarize my portfolio health', propose ? 'Propose mitigations for the riskiest project' : "What's the top risk across my projects?"],
@@ -998,10 +998,12 @@ export default function AiAssistant() {
                     <div className="mb-1 flex items-center gap-1.5 font-semibold text-violet-700 dark:text-violet-300">{L.proposalsTitle}</div>
                     <ul className="space-y-0.5 text-slate-600 dark:text-slate-300">
                       {t.proposals.map((p, j) => (
-                        <li key={j}>• {ACTION_LABELS[p.actionType] ?? p.actionType} · <span className="font-mono">{p.projectCode}</span>{p.routed ? '' : L.waitingApprover}</li>
+                        <li key={j}>• {ACTION_LABELS[p.actionType] ?? p.actionType} · <span className="font-mono">{p.projectCode}</span>{p.applied ? L.appliedSuffix : p.routed ? '' : L.waitingApprover}</li>
                       ))}
                     </ul>
-                    <Link to="/approvals" onClick={() => setOpen(false)} className="mt-1.5 inline-block font-medium text-violet-700 hover:underline dark:text-violet-300">{L.reviewInApprovals}</Link>
+                    {t.proposals.some((p) => !p.applied) && (
+                      <Link to="/approvals" onClick={() => setOpen(false)} className="mt-1.5 inline-block font-medium text-violet-700 hover:underline dark:text-violet-300">{L.reviewInApprovals}</Link>
+                    )}
                   </div>
                 )}
                 {/* Grounded "how-to" navigation — real in-app router links surfaced by the process guide */}

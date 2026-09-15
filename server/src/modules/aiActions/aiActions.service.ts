@@ -5,7 +5,8 @@ import { getTenantStore } from '../../lib/tenant/context.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { createNotification } from '../notification/notification.service.js';
 import { createRisk } from '../risk/risk.service.js';
-import { setTaskProgress, applyAutoSchedule } from '../schedule/schedule.service.js';
+import { setTaskProgress, applyAutoSchedule, updateTask, createTask, addDependency, updateDependency, deleteDependency } from '../schedule/schedule.service.js';
+import { DEPENDENCY_TYPES } from '../schedule/schedule.schemas.js';
 import { createChangeRequest } from '../charter/charter.service.js';
 import { startApproval, resolveWorkflow, createWorkflow } from '../approval/approval.service.js';
 import { RISK_KINDS, RESPONSE_STRATEGIES } from '../risk/risk.schemas.js';
@@ -26,8 +27,14 @@ import { updateDirectLine } from '../cost/cost.service.js';
 // change actions, distinct from enabling the narrative/advisory features (aiNarrativeEnabled).
 // =====================================================================
 
-export const AI_ACTION_TYPES = ['CREATE_RISK', 'UPDATE_TASK_PROGRESS', 'CREATE_CHANGE_REQUEST', 'TIDY_SCHEDULE', 'REASSIGN_MANPOWER'] as const;
+export const AI_ACTION_TYPES = [
+  'CREATE_RISK', 'UPDATE_TASK_PROGRESS', 'CREATE_CHANGE_REQUEST', 'TIDY_SCHEDULE', 'REASSIGN_MANPOWER',
+  // Gantt-editing family (Fase 2) — reschedule a task, edit a dependency link, add a task.
+  'RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK',
+] as const;
 export type AiActionType = (typeof AI_ACTION_TYPES)[number];
+
+const MS_PER_DAY = 86_400_000;
 
 // Qualitative score (1-5) → probability fraction, mirroring the risk-suggest bulk-create mapping.
 // EMV impact is left at 0 for the PM to refine (same as AiRiskSuggest); the score drives the matrix.
@@ -71,6 +78,54 @@ const tidyScheduleParams = z.object({
 const reassignManpowerParams = z.object({
   costItemId: z.string().uuid(),
   toResourceId: z.string().uuid(),
+});
+
+// Plan-date bounds mirror the schedule schemas' DoS guard (a single request must not spin the
+// working-day walker for billions of iterations on the shared server).
+const PLAN_MIN = new Date('2000-01-01T00:00:00.000Z');
+const PLAN_MAX = new Date('2100-12-31T00:00:00.000Z');
+const planDate = () => z.coerce.date().min(PLAN_MIN, 'date is out of the supported range').max(PLAN_MAX, 'date is out of the supported range');
+const DUR_MAX = 3650; // ≤10 years, matches the scheduler's lag cap
+
+// Move a task on the Gantt: new start and/or new end (or a duration in calendar days). When only a
+// new start is given the existing duration is preserved. propagate (default true) runs the push-only
+// auto-scheduler afterwards so dependent tasks shift to keep the network valid.
+const rescheduleTaskParams = z.object({
+  taskId: z.string().uuid(),
+  startDate: planDate().optional(),
+  endDate: planDate().optional(),
+  durationDays: z.coerce.number().int().min(0).max(DUR_MAX).optional(),
+  propagate: z.boolean().default(true),
+}).refine((d) => d.startDate != null || d.endDate != null || d.durationDays != null, {
+  message: 'Give at least one of startDate, endDate or durationDays',
+});
+
+// Add / edit / remove a dependency link. Update & remove identify the link by dependencyId OR by the
+// predecessor→successor task pair (the AI knows task ids from get_schedule_detail, not link ids).
+const editDependencyParams = z.object({
+  op: z.enum(['add', 'update', 'remove']),
+  predecessorTaskId: z.string().uuid().optional(),
+  successorTaskId: z.string().uuid().optional(),
+  dependencyId: z.string().uuid().optional(),
+  type: z.enum(DEPENDENCY_TYPES).optional(),
+  lagDays: z.coerce.number().int().min(-DUR_MAX).max(DUR_MAX).optional(),
+}).refine(
+  (d) => d.op !== 'add' || (d.predecessorTaskId != null && d.successorTaskId != null),
+  { message: 'add needs predecessorTaskId and successorTaskId' },
+).refine(
+  (d) => d.op === 'add' || d.dependencyId != null || (d.predecessorTaskId != null && d.successorTaskId != null),
+  { message: 'update/remove needs dependencyId or the predecessor+successor pair' },
+);
+
+// Create a new work package / milestone. startDate is required; end defaults to start + duration
+// (calendar days, default 1) or equals start for a milestone.
+const createTaskParams = z.object({
+  name: z.string().min(2).max(200),
+  parentTaskId: z.string().uuid().optional(),
+  startDate: planDate(),
+  endDate: planDate().optional(),
+  durationDays: z.coerce.number().int().min(0).max(DUR_MAX).optional(),
+  isMilestone: z.boolean().default(false),
 });
 
 // ---- The action registry: schema + human describe + audited executor -----------------------------
@@ -159,12 +214,103 @@ const REGISTRY: Record<AiActionType, ActionDef<any>> = {
       }, actorId);
     },
   },
+  RESCHEDULE_TASK: {
+    schema: rescheduleTaskParams,
+    describe: async (p: z.infer<typeof rescheduleTaskParams>) => {
+      const task = await prisma.task.findFirst({ where: { id: p.taskId }, select: { name: true } });
+      return `an AI-proposed action (reschedule "${task?.name ?? 'a task'}")`;
+    },
+    execute: async (projectId, p: z.infer<typeof rescheduleTaskParams>, actorId) => {
+      const t = await prisma.task.findFirst({ where: { id: p.taskId, projectId } });
+      if (!t) throw BadRequest('Task not found on this project');
+      const planStart = p.startDate ?? t.planStart;
+      let planEnd: Date;
+      if (p.endDate) planEnd = p.endDate;
+      else if (p.durationDays != null) planEnd = new Date(planStart.getTime() + p.durationDays * MS_PER_DAY);
+      else planEnd = new Date(planStart.getTime() + (t.planEnd.getTime() - t.planStart.getTime())); // preserve duration
+      if (planEnd.getTime() < planStart.getTime()) throw BadRequest('The task would end before it starts');
+      // updateTask is a full replace — carry every existing field forward and override only the dates.
+      // ownerResourceIds is omitted on purpose so the existing owner set is preserved.
+      await updateTask(projectId, p.taskId, {
+        name: t.name, wbsCode: t.wbsCode, description: t.description, deliverable: t.deliverable,
+        acceptanceCriteria: t.acceptanceCriteria, parentTaskId: t.parentTaskId,
+        planStart, planEnd, actualStart: t.actualStart, actualFinish: t.actualFinish,
+        picUserId: t.picUserId, picResourceId: t.picResourceId,
+        progressPct: t.progressPct, weight: t.weight == null ? null : Number(t.weight),
+        isMilestone: t.isMilestone, sortOrder: t.sortOrder,
+      }, actorId);
+      if (p.propagate) await applyAutoSchedule(projectId, { dryRun: false, actorId, mode: 'push' });
+    },
+  },
+  EDIT_DEPENDENCY: {
+    schema: editDependencyParams,
+    describe: async (p: z.infer<typeof editDependencyParams>) =>
+      `an AI-proposed action (${p.op} a task dependency)`,
+    execute: async (projectId, p: z.infer<typeof editDependencyParams>, actorId) => {
+      if (p.op === 'add') {
+        await addDependency(projectId, p.successorTaskId!, { predecessorId: p.predecessorTaskId!, type: p.type ?? 'FS', lagDays: p.lagDays ?? 0 }, actorId);
+        return;
+      }
+      // Resolve the link id from the pair when not given directly.
+      let depId = p.dependencyId ?? null;
+      if (!depId) {
+        const dep = await prisma.taskDependency.findFirst({
+          where: { predecessorId: p.predecessorTaskId, successorId: p.successorTaskId, predecessor: { projectId } },
+          select: { id: true },
+        });
+        if (!dep) throw BadRequest('No dependency found between those tasks');
+        depId = dep.id;
+      }
+      if (p.op === 'remove') { await deleteDependency(projectId, depId, actorId); return; }
+      // update — type & lagDays are both required by the edit; fall back to the stored values.
+      const cur = await prisma.taskDependency.findFirst({ where: { id: depId, predecessor: { projectId } }, select: { type: true, lagDays: true } });
+      if (!cur) throw BadRequest('Dependency not found on this project');
+      await updateDependency(projectId, depId, { type: p.type ?? cur.type, lagDays: p.lagDays ?? cur.lagDays }, actorId);
+    },
+  },
+  CREATE_TASK: {
+    schema: createTaskParams,
+    describe: async (p: z.infer<typeof createTaskParams>) =>
+      `an AI-proposed action (add ${p.isMilestone ? 'milestone' : 'task'} "${p.name}")`,
+    execute: async (projectId, p: z.infer<typeof createTaskParams>, actorId) => {
+      const planStart = p.startDate;
+      const planEnd = p.isMilestone
+        ? planStart
+        : p.endDate ?? new Date(planStart.getTime() + (p.durationDays ?? 1) * MS_PER_DAY);
+      if (planEnd.getTime() < planStart.getTime()) throw BadRequest('The task would end before it starts');
+      await createTask(projectId, {
+        name: p.name, parentTaskId: p.parentTaskId,
+        planStart, planEnd, progressPct: 0, isMilestone: p.isMilestone, sortOrder: 0,
+      }, actorId);
+    },
+  },
 };
 
 function actionDef(actionType: string): ActionDef<unknown> {
   const def = REGISTRY[actionType as AiActionType];
   if (!def) throw BadRequest(`Unknown AI action type "${actionType}"`);
   return def;
+}
+
+// A DB-free human label for a stored proposal — used for list surfaces where doing per-row name
+// lookups (as the richer REGISTRY.describe does) would fan out into many queries. Best-effort: an
+// unrecognised type or bad params degrades to a generic phrase.
+function describeRow(actionType: string, params: unknown): string {
+  const def = REGISTRY[actionType as AiActionType];
+  const parsed = def?.schema.safeParse(params);
+  if (!def || !parsed?.success) return 'an AI-proposed action';
+  const p = parsed.data as Record<string, unknown>;
+  switch (actionType as AiActionType) {
+    case 'CREATE_RISK': return `create risk "${p.title}" (P${p.probabilityScore}×I${p.impactScore})`;
+    case 'UPDATE_TASK_PROGRESS': return `set a task's progress to ${p.progressPct}%`;
+    case 'CREATE_CHANGE_REQUEST': return `draft change request "${p.title}"`;
+    case 'TIDY_SCHEDULE': return `tidy the schedule (${p.mode === 'asap' ? 'compact/ASAP' : 'push-only'})`;
+    case 'REASSIGN_MANPOWER': return 'reassign a task\'s manpower to another resource';
+    case 'RESCHEDULE_TASK': return 'reschedule a task on the Gantt';
+    case 'EDIT_DEPENDENCY': return `${String(p.op)} a task dependency`;
+    case 'CREATE_TASK': return `add ${p.isMilestone ? 'milestone' : 'task'} "${p.name}"`;
+    default: return 'an AI-proposed action';
+  }
 }
 
 // ---- Gating -------------------------------------------------------------------------------------
@@ -218,11 +364,24 @@ async function ensureAiActionWorkflow(actorId: string): Promise<void> {
 // ---- Propose ------------------------------------------------------------------------------------
 
 export interface ProposeInput { projectId: string; actionType: string; params: unknown; rationale?: string | null; confidence?: string | null }
+export interface ProposeResult { id: string; routed: boolean; applied: boolean }
 
-// Validate + persist a proposal, then route it into the approval engine. Returns the proposal id and
-// whether it landed in an approver's inbox (routed=false ⇒ no approver resolvable — proposal stays
-// PENDING and a human must configure a workflow with a reachable approver).
-export async function proposeAction(input: ProposeInput, actorId: string): Promise<{ id: string; routed: boolean }> {
+// Fase 3 — the schedule-editing family applies DIRECTLY when the baseline is unlocked (an edit the
+// requester could make by hand, done for them on their explicit ask). A locked baseline keeps the
+// human-in-the-loop approval route, so a controlled schedule change still goes through a decision.
+const DIRECT_APPLY_WHEN_UNLOCKED = new Set<AiActionType>(['RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'TIDY_SCHEDULE']);
+
+async function isBaselineLocked(projectId: string): Promise<boolean> {
+  const p = await prisma.project.findFirst({ where: { id: projectId }, select: { baselineLockedAt: true } });
+  return Boolean(p?.baselineLockedAt);
+}
+
+// Validate + persist a proposal, then either apply it directly (schedule-editing family on an
+// unlocked baseline) or route it into the approval engine. Returns the proposal id plus:
+//   applied=true  → the write already happened (baseline was unlocked)
+//   routed=true   → it landed in an approver's inbox (awaiting a human decision)
+//   both false    → stored PENDING but no approver was resolvable (a human must fix the workflow)
+export async function proposeAction(input: ProposeInput, actorId: string): Promise<ProposeResult> {
   await assertActionsEnabled(input.projectId);
   const def = actionDef(input.actionType);
   const parsed = def.schema.safeParse(input.params);
@@ -240,6 +399,16 @@ export async function proposeAction(input: ProposeInput, actorId: string): Promi
     },
   });
 
+  // Direct-apply path — reuse finalizeProposal so the write, APPLIED/FAILED stamping, outcome
+  // baseline and failure notice are identical to the approve path. A failed execution surfaces its
+  // real reason to the caller (Anett relays it) rather than leaving a silent FAILED row.
+  if (DIRECT_APPLY_WHEN_UNLOCKED.has(input.actionType as AiActionType) && !(await isBaselineLocked(input.projectId))) {
+    await finalizeProposal(proposal.id, input.projectId, 'APPROVED', actorId);
+    const final = await prisma.aiActionProposal.findUnique({ where: { id: proposal.id }, select: { status: true, failureNote: true } });
+    if (final?.status === 'FAILED') throw BadRequest(final.failureNote ?? 'Could not apply the AI action');
+    return { id: proposal.id, routed: false, applied: true };
+  }
+
   const payload = { actionType: input.actionType, params: parsed.data, rationale: input.rationale ?? null, requestedById: actorId };
   let started = await startApproval({ entityType: 'AI_ACTION', entityId: proposal.id, projectId: input.projectId, payload }, actorId);
   if (!started) {
@@ -247,7 +416,7 @@ export async function proposeAction(input: ProposeInput, actorId: string): Promi
     await ensureAiActionWorkflow(actorId);
     started = await startApproval({ entityType: 'AI_ACTION', entityId: proposal.id, projectId: input.projectId, payload }, actorId);
   }
-  return { id: proposal.id, routed: Boolean(started) };
+  return { id: proposal.id, routed: Boolean(started), applied: false };
 }
 
 // Recent proposals for a project (any status) — drives a small "AI actions" history/status surface.
@@ -258,6 +427,33 @@ export async function listProjectProposals(projectId: string) {
     take: 50,
     select: { id: true, actionType: true, params: true, rationale: true, confidence: true, status: true, failureNote: true, createdAt: true, appliedAt: true },
   });
+}
+
+// The proposals the current user RAISED (via Anett), across every project they can access — the
+// requester's own tracking surface on the approvals page. AiActionProposal is tenant-scoped, so this
+// is auto-bounded to the active workspace. Human label is derived from the row (no extra query).
+export async function listMyRaisedProposals(userId: string) {
+  const rows = await prisma.aiActionProposal.findMany({
+    where: { proposedById: userId },
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    select: {
+      id: true, actionType: true, params: true, rationale: true, status: true, failureNote: true,
+      createdAt: true, appliedAt: true,
+      project: { select: { id: true, name: true, code: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    actionType: r.actionType,
+    label: describeRow(r.actionType, r.params),
+    rationale: r.rationale,
+    status: r.status,
+    failureNote: r.failureNote,
+    createdAt: r.createdAt,
+    appliedAt: r.appliedAt,
+    project: r.project,
+  }));
 }
 
 // ---- Finalize (called by approval.finalize on the terminal decision) ----------------------------
