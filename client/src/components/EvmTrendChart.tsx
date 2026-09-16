@@ -49,11 +49,19 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
 }) {
   const snaps = data.snapshots;
   const curve = data.plannedCurve;
-  if (!snaps.length && curve.length < 2) {
+  const progress = mode === 'progress';
+  // Snapshot-less projects (e.g. an imported/cloned DRAFT) have no captured EV/AC history, so the
+  // earned/actual line never appears from snapshots. Fall back to the dense, timeline-derived
+  // plan-vs-actual progress series (forecast.progressSeries — read straight from the WBS's own
+  // actual dates + progressPct) whenever the project has fewer than two snapshots. Progress mode
+  // only; identical to what the S-curve PNG export already does.
+  const progSeries = progress && snaps.length < 2 && forecast?.progressSeries && forecast.progressSeries.length >= 2
+    ? forecast.progressSeries
+    : null;
+  if (!snaps.length && curve.length < 2 && !progSeries) {
     return <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">No schedule baseline or snapshots yet to draw a trend.</div>;
   }
 
-  const progress = mode === 'progress';
   const bac = data.bac || 1;
   const V = (v: number) => (progress ? (v / bac) * 100 : v); // value → axis unit
   const fmtShort = progress ? (v: number) => `${formatNum(v, 0)}%` : formatIdrShort;
@@ -69,9 +77,10 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
   const forecastFinishMs = forecast?.schedule.forecastFinish ? +new Date(forecast.schedule.forecastFinish) : null;
   const fcFinishMs = forecastFinishMs ?? plannedFinishMs;
 
+  const progTimes = progSeries ? progSeries.map((p) => +new Date(p.t)) : [];
   const times = [
     ...curve.map((p) => +new Date(p.t)), ...snaps.map((s) => +new Date(s.statusDate)),
-    ...fcSeries.map((p) => p.t), statusMs,
+    ...fcSeries.map((p) => p.t), statusMs, ...progTimes,
     ...(plannedFinishMs ? [plannedFinishMs] : []), ...(forecastFinishMs ? [forecastFinishMs] : []),
   ].filter((n) => Number.isFinite(n));
   const t0 = Math.min(...times), t1 = Math.max(...times);
@@ -97,8 +106,9 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
       bare={bare}
       legend={<Legend items={[
         { color: PV, label: progress ? 'Planned %' : 'Planned (PV)' },
-        { color: EV, label: progress ? 'Earned %' : 'Earned (EV)' },
-        { color: AC, label: progress ? 'Spent %' : 'Actual (AC)' },
+        { color: EV, label: progress ? (progSeries ? 'Actual %' : 'Earned %') : 'Earned (EV)' },
+        // Timeline fallback plots plan-vs-actual only (no cost/spent line).
+        ...(progSeries ? [] : [{ color: AC, label: progress ? 'Spent %' : 'Actual (AC)' }]),
         ...(fcSeries.length ? [{ color: FC, label: 'Forecast (EAC)' }] : []),
       ]} />}
       footer={(vp) => <TimeAxisLabels t0={vp.domain[0]} t1={vp.domain[1]} granularity={vp.granularity} />}
@@ -113,6 +123,12 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
           { label: 'CPI · SPI', value: `${formatNum(s.cpi, 2)} · ${formatNum(s.spi, 2)}`, color: '#64748b' },
           { label: 'Complete', value: `${formatNum(s.weightedProgress * 100, 0)}%`, color: '#64748b' },
         ]} />;
+      } : progSeries ? ({ hoverTime }) => {
+        const p = progSeries[nearestIndex(progTimes, hoverTime)];
+        return <ChartTip heading={formatDate(p.t)} rows={[
+          { label: 'Planned', value: `${formatNum(p.plannedPct * 100, 1)}%`, color: PV },
+          { label: 'Actual', value: p.actualPct != null ? `${formatNum(p.actualPct * 100, 1)}%` : '—', color: EV },
+        ]} />;
       } : undefined}
     >
       {(vp) => {
@@ -124,6 +140,15 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
           snaps.map((s) => ({ x: x(+new Date(s.statusDate)), y: y(sel(s)) }));
         const evPts = snapPts((s) => s.ev), acPts = snapPts((s) => s.ac), pvSnapPts = snapPts((s) => s.pv);
         const fcPts = toPts(fcSeries);
+        // Timeline fallback (progress mode, snapshot-less): plan & actual straight from the WBS
+        // series. A pct (0..1) → pseudo-money (pct*bac) so the shared y()/V() maps it back to a %.
+        const progPlanPts = progSeries ? progSeries.map((p) => ({ x: x(+new Date(p.t)), y: y(p.plannedPct * bac) })) : [];
+        const progActPts = progSeries
+          ? progSeries.filter((p) => p.actualPct != null).map((p) => ({ x: x(+new Date(p.t)), y: y((p.actualPct as number) * bac) }))
+          : [];
+        const lastAct = progSeries ? [...progSeries].reverse().find((p) => p.actualPct != null) : undefined;
+        const progFav = lastAct ? (lastAct.actualPct as number) >= lastAct.plannedPct : true;
+        const progRibbon = progActPts.length > 1 ? ribbonPath(progActPts, progPlanPts.slice(0, progActPts.length)) : '';
         // Variance ribbon: EV vs AC (cost) in money mode, EV vs PV (schedule) in progress mode.
         const other = progress ? pvSnapPts : acPts;
         const latest = snaps[snaps.length - 1];
@@ -170,17 +195,22 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
             })}
             {/* Variance shading — favourable (green) / unfavourable (red), very subtle. */}
             {ribbon && <path d={ribbon} className={favourable ? 'fill-emerald-400/10' : 'fill-red-400/10'} stroke="none" />}
+            {progRibbon && <path d={progRibbon} className={progFav ? 'fill-emerald-400/10' : 'fill-red-400/10'} stroke="none" />}
             {evPts.length > 1 && <path d={areaPath(evPts, H - padB)} fill={`url(#evTrendGrad-${uid})`} stroke="none" />}
+            {progActPts.length > 1 && <path d={areaPath(progActPts, H - padB)} fill={`url(#evTrendGrad-${uid})`} stroke="none" />}
             {/* EAC cone (optimistic..pessimistic). */}
             {cone.length > 1 && <path d={ribbonPath(toPts(cone.map((c) => ({ t: c.t, v: c.hi }))), toPts(cone.map((c) => ({ t: c.t, v: c.lo }))))} className="fill-amber-400/10" stroke="none" />}
             {/* Target reference line: BAC (money) or 100% (progress). */}
             <line x1={padL} x2={W - padR} y1={targetY} y2={targetY} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
-            {curve.length > 1 && <path d={smoothPath(pvPts)} fill="none" stroke={PV} strokeWidth="2.25" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {!progSeries && curve.length > 1 && <path d={smoothPath(pvPts)} fill="none" stroke={PV} strokeWidth="2.25" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {progPlanPts.length > 1 && <path d={smoothPath(progPlanPts)} fill="none" stroke={PV} strokeWidth="2.25" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
             {acPts.length > 1 && <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
             {/* Forecast projection — dashed amber from today to the forecast finish. */}
             {fcPts.length > 1 && <path d={smoothPath(fcPts)} fill="none" stroke={FC} strokeWidth="2.25" strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
             {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={EV} strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.14" vectorEffect="non-scaling-stroke" />}
             {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={EV} strokeWidth="3.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {progActPts.length > 1 && <path d={smoothPath(progActPts)} fill="none" stroke={EV} strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.14" vectorEffect="non-scaling-stroke" />}
+            {progActPts.length > 1 && <path d={smoothPath(progActPts)} fill="none" stroke={EV} strokeWidth="3.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
             {snaps.map((s, i) => (
               <g key={s.id}>
                 {i === hi && <circle cx={acPts[i].x} cy={acPts[i].y} r="6" fill={AC} opacity="0.18" />}

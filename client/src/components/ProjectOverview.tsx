@@ -354,7 +354,10 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const bac = e.bac || trend?.bac || 0;
   const hasTrend = !!trend && (trend.plannedCurve.length >= 2 || trend.snapshots.length > 0);
   const hasCost = hasTrend;
-  const hasProg = hasTrend && bac > 0;
+  // Progress % normally needs a BAC to scale against, but a snapshot-less project (e.g. an imported
+  // clone) falls back to the timeline-derived progressSeries, which is BAC-independent — allow it.
+  const hasTimelineProg = (fcQ.data?.progressSeries?.length ?? 0) >= 2;
+  const hasProg = hasTrend && (bac > 0 || hasTimelineProg);
 
   // Plan vs projected margin & profit. Plan = Revenue − BAC (the cost baseline); projected =
   // Revenue − EAC (forecast cost at completion) — the honest "where margin will land". We do NOT
