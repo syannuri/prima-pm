@@ -99,6 +99,16 @@ export interface AiToolDef {
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
+  // Opt a tool into STRICT tool use (Anthropic guarantees `tool_use.input` validates exactly against
+  // the schema). Requires a fully strict-compliant schema (every property in `required`,
+  // `additionalProperties:false`, concretely-typed leaves). Threaded to the API in runToolLoop.
+  strict?: boolean;
+}
+
+// Gate strict tool use behind an env flag so it's dormant-by-default and instantly reversible in
+// prod (a malformed strict schema would 400 the whole tool call). Supported on Claude 4.5+ models.
+export function strictToolsEnabled(): boolean {
+  return process.env.AI_STRICT_TOOLS === 'true';
 }
 
 export interface AiPort {
@@ -344,7 +354,7 @@ function liveAiPort(): AiPort {
           system: toSystemBlocks(sys, (s) => redactor.redact(s)),
           // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
           // the SDK's Tool shape whose InputSchema requires the literal `type`.
-          tools: withTools ? (tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })) as Anthropic.Tool[]) : undefined,
+          tools: withTools ? (tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema, ...(t.strict ? { strict: true } : {}) })) as Anthropic.Tool[]) : undefined,
           // Cache the accumulated project-context prefix (tool results + prior turns); see withHistoryCache.
           messages: withHistoryCache(m),
         });
