@@ -2,7 +2,7 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { aiEnabled, aiConfig, getAiPort, type AiToolDef, type SystemPrompt, aiNotEnabledError } from '../../lib/ai.js';
+import { aiEnabled, aiConfig, getAiPort, strictToolsEnabled, type AiToolDef, type SystemPrompt, aiNotEnabledError } from '../../lib/ai.js';
 import { type RawUsage } from '../../lib/aiUsage.js';
 import { estimateCostUsd } from '../../lib/aiPricing.js';
 import { sampleAnswerQuality } from '../../lib/aiJudgeSample.js';
@@ -100,7 +100,7 @@ const SYSTEM_PROMPT_EN = [
 const systemPromptFor = (lang: AssistantLang): string => (lang === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ID);
 
 // Tool schemas (raw JSON schema — the SDK zod helper targets a different zod major than the app).
-const TOOLS: AiToolDef[] = [
+export const TOOLS: AiToolDef[] = [
   {
     name: 'list_projects',
     description: 'Daftar proyek yang dapat diakses pengguna (kode, nama, status, PM). Panggil ini dulu untuk mengetahui proyek apa saja yang tersedia.',
@@ -259,16 +259,36 @@ const TOOLS: AiToolDef[] = [
       'TOTAL RUPIAH: untuk "berapa total budget/BAC/EV dari proyek X, Y, …", panggil query_data (filter code in [...] atau sesuai kriteria, sertakan kolom bac/ev). Hasil memuat `sums`/`sumsText` = total yang DIHITUNG SERVER atas semua baris cocok. Kutip `sumsText` PERSIS — JANGAN menjumlah/mengonversi rupiah sendiri.',
       'PENTING soal `ac`/`ev`: kolom ini diambil dari SNAPSHOT EVM TERAKHIR (nilai point-in-time per status date), BUKAN biaya aktual terkini — bisa basi bila ada biaya dicatat setelah snapshot. Untuk "actual cost / biaya yang SUDAH DIKELUARKAN sampai kini", JANGAN pakai `ac` dari query_data; panggil get_project_costs (directActual + indirectActual, live).',
     ].join('\n'),
+    // STRICT-compliant schema (every property in `required`; optionals are nullable; `value` is
+    // concretely typed via anyOf) so it can opt into strict tool use — the model's spec then
+    // validates exactly and can't emit a malformed/hallucinated field. validateSpec already treats
+    // null filters/sort/limit/columns as "absent" (see query.service.ts), so this shape is a no-op
+    // when strict is off. Gated by AI_STRICT_TOOLS (dormant-by-default, reversible).
+    strict: strictToolsEnabled(),
     input_schema: {
       type: 'object',
       properties: {
         entity: { type: 'string', enum: ['projects', 'tasks'] },
-        filters: { type: 'array', items: { type: 'object', properties: { field: { type: 'string' }, op: { type: 'string', enum: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains', 'in'] }, value: {} }, required: ['field', 'op', 'value'], additionalProperties: false } },
-        sort: { type: 'object', properties: { field: { type: 'string' }, dir: { type: 'string', enum: ['asc', 'desc'] } }, required: ['field'], additionalProperties: false },
-        limit: { type: 'number' },
-        columns: { type: 'array', items: { type: 'string' } },
+        filters: {
+          type: ['array', 'null'],
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string' },
+              op: { type: 'string', enum: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains', 'in'] },
+              // Scalar for most ops; an array for `in`. Concretely typed so strict mode accepts it.
+              value: { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }, { type: 'array', items: { type: ['string', 'number'] } }] },
+            },
+            required: ['field', 'op', 'value'],
+            additionalProperties: false,
+          },
+        },
+        // `dir` left untyped-enum (nullable) — validateSpec normalizes anything non-'asc' to 'desc'.
+        sort: { type: ['object', 'null'], properties: { field: { type: 'string' }, dir: { type: ['string', 'null'] } }, required: ['field', 'dir'], additionalProperties: false },
+        limit: { type: ['number', 'null'] },
+        columns: { type: ['array', 'null'], items: { type: 'string' } },
       },
-      required: ['entity'],
+      required: ['entity', 'filters', 'sort', 'limit', 'columns'],
       additionalProperties: false,
     },
   },

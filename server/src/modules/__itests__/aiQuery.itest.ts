@@ -7,8 +7,9 @@ import { signAccessToken } from '../../lib/jwt.js';
 import { runWithTenant } from '../../lib/tenant/context.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
-import { __setAiPort, type AiPort } from '../../lib/ai.js';
+import { __setAiPort, strictToolsEnabled, type AiPort } from '../../lib/ai.js';
 import { validateSpec, runQuery } from '../assistant/query.service.js';
+import { TOOLS } from '../assistant/assistant.service.js';
 
 // Anett natural-language data query (query_data tool). Exercises the whitelist validation, the
 // deterministic engine (filter/sort/limit over derived columns), access scoping, and the tool path
@@ -86,6 +87,32 @@ describe('Anett data query — query_data', () => {
     expect(() => validateSpec({ entity: 'aliens' as never })).toThrow();
     expect(() => validateSpec({ entity: 'projects', filters: [{ field: 'nope', op: 'eq', value: 1 }] })).toThrow();
     expect(() => validateSpec({ entity: 'projects', filters: [{ field: 'name', op: 'gt', value: 'x' }] })).toThrow(); // gt not valid on string
+  });
+
+  it('validateSpec tolerates the nulls STRICT tool use emits for absent optional fields', () => {
+    // Under strict mode the model must emit every property; absent ones come through as null. The
+    // engine must treat them exactly like "omitted" (filters→[], sort→none, limit→default, columns→default).
+    const spec = { entity: 'projects', filters: null, sort: null, limit: null, columns: null } as never;
+    const norm = validateSpec(spec);
+    expect(norm.filters).toEqual([]);
+    expect(norm.sort).toBeUndefined();
+    expect(norm.limit).toBe(50);
+    expect(norm.columns.length).toBeGreaterThan(0); // default columns
+    // A null `dir` on a present sort normalizes to 'desc' (never throws).
+    expect(validateSpec({ entity: 'projects', sort: { field: 'spi', dir: null } } as never).sort).toMatchObject({ field: 'spi', dir: 'desc' });
+  });
+
+  it('query_data tool schema is STRICT-well-formed (every property required, additionalProperties:false, typed leaves) + env-gated', () => {
+    const qd = TOOLS.find((t) => t.name === 'query_data')!;
+    const schema = qd.input_schema as { properties: Record<string, unknown>; required: string[]; additionalProperties: boolean };
+    // Strict requires: additionalProperties:false and EVERY property listed in `required`.
+    expect(schema.additionalProperties).toBe(false);
+    expect(new Set(schema.required)).toEqual(new Set(Object.keys(schema.properties)));
+    // No untyped leaf: the filter `value` must be a concrete anyOf, not the empty `{}` schema.
+    const value = (schema.properties.filters as { items: { properties: { value: Record<string, unknown> } } }).items.properties.value;
+    expect(Object.keys(value)).toContain('anyOf');
+    // The `strict` flag follows the env gate (dormant-by-default).
+    expect(qd.strict).toBe(strictToolsEnabled());
   });
 
   it('projects: filter (spi<0.9) is scoped to the caller and returns only matching rows', async () => {
