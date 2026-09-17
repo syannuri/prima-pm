@@ -1476,6 +1476,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // Chart interactions: drag a bar to reschedule; click a link handle then another bar to connect them.
   const [drag, setDrag] = useState<{ id: string; mode: 'move' | 'start' | 'end'; dx: number } | null>(null);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
+  // Drag-to-link: dragging a bar's link handle onto another task's bar. `sx/sy` = the source
+  // handle's screen point (rubber-band anchor); `x/y` = the live pointer; `overId` = the bar
+  // currently hovered (valid target, ≠ source).
+  const [linkDrag, setLinkDrag] = useState<{ fromId: string; sx: number; sy: number; x: number; y: number; overId: string | null } | null>(null);
   // Dependency editor popover: which link is being edited + where to anchor it.
   const [editDep, setEditDep] = useState<{ id: string; x: number; y: number } | null>(null);
   // "Tidy schedule" mode menu (push vs compact) — anchored at the click point, fullscreen-safe.
@@ -1487,6 +1491,46 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const uid = useId().replace(/:/g, '');
 
   useEffect(() => { if (!linkFrom) return; const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLinkFrom(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [linkFrom]);
+
+  // Which task's bar sits under a screen point — bar containers span the full timeline width at
+  // their row's vertical band, so a hit is a pure Y-band test (+ X within the timeline).
+  const barAtPoint = (cx: number, cy: number): string | null => {
+    for (const [id, el] of barRefs.current) {
+      const rc = el.getBoundingClientRect();
+      if (cx >= rc.left && cx <= rc.right && cy >= rc.top && cy <= rc.bottom) return id;
+    }
+    return null;
+  };
+  // Press a bar's link handle and drag onto another task's bar → Finish→Start dependency. A quick
+  // click (no drag past the threshold) falls back to the click-to-link mode (touch/a11y friendly).
+  const startLinkDrag = (fromId: string, e: React.PointerEvent) => {
+    e.stopPropagation(); e.preventDefault();
+    const sx = e.clientX, sy = e.clientY;
+    setLinkFrom(null);
+    setLinkDrag({ fromId, sx, sy, x: sx, y: sy, overId: null });
+    let moved = false;
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('keydown', onKey);
+    };
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 4) moved = true;
+      const over = barAtPoint(ev.clientX, ev.clientY);
+      setLinkDrag((d) => (d ? { ...d, x: ev.clientX, y: ev.clientY, overId: over && over !== fromId ? over : null } : d));
+    };
+    const up = (ev: PointerEvent) => {
+      cleanup();
+      setLinkDrag(null);
+      if (!moved) { setLinkFrom((cur) => (cur === fromId ? null : fromId)); return; }
+      const over = barAtPoint(ev.clientX, ev.clientY);
+      if (over && over !== fromId) addDep.mutate({ predecessorId: fromId, successorId: over });
+    };
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { cleanup(); setLinkDrag(null); } };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('keydown', onKey);
+  };
 
   function startDrag(e: React.PointerEvent, node: GanttNode, mode: 'move' | 'start' | 'end') {
     if (!canPlan || (node.children && node.children.length > 0) || !axis) return;
@@ -2302,7 +2346,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         data-left={node.isMilestone ? msLeft : leftPct}
                         data-width={node.isMilestone ? 0 : widthPct}
                         onClick={() => { if (linkFrom && linkFrom !== node.id) { addDep.mutate({ predecessorId: linkFrom, successorId: node.id }); setLinkFrom(null); } }}
-                        className={`group/bar relative h-8 transition-opacity ${isolateCritical && !isCritical ? 'opacity-25' : ''} ${linkFrom && linkFrom !== node.id ? 'cursor-crosshair rounded ring-1 ring-inset ring-brand-400/50 hover:bg-brand-500/5' : ''}`}
+                        className={`group/bar relative h-8 transition-opacity ${isolateCritical && !isCritical ? 'opacity-25' : ''} ${((linkFrom && linkFrom !== node.id) || (linkDrag && linkDrag.fromId !== node.id)) ? 'cursor-crosshair rounded ring-1 ring-inset ring-brand-400/50 hover:bg-brand-500/5' : ''} ${linkDrag?.overId === node.id ? '!ring-2 !ring-brand-500 rounded bg-brand-500/10' : ''}`}
                         style={{ width: axis?.width }}
                       >
                         {/* Past-shading — a whisper-faint wash over everything before Today so the
@@ -2420,14 +2464,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                             )}
                           </>
                         )}
-                        {/* link handle — click to start a Finish→Start dependency from this task */}
+                        {/* link handle — drag onto another task's bar to create a Finish→Start
+                            dependency (or click for click-to-link mode). */}
                         {canPlan && !dragging && (
                           <button
                             type="button"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => { e.stopPropagation(); setLinkFrom(linkFrom === node.id ? null : node.id); }}
-                            title={linkFrom === node.id ? 'Click another task to link (Esc to cancel)' : 'Link this task → another (Finish-to-Start)'}
-                            className={`absolute top-1/2 z-[8] h-3 w-3 -translate-y-1/2 translate-x-1.5 rounded-full border shadow-sm transition ${linkFrom === node.id ? 'border-brand-500 bg-brand-500 ring-2 ring-brand-300' : 'border-slate-300 bg-white opacity-0 group-hover/bar:opacity-100 dark:border-slate-500 dark:bg-slate-700'}`}
+                            onPointerDown={(e) => startLinkDrag(node.id, e)}
+                            title={linkFrom === node.id ? 'Click another task to link (Esc to cancel)' : 'Drag onto another task to link (Finish-to-Start) — or click'}
+                            className={`absolute top-1/2 z-[8] h-3 w-3 -translate-y-1/2 translate-x-1.5 cursor-crosshair touch-none rounded-full border shadow-sm transition ${(linkFrom === node.id || linkDrag?.fromId === node.id) ? 'border-brand-500 bg-brand-500 ring-2 ring-brand-300' : 'border-slate-300 bg-white opacity-0 group-hover/bar:opacity-100 hover:!opacity-100 hover:scale-125 dark:border-slate-500 dark:bg-slate-700'}`}
                             style={{ left: `${node.isMilestone ? msLeft : leftPct + widthPct}%` }}
                           />
                         )}
@@ -2604,6 +2648,24 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             { label: 'Compact', icon: '🧹', hint: 'pull earlier', onClick: () => tidySchedule('asap') },
           ]}
         />
+      )}
+      {/* Drag-to-link rubber-band — a dashed connector from the source handle to the pointer while
+          dragging a dependency onto another task's bar. Portaled so it floats above everything
+          (incl. fullscreen), in viewport coords (pointer-events off so it never blocks the drop). */}
+      {linkDrag && createPortal(
+        <div className="pointer-events-none fixed inset-0 z-[70]">
+          <svg width="100%" height="100%" className="absolute inset-0 overflow-visible">
+            <defs>
+              <marker id={`linkArrow-${uid}`} markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#3b82f6" /></marker>
+            </defs>
+            <line x1={linkDrag.sx} y1={linkDrag.sy} x2={linkDrag.x} y2={linkDrag.y} stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 4" markerEnd={`url(#linkArrow-${uid})`} />
+            <circle cx={linkDrag.sx} cy={linkDrag.sy} r={3.5} fill="#3b82f6" />
+          </svg>
+          <span className="absolute rounded bg-brand-600 px-1.5 py-0.5 text-[11px] font-medium text-white shadow" style={{ left: linkDrag.x + 14, top: linkDrag.y + 14 }}>
+            {linkDrag.overId ? 'Release to link →' : 'Drop on a task…'}
+          </span>
+        </div>,
+        modalContainer ?? document.body,
       )}
       {/* Right-click-a-column-header menu — hide that column (restore via ⚙ Options → Columns). */}
       {colMenu && (
