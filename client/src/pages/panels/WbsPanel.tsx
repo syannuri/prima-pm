@@ -130,7 +130,7 @@ const HIDEABLE_COLS: { key: ColKey; label: string }[] = [
   { key: 'var', label: 'Variance' },
   { key: 'timeline', label: 'Timeline (Gantt)' },
 ];
-type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean; colWidths?: Record<string, number> };
+type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean; showFloat?: boolean; showMinimap?: boolean; colWidths?: Record<string, number> };
 const readWbsPrefs = (): WbsPrefs => { try { return JSON.parse(localStorage.getItem(WBS_PREFS_KEY) || '{}'); } catch { return {}; } };
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
@@ -634,6 +634,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // read-only to outline the critical bars on the Gantt (same data as the CPM panel).
   const cpmQ = useQuery({ queryKey: ['cpm', projectId], queryFn: () => api.get<CpmResult>(`${base}/cpm`) });
   const criticalIds = useMemo(() => new Set((cpmQ.data?.tasks ?? []).filter((t) => t.critical).map((t) => t.id)), [cpmQ.data]);
+  // Total float (days of slack) per task, from the same CPM run — drives the optional "slack ghost"
+  // drawn past a non-critical bar. Only non-critical tasks with a positive float are worth showing.
+  const floatById = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of cpmQ.data?.tasks ?? []) if (!t.critical && t.totalFloat > 0) m.set(t.id, t.totalFloat);
+    return m;
+  }, [cpmQ.data]);
+  const hasFloat = floatById.size > 0;
 
   // Collapsed parent rows (subtree hidden; the parent's rolled bar still spans it).
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -767,6 +775,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [overflowX, setOverflowX] = useState(false);
   const axisRef = useRef<{ width: number; effScale: Scale } | null>(null);
   const preserveRef = useRef<number | null>(null); // timeline-centre fraction to restore across a zoom
+  const fitFracRef = useRef<number | null>(null); // left-edge fraction to scroll to after a fit-to-selection
 
   // Timeline axis: span of all (rolled) plan dates → a pixel width + ticks for the
   // chosen scale, plus a "today" marker. Bars are positioned by % of the span, so
@@ -859,7 +868,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   };
   useLayoutEffect(() => {
     const sc = scrollRef.current, tl = timelineRef.current, a = axisRef.current;
-    if (preserveRef.current == null || !sc || !tl || !a) return;
+    if (!sc || !tl || !a) return;
+    // Fit-to-selection: scroll the framed span's left edge just inside the frozen pane.
+    if (fitFracRef.current != null) {
+      sc.scrollLeft = Math.max(0, fitFracRef.current * a.width - 24);
+      fitFracRef.current = null;
+      return;
+    }
+    if (preserveRef.current == null) return;
     const left = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
     sc.scrollLeft = left + preserveRef.current * a.width - sc.clientWidth / 2;
     preserveRef.current = null;
@@ -951,6 +967,43 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [showLegend, setShowLegend] = useState<boolean>(() => readWbsPrefs().showLegend ?? false);
   // Render the task name trailing its bar in the timeline (readable without the frozen name pane).
   const [showBarLabels, setShowBarLabels] = useState<boolean>(() => readWbsPrefs().showBarLabels ?? false);
+  // Draw each non-critical leaf's total float as a faded "slack" extension past its plan bar, so the
+  // schedule buffer (how far a task can slip before it becomes critical) reads at a glance.
+  const [showFloat, setShowFloat] = useState<boolean>(() => readWbsPrefs().showFloat ?? false);
+  // Compressed overview strip below the timeline — click/drag to navigate long schedules.
+  const [showMinimap, setShowMinimap] = useState<boolean>(() => readWbsPrefs().showMinimap ?? false);
+  const [miniView, setMiniView] = useState<{ left: number; width: number } | null>(null);
+  const [miniDrag, setMiniDrag] = useState(false);
+  const miniRef = useRef<HTMLDivElement>(null);
+  // Mirror the live scroll window into the minimap as a fraction of the full timeline width. The
+  // frozen columns cover the leftmost `frozenW` px of the viewport, so the visible timeline starts
+  // at scrollLeft (in timeline-local px) and is `clientWidth − frozenW` wide.
+  const syncMinimap = () => {
+    const sc = scrollRef.current, tl = timelineRef.current, a = axisRef.current;
+    if (!sc || !tl || !a || !a.width) { setMiniView(null); return; }
+    const frozenW = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
+    const visW = Math.max(0, sc.clientWidth - frozenW);
+    const left = Math.min(1, Math.max(0, sc.scrollLeft / a.width));
+    setMiniView({ left, width: Math.min(1 - left, visW / a.width) });
+  };
+  // Click/drag anywhere on the minimap centres the scroll window on that point.
+  const miniScrub = (clientX: number) => {
+    const sc = scrollRef.current, tl = timelineRef.current, a = axisRef.current, m = miniRef.current;
+    if (!sc || !tl || !a || !m || !a.width) return;
+    const rect = m.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const frozenW = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
+    const visW = Math.max(0, sc.clientWidth - frozenW);
+    sc.scrollLeft = Math.max(0, Math.min(sc.scrollWidth - sc.clientWidth, f * a.width - visW / 2));
+  };
+  // Keep the minimap window in sync when the layout (zoom/height/fullscreen/filter) shifts + on resize.
+  useEffect(() => { if (showMinimap && showGantt) syncMinimap(); }, [showMinimap, showGantt, axis?.width, panelH, fullscreen, visibleRows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!showMinimap || !showGantt) return;
+    const on = () => syncMinimap();
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, [showMinimap, showGantt]); // eslint-disable-line react-hooks/exhaustive-deps
   // Per-column widths (px) — drag a header's right edge to resize. Pinned via width+min+max (the
   // same technique the frozen columns use), so it works on this border-separate (non-fixed) table.
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => readWbsPrefs().colWidths ?? {});
@@ -1012,8 +1065,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [hoverRow, setHoverRow] = useState<string | null>(null);
   // Remember the view prefs across reloads.
   useEffect(() => {
-    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels, colWidths })); } catch { /* ignore quota */ }
-  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels, colWidths]);
+    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels, showFloat, showMinimap, colWidths })); } catch { /* ignore quota */ }
+  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels, showFloat, showMinimap, colWidths]);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
@@ -1125,6 +1178,37 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const toggleSel = (id: string) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  // Fit-to-selection — zoom & scroll the timeline so the selected tasks' date span fills the view.
+  // Picks a legible base scale for the selection span, zooms to ~90% fill, then scrolls its left edge
+  // just inside the frozen pane (via fitFracRef; the span fraction is invariant to zoom).
+  const fitToSelection = () => {
+    const sc = scrollRef.current, tl = timelineRef.current;
+    if (!axis || !selectedIds.size || !sc || !tl) return;
+    let lo = Infinity, hi = -Infinity;
+    for (const id of selectedIds) {
+      const rr = rolled.get(id), n = nav.nodeById.get(id);
+      const s = rr?.start ?? (n ? +new Date(n.planStart) : NaN);
+      const e = rr?.end ?? (n ? +new Date(n.planEnd) : NaN);
+      if (Number.isFinite(s)) lo = Math.min(lo, s);
+      if (Number.isFinite(e)) hi = Math.max(hi, e);
+    }
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
+    const selSpanDays = Math.max((hi - lo) / day, 1);
+    const tlLeft = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft; // frozen-pane width
+    const availW = Math.max(160, sc.clientWidth - tlLeft);
+    const base: Scale = selSpanDays <= 45 ? 'day' : selSpanDays <= 400 ? 'week' : 'month';
+    const nextZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, (availW * 0.9) / selSpanDays / PX_PER_DAY[base]));
+    fitFracRef.current = (lo - axis.min) / axis.span;
+    setScale(base);
+    setZoom(nextZoom);
+    // Fallback when the width didn't change (the layout effect won't re-fire): scroll next frame.
+    requestAnimationFrame(() => {
+      if (fitFracRef.current == null) return;
+      const a = axisRef.current;
+      if (a && sc) sc.scrollLeft = Math.max(0, fitFracRef.current * a.width - 24);
+      fitFracRef.current = null;
+    });
+  };
   const bulkDelete = useMutation({
     mutationFn: (ids: string[]) => api.post<{ deleted: number }>(`${base}/tasks/bulk-delete`, { ids }),
     onSuccess: (res) => { invalidate(); toast.success(`${res.deleted} task${res.deleted === 1 ? '' : 's'} deleted`); exitSelect(); },
@@ -1524,6 +1608,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         </div>
                         <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-600">
                           <button type="button" onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700">−</button>
+                          <button type="button" onClick={() => { captureCenter(); setZoom(1); }} disabled={scale === 'width' || Math.abs(zoom - 1) < 0.01} title="Reset zoom to 100%" className="min-w-[3rem] border-l border-slate-200 px-2 py-1 text-[11px] font-semibold leading-none tabular-nums text-slate-500 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">{scale === 'width' ? '—' : `${Math.round(zoom * 100)}%`}</button>
                           <button type="button" onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">+</button>
                         </div>
                       </div>
@@ -1534,6 +1619,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                       )}
                       <button type="button" onClick={() => setShowBarLabels((v) => !v)} className={OPT_ROW}>
                         <span aria-hidden>🔖</span><span className="flex-1 text-left">{showBarLabels ? 'Hide bar labels' : 'Show bar labels'}</span>
+                      </button>
+                      {hasFloat && (
+                        <button type="button" onClick={() => setShowFloat((v) => !v)} className={`${OPT_ROW} ${showFloat ? '!text-emerald-600 dark:!text-emerald-400' : ''}`}>
+                          <span aria-hidden>⇥</span><span className="flex-1 text-left">{showFloat ? 'Hide slack (float)' : 'Show slack (float)'}</span>
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setShowMinimap((v) => !v)} className={`${OPT_ROW} ${showMinimap ? '!text-brand-600 dark:!text-brand-400' : ''}`}>
+                        <span aria-hidden>🗺️</span><span className="flex-1 text-left">{showMinimap ? 'Hide minimap' : 'Show minimap'}</span>
                       </button>
                     </>
                   )}
@@ -1630,6 +1723,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm dark:border-brand-900/50 dark:bg-brand-900/15">
           <span className="font-medium text-brand-800 dark:text-brand-200">{selectedIds.size} selected</span>
           <div className="flex-1" />
+          {showGantt && <button onClick={fitToSelection} disabled={!selectedIds.size} title="Zoom the timeline to frame the selected tasks" className={`${CTRL_BTN} disabled:opacity-40`}>⤢ Fit to view</button>}
           <button onClick={() => setSelectedIds(new Set())} disabled={!selectedIds.size} className={`${CTRL_BTN} disabled:opacity-40`}>Clear selection</button>
           <Button
             variant="danger" className="!py-1 text-xs"
@@ -1695,6 +1789,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-4 rounded-sm bg-slate-700 dark:bg-slate-200" />Summary</span>
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-gradient-to-br from-brand-400 to-brand-600" />Milestone</span>
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full ring-2 ring-inset ring-red-500/70" />Critical&nbsp;path</span>
+            {showFloat && hasFloat && (
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-5 rounded-full bg-[repeating-linear-gradient(45deg,rgba(16,185,129,0.5)_0,rgba(16,185,129,0.5)_2px,transparent_2px,transparent_5px)] ring-1 ring-inset ring-emerald-500/40" />Slack&nbsp;(float)</span>
+            )}
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-brand-500 shadow-[0_0_6px_rgba(59,130,246,0.55)]" />Today</span>
           </div>
         )}
@@ -1735,6 +1832,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             `h-full` resolved to 0 inside the native-fullscreen element on mobile, so a rotate left
             the timeline collapsed/stuck. */}
         <div ref={scrollRef}
+          onScroll={() => { if (showMinimap) syncMinimap(); }}
           style={!fullscreen && panelH ? { height: panelH } : undefined}
           className={`touch-pan-x touch-pan-y w-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'min-h-0 flex-1' : panelH ? '' : 'max-h-[78vh]'}`}>
           {linkFrom && (
@@ -1890,6 +1988,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                 const bar = BAR[overdue ? 'red' : st.color] ?? BAR.slate;
                 const leftPct = axis ? ((r.start - axis.min) / axis.span) * 100 : 0;
                 const widthPct = axis ? Math.max(axis.minBarPct, ((r.end - r.start) / axis.span) * 100) : 0;
+                // Slack ghost — total float (days) trailing the plan bar, for non-critical leaves only.
+                const floatDays = showFloat && !r.isParent && !node.isMilestone && !isCritical ? (floatById.get(node.id) ?? 0) : 0;
+                const floatPct = axis && floatDays > 0 ? (floatDays * day / axis.span) * 100 : 0;
                 // Live drag preview — shift/resize the plan bar by the dragged pixels (as % of span).
                 const dragging = drag?.id === node.id ? drag : null;
                 const dShiftPct = dragging && axis ? (dragging.dx / axis.width) * 100 : 0;
@@ -2193,6 +2294,16 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                               {draggable && <span onPointerDown={(e) => startDrag(e, node, 'start')} className="absolute inset-y-0 left-0 w-2 cursor-ew-resize touch-none rounded-l-full bg-black/25 opacity-0 group-hover/track:opacity-100 dark:bg-white/25" />}
                               {draggable && <span onPointerDown={(e) => startDrag(e, node, 'end')} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize touch-none rounded-r-full bg-black/25 opacity-0 group-hover/track:opacity-100 dark:bg-white/25" />}
                             </div>
+                            {/* slack ghost — total float trailing the plan bar (faded green hatch); how far
+                                this task can slip before it hits the critical path. Hidden while dragging. */}
+                            {floatPct > 0 && !dragging && (
+                              <div
+                                aria-hidden
+                                className="pointer-events-none absolute top-3 h-[15px] rounded-r-full bg-[repeating-linear-gradient(45deg,rgba(16,185,129,0.5)_0,rgba(16,185,129,0.5)_2px,transparent_2px,transparent_5px)] ring-1 ring-inset ring-emerald-500/30"
+                                style={{ left: `${leftPct + widthPct}%`, width: `${floatPct}%` }}
+                                title={`Slack: ${floatDays} day${floatDays === 1 ? '' : 's'} of float before this task becomes critical`}
+                              />
+                            )}
                             {/* actual bar — vivid, at REAL dates, overlaid on the plan track (leaf tasks that started) */}
                             {started && (
                               <div
@@ -2287,6 +2398,35 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             faded. pointer-events-none so it never blocks the scrollbar or a bar drag. */}
         {overflowX && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-40 w-16 rounded-r-xl bg-gradient-to-l from-white via-white/85 to-transparent dark:from-slate-900 dark:via-slate-900/85" />}
         </div>
+          {/* Minimap navigator — a compressed silhouette of every bar over the full span with a live
+              viewport window. Click/drag to jump the horizontal scroll. Sits outside the scroll box
+              so it stays visible while the table scrolls. */}
+          {showMinimap && showGantt && rows.length > 0 && axis && (
+            <div
+              ref={miniRef}
+              onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setMiniDrag(true); miniScrub(e.clientX); }}
+              onPointerMove={(e) => { if (miniDrag) miniScrub(e.clientX); }}
+              onPointerUp={(e) => { setMiniDrag(false); try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* already released */ } }}
+              onPointerCancel={() => setMiniDrag(false)}
+              title="Overview — click or drag to navigate the timeline"
+              className="relative mt-2 h-12 w-full cursor-pointer touch-none select-none overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50"
+            >
+              {axis.todayPct != null && <div aria-hidden className="absolute inset-y-0 z-[2] w-px bg-brand-500/70" style={{ left: `${axis.todayPct}%` }} />}
+              {visibleRows.map((r, i) => {
+                const rr = rolled.get(r.node.id);
+                const s = rr?.start ?? +new Date(r.node.planStart);
+                const e = rr?.end ?? +new Date(r.node.planEnd);
+                const left = ((s - axis.min) / axis.span) * 100;
+                const w = Math.max(0.4, ((e - s) / axis.span) * 100);
+                const y = 4 + (i / Math.max(1, visibleRows.length - 1)) * 34;
+                const crit = criticalIds.has(r.node.id);
+                return <div key={r.node.id} aria-hidden className={`absolute h-[2px] rounded-full ${crit ? 'bg-red-500' : rr?.isParent ? 'bg-slate-400 dark:bg-slate-500' : 'bg-brand-400/80 dark:bg-brand-500/70'}`} style={{ left: `${left}%`, width: `${w}%`, top: y }} />;
+              })}
+              {miniView && (
+                <div aria-hidden className="pointer-events-none absolute inset-y-0 z-[3] rounded-sm border-2 border-brand-500/80 bg-brand-500/10 shadow-sm" style={{ left: `${miniView.left * 100}%`, width: `${Math.max(2, miniView.width * 100)}%` }} />
+              )}
+            </div>
+          )}
           {/* Full-screen toggle placed directly BELOW the Gantt — a second, obvious entry point to
               the immersive timeline (the toolbar keeps its own compact toggle). */}
           {rows.length > 0 && (
