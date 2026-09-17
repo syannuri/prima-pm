@@ -130,7 +130,7 @@ const HIDEABLE_COLS: { key: ColKey; label: string }[] = [
   { key: 'var', label: 'Variance' },
   { key: 'timeline', label: 'Timeline (Gantt)' },
 ];
-type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean; showFloat?: boolean; colWidths?: Record<string, number> };
+type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean; showFloat?: boolean; showMinimap?: boolean; colWidths?: Record<string, number> };
 const readWbsPrefs = (): WbsPrefs => { try { return JSON.parse(localStorage.getItem(WBS_PREFS_KEY) || '{}'); } catch { return {}; } };
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
@@ -970,6 +970,40 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // Draw each non-critical leaf's total float as a faded "slack" extension past its plan bar, so the
   // schedule buffer (how far a task can slip before it becomes critical) reads at a glance.
   const [showFloat, setShowFloat] = useState<boolean>(() => readWbsPrefs().showFloat ?? false);
+  // Compressed overview strip below the timeline — click/drag to navigate long schedules.
+  const [showMinimap, setShowMinimap] = useState<boolean>(() => readWbsPrefs().showMinimap ?? false);
+  const [miniView, setMiniView] = useState<{ left: number; width: number } | null>(null);
+  const [miniDrag, setMiniDrag] = useState(false);
+  const miniRef = useRef<HTMLDivElement>(null);
+  // Mirror the live scroll window into the minimap as a fraction of the full timeline width. The
+  // frozen columns cover the leftmost `frozenW` px of the viewport, so the visible timeline starts
+  // at scrollLeft (in timeline-local px) and is `clientWidth − frozenW` wide.
+  const syncMinimap = () => {
+    const sc = scrollRef.current, tl = timelineRef.current, a = axisRef.current;
+    if (!sc || !tl || !a || !a.width) { setMiniView(null); return; }
+    const frozenW = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
+    const visW = Math.max(0, sc.clientWidth - frozenW);
+    const left = Math.min(1, Math.max(0, sc.scrollLeft / a.width));
+    setMiniView({ left, width: Math.min(1 - left, visW / a.width) });
+  };
+  // Click/drag anywhere on the minimap centres the scroll window on that point.
+  const miniScrub = (clientX: number) => {
+    const sc = scrollRef.current, tl = timelineRef.current, a = axisRef.current, m = miniRef.current;
+    if (!sc || !tl || !a || !m || !a.width) return;
+    const rect = m.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const frozenW = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
+    const visW = Math.max(0, sc.clientWidth - frozenW);
+    sc.scrollLeft = Math.max(0, Math.min(sc.scrollWidth - sc.clientWidth, f * a.width - visW / 2));
+  };
+  // Keep the minimap window in sync when the layout (zoom/height/fullscreen/filter) shifts + on resize.
+  useEffect(() => { if (showMinimap && showGantt) syncMinimap(); }, [showMinimap, showGantt, axis?.width, panelH, fullscreen, visibleRows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!showMinimap || !showGantt) return;
+    const on = () => syncMinimap();
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, [showMinimap, showGantt]); // eslint-disable-line react-hooks/exhaustive-deps
   // Per-column widths (px) — drag a header's right edge to resize. Pinned via width+min+max (the
   // same technique the frozen columns use), so it works on this border-separate (non-fixed) table.
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => readWbsPrefs().colWidths ?? {});
@@ -1031,8 +1065,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [hoverRow, setHoverRow] = useState<string | null>(null);
   // Remember the view prefs across reloads.
   useEffect(() => {
-    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels, showFloat, colWidths })); } catch { /* ignore quota */ }
-  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels, showFloat, colWidths]);
+    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels, showFloat, showMinimap, colWidths })); } catch { /* ignore quota */ }
+  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels, showFloat, showMinimap, colWidths]);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
@@ -1591,6 +1625,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                           <span aria-hidden>⇥</span><span className="flex-1 text-left">{showFloat ? 'Hide slack (float)' : 'Show slack (float)'}</span>
                         </button>
                       )}
+                      <button type="button" onClick={() => setShowMinimap((v) => !v)} className={`${OPT_ROW} ${showMinimap ? '!text-brand-600 dark:!text-brand-400' : ''}`}>
+                        <span aria-hidden>🗺️</span><span className="flex-1 text-left">{showMinimap ? 'Hide minimap' : 'Show minimap'}</span>
+                      </button>
                     </>
                   )}
                   <button type="button" onClick={() => setDensity((d) => (d === 'compact' ? 'comfortable' : 'compact'))} className={OPT_ROW}>
@@ -1795,6 +1832,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             `h-full` resolved to 0 inside the native-fullscreen element on mobile, so a rotate left
             the timeline collapsed/stuck. */}
         <div ref={scrollRef}
+          onScroll={() => { if (showMinimap) syncMinimap(); }}
           style={!fullscreen && panelH ? { height: panelH } : undefined}
           className={`touch-pan-x touch-pan-y w-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 ${fullscreen ? 'min-h-0 flex-1' : panelH ? '' : 'max-h-[78vh]'}`}>
           {linkFrom && (
@@ -2360,6 +2398,35 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
             faded. pointer-events-none so it never blocks the scrollbar or a bar drag. */}
         {overflowX && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-40 w-16 rounded-r-xl bg-gradient-to-l from-white via-white/85 to-transparent dark:from-slate-900 dark:via-slate-900/85" />}
         </div>
+          {/* Minimap navigator — a compressed silhouette of every bar over the full span with a live
+              viewport window. Click/drag to jump the horizontal scroll. Sits outside the scroll box
+              so it stays visible while the table scrolls. */}
+          {showMinimap && showGantt && rows.length > 0 && axis && (
+            <div
+              ref={miniRef}
+              onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setMiniDrag(true); miniScrub(e.clientX); }}
+              onPointerMove={(e) => { if (miniDrag) miniScrub(e.clientX); }}
+              onPointerUp={(e) => { setMiniDrag(false); try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* already released */ } }}
+              onPointerCancel={() => setMiniDrag(false)}
+              title="Overview — click or drag to navigate the timeline"
+              className="relative mt-2 h-12 w-full cursor-pointer touch-none select-none overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50"
+            >
+              {axis.todayPct != null && <div aria-hidden className="absolute inset-y-0 z-[2] w-px bg-brand-500/70" style={{ left: `${axis.todayPct}%` }} />}
+              {visibleRows.map((r, i) => {
+                const rr = rolled.get(r.node.id);
+                const s = rr?.start ?? +new Date(r.node.planStart);
+                const e = rr?.end ?? +new Date(r.node.planEnd);
+                const left = ((s - axis.min) / axis.span) * 100;
+                const w = Math.max(0.4, ((e - s) / axis.span) * 100);
+                const y = 4 + (i / Math.max(1, visibleRows.length - 1)) * 34;
+                const crit = criticalIds.has(r.node.id);
+                return <div key={r.node.id} aria-hidden className={`absolute h-[2px] rounded-full ${crit ? 'bg-red-500' : rr?.isParent ? 'bg-slate-400 dark:bg-slate-500' : 'bg-brand-400/80 dark:bg-brand-500/70'}`} style={{ left: `${left}%`, width: `${w}%`, top: y }} />;
+              })}
+              {miniView && (
+                <div aria-hidden className="pointer-events-none absolute inset-y-0 z-[3] rounded-sm border-2 border-brand-500/80 bg-brand-500/10 shadow-sm" style={{ left: `${miniView.left * 100}%`, width: `${Math.max(2, miniView.width * 100)}%` }} />
+              )}
+            </div>
+          )}
           {/* Full-screen toggle placed directly BELOW the Gantt — a second, obvious entry point to
               the immersive timeline (the toolbar keeps its own compact toggle). */}
           {rows.length > 0 && (
