@@ -775,6 +775,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [overflowX, setOverflowX] = useState(false);
   const axisRef = useRef<{ width: number; effScale: Scale } | null>(null);
   const preserveRef = useRef<number | null>(null); // timeline-centre fraction to restore across a zoom
+  const fitFracRef = useRef<number | null>(null); // left-edge fraction to scroll to after a fit-to-selection
 
   // Timeline axis: span of all (rolled) plan dates → a pixel width + ticks for the
   // chosen scale, plus a "today" marker. Bars are positioned by % of the span, so
@@ -867,7 +868,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   };
   useLayoutEffect(() => {
     const sc = scrollRef.current, tl = timelineRef.current, a = axisRef.current;
-    if (preserveRef.current == null || !sc || !tl || !a) return;
+    if (!sc || !tl || !a) return;
+    // Fit-to-selection: scroll the framed span's left edge just inside the frozen pane.
+    if (fitFracRef.current != null) {
+      sc.scrollLeft = Math.max(0, fitFracRef.current * a.width - 24);
+      fitFracRef.current = null;
+      return;
+    }
+    if (preserveRef.current == null) return;
     const left = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
     sc.scrollLeft = left + preserveRef.current * a.width - sc.clientWidth / 2;
     preserveRef.current = null;
@@ -1136,6 +1144,37 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const toggleSel = (id: string) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  // Fit-to-selection — zoom & scroll the timeline so the selected tasks' date span fills the view.
+  // Picks a legible base scale for the selection span, zooms to ~90% fill, then scrolls its left edge
+  // just inside the frozen pane (via fitFracRef; the span fraction is invariant to zoom).
+  const fitToSelection = () => {
+    const sc = scrollRef.current, tl = timelineRef.current;
+    if (!axis || !selectedIds.size || !sc || !tl) return;
+    let lo = Infinity, hi = -Infinity;
+    for (const id of selectedIds) {
+      const rr = rolled.get(id), n = nav.nodeById.get(id);
+      const s = rr?.start ?? (n ? +new Date(n.planStart) : NaN);
+      const e = rr?.end ?? (n ? +new Date(n.planEnd) : NaN);
+      if (Number.isFinite(s)) lo = Math.min(lo, s);
+      if (Number.isFinite(e)) hi = Math.max(hi, e);
+    }
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
+    const selSpanDays = Math.max((hi - lo) / day, 1);
+    const tlLeft = tl.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft; // frozen-pane width
+    const availW = Math.max(160, sc.clientWidth - tlLeft);
+    const base: Scale = selSpanDays <= 45 ? 'day' : selSpanDays <= 400 ? 'week' : 'month';
+    const nextZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, (availW * 0.9) / selSpanDays / PX_PER_DAY[base]));
+    fitFracRef.current = (lo - axis.min) / axis.span;
+    setScale(base);
+    setZoom(nextZoom);
+    // Fallback when the width didn't change (the layout effect won't re-fire): scroll next frame.
+    requestAnimationFrame(() => {
+      if (fitFracRef.current == null) return;
+      const a = axisRef.current;
+      if (a && sc) sc.scrollLeft = Math.max(0, fitFracRef.current * a.width - 24);
+      fitFracRef.current = null;
+    });
+  };
   const bulkDelete = useMutation({
     mutationFn: (ids: string[]) => api.post<{ deleted: number }>(`${base}/tasks/bulk-delete`, { ids }),
     onSuccess: (res) => { invalidate(); toast.success(`${res.deleted} task${res.deleted === 1 ? '' : 's'} deleted`); exitSelect(); },
@@ -1535,6 +1574,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                         </div>
                         <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-600">
                           <button type="button" onClick={() => zoomBy(1 / 1.25)} disabled={scale === 'width'} title="Zoom out" className="px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700">−</button>
+                          <button type="button" onClick={() => { captureCenter(); setZoom(1); }} disabled={scale === 'width' || Math.abs(zoom - 1) < 0.01} title="Reset zoom to 100%" className="min-w-[3rem] border-l border-slate-200 px-2 py-1 text-[11px] font-semibold leading-none tabular-nums text-slate-500 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">{scale === 'width' ? '—' : `${Math.round(zoom * 100)}%`}</button>
                           <button type="button" onClick={() => zoomBy(1.25)} disabled={scale === 'width'} title="Zoom in" className="border-l border-slate-200 px-2 py-1 text-sm font-semibold leading-none text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">+</button>
                         </div>
                       </div>
@@ -1646,6 +1686,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm dark:border-brand-900/50 dark:bg-brand-900/15">
           <span className="font-medium text-brand-800 dark:text-brand-200">{selectedIds.size} selected</span>
           <div className="flex-1" />
+          {showGantt && <button onClick={fitToSelection} disabled={!selectedIds.size} title="Zoom the timeline to frame the selected tasks" className={`${CTRL_BTN} disabled:opacity-40`}>⤢ Fit to view</button>}
           <button onClick={() => setSelectedIds(new Set())} disabled={!selectedIds.size} className={`${CTRL_BTN} disabled:opacity-40`}>Clear selection</button>
           <Button
             variant="danger" className="!py-1 text-xs"
