@@ -130,7 +130,23 @@ const HIDEABLE_COLS: { key: ColKey; label: string }[] = [
   { key: 'var', label: 'Variance' },
   { key: 'timeline', label: 'Timeline (Gantt)' },
 ];
-type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean; showFloat?: boolean; showMinimap?: boolean; colWidths?: Record<string, number> };
+// Reorderable middle columns — the identity pane (✓/WBS/Task) and the timeline stay pinned, but
+// everything between them can be rearranged (⚙ Options → Columns list, or by dragging a header).
+// This array is the canonical (default) left-to-right order.
+const MIDDLE_COLS: ColKey[] = ['owner', 'planDates', 'actualDates', 'dur', 'budget', 'weight', 'pct', 'status', 'var'];
+const COL_LABEL = Object.fromEntries(HIDEABLE_COLS.map((c) => [c.key, c.label])) as Record<ColKey, string>;
+const isDateGroupCol = (k: ColKey) => k === 'planDates' || k === 'actualDates';
+// Normalise a persisted order: keep known middle cols in their saved order, append any missing
+// (e.g. a column we added since the prefs were written), and drop anything unknown. Forward- and
+// backward-compatible, so an old/partial saved order never hides or duplicates a column.
+const normalizeColOrder = (saved?: ColKey[]): ColKey[] => {
+  const seen = new Set<ColKey>();
+  const out: ColKey[] = [];
+  for (const k of saved ?? []) if (MIDDLE_COLS.includes(k) && !seen.has(k)) { out.push(k); seen.add(k); }
+  for (const k of MIDDLE_COLS) if (!seen.has(k)) out.push(k);
+  return out;
+};
+type WbsPrefs = { scale?: ScaleOpt; showGantt?: boolean; showDates?: boolean; density?: Density; hiddenCols?: ColKey[]; highlightCritical?: boolean; showLegend?: boolean; showBarLabels?: boolean; showFloat?: boolean; showMinimap?: boolean; colWidths?: Record<string, number>; colOrder?: ColKey[] };
 const readWbsPrefs = (): WbsPrefs => { try { return JSON.parse(localStorage.getItem(WBS_PREFS_KEY) || '{}'); } catch { return {}; } };
 const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 
@@ -956,6 +972,30 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const toggleCol = (k: ColKey) => setHiddenCols((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const hideCol = (k: ColKey) => setHiddenCols((s) => (s.has(k) ? s : new Set(s).add(k)));
   const showAllCols = () => setHiddenCols(new Set());
+  // Per-column ORDER for the reorderable middle columns (owner…var). Persisted; normalised so it's
+  // robust to added/removed columns. `orderedCols` = the visible middle cols in user order, driving
+  // both header rows and every body cell (identity pane + timeline render outside this list).
+  const [colOrder, setColOrder] = useState<ColKey[]>(() => normalizeColOrder(readWbsPrefs().colOrder));
+  const orderedCols = useMemo(() => colOrder.filter((k) => !hiddenCols.has(k)), [colOrder, hiddenCols]);
+  const orderedDateGroups = useMemo(() => orderedCols.filter(isDateGroupCol), [orderedCols]);
+  const isDefaultColOrder = colOrder.every((k, i) => k === MIDDLE_COLS[i]);
+  const moveCol = (key: ColKey, dir: -1 | 1) => setColOrder((o) => {
+    const i = o.indexOf(key), j = i + dir;
+    if (i < 0 || j < 0 || j >= o.length) return o;
+    const n = [...o]; [n[i], n[j]] = [n[j], n[i]]; return n;
+  });
+  // Move `from` so it lands immediately before `to` (drag-and-drop, list or header).
+  const reorderCol = (from: ColKey, to: ColKey) => setColOrder((o) => {
+    if (from === to) return o;
+    const n = o.filter((k) => k !== from);
+    const idx = n.indexOf(to);
+    if (idx < 0) return o;
+    n.splice(idx, 0, from);
+    return n;
+  });
+  const resetColOrder = () => setColOrder(normalizeColOrder([]));
+  // Drag-to-reorder within the ⚙ Options → Columns list (independent of the header drag state).
+  const [listDragCol, setListDragCol] = useState<ColKey | null>(null);
   // Back-compat derived flags so the rest of the component keeps reading these names. `showGantt` =
   // the timeline column; `showDates` = ANY date group visible (drives the 2-row grouped header).
   const showGantt = show('timeline');
@@ -1065,8 +1105,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const [hoverRow, setHoverRow] = useState<string | null>(null);
   // Remember the view prefs across reloads.
   useEffect(() => {
-    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels, showFloat, showMinimap, colWidths })); } catch { /* ignore quota */ }
-  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels, showFloat, showMinimap, colWidths]);
+    try { localStorage.setItem(WBS_PREFS_KEY, JSON.stringify({ scale, density, hiddenCols: [...hiddenCols], highlightCritical, showLegend, showBarLabels, showFloat, showMinimap, colWidths, colOrder })); } catch { /* ignore quota */ }
+  }, [scale, density, hiddenCols, highlightCritical, showLegend, showBarLabels, showFloat, showMinimap, colWidths, colOrder]);
 
   // Measure the visible timeline width (viewport minus the frozen left pane) for 'Fit' mode, and
   // whether the timeline overflows horizontally (drives the right-edge scroll hint). Re-runs on
@@ -1126,6 +1166,47 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // Right-click a column header → a one-item "Hide column" menu (restore via ⚙ Options → Columns).
   const [colMenu, setColMenu] = useState<{ key: ColKey; label: string; x: number; y: number } | null>(null);
   const openColMenu = (key: ColKey, label: string, e: React.MouseEvent) => { e.preventDefault(); setColMenu({ key, label, x: e.clientX, y: e.clientY }); };
+  // Drag-to-reorder a column by its header (Phase 3). `dragCol` = the key being dragged; `dropCol`
+  // = the header currently hovered (draws an insert line). Drop → reorderCol(from → before target).
+  const [dragCol, setDragCol] = useState<ColKey | null>(null);
+  const [dropCol, setDropCol] = useState<ColKey | null>(null);
+  // Header drag wiring for a middle column. Applied to every reorderable header (top row). The grip
+  // resize handle stops propagation so a resize-drag never starts a reorder.
+  const headDrag = (k: ColKey): Partial<React.HTMLAttributes<HTMLTableCellElement>> & { draggable: boolean } => ({
+    draggable: true,
+    // A resize-drag (grip pointerdown) must never start a column reorder — bail if one is active.
+    onDragStart: (e) => { if (colResize.current) { e.preventDefault(); return; } setDragCol(k); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch { /* some browsers */ } },
+    onDragEnd: () => { setDragCol(null); setDropCol(null); },
+    onDragOver: (e) => { if (dragCol && dragCol !== k) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropCol(k); } },
+    onDragLeave: () => setDropCol((c) => (c === k ? null : c)),
+    onDrop: (e) => { e.preventDefault(); if (dragCol && dragCol !== k) reorderCol(dragCol, k); setDragCol(null); setDropCol(null); },
+  });
+  // Insert-line + dragging affordance classes for a header cell being reordered.
+  const dragCls = (k: ColKey) => `${dragCol === k ? 'opacity-40' : ''} ${dropCol === k ? 'ring-2 ring-inset ring-brand-400' : ''}`;
+  // ── Reorderable middle-column renderers ──────────────────────────────────────
+  // A single ordered list (`orderedCols`) drives the header top row, the Start/Finish sub-header
+  // row, and every body cell. Identity (✓/WBS/Task) and the timeline render outside this list.
+  const headTop = (k: ColKey): ReactNode => {
+    switch (k) {
+      case 'owner': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('owner')} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className={`relative cursor-context-menu border-b-4 border-b-rose-400 align-bottom ${dragCls(k)}`} title="Owner (PIC) — drag to reorder · right-click to hide">Owner<ColGrip col="owner" /></th>;
+      case 'planDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className={`cursor-context-menu border-b-2 border-slate-800 !bg-slate-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-slate-900 dark:!bg-slate-700 ${dragCls(k)}`} title="Planned (baseline plan) dates — drag to reorder · right-click to hide">Plan</th>;
+      case 'actualDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className={`cursor-context-menu border-b-2 border-teal-800 !bg-teal-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-teal-900 dark:!bg-teal-700 ${dragCls(k)}`} title="Actual start & finish (tracking) — drag to reorder · right-click to hide">Actual</th>;
+      case 'dur': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('dur')} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className={`relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Duration — drag to reorder · right-click to hide">Dur<ColGrip col="dur" /></th>;
+      case 'budget': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('budget')} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className={`relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Linked Direct Cost (the EVM budget weight) — drag to reorder · right-click to hide">Budget<ColGrip col="budget" /></th>;
+      case 'weight': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('weight')} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className={`relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Manual work-package weight steers the % roll-up — drag to reorder · right-click to hide">Weight<ColGrip col="weight" /></th>;
+      case 'pct': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('pct')} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className={`relative cursor-context-menu border-b-4 border-b-violet-400 text-center align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="% complete — drag to reorder · right-click to hide"><span className="inline-flex flex-col items-center leading-tight"><span className="text-[9px] font-semibold uppercase tracking-wide text-blue-200">Progress</span><span>%</span></span><ColGrip col="pct" /></th>;
+      case 'status': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('status')} onContextMenu={(e) => openColMenu('status', 'Status', e)} className={`relative cursor-context-menu border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="Status — drag to reorder · right-click to hide">Status<ColGrip col="status" /></th>;
+      case 'var': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('var')} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className={`relative cursor-context-menu border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="Finish variance vs baseline (days) — drag to reorder · right-click to hide">Var<ColGrip col="var" /></th>;
+      default: return null;
+    }
+  };
+  const headSub = (k: ColKey): ReactNode => {
+    switch (k) {
+      case 'planDates': return <Fragment key={k}><th className="!bg-slate-600 !text-slate-100 !border-b-4 !border-b-sky-400 dark:!bg-slate-600 dark:!text-slate-100">Start</th><th className="!bg-slate-600 !text-slate-100 !border-b-4 !border-b-sky-400 dark:!bg-slate-600 dark:!text-slate-100">Finish</th></Fragment>;
+      case 'actualDates': return <Fragment key={k}><th className="!bg-emerald-600 !text-emerald-50 !border-b-4 !border-b-emerald-400 dark:!bg-emerald-600 dark:!text-emerald-50">Start</th><th className="!bg-emerald-600 !text-emerald-50 !border-b-4 !border-b-emerald-400 dark:!bg-emerald-600 dark:!text-emerald-50">Finish</th></Fragment>;
+      default: return null;
+    }
+  };
   // Base = ✓ WBS Task Owner % Status Var (7); +6 date/budget cols when shown; + the Gantt column
   // (when shown). No Actions column anymore — row actions live in the right-click / ⋮ menu.
   // Visible column count for DraftRow / empty-state colSpans: ✓ + WBS + Task (3, always) + each
@@ -1675,21 +1756,39 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                   <button type="button" disabled={ganttExporting !== null} onClick={() => { close(); exportGantt('excel'); }} className={`${OPT_ROW} disabled:opacity-40`}>
                     <span aria-hidden>⬇</span><span className="flex-1 text-left">{ganttExporting === 'excel' ? 'Exporting Excel…' : 'Gantt Excel'}</span>
                   </button>
-                  {/* Columns — show/hide each column (also: right-click a column header to hide it). */}
+                  {/* Columns — show/hide + reorder. Middle columns drag to reorder (or ↑/↓); the
+                      timeline stays pinned last. Also: drag a header to reorder, right-click to hide. */}
                   <div className="mb-1 mt-3 flex items-center justify-between px-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Columns</span>
                     <span className="flex items-center gap-2">
+                      {!isDefaultColOrder && <button type="button" onClick={resetColOrder} className="text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-400" title="Restore the default left-to-right column order">Reset order</button>}
                       {Object.keys(colWidths).length > 0 && <button type="button" onClick={() => setColWidths({})} className="text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-400" title="Drag a header's right edge to resize; this resets them">Reset widths</button>}
                       {hiddenCols.size > 0 && <button type="button" onClick={showAllCols} className="text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-400">Show all</button>}
                     </span>
                   </div>
-                  <p className="px-1 pb-1 text-[10px] leading-tight text-slate-400 dark:text-slate-500">Tip: drag a column header's right edge to resize (double-click to reset).</p>
-                  {HIDEABLE_COLS.map((c) => (
-                    <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
-                      <input type="checkbox" checked={show(c.key)} onChange={() => toggleCol(c.key)} className="h-3.5 w-3.5 accent-brand-600" />
-                      <span className="flex-1 text-left">{c.label}</span>
-                    </label>
+                  <p className="px-1 pb-1 text-[10px] leading-tight text-slate-400 dark:text-slate-500">Tip: drag ⠿ to reorder (or use ↑/↓); drag a header's right edge to resize.</p>
+                  {colOrder.map((k, i) => (
+                    <div key={k}
+                      draggable
+                      onDragStart={(e) => { setListDragCol(k); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragOver={(e) => { if (listDragCol && listDragCol !== k) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+                      onDrop={(e) => { e.preventDefault(); if (listDragCol && listDragCol !== k) reorderCol(listDragCol, k); setListDragCol(null); }}
+                      onDragEnd={() => setListDragCol(null)}
+                      className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700 ${listDragCol === k ? 'opacity-40' : ''}`}>
+                      <span className="cursor-grab select-none text-slate-400 active:cursor-grabbing dark:text-slate-500" title="Drag to reorder" aria-hidden>⠿</span>
+                      <label className="flex flex-1 cursor-pointer items-center gap-2">
+                        <input type="checkbox" checked={show(k)} onChange={() => toggleCol(k)} className="h-3.5 w-3.5 accent-brand-600" />
+                        <span className="flex-1 text-left">{COL_LABEL[k]}</span>
+                      </label>
+                      <button type="button" onClick={() => moveCol(k, -1)} disabled={i === 0} title="Move up" aria-label={`Move ${COL_LABEL[k]} up`} className="grid h-5 w-5 place-items-center rounded text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-slate-600 dark:hover:text-slate-100">↑</button>
+                      <button type="button" onClick={() => moveCol(k, 1)} disabled={i === colOrder.length - 1} title="Move down" aria-label={`Move ${COL_LABEL[k]} down`} className="grid h-5 w-5 place-items-center rounded text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-slate-600 dark:hover:text-slate-100">↓</button>
+                    </div>
                   ))}
+                  {/* Timeline — pinned last (not reorderable), hide/show only. */}
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700">
+                    <input type="checkbox" checked={show('timeline')} onChange={() => toggleCol('timeline')} className="h-3.5 w-3.5 accent-brand-600" />
+                    <span className="flex-1 text-left">{COL_LABEL.timeline}</span>
+                  </label>
                   <div className="mb-1 mt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Baseline</div>
                   <div className="flex items-center justify-between gap-2 px-1">
                     <span className="text-xs text-slate-500 dark:text-slate-400">{baselinedAt ? `Baselined ${formatDate(baselinedAt)}` : 'No baseline set'}</span>
@@ -1927,20 +2026,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                 </th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b-4 border-b-rose-400 align-bottom ${frozenTh}`}>WBS</th>
                 <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88, colStyle('task'))} className={`relative ${colWidths.task ? '' : 'min-w-[14rem]'} border-b-4 border-b-rose-400 text-center align-bottom ${frozenTh} ${frozenEdge}`}>Task<ColGrip col="task" /></th>
-                {/* Data columns — each hideable via right-click (restore in ⚙ Options → Columns). */}
-                {show('owner') && <th rowSpan={showDates ? 2 : 1} style={colStyle('owner')} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className="relative cursor-context-menu border-b-4 border-b-rose-400 align-bottom" title="Owner (PIC) — right-click to hide">Owner<ColGrip col="owner" /></th>}
-                {show('planDates') && (
-                  <th colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className="cursor-context-menu border-b-2 border-slate-800 !bg-slate-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-slate-900 dark:!bg-slate-700" title="Planned (baseline plan) dates — right-click to hide">Plan</th>
-                )}
-                {show('actualDates') && (
-                  <th colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className="cursor-context-menu border-b-2 border-teal-800 !bg-teal-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-teal-900 dark:!bg-teal-700" title="Actual start & finish (tracking) — right-click to hide">Actual</th>
-                )}
-                {show('dur') && <th rowSpan={showDates ? 2 : 1} style={colStyle('dur')} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className="relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white" title="Duration — right-click to hide">Dur<ColGrip col="dur" /></th>}
-                {show('budget') && <th rowSpan={showDates ? 2 : 1} style={colStyle('budget')} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className="relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white" title="Linked Direct Cost (the EVM budget weight) — right-click to hide">Budget<ColGrip col="budget" /></th>}
-                {show('weight') && <th rowSpan={showDates ? 2 : 1} style={colStyle('weight')} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className="relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white" title="Manual work-package weight steers the % roll-up — right-click to hide">Weight<ColGrip col="weight" /></th>}
-                {show('pct') && <th rowSpan={showDates ? 2 : 1} style={colStyle('pct')} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className="relative cursor-context-menu border-b-4 border-b-violet-400 text-center align-bottom !bg-blue-800 !text-white" title="% complete — right-click to hide"><span className="inline-flex flex-col items-center leading-tight"><span className="text-[9px] font-semibold uppercase tracking-wide text-blue-200">Progress</span><span>%</span></span><ColGrip col="pct" /></th>}
-                {show('status') && <th rowSpan={showDates ? 2 : 1} style={colStyle('status')} onContextMenu={(e) => openColMenu('status', 'Status', e)} className="relative cursor-context-menu border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white" title="Status — right-click to hide">Status<ColGrip col="status" /></th>}
-                {show('var') && <th rowSpan={showDates ? 2 : 1} style={colStyle('var')} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className="relative cursor-context-menu border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white" title="Finish variance vs baseline (days) — right-click to hide">Var<ColGrip col="var" /></th>}
+                {/* Data columns — reorderable (drag a header, or ⚙ Options → Columns); each hideable via right-click. */}
+                {orderedCols.map(headTop)}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
                 {showGantt && (
                   <th ref={timelineRef} rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('timeline', 'Timeline (Gantt)', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Timeline — right-click to hide">
@@ -1958,8 +2045,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               {/* Row 2 — the Start/Finish sub-labels under each VISIBLE date group. */}
               {showDates && (
                 <tr className="text-center text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:px-2 [&>th]:text-center [&>th]:font-bold [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700">
-                  {show('planDates') && <><th className="!bg-slate-600 !text-slate-100 !border-b-4 !border-b-sky-400 dark:!bg-slate-600 dark:!text-slate-100">Start</th><th className="!bg-slate-600 !text-slate-100 !border-b-4 !border-b-sky-400 dark:!bg-slate-600 dark:!text-slate-100">Finish</th></>}
-                  {show('actualDates') && <><th className="!bg-emerald-600 !text-emerald-50 !border-b-4 !border-b-emerald-400 dark:!bg-emerald-600 dark:!text-emerald-50">Start</th><th className="!bg-emerald-600 !text-emerald-50 !border-b-4 !border-b-emerald-400 dark:!bg-emerald-600 dark:!text-emerald-50">Finish</th></>}
+                  {orderedDateGroups.map(headSub)}
                 </tr>
               )}
             </thead>
@@ -2026,6 +2112,122 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                 const hasDict = !!(node.description || node.deliverable || node.acceptanceCriteria || node.picResource || node.pic);
                 const isOpen = expanded.has(node.id);
                 const togglingId = progress.isPending && progress.variables?.id === node.id;
+                // Body cell for a reorderable middle column — mirrors headTop/headSub so one ordered
+                // list drives header + body. Date groups emit two <td>. No show() guard here: the
+                // caller iterates `orderedCols`, which is already visibility-filtered.
+                const cell = (k: ColKey): ReactNode => {
+                  switch (k) {
+                    case 'owner': return <td key={k} className="!text-left">{canEdit
+                      ? <OwnerPopover owners={orderedOwners(node)} node={node} editable resources={resources} container={modalContainer} onSave={(patch) => patchTask.mutate({ node, patch })} />
+                      : <OwnerCell owners={orderedOwners(node)} />}</td>;
+                    case 'planDates': return (
+                      <Fragment key={k}>
+                        {/* Plan Start — rolls up (read-only) on summary rows; leaf is click-to-edit
+                            whenever the baseline is UNLOCKED (canPlan). */}
+                        <td className="whitespace-nowrap text-center">
+                          {r.isParent
+                            ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
+                            : <InlineDate value={node.planStart} editable={canPlan} onSave={(v) => v && editPlanStart(node, v)} title={canPlan ? 'Plan start — click to edit (keeps duration, shifts finish)' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
+                        </td>
+                        {/* Plan Finish */}
+                        <td className="whitespace-nowrap text-center">
+                          {r.isParent
+                            ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
+                            : <InlineDate value={node.planEnd} editable={canPlan} onSave={(v) => v && editPlanEnd(node, v)} title={canPlan ? 'Plan finish — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
+                        </td>
+                      </Fragment>
+                    );
+                    case 'actualDates': return (
+                      <Fragment key={k}>
+                        {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
+                        <td className="whitespace-nowrap text-center">
+                          {r.isParent
+                            ? (r.actualStart != null
+                                ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up: earliest actual start of subtasks">{formatDate(new Date(r.actualStart))}</span>
+                                : <span className="text-slate-300 dark:text-slate-600">—</span>)
+                            : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualStart: v } })} title="Actual start — click to set (blank to clear)" />}
+                        </td>
+                        {/* Actual Finish */}
+                        <td className="whitespace-nowrap text-center">
+                          {r.isParent
+                            ? (r.actualFinish != null
+                                ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up: latest actual finish (all subtasks complete)">{formatDate(new Date(r.actualFinish))}</span>
+                                : <span className="text-slate-300 dark:text-slate-600">—</span>)
+                            : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualFinish: v } })} title="Actual finish — click to set (blank to clear)" />}
+                        </td>
+                      </Fragment>
+                    );
+                    case 'dur': return <td key={k} className="text-center tabular-nums text-xs text-slate-600 dark:text-slate-300">{r.dur}d</td>;
+                    case 'budget': return (
+                        <td key={k} className={`text-center tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
+                          {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                        </td>
+                    );
+                    case 'weight': return (
+                        /* Manual work-package weight (Model B) + the effective project share it resolves to. */
+                        <td key={k} className="whitespace-nowrap text-center">
+                          {canPlan ? (
+                            <input
+                              type="number" min={0} step="any" defaultValue={node.weight ?? ''} key={`w-${node.weight}`}
+                              placeholder="auto" aria-label={`Weight for ${node.name}`}
+                              title="Manual weight — set on a Main Task to steer the % roll-up. Blank = auto (cost/duration)."
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim();
+                                const v = raw === '' ? null : Math.max(0, Number(raw));
+                                if (v !== (node.weight ?? null)) patchTask.mutate({ node, patch: { weight: v } });
+                              }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                              className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-center text-xs tabular-nums text-slate-700 transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600"
+                            />
+                          ) : node.weight != null ? (
+                            <span className="tabular-nums text-xs text-slate-600 dark:text-slate-300">{node.weight}</span>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600">auto</span>
+                          )}
+                          <span className="ml-1 tabular-nums text-[10px] text-slate-400 dark:text-slate-500" title="Effective share of the whole project this task/phase carries">{r.wt > 0 ? `${node.effectiveWeightPct}%` : ''}</span>
+                        </td>
+                    );
+                    case 'pct': return (
+                    <td key={k} className="text-right">
+                      {node.stepCount > 0 && !r.isParent ? (
+                        // Derived from weighted steps → read-only; click to view/edit the steps.
+                        <button type="button" onClick={() => setStepsFor(node)}
+                          title={`Derived from ${node.stepCount} weighted step${node.stepCount === 1 ? '' : 's'} — click to view/edit`}
+                          className="inline-flex items-center gap-0.5 tabular-nums text-xs text-brand-700 hover:underline dark:text-brand-300">
+                          {r.pct}% <span className="text-[9px]" aria-hidden>☑{node.stepCount}</span>
+                        </button>
+                      ) : canEdit && !r.isParent ? (
+                        <input
+                          type="number" min={0} max={100} defaultValue={node.progressPct} key={node.progressPct}
+                          aria-label={`Percent complete for ${node.name}`}
+                          style={{ background: pctFillBg(node.progressPct) }}
+                          onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); e.currentTarget.style.background = pctFillBg(v); }}
+                          onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); e.currentTarget.style.background = pctFillBg(v); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          className="w-16 rounded-lg border border-slate-200/70 px-1 py-0.5 text-center text-xs font-normal tabular-nums text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.12)] transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/50 dark:border-slate-700 dark:text-white"
+                        />
+                      ) : (
+                        <span className={`tabular-nums text-xs ${r.isParent ? 'font-bold text-slate-600 dark:text-slate-300' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
+                          {r.pct}%
+                        </span>
+                      )}
+                    </td>
+                    );
+                    case 'status': return <td key={k}><Badge color={overdue ? 'red' : st.color}>{overdue ? 'Overdue' : st.label}</Badge></td>;
+                    case 'var': return (
+                    <td key={k} className="text-center tabular-nums text-xs">
+                      {varDays == null ? (
+                        <span className="text-slate-300 dark:text-slate-600">—</span>
+                      ) : (
+                        <span title={`${varIsActual ? 'Actual' : 'Forecast'} finish vs baseline (${formatDate(new Date(r.baseEnd!))})`} className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}>
+                          {varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}{varIsActual && <span className="ml-0.5 text-slate-400 dark:text-slate-500" title="Based on the confirmed actual finish">✓</span>}
+                        </span>
+                      )}
+                    </td>
+                    );
+                    default: return null;
+                  }
+                };
                 return (
                   <Fragment key={node.id}>
                   <tr
@@ -2091,117 +2293,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                           className={`absolute -bottom-2.5 z-30 grid h-5 w-5 place-items-center text-lg font-bold leading-none text-slate-600 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
                       )}
                     </td>
-                    {show('owner') && <td className="!text-left">{canEdit
-                      ? <OwnerPopover owners={orderedOwners(node)} node={node} editable resources={resources} container={modalContainer} onSave={(patch) => patchTask.mutate({ node, patch })} />
-                      : <OwnerCell owners={orderedOwners(node)} />}</td>}
-                    {show('planDates') && (
-                      <>
-                        {/* Plan Start — rolls up (read-only) on summary rows; leaf is click-to-edit
-                            whenever the baseline is UNLOCKED (canPlan). Drag-reschedule is separately
-                            frozen once a baseline exists (canDrag), but click-editing plan dates must
-                            work after a change request unlocks the baseline — else an approved CR
-                            can't actually be applied. */}
-                        <td className="whitespace-nowrap text-center">
-                          {r.isParent
-                            ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.start))}</span>
-                            : <InlineDate value={node.planStart} editable={canPlan} onSave={(v) => v && editPlanStart(node, v)} title={canPlan ? 'Plan start — click to edit (keeps duration, shifts finish)' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
-                        </td>
-                        {/* Plan Finish */}
-                        <td className="whitespace-nowrap text-center">
-                          {r.isParent
-                            ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up from subtasks">{formatDate(new Date(r.end))}</span>
-                            : <InlineDate value={node.planEnd} editable={canPlan} onSave={(v) => v && editPlanEnd(node, v)} title={canPlan ? 'Plan finish — click to edit' : 'Baseline locked — approve a change request (or unlock the baseline) to edit plan dates'} />}
-                        </td>
-                      </>
-                    )}
-                    {show('actualDates') && (
-                      <>
-                        {/* Actual Start — leaf tasks; always editable while tracking (auto-stamp fills it only if empty). */}
-                        <td className="whitespace-nowrap text-center">
-                          {r.isParent
-                            ? (r.actualStart != null
-                                ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up: earliest actual start of subtasks">{formatDate(new Date(r.actualStart))}</span>
-                                : <span className="text-slate-300 dark:text-slate-600">—</span>)
-                            : <InlineDate value={node.actualStart} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualStart: v } })} title="Actual start — click to set (blank to clear)" />}
-                        </td>
-                        {/* Actual Finish */}
-                        <td className="whitespace-nowrap text-center">
-                          {r.isParent
-                            ? (r.actualFinish != null
-                                ? <span className="text-xs font-bold text-slate-600 dark:text-slate-300" title="Rolls up: latest actual finish (all subtasks complete)">{formatDate(new Date(r.actualFinish))}</span>
-                                : <span className="text-slate-300 dark:text-slate-600">—</span>)
-                            : <InlineDate value={node.actualFinish} editable={canEdit} onSave={(v) => setActuals.mutate({ id: node.id, patch: { actualFinish: v } })} title="Actual finish — click to set (blank to clear)" />}
-                        </td>
-                      </>
-                    )}
-                    {show('dur') && <td className="text-center tabular-nums text-xs text-slate-600 dark:text-slate-300">{r.dur}d</td>}
-                    {show('budget') && (
-                        <td className={`text-center tabular-nums text-xs ${r.isParent ? 'font-medium text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'}`} title={r.isParent ? 'Rolled up from subtasks' : 'Linked Direct Cost'}>
-                          {r.budget > 0 ? formatIdrShort(r.budget) : <span className="text-slate-300 dark:text-slate-600">—</span>}
-                        </td>
-                    )}
-                    {show('weight') && (
-                        /* Manual work-package weight (Model B) + the effective project share it resolves to. */
-                        <td className="whitespace-nowrap text-center">
-                          {canPlan ? (
-                            <input
-                              type="number" min={0} step="any" defaultValue={node.weight ?? ''} key={`w-${node.weight}`}
-                              placeholder="auto" aria-label={`Weight for ${node.name}`}
-                              title="Manual weight — set on a Main Task to steer the % roll-up. Blank = auto (cost/duration)."
-                              onBlur={(e) => {
-                                const raw = e.target.value.trim();
-                                const v = raw === '' ? null : Math.max(0, Number(raw));
-                                if (v !== (node.weight ?? null)) patchTask.mutate({ node, patch: { weight: v } });
-                              }}
-                              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                              className="w-14 rounded border border-transparent bg-slate-50 px-1 py-0.5 text-center text-xs tabular-nums text-slate-700 transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600"
-                            />
-                          ) : node.weight != null ? (
-                            <span className="tabular-nums text-xs text-slate-600 dark:text-slate-300">{node.weight}</span>
-                          ) : (
-                            <span className="text-slate-300 dark:text-slate-600">auto</span>
-                          )}
-                          <span className="ml-1 tabular-nums text-[10px] text-slate-400 dark:text-slate-500" title="Effective share of the whole project this task/phase carries">{r.wt > 0 ? `${node.effectiveWeightPct}%` : ''}</span>
-                        </td>
-                    )}
-                    {show('pct') && (
-                    <td className="text-right">
-                      {node.stepCount > 0 && !r.isParent ? (
-                        // Derived from weighted steps → read-only; click to view/edit the steps.
-                        <button type="button" onClick={() => setStepsFor(node)}
-                          title={`Derived from ${node.stepCount} weighted step${node.stepCount === 1 ? '' : 's'} — click to view/edit`}
-                          className="inline-flex items-center gap-0.5 tabular-nums text-xs text-brand-700 hover:underline dark:text-brand-300">
-                          {r.pct}% <span className="text-[9px]" aria-hidden>☑{node.stepCount}</span>
-                        </button>
-                      ) : canEdit && !r.isParent ? (
-                        <input
-                          type="number" min={0} max={100} defaultValue={node.progressPct} key={node.progressPct}
-                          aria-label={`Percent complete for ${node.name}`}
-                          style={{ background: pctFillBg(node.progressPct) }}
-                          onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); e.currentTarget.style.background = pctFillBg(v); }}
-                          onBlur={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value))); e.currentTarget.style.background = pctFillBg(v); if (v !== node.progressPct) progress.mutate({ id: node.id, pct: v }); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          className="w-16 rounded-lg border border-slate-200/70 px-1 py-0.5 text-center text-xs font-normal tabular-nums text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.12)] transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/50 dark:border-slate-700 dark:text-white"
-                        />
-                      ) : (
-                        <span className={`tabular-nums text-xs ${r.isParent ? 'font-bold text-slate-600 dark:text-slate-300' : ''}`} title={r.isParent ? 'Rolled up from subtasks' : undefined}>
-                          {r.pct}%
-                        </span>
-                      )}
-                    </td>
-                    )}
-                    {show('status') && <td><Badge color={overdue ? 'red' : st.color}>{overdue ? 'Overdue' : st.label}</Badge></td>}
-                    {show('var') && (
-                    <td className="text-center tabular-nums text-xs">
-                      {varDays == null ? (
-                        <span className="text-slate-300 dark:text-slate-600">—</span>
-                      ) : (
-                        <span title={`${varIsActual ? 'Actual' : 'Forecast'} finish vs baseline (${formatDate(new Date(r.baseEnd!))})`} className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}>
-                          {varDays > 0 ? `+${varDays}d` : varDays < 0 ? `${varDays}d` : '0'}{varIsActual && <span className="ml-0.5 text-slate-400 dark:text-slate-500" title="Based on the confirmed actual finish">✓</span>}
-                        </span>
-                      )}
-                    </td>
-                    )}
+                    {/* Reorderable middle columns — order driven by `orderedCols` (see `cell`). */}
+                    {orderedCols.map(cell)}
                     {showGantt && (
                     <td>
                       <div
