@@ -7,6 +7,7 @@ import AnettChartCard from './AnettChartCard';
 import { onOpenAnett } from '../lib/anettBus';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { useLang } from '../context/LanguageContext';
+import { selectChips } from '../lib/anettChips';
 import { useAuth } from '../context/AuthContext';
 import { anettChatKey } from '../lib/anettChat';
 
@@ -299,6 +300,9 @@ export default function AiAssistant() {
   const { user } = useAuth();
   const L = STRINGS[lang];
   const ACTION_LABELS = L.actionLabels;
+  // Rotates the starter cards: bumped when the panel opens or a new chat starts, so the surfaced
+  // set changes each session while the most-urgent card stays pinned (see selectChips).
+  const [chipSeed, setChipSeed] = useState(0);
   // Per-user storage key so one account never reads another's chat in a shared tab (see anettChat.ts).
   const chatKey = anettChatKey(user?.id);
   const [open, setOpen] = useState(false);
@@ -547,6 +551,9 @@ export default function AiAssistant() {
     return () => window.removeEventListener('keydown', onKey);
   }, [availQ.data?.aiAvailable]);
 
+  // Rotate the starter cards each time the panel opens (covers launcher, ⌘K, and bus-open alike).
+  useEffect(() => { if (open) setChipSeed((s) => s + 1); }, [open]);
+
   // In-context nudges (#B): another component can open Anett with a prefilled question via the bus.
   useEffect(() => {
     onOpenAnett((prompt) => {
@@ -719,7 +726,7 @@ export default function AiAssistant() {
     void runAskStream(base);
   };
 
-  const newChat = () => { setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); setSessionCost({ costUsd: 0, tokens: 0 }); spokenRef.current = -1; cancelSpeak(); try { sessionStorage.removeItem(chatKey); } catch { /* noop */ } inputRef.current?.focus(); };
+  const newChat = () => { setChipSeed((s) => s + 1); setTurns([]); setInput(''); setStreamIdx(null); setStreamLen(0); setSessionCost({ costUsd: 0, tokens: 0 }); spokenRef.current = -1; cancelSpeak(); try { sessionStorage.removeItem(chatKey); } catch { /* noop */ } inputRef.current?.focus(); };
 
   // Stop + release the waveform mic stream.
   const stopMic = () => setMicStream((s) => { s?.getTracks().forEach((t) => t.stop()); return null; });
@@ -805,7 +812,16 @@ export default function AiAssistant() {
 
   // Contextual starter chips — project-aware when viewing a project; the action chip only when
   // Stage C propose is available. Follow-up chips nudge the next useful question. Both bilingual.
-  const chips = L.chips(!!currentProjectId, canPropose);
+  const chips = selectChips(
+    {
+      proj: !!currentProjectId,
+      propose: canPropose,
+      overdue: briefingQ.data?.overdueTasks ?? 0,
+      approvals: approvalsQ.data?.approvals?.length ?? 0,
+      lang,
+    },
+    chipSeed,
+  );
   const followups = L.followups(!!currentProjectId);
   const lastIsAnswer = turns.length > 0 && turns[turns.length - 1].role === 'assistant' && !turns[turns.length - 1].error;
 
