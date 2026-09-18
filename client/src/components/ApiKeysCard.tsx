@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { Role } from '../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from './ui';
+import { Badge, Button, Field, Input, Select, Spinner } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 
 interface ApiKey {
@@ -67,10 +68,7 @@ export default function ApiKeysCard() {
   const keys = data?.keys ?? [];
 
   return (
-    <Card>
-      <SectionTitle sub="Programmatic access to your workspace over the REST API. Send the key as an Authorization: Bearer header. Keys are read-only.">
-        API keys
-      </SectionTitle>
+    <SettingsGroup title="API keys" sub="Programmatic access to your workspace over the REST API. Send the key as an Authorization: Bearer header. Keys are read-only.">
 
       {/* Show a freshly-created key once, prominently — it can't be retrieved again. */}
       {justCreated && (
@@ -143,6 +141,6 @@ export default function ApiKeysCard() {
           </ul>
         )}
       </div>
-    </Card>
+    </SettingsGroup>
   );
 }

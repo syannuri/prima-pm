@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from './ui';
+import { Badge, Button, Field, Input, Select, Spinner } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 
 type WebhookFormat = 'GENERIC' | 'SLACK' | 'TEAMS';
@@ -79,10 +80,7 @@ export default function WebhooksCard() {
   const log = deliveries.data?.deliveries ?? [];
 
   return (
-    <Card>
-      <SectionTitle sub="Get a signed HTTPS POST when things happen in your workspace. Verify deliveries with the X-Prismatix-Signature header.">
-        Webhooks
-      </SectionTitle>
+    <SettingsGroup title="Webhooks" sub="Get a signed HTTPS POST when things happen in your workspace. Verify deliveries with the X-Prismatix-Signature header.">
 
       {justCreated && (
         <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-900/20">
@@ -181,6 +179,6 @@ export default function WebhooksCard() {
           </ul>
         </div>
       )}
-    </Card>
+    </SettingsGroup>
   );
 }

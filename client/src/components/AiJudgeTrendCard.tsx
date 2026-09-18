@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Badge, Card, SectionTitle, Spinner } from './ui';
+import { Badge, Spinner } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useLang } from '../context/LanguageContext';
 
 // Quality-trend dashboard (#5): the LLM judge's scores over a SAMPLE of real Anett answers, so an admin
@@ -63,8 +64,7 @@ export default function AiJudgeTrendCard() {
   const maxCount = Math.max(1, ...(data?.buckets ?? []).map((b) => b.count));
 
   return (
-    <Card>
-      <SectionTitle sub={t.sub}>{t.title}</SectionTitle>
+    <SettingsGroup title={t.title} sub={t.sub}>
       {loading ? (
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : !data || data.totalSamples === 0 ? (
@@ -113,6 +113,6 @@ export default function AiJudgeTrendCard() {
           </div>
         </div>
       )}
-    </Card>
+    </SettingsGroup>
   );
 }

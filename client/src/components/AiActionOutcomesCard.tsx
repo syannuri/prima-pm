@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Badge, Card, SectionTitle, Spinner } from './ui';
+import { Badge, Spinner } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useLang } from '../context/LanguageContext';
 
 // Outcome learning — the workspace track record of APPLIED AI actions. For each scored action type
@@ -67,8 +68,7 @@ export default function AiActionOutcomesCard() {
   const empty = !loading && stats.length === 0 && recent.length === 0;
 
   return (
-    <Card>
-      <SectionTitle sub={t.sub}>{t.title}</SectionTitle>
+    <SettingsGroup title={t.title} sub={t.sub}>
       {loading ? (
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : empty ? (
@@ -119,6 +119,6 @@ export default function AiActionOutcomesCard() {
           <p className="text-[11px] leading-snug text-slate-400 dark:text-slate-500">{t.caveat}</p>
         </div>
       )}
-    </Card>
+    </SettingsGroup>
   );
 }

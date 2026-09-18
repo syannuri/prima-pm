@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { Button, Card, SectionTitle } from './ui';
+import { Button } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 
 // Personal iCal calendar feed (T4.2). The user reveals their subscribe URL on demand (the GET also
@@ -31,10 +32,7 @@ export default function CalendarFeedCard() {
   };
 
   return (
-    <Card>
-      <SectionTitle sub="Subscribe to your projects’ milestones and task dates in Google, Outlook or Apple Calendar. Anyone with the URL can view it — rotate it if it leaks.">
-        Calendar feed
-      </SectionTitle>
+    <SettingsGroup title="Calendar feed" sub="Subscribe to your projects’ milestones and task dates in Google, Outlook or Apple Calendar. Anyone with the URL can view it — rotate it if it leaks.">
       {!url ? (
         <div className="mt-3">
           <Button type="button" onClick={() => load(false)} disabled={busy}>{busy ? 'Loading…' : 'Show my calendar URL'}</Button>
@@ -50,6 +48,6 @@ export default function CalendarFeedCard() {
           </button>
         </div>
       )}
-    </Card>
+    </SettingsGroup>
   );
 }

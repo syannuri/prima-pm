@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { AiSettings } from '../api/types';
-import { Card, SectionTitle, Spinner, Toggle } from './ui';
+import { Spinner, Toggle } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 import { useLang } from '../context/LanguageContext';
 
@@ -65,8 +66,7 @@ export default function AiNarrativeCard() {
   });
 
   return (
-    <Card>
-      <SectionTitle sub={t.sectionSub}>AI Status Narrative</SectionTitle>
+    <SettingsGroup title="AI Status Narrative" sub={t.sectionSub}>
       {isLoading || !data ? (
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : (
@@ -154,6 +154,6 @@ export default function AiNarrativeCard() {
           </div>
         </div>
       )}
-    </Card>
+    </SettingsGroup>
   );
 }

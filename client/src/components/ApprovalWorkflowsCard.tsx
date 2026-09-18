@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { ApprovalAppliesTo, ApprovalApproverKind, ApprovalWorkflow, Role, TenantMember } from '../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner, Toggle } from './ui';
+import { Badge, Button, Field, Input, Select, Spinner, Toggle } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 
 const ROLES: Role[] = ['ADMIN', 'PMO', 'PROJECT_MANAGER', 'FINANCE', 'RISK_OFFICER', 'TEAM_MEMBER', 'VIEWER'];
@@ -126,10 +127,7 @@ export default function ApprovalWorkflowsCard() {
   const workflows = wfQ.data?.workflows ?? [];
 
   return (
-    <Card>
-      <SectionTitle sub="Route Change Requests through a multi-step approval chain. A CR matching a workflow's conditions goes through its steps instead of the single approve/reject. No match → the usual PMO/Admin decision.">
-        Approval workflows
-      </SectionTitle>
+    <SettingsGroup title="Approval workflows" sub="Route Change Requests through a multi-step approval chain. A CR matching a workflow's conditions goes through its steps instead of the single approve/reject. No match → the usual PMO/Admin decision.">
 
       {/* Existing workflows */}
       <div className="mt-3">
@@ -300,7 +298,7 @@ export default function ApprovalWorkflowsCard() {
           <Button type="submit" disabled={!canSave}>{save.isPending ? 'Saving…' : editingId ? 'Save changes' : 'Create workflow'}</Button>
         </div>
       </form>
-    </Card>
+    </SettingsGroup>
   );
 }
 
