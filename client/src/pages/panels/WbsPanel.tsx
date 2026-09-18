@@ -1346,6 +1346,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     onSuccess: (res) => { invalidate(); toast.success(`${res.deleted} task${res.deleted === 1 ? '' : 's'} deleted`); exitSelect(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to delete tasks'),
   });
+  // Bulk-edit the selection — set % complete and/or assign the lead owner in one call. Keeps the
+  // selection (unlike delete) so several edits can be chained.
+  const bulkUpdate = useMutation({
+    mutationFn: (body: { ids: string[]; progressPct?: number; picResourceId?: string | null }) =>
+      api.post<{ updated: number }>(`${base}/tasks/bulk-update`, body),
+    onSuccess: (res) => { invalidate(); toast.success(`${res.updated} task${res.updated === 1 ? '' : 's'} updated`); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update tasks'),
+  });
   const clearAll = useMutation({
     mutationFn: () => api.post<{ deleted: number }>(`${base}/clear`, {}),
     onSuccess: (res) => { invalidate(); toast.success(`Timeline cleared — ${res.deleted} task${res.deleted === 1 ? '' : 's'} removed`); exitSelect(); },
@@ -1923,6 +1931,20 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
           <span className="font-medium text-brand-800 dark:text-brand-200">{selectedIds.size} selected</span>
           <div className="flex-1" />
           {showGantt && <button onClick={fitToSelection} disabled={!selectedIds.size} title="Zoom the timeline to frame the selected tasks" className={`${CTRL_BTN} disabled:opacity-40`}>⤢ Fit to view</button>}
+          {/* Bulk edit — assign a lead owner + set % complete for every selected task at once. */}
+          <select
+            aria-label="Assign owner to selected tasks"
+            disabled={!selectedIds.size || bulkUpdate.isPending}
+            value=""
+            onChange={(e) => { const v = e.target.value; if (v) bulkUpdate.mutate({ ids: [...selectedIds], picResourceId: v }); }}
+            title="Assign a lead owner to the selected tasks"
+            className={`${CTRL_BTN} disabled:opacity-40`}
+          >
+            <option value="" disabled>👤 Set owner…</option>
+            {resources.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+          <button onClick={() => bulkUpdate.mutate({ ids: [...selectedIds], progressPct: 100 })} disabled={!selectedIds.size || bulkUpdate.isPending} title="Mark the selected tasks 100% complete" className={`${CTRL_BTN} disabled:opacity-40`}>✓ 100%</button>
+          <button onClick={() => bulkUpdate.mutate({ ids: [...selectedIds], progressPct: 0 })} disabled={!selectedIds.size || bulkUpdate.isPending} title="Reset the selected tasks to 0% (not started)" className={`${CTRL_BTN} disabled:opacity-40`}>○ 0%</button>
           <button onClick={() => setSelectedIds(new Set())} disabled={!selectedIds.size} className={`${CTRL_BTN} disabled:opacity-40`}>Clear selection</button>
           <Button
             variant="danger" className="!py-1 text-xs"

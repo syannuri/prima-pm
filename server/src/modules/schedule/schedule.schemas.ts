@@ -108,9 +108,23 @@ export const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(2000),
 });
 
+// Bulk-edit selected tasks — apply a small partial patch to many at once. An omitted field is left
+// untouched; `picResourceId: null` clears the lead owner. At least one patch field must be present.
+// Progress/owner are execution data (not plan structure), so this isn't gated by the baseline lock.
+export const bulkUpdateSchema = z
+  .object({
+    ids: z.array(z.string().uuid()).min(1).max(2000),
+    progressPct: z.coerce.number().int().min(0).max(100).optional(),
+    picResourceId: z.string().uuid().nullable().optional(),
+  })
+  .refine((d) => d.progressPct !== undefined || d.picResourceId !== undefined, {
+    message: 'Provide progressPct and/or picResourceId',
+  });
+
 export type TaskStepsInput = z.infer<typeof taskStepsSchema>;
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
 export type DependencyEditInput = z.infer<typeof dependencyEditSchema>;
 export type ProgressInput = z.infer<typeof progressSchema>;
 export type TaskActualsInput = z.infer<typeof taskActualsSchema>;
+export type BulkUpdateInput = z.infer<typeof bulkUpdateSchema>;
