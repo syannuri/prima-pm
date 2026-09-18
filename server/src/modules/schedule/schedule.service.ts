@@ -24,7 +24,7 @@ import {
   type AutoTaskInput,
   type AutoScheduleMode,
 } from './schedule.helpers.js';
-import type { DependencyInput, DependencyEditInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
+import type { BulkUpdateInput, DependencyInput, DependencyEditInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
 import { simulateSchedule, seedFromString, type SchedDistribution } from './scheduleSimulation.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
@@ -591,6 +591,44 @@ export async function bulkDeleteTasks(projectId: string, ids: string[], actorId:
   await assertBaselineUnlocked(projectId);
   const expanded = collectSubtrees(all, roots);
   return deleteWithUndo(projectId, expanded, 'BULK_DELETE', actorId);
+}
+
+// Bulk-edit selected tasks: apply a small partial patch (progress and/or lead owner) to many tasks
+// at once. Reuses setTaskProgress (so actual-date stamping + reversibility follow) and mirrors the
+// updateTask owner invariant (a set lead is always folded into the owner set). Progress/owner are
+// execution data, so — like the single-task progress/actuals endpoints — this is NOT gated by the
+// baseline lock. Ids not in this project are silently skipped.
+export async function bulkUpdateTasks(projectId: string, input: BulkUpdateInput, actorId: string) {
+  await ensureChartered(projectId);
+  const tasks = await prisma.task.findMany({
+    where: { projectId, id: { in: input.ids } },
+    select: { id: true, picResourceId: true },
+  });
+  if (tasks.length === 0) return { updated: 0 };
+
+  if (input.picResourceId !== undefined) {
+    await assertPicResource(input.picResourceId);
+    const lead = input.picResourceId;
+    for (const t of tasks) {
+      await prisma.task.update({
+        where: { id: t.id },
+        data: {
+          picResourceId: lead,
+          // Fold the new lead into the owner set (invariant the report/export labels rely on).
+          ...(lead
+            ? { owners: { connectOrCreate: { where: { taskId_resourceId: { taskId: t.id, resourceId: lead } }, create: { resourceId: lead } } } }
+            : {}),
+        },
+      });
+      await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: t.id, action: 'UPDATE', before: { picResourceId: t.picResourceId }, after: { picResourceId: lead } });
+    }
+  }
+
+  if (input.progressPct !== undefined) {
+    for (const t of tasks) await setTaskProgress(projectId, t.id, input.progressPct, actorId);
+  }
+
+  return { updated: tasks.length };
 }
 
 // Clear the whole schedule (delete every task in the project). Strong-confirmed on the client.
