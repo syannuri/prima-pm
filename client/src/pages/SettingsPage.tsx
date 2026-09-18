@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import { Button, Card, Field, Input, SectionTitle, Toggle } from '../components/ui';
 import { useTheme } from '../context/ThemeContext';
@@ -23,93 +24,132 @@ import CustomFieldsAdminCard from '../components/CustomFieldsAdminCard';
 import CustomRolesAdminCard from '../components/CustomRolesAdminCard';
 import { fieldState, isPasswordValid, pwHasLen, pwHasMix, Rule } from '../lib/formValidation';
 
+// Two-initial monogram for the profile chip (mirrors AvatarMenu).
+const initials = (name?: string) =>
+  (name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+
+// Category glyphs (inline SVG, currentColor) — same visual family as the Sidebar icons.
+const NAV_ICON: Record<SectionKey, string> = {
+  general: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6', // sliders
+  account: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8', // person
+  workspace: 'M3 21h18M6 21V7l6-4 6 4v14M10 9h.01M14 9h.01M10 13h.01M14 13h.01M10 17h.01M14 17h.01', // building
+  developer: 'M16 18l6-6-6-6M8 6l-6 6 6 6', // code brackets
+  governance: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4', // shield-check
+  ai: 'M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4zM19 3v3M20.5 4.5h-3', // sparkle
+};
+
+type SectionKey = 'general' | 'account' | 'workspace' | 'developer' | 'governance' | 'ai';
+interface SectionDef { key: SectionKey; label: string; desc: string; adminOnly?: boolean; render: () => ReactNode }
+
+const SECTIONS: SectionDef[] = [
+  { key: 'general', label: 'General', desc: 'How Prismatix looks and speaks on this device.', render: () => <AppearanceCard /> },
+  { key: 'account', label: 'Account', desc: 'Your password and personal calendar feed.', render: () => <><SecurityCard /><CalendarFeedCard /></> },
+  { key: 'workspace', label: 'Workspace', desc: "Your organization's address and data model.", adminOnly: true, render: () => <><WorkspaceAddressCard /><CustomFieldsAdminCard /><CustomRolesAdminCard /></> },
+  { key: 'developer', label: 'Developer', desc: 'Workspace-wide API access, webhooks and no-code automations.', adminOnly: true, render: () => <><ApiKeysCard /><WebhooksCard /><AutomationsCard /></> },
+  { key: 'governance', label: 'Governance', desc: 'Approval routing for change requests and proposal intake scoring.', adminOnly: true, render: () => <><ApprovalWorkflowsCard /><IntakeScoringCard /></> },
+  { key: 'ai', label: 'AI', desc: 'Anett assistant — narrative, actions, memory, feedback and usage.', adminOnly: true, render: () => <><AiNarrativeCard /><AiActionOutcomesCard /><AiMemoryCard /><AiFeedbackInboxCard /><AiJudgeTrendCard /><AiUsageCard /></> },
+];
+
+const navIdle =
+  'text-slate-600 ring-1 ring-transparent hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
+// Active item: brand wash + tinted glyph/label + a crisp left accent bar + hairline ring (matches
+// the Sidebar's "you are here" language, in the light content surface).
+const navActive =
+  'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200 shadow-[inset_2px_0_0_theme(colors.brand.500)] dark:bg-brand-500/15 dark:text-brand-200 dark:ring-brand-400/30';
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
-  // Platform (deployment-wide) settings now live in the super-admin console → /admin/settings.
+  // Platform (deployment-wide) settings live in the super-admin console → /admin/settings.
+  const sections = useMemo(() => SECTIONS.filter((s) => !s.adminOnly || isAdmin), [isAdmin]);
+  const [params, setParams] = useSearchParams();
+  const requested = params.get('section');
+  const active = sections.find((s) => s.key === requested) ?? sections[0];
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const go = (key: SectionKey) => {
+    const p = new URLSearchParams(params);
+    p.set('section', key);
+    setParams(p, { replace: true }); // bookmarkable, doesn't spam history
+    // Reveal the panel only if it's actually off-screen (mobile, after a tall previous section) —
+    // 'nearest' is a no-op on desktop, so switching never yanks the profile header out of view.
+    requestAnimationFrame(() => contentRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  };
+  // Roving arrow-key navigation across the tablist (both axes, since the rail is vertical on desktop
+  // and horizontal on mobile). Wraps around; moves focus + selection together.
+  const onKey = (e: React.KeyboardEvent) => {
+    const i = sections.findIndex((s) => s.key === active.key);
+    let n = i;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') n = (i + 1) % sections.length;
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') n = (i - 1 + sections.length) % sections.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = sections.length - 1;
+    else return;
+    e.preventDefault();
+    go(sections[n].key);
+    document.getElementById(`settings-tab-${sections[n].key}`)?.focus();
+  };
+
   return (
-    <div className="space-y-7 pb-12">
-      {/* Page header */}
-      <header className="border-b border-slate-200 pb-4 dark:border-slate-800">
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Settings</h1>
-        {user && (
-          <p className="mt-1 break-words text-sm text-slate-500 dark:text-slate-400">
-            Signed in as <span className="font-medium text-slate-700 dark:text-slate-300">{user.name}</span> · {user.email}
-          </p>
-        )}
+    <div className="pb-12">
+      {/* Profile header — monogram + identity + role chip. */}
+      <header className="mb-6 flex items-center gap-4 border-b border-slate-200 pb-5 dark:border-slate-800">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-base font-bold text-white shadow-sm">
+          {initials(user?.name)}
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-xl font-bold text-slate-800 dark:text-slate-100">{user?.name || 'Settings'}</h1>
+            {user?.role && (
+              <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 ring-1 ring-inset ring-brand-200 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-brand-400/30">
+                {user.role}
+              </span>
+            )}
+          </div>
+          <p className="truncate text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
+        </div>
       </header>
 
-      {/* Full-screen, two-column layout (like the other pages) — each column is an independent
-          vertical stack so sections balance across the width with no ragged grid gaps. Collapses
-          to a single column below `lg`. Related cards stay grouped inside each section. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-7">
-        <div className="space-y-7">
-          <SettingsSection title="Preferences" sub="How Prismatix looks and speaks on this device.">
-            <AppearanceCard />
-          </SettingsSection>
+      <div className="lg:grid lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:gap-8">
+        {/* Category rail — a vertical tablist on desktop; a horizontal scroll of pills on mobile. */}
+        <nav
+          role="tablist"
+          aria-label="Settings sections"
+          aria-orientation="vertical"
+          onKeyDown={onKey}
+          className="mb-5 flex gap-1 overflow-x-auto pb-1 lg:sticky lg:top-4 lg:mb-0 lg:flex-col lg:overflow-visible lg:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {sections.map((s) => {
+            const on = s.key === active.key;
+            return (
+              <button
+                key={s.key}
+                id={`settings-tab-${s.key}`}
+                role="tab"
+                type="button"
+                aria-selected={on}
+                aria-current={on ? 'page' : undefined}
+                tabIndex={on ? 0 : -1}
+                onClick={() => go(s.key)}
+                className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition lg:w-full ${on ? navActive : navIdle}`}
+              >
+                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={NAV_ICON[s.key]} /></svg>
+                <span className="whitespace-nowrap">{s.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-          {/* Workspace identity — tenant-ADMIN can change the org's subdomain. */}
-          {isAdmin && (
-            <SettingsSection title="Workspace" sub="Your organization's address on the platform.">
-              <WorkspaceAddressCard />
-            </SettingsSection>
-          )}
-
-          {/* Workspace data-model configuration — tenant-ADMIN only. */}
-          {isAdmin && (
-            <SettingsSection title="Workspace configuration" sub="Workspace-wide — tailor projects and roles to your organization.">
-              <CustomFieldsAdminCard />
-              <CustomRolesAdminCard />
-            </SettingsSection>
-          )}
-
-          {/* Workspace-level developer tools — tenant-ADMIN only (management APIs are ADMIN-gated). */}
-          {isAdmin && (
-            <SettingsSection title="Developer & integrations" sub="Workspace-wide — API access, webhooks and automations.">
-              <ApiKeysCard />
-              <WebhooksCard />
-              <AutomationsCard />
-            </SettingsSection>
-          )}
-
-          {/* Change-control governance — tenant-ADMIN only. */}
-          {isAdmin && (
-            <SettingsSection title="Governance" sub="Workspace-wide — approval routing for change requests and AI features.">
-              <ApprovalWorkflowsCard />
-              <IntakeScoringCard />
-              <AiNarrativeCard />
-              <AiActionOutcomesCard />
-              <AiMemoryCard />
-              <AiFeedbackInboxCard />
-              <AiJudgeTrendCard />
-              <AiUsageCard />
-            </SettingsSection>
-          )}
-        </div>
-
-        <div className="space-y-7">
-          <SettingsSection title="Account" sub="Your password and personal calendar feed.">
-            <SecurityCard />
-            {/* Personal iCal calendar feed — available to every signed-in user. */}
-            <CalendarFeedCard />
-          </SettingsSection>
+        {/* Active category — its header + cards. */}
+        <div ref={contentRef} role="tabpanel" aria-label={active.label} className="min-w-0 scroll-mt-4">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{active.label}</h2>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{active.desc}</p>
+          </div>
+          <div className="space-y-6">{active.render()}</div>
         </div>
       </div>
     </div>
-  );
-}
-
-// A labelled group of setting cards: a small caption + a tight stack, so related settings read
-// as one block and distinct groups are clearly separated.
-function SettingsSection({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <div className="px-0.5">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{title}</h2>
-        {sub && <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{sub}</p>}
-      </div>
-      {children}
-    </section>
   );
 }
 
