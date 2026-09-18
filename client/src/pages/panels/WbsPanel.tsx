@@ -2473,7 +2473,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                             {/* optional in-bar label — the task name trailing its bar, so the timeline
                                 reads on its own (toggle in ⚙ Options → Timeline → Bar labels). */}
                             {showBarLabels && (
-                              <span className="pointer-events-none absolute top-1/2 z-[5] max-w-[38%] -translate-y-1/2 truncate whitespace-nowrap text-[10px] font-medium text-slate-600 dark:text-slate-300" style={{ left: `calc(${Math.min(leftPct + widthPct, 88)}% + ${started && inProgress ? 34 : 8}px)` }}>{node.name}</span>
+                              <span className="pointer-events-none absolute top-1/2 z-[9] max-w-[38%] -translate-y-1/2 truncate whitespace-nowrap text-[10px] font-medium text-slate-700 [text-shadow:0_0_3px_rgb(255_255_255),0_0_3px_rgb(255_255_255)] dark:text-slate-200 dark:[text-shadow:0_0_3px_rgb(15_23_42),0_0_3px_rgb(15_23_42)]" style={{ left: `calc(${Math.min(leftPct + widthPct, 88)}% + ${started && inProgress ? 34 : 8}px)` }}>{node.name}</span>
                             )}
                           </>
                         )}
