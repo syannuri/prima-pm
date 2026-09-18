@@ -2470,11 +2470,26 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                             {started && inProgress && actWidth > 3 && (
                               <span className="pointer-events-none absolute top-[10px] z-[7] text-[9px] font-semibold leading-none tabular-nums text-slate-500 dark:text-slate-300" style={{ left: `calc(${Math.min(actLeft + actWidth, 92)}% + 12px)` }}>{r.pct}%</span>
                             )}
-                            {/* optional in-bar label — the task name trailing its bar, so the timeline
-                                reads on its own (toggle in ⚙ Options → Timeline → Bar labels). */}
-                            {showBarLabels && (
-                              <span className="pointer-events-none absolute top-1/2 z-[9] max-w-[38%] -translate-y-1/2 truncate whitespace-nowrap text-[10px] font-medium text-slate-700 [text-shadow:0_0_3px_rgb(255_255_255),0_0_3px_rgb(255_255_255)] dark:text-slate-200 dark:[text-shadow:0_0_3px_rgb(15_23_42),0_0_3px_rgb(15_23_42)]" style={{ left: `calc(${Math.min(leftPct + widthPct, 88)}% + ${started && inProgress ? 34 : 8}px)` }}>{node.name}</span>
-                            )}
+                            {/* optional task-name label (toggle in ⚙ Options → Timeline → Bar labels).
+                                Adaptive placement so it never sits ON the bar: trail to the RIGHT when
+                                there's room; LEAD on the left (right-aligned) when the bar hugs the
+                                right edge; sit INSIDE (width-capped) only when the bar spans nearly the
+                                whole timeline. A text halo keeps it legible against grid/bars. */}
+                            {showBarLabels && (() => {
+                              const barLeftPct = started ? Math.min(leftPct, actLeft) : leftPct;
+                              const barRightPct = started ? Math.max(leftPct + widthPct, actLeft + actWidth) : leftPct + widthPct;
+                              const rightRoom = 100 - barRightPct;
+                              const inside = barLeftPct < 14 && rightRoom < 14;  // bar hogs the width
+                              const lead = !inside && rightRoom < 14;            // near the right edge
+                              const style = inside
+                                ? { left: `calc(${barLeftPct}% + 6px)`, maxWidth: `calc(${Math.max(barRightPct - barLeftPct, 6)}% - 12px)` }
+                                : lead
+                                  ? { right: `calc(${100 - barLeftPct}% + 8px)` }
+                                  : { left: `calc(${barRightPct}% + ${started && inProgress ? 34 : 8}px)` };
+                              return (
+                                <span className={`pointer-events-none absolute top-1/2 z-[9] max-w-[38%] -translate-y-1/2 truncate whitespace-nowrap text-[10px] font-medium ${lead ? 'text-right' : 'text-left'} text-slate-700 [text-shadow:0_0_3px_rgb(255_255_255),0_0_3px_rgb(255_255_255)] dark:text-slate-200 dark:[text-shadow:0_0_3px_rgb(15_23_42),0_0_3px_rgb(15_23_42)]`} style={style}>{node.name}</span>
+                              );
+                            })()}
                           </>
                         )}
                         {/* link handle — drag onto another task's bar to create a Finish→Start
