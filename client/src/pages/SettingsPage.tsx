@@ -118,7 +118,7 @@ export default function SettingsPage() {
           aria-label="Settings sections"
           aria-orientation="vertical"
           onKeyDown={onKey}
-          className="mb-5 flex gap-1 overflow-x-auto pb-1 lg:sticky lg:top-4 lg:mb-0 lg:flex-col lg:overflow-visible lg:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="mb-5 flex gap-1 overflow-x-auto pb-1 lg:sticky lg:top-4 lg:mb-0 lg:flex-col lg:self-start lg:overflow-visible lg:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {sections.map((s) => {
             const on = s.key === active.key;
