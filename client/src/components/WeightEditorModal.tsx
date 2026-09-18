@@ -25,12 +25,14 @@ export default function WeightEditorModal({
   baselined,
   onClose,
   onSaved,
+  container,
 }: {
   base: string; // /projects/:id/schedule
   phases: GanttNode[]; // top-level nodes (the tree roots)
   baselined: boolean; // a schedule baseline exists → weights are frozen for EVM until re-baseline
   onClose: () => void;
   onSaved: () => void;
+  container?: Element | null;
 }) {
   const toast = useToast();
   const [vals, setVals] = useState<Record<string, string>>(() =>
@@ -86,7 +88,7 @@ export default function WeightEditorModal({
   };
 
   return (
-    <Modal onClose={onClose} title="Phase weights" size="lg">
+    <Modal onClose={onClose} title="Phase weights" size="lg" container={container}>
       <div className="space-y-4">
         <p className="text-sm text-slate-600 dark:text-slate-300">
           Set a relative <strong>weight</strong> on each top-level phase to steer the overall

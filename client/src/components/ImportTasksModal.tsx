@@ -7,7 +7,7 @@ interface Preview { total: number; willImport: number; errors: { rowNum: number;
 
 // Uploads an .xlsx/.csv to the task-import endpoint: first a dry-run preview (counts + per-row
 // errors), then commit. Backend is all-or-nothing, so we only allow commit when there are no errors.
-export default function ImportTasksModal({ projectId, onClose, onImported }: { projectId: string; onClose: () => void; onImported: () => void }) {
+export default function ImportTasksModal({ projectId, onClose, onImported, container }: { projectId: string; onClose: () => void; onImported: () => void; container?: Element | null }) {
   const toast = useToast();
   const base = `/projects/${projectId}/import/tasks`;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -43,7 +43,7 @@ export default function ImportTasksModal({ projectId, onClose, onImported }: { p
   const hasErrors = (preview?.errors.length ?? 0) > 0;
 
   return (
-    <Modal onClose={onClose} title="Import tasks" size="lg">
+    <Modal onClose={onClose} title="Import tasks" size="lg" container={container}>
       <div className="space-y-4">
         <p className="text-sm text-slate-600 dark:text-slate-300">
           Upload an <strong>.xlsx</strong> or <strong>.csv</strong> with columns

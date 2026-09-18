@@ -20,6 +20,7 @@ export default function StepsModal({
   canEdit,
   onClose,
   onSaved,
+  container,
 }: {
   base: string; // /projects/:id/schedule
   taskId: string;
@@ -27,6 +28,7 @@ export default function StepsModal({
   canEdit: boolean;
   onClose: () => void;
   onSaved: () => void;
+  container?: Element | null;
 }) {
   const toast = useToast();
   const [steps, setSteps] = useState<Draft[] | null>(null);
@@ -70,7 +72,7 @@ export default function StepsModal({
   };
 
   return (
-    <Modal onClose={onClose} title="Progress steps" size="lg">
+    <Modal onClose={onClose} title="Progress steps" size="lg" container={container}>
       <div className="space-y-4">
         <p className="text-sm text-slate-600 dark:text-slate-300">
           Break <strong>{taskName}</strong> into weighted sub-deliverables. The task&apos;s{' '}
