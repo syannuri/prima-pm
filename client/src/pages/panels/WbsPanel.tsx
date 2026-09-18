@@ -1308,6 +1308,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // Multi-select cleanup — pick several tasks (each deletes its subtree) or clear the whole timeline.
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [shiftDays, setShiftDays] = useState(1); // days for the bulk date-shift control
   const toggleSel = (id: string) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
   // Fit-to-selection — zoom & scroll the timeline so the selected tasks' date span fills the view.
@@ -1353,6 +1354,13 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
       api.post<{ updated: number }>(`${base}/tasks/bulk-update`, body),
     onSuccess: (res) => { invalidate(); toast.success(`${res.updated} task${res.updated === 1 ? '' : 's'} updated`); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update tasks'),
+  });
+  // Bulk date-shift — move the selection's plan dates by ±N days; a phase moves its whole subtree,
+  // then a push-only reschedule heals any dependency the move breaks. Keeps the selection.
+  const bulkShift = useMutation({
+    mutationFn: (body: { ids: string[]; days: number }) => api.post<{ updated: number; moved: number }>(`${base}/tasks/bulk-shift`, body),
+    onSuccess: (res) => { invalidate(); toast.success(`${res.updated} task${res.updated === 1 ? '' : 's'} shifted${res.moved ? ` · ${res.moved} rescheduled` : ''}`); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to shift tasks'),
   });
   const clearAll = useMutation({
     mutationFn: () => api.post<{ deleted: number }>(`${base}/clear`, {}),
@@ -1945,6 +1953,18 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
           </select>
           <button onClick={() => bulkUpdate.mutate({ ids: [...selectedIds], progressPct: 100 })} disabled={!selectedIds.size || bulkUpdate.isPending} title="Mark the selected tasks 100% complete" className={`${CTRL_BTN} disabled:opacity-40`}>✓ 100%</button>
           <button onClick={() => bulkUpdate.mutate({ ids: [...selectedIds], progressPct: 0 })} disabled={!selectedIds.size || bulkUpdate.isPending} title="Reset the selected tasks to 0% (not started)" className={`${CTRL_BTN} disabled:opacity-40`}>○ 0%</button>
+          {/* Bulk date-shift — move the selection's plan dates ±N days (a phase moves its subtree). */}
+          <div className="inline-flex items-center gap-1">
+            <span className="text-xs font-medium text-brand-800 dark:text-brand-200">Shift</span>
+            <input
+              type="number" min={1} max={3650} value={shiftDays}
+              onChange={(e) => setShiftDays(Math.max(1, Math.min(3650, Math.floor(Number(e.target.value) || 1))))}
+              aria-label="Days to shift the selected tasks" title="Number of days"
+              className="w-14 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs tabular-nums text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            />
+            <button onClick={() => bulkShift.mutate({ ids: [...selectedIds], days: -shiftDays })} disabled={!selectedIds.size || bulkShift.isPending} title={`Move selected ${shiftDays} day(s) earlier`} className={`${CTRL_BTN} disabled:opacity-40`}>◀ −{shiftDays}d</button>
+            <button onClick={() => bulkShift.mutate({ ids: [...selectedIds], days: shiftDays })} disabled={!selectedIds.size || bulkShift.isPending} title={`Move selected ${shiftDays} day(s) later`} className={`${CTRL_BTN} disabled:opacity-40`}>+{shiftDays}d ▶</button>
+          </div>
           <button onClick={() => setSelectedIds(new Set())} disabled={!selectedIds.size} className={`${CTRL_BTN} disabled:opacity-40`}>Clear selection</button>
           <Button
             variant="danger" className="!py-1 text-xs"
