@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { Role } from '../api/types';
-import { Badge, Button, Card, Field, Input, SectionTitle, Select, Spinner } from './ui';
+import { Badge, Button, Field, Input, Select, Spinner } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 
 interface Rule {
@@ -63,10 +64,7 @@ export default function AutomationsCard() {
   const canCreate = name.trim().length > 0 && event && (notifyPm || notifyRole) && !create.isPending;
 
   return (
-    <Card>
-      <SectionTitle sub="Run an action automatically when something happens — “when a risk is raised, notify the PMO”. Delivers in-app notifications; no code required.">
-        Automations
-      </SectionTitle>
+    <SettingsGroup title="Automations" sub="Run an action automatically when something happens — “when a risk is raised, notify the PMO”. Delivers in-app notifications; no code required.">
 
       <form onSubmit={(e) => { e.preventDefault(); if (canCreate) create.mutate(); }} className="mt-3 space-y-3">
         <div className="flex flex-wrap items-end gap-2">
@@ -142,6 +140,6 @@ export default function AutomationsCard() {
           </ul>
         )}
       </div>
-    </Card>
+    </SettingsGroup>
   );
 }

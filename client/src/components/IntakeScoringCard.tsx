@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { IntakeWeights } from '../api/types';
-import { Card, Button, Input, SectionTitle } from './ui';
+import { Button, Input } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 
 // Settings → Governance: per-tenant weights for the intake scoring model (Project Intake &
@@ -34,8 +35,7 @@ export default function IntakeScoringCard() {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to save'),
   });
   return (
-    <Card>
-      <SectionTitle sub="Weight each criterion (0–10) for scoring intake proposals. Risk & cost are cost-type — a higher raw score counts as worse (inverted in the weighted total).">Intake scoring weights</SectionTitle>
+    <SettingsGroup title="Intake scoring weights" sub="Weight each criterion (0–10) for scoring intake proposals. Risk & cost are cost-type — a higher raw score counts as worse (inverted in the weighted total).">
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {ROWS.map((r) => (
           <label key={r.k} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800">
@@ -48,6 +48,6 @@ export default function IntakeScoringCard() {
       <div className="mt-3 flex justify-end">
         <Button disabled={save.isPending || !w} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save weights'}</Button>
       </div>
-    </Card>
+    </SettingsGroup>
   );
 }

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { AiMemory, AiMemoryScope, AiMemoryKind } from '../api/types';
-import { Button, Card, Input, SectionTitle, Select, Spinner } from './ui';
+import { Button, Input, Select, Spinner } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 import { useLang } from '../context/LanguageContext';
 
@@ -70,8 +71,7 @@ export default function AiMemoryCard() {
   const memories = data?.memories ?? [];
 
   return (
-    <Card>
-      <SectionTitle sub={t.sectionSub}>{lang === 'en' ? 'Anett memory' : 'Ingatan Anett'}</SectionTitle>
+    <SettingsGroup title={lang === 'en' ? 'Anett memory' : 'Ingatan Anett'} sub={t.sectionSub}>
 
       {/* Add a memory */}
       <div className="mt-3 space-y-2">
@@ -121,6 +121,6 @@ export default function AiMemoryCard() {
           </ul>
         )}
       </div>
-    </Card>
+    </SettingsGroup>
   );
 }

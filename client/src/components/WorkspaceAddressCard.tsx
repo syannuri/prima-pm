@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
-import { Button, Card, Field, Input } from './ui';
+import { Button, Field, Input } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 import { useLang } from '../context/LanguageContext';
 import { appBaseDomain, workspaceHostname, workspaceUrl } from '../lib/workspaceHost';
@@ -34,9 +35,7 @@ export default function WorkspaceAddressCard() {
   const url = workspaceUrl(t.slug);
 
   return (
-    <Card>
-      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{id ? 'Alamat workspace' : 'Workspace address'}</h3>
-      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{id ? 'Alamat tempat tim Anda masuk.' : "Where your team signs in."}</p>
+    <SettingsGroup title={id ? 'Alamat workspace' : 'Workspace address'} sub={id ? 'Alamat tempat tim Anda masuk.' : 'Where your team signs in.'}>
       {url && (
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
           {id ? 'Saat ini' : 'Current'}: <a href={url} target="_blank" rel="noreferrer" className="font-mono font-medium text-brand-600 hover:underline dark:text-brand-400">{workspaceHostname(t.slug)}</a>
@@ -57,6 +56,6 @@ export default function WorkspaceAddressCard() {
       ) : (
         <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{id ? 'Routing subdomain tidak dikonfigurasi pada deployment ini.' : "Subdomain routing isn't configured on this deployment."}</p>
       )}
-    </Card>
+    </SettingsGroup>
   );
 }

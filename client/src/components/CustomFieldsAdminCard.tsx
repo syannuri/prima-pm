@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import { Button, Card, Field, Input, SectionTitle, Toggle } from './ui';
+import { Button, Field, Input, Toggle } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 
 // Tenant-ADMIN builder for project custom fields (Tier-3). Lists existing definitions and lets an admin
@@ -85,10 +86,7 @@ export default function CustomFieldsAdminCard() {
   const selectClass = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100';
 
   return (
-    <Card>
-      <SectionTitle sub="Add your own fields to projects (e.g. Business Unit, Client Ref, Cost Centre). Admins define them here; teams fill them in on each project’s Overview.">
-        Custom fields
-      </SectionTitle>
+    <SettingsGroup title="Custom fields" sub="Add your own fields to projects (e.g. Business Unit, Client Ref, Cost Centre). Admins define them here; teams fill them in on each project’s Overview.">
 
       <div className="mt-4 space-y-2">
         {loading ? (
@@ -136,6 +134,6 @@ export default function CustomFieldsAdminCard() {
           <Button type="button" onClick={add} disabled={busy || !label.trim()}>{busy ? 'Adding…' : 'Add field'}</Button>
         </div>
       </div>
-    </Card>
+    </SettingsGroup>
   );
 }

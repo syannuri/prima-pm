@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client';
 import type { CustomRole, Role } from '../api/types';
-import { Button, Card, Field, Input, SectionTitle } from './ui';
+import { Button, Field, Input } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 
 // Tenant-ADMIN builder for the org's custom role catalog (Tier-3). A custom role gives a workspace-specific
@@ -61,10 +62,7 @@ export default function CustomRolesAdminCard() {
   const selectClass = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100';
 
   return (
-    <Card>
-      <SectionTitle sub="Give your organization's own names to roles (e.g. “Delivery Lead”, “Auditor”). Each maps to a built-in permission level; assign them to members on the Members page.">
-        Custom roles
-      </SectionTitle>
+    <SettingsGroup title="Custom roles" sub="Give your organization's own names to roles (e.g. “Delivery Lead”, “Auditor”). Each maps to a built-in permission level; assign them to members on the Members page.">
 
       <div className="mt-4 space-y-2">
         {loading ? (
@@ -98,6 +96,6 @@ export default function CustomRolesAdminCard() {
           <Button type="button" onClick={add} disabled={busy || !name.trim()}>{busy ? 'Adding…' : 'Add role'}</Button>
         </div>
       </div>
-    </Card>
+    </SettingsGroup>
   );
 }

@@ -2,7 +2,8 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
-import { Button, Card, Field, Input, SectionTitle, Toggle } from '../components/ui';
+import { Button, Field, Input, Toggle } from '../components/ui';
+import { SettingsGroup, SettingsRow } from '../components/settingsUi';
 import { useTheme } from '../context/ThemeContext';
 import { useLang, type Lang } from '../context/LanguageContext';
 import { useToast } from '../components/Toast';
@@ -146,7 +147,7 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{active.label}</h2>
             <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{active.desc}</p>
           </div>
-          <div className="space-y-6">{active.render()}</div>
+          <div className="space-y-8">{active.render()}</div>
         </div>
       </div>
     </div>
@@ -163,23 +164,12 @@ function AppearanceCard() {
   const { lang, setLang } = useLang();
   const dark = theme === 'dark';
   return (
-    <Card className="space-y-3">
-      <SectionTitle sub="Choose how Prismatix looks and greets you on this device.">Appearance &amp; language</SectionTitle>
-      <div className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
-        <div>
-          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Dark mode</div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            {dark ? 'On — easier on the eyes in low light.' : 'Off — using the light theme.'}
-          </div>
-        </div>
+    <SettingsGroup title="Appearance" flush>
+      <SettingsRow title="Dark mode" sub={dark ? 'On — easier on the eyes in low light.' : 'Off — using the light theme.'}>
         <Toggle checked={dark} onChange={() => toggle()} label="Toggle dark mode" />
-      </div>
-      <div className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
-        <div>
-          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Language</div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">Greeting &amp; dates. Auto-detected from your browser.</div>
-        </div>
-        <div className="inline-flex rounded-lg bg-slate-200/70 p-0.5 dark:bg-slate-700/60">
+      </SettingsRow>
+      <SettingsRow title="Language" sub="Greeting & dates. Auto-detected from your browser.">
+        <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
           {LANGS.map((l) => (
             <button
               key={l.value}
@@ -187,7 +177,7 @@ function AppearanceCard() {
               aria-pressed={lang === l.value}
               className={`rounded-md px-3 py-1 text-sm font-medium transition ${
                 lang === l.value
-                  ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-white'
+                  ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-700 dark:text-white'
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
@@ -195,8 +185,8 @@ function AppearanceCard() {
             </button>
           ))}
         </div>
-      </div>
-    </Card>
+      </SettingsRow>
+    </SettingsGroup>
   );
 }
 
@@ -233,10 +223,7 @@ function SecurityCard() {
   };
 
   return (
-    <Card>
-      <SectionTitle sub="Use a unique password of 10+ characters with at least one letter and one number.">
-        Change password
-      </SectionTitle>
+    <SettingsGroup title="Password" sub="Use a unique password of 10+ characters with at least one letter and one number.">
       <form onSubmit={onSubmit} className="space-y-3">
         <Field label="Current password">
           <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required state={current ? 'valid' : undefined} />
@@ -261,6 +248,6 @@ function SecurityCard() {
           </Button>
         </div>
       </form>
-    </Card>
+    </SettingsGroup>
   );
 }

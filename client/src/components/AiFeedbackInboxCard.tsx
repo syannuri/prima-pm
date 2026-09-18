@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Card, SectionTitle, Spinner } from './ui';
+import { Spinner } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useToast } from './Toast';
 import { useLang } from '../context/LanguageContext';
 
@@ -59,8 +60,7 @@ export default function AiFeedbackInboxCard() {
   });
 
   return (
-    <Card>
-      <SectionTitle>Umpan balik Anett</SectionTitle>
+    <SettingsGroup title="Umpan balik Anett">
       <p className="text-xs text-slate-500 mb-3">{t.sub}</p>
       <div className="flex gap-1.5 mb-3">
         {(['ALL', 'UP', 'DOWN'] as const).map((f) => (
@@ -132,6 +132,6 @@ export default function AiFeedbackInboxCard() {
           ))}
         </ul>
       )}
-    </Card>
+    </SettingsGroup>
   );
 }

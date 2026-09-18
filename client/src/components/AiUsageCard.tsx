@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Card, SectionTitle, Spinner } from './ui';
+import { Spinner } from './ui';
+import { SettingsGroup } from './settingsUi';
 import { useLang } from '../context/LanguageContext';
 
 // AI token & cost dashboard (improvement #1). ADMIN-only card in Settings → Governance. Reads the
@@ -72,9 +73,10 @@ export default function AiUsageCard() {
   const cacheTok = (totals?.cacheCreationTokens ?? 0) + (totals?.cacheReadTokens ?? 0);
 
   return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
-        <SectionTitle sub={t.sub}>{t.title}</SectionTitle>
+    <SettingsGroup
+      title={t.title}
+      sub={t.sub}
+      action={
         <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-slate-300 text-xs dark:border-slate-600">
           {(['month', '30d'] as const).map((w) => (
             <button
@@ -86,7 +88,8 @@ export default function AiUsageCard() {
             </button>
           ))}
         </div>
-      </div>
+      }
+    >
 
       {data?.budget && (
         <div className="mt-3">
@@ -154,6 +157,6 @@ export default function AiUsageCard() {
           <p className="text-xs text-slate-400 dark:text-slate-500">{t.estimate}</p>
         </div>
       )}
-    </Card>
+    </SettingsGroup>
   );
 }
