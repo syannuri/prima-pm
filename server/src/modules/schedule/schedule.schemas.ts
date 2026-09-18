@@ -121,6 +121,14 @@ export const bulkUpdateSchema = z
     message: 'Provide progressPct and/or picResourceId',
   });
 
+// Bulk date-shift — move every selected task (each expanded to its subtree) by ±N calendar days,
+// then push-only auto-schedule to heal any dependency violation the move introduces. Plan dates are
+// structure, so this IS gated by the baseline lock. `days` is bounded (matches the scheduler caps).
+export const bulkShiftSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(2000),
+  days: z.coerce.number().int().min(-3650).max(3650).refine((n) => n !== 0, { message: 'days must be non-zero' }),
+});
+
 export type TaskStepsInput = z.infer<typeof taskStepsSchema>;
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
@@ -128,3 +136,4 @@ export type DependencyEditInput = z.infer<typeof dependencyEditSchema>;
 export type ProgressInput = z.infer<typeof progressSchema>;
 export type TaskActualsInput = z.infer<typeof taskActualsSchema>;
 export type BulkUpdateInput = z.infer<typeof bulkUpdateSchema>;
+export type BulkShiftInput = z.infer<typeof bulkShiftSchema>;

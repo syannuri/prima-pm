@@ -631,6 +631,30 @@ export async function bulkUpdateTasks(projectId: string, input: BulkUpdateInput,
   return { updated: tasks.length };
 }
 
+// Bulk date-shift — move every selected task (each expanded to its subtree, so selecting a phase
+// moves everything under it) by ±`days` calendar days, then push-only auto-schedule to heal any
+// dependency violation the move introduces (mirrors updateTask). Only leaf tasks carry real dates —
+// parents roll up — so we shift the leaves in the expanded set. Plan dates are structure, so this is
+// gated by the baseline lock. Ids outside the project are skipped.
+export async function bulkShiftTasks(projectId: string, ids: string[], days: number, actorId: string) {
+  await ensureChartered(projectId);
+  await assertBaselineUnlocked(projectId);
+  const all = await prisma.task.findMany({ where: { projectId }, select: { id: true, parentTaskId: true } });
+  const present = new Set(all.map((t) => t.id));
+  const roots = ids.filter((id) => present.has(id));
+  if (roots.length === 0) return { updated: 0, moved: 0 };
+
+  const parentIds = new Set(all.map((t) => t.parentTaskId).filter(Boolean) as string[]);
+  const leafIds = collectSubtrees(all, roots).filter((id) => !parentIds.has(id));
+  const leaves = await prisma.task.findMany({ where: { id: { in: leafIds } }, select: { id: true, planStart: true, planEnd: true } });
+  for (const t of leaves) {
+    await prisma.task.update({ where: { id: t.id }, data: { planStart: addDays(t.planStart, days), planEnd: addDays(t.planEnd, days) } });
+  }
+  const auto = await applyAutoSchedule(projectId, { actorId });
+  await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: roots[0], action: 'UPDATE', before: null, after: { bulkShiftDays: days, tasks: leaves.length } });
+  return { updated: leaves.length, moved: auto.moved.length };
+}
+
 // Clear the whole schedule (delete every task in the project). Strong-confirmed on the client.
 export async function clearSchedule(projectId: string, actorId: string) {
   const all = await prisma.task.findMany({ where: { projectId }, select: { id: true } });

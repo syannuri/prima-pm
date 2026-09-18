@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
-import { upsertTaskSchema, dependencySchema, dependencyEditSchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema, bulkDeleteSchema, bulkUpdateSchema } from './schedule.schemas.js';
+import { upsertTaskSchema, dependencySchema, dependencyEditSchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema, bulkDeleteSchema, bulkUpdateSchema, bulkShiftSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
 import { aiEnabled } from '../../lib/ai.js';
@@ -156,6 +156,12 @@ router.post('/tasks/bulk-delete', ...canWrite, validateBody(bulkDeleteSchema), a
 // Bulk-edit selected tasks — apply a partial patch (progress and/or lead owner) to many at once.
 router.post('/tasks/bulk-update', ...canWrite, validateBody(bulkUpdateSchema), asyncHandler(async (req, res) => {
   const result = await svc.bulkUpdateTasks(req.params.projectId, req.body, req.user!.id);
+  res.json(result);
+}));
+
+// Bulk date-shift selected tasks (each expanded to its subtree) by ±N days, then push-only reschedule.
+router.post('/tasks/bulk-shift', ...canWrite, validateBody(bulkShiftSchema), asyncHandler(async (req, res) => {
+  const result = await svc.bulkShiftTasks(req.params.projectId, req.body.ids, req.body.days, req.user!.id);
   res.json(result);
 }));
 
