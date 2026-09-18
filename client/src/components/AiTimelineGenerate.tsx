@@ -43,13 +43,14 @@ type EPhase = Omit<DraftPhase, 'tasks'> & { include: boolean; tasks: ETask[] };
 
 const DAY = 86_400_000;
 
-export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplied, className, label }: {
+export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplied, className, label, container }: {
   base: string;
   projectId: string;
   hasTasks: boolean;
   onApplied: () => void;
   className?: string;
   label?: string;
+  container?: Element | null;
 }) {
   const toast = useToast();
   const { lang } = useLang();
@@ -211,7 +212,7 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
       </button>
 
       {open && (
-        <Modal onClose={() => setOpen(false)} title={t('Timeline dari AI', 'AI timeline draft')} size="lg">
+        <Modal onClose={() => setOpen(false)} title={t('Timeline dari AI', 'AI timeline draft')} size="lg" container={container}>
           <div className="space-y-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {t(

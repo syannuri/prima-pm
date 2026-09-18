@@ -1628,13 +1628,16 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   const isolateCritical = highlightCritical && criticalIds.size > 0;
 
   return (
-    <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-50 p-3 dark:bg-slate-950 sm:p-5' : ''}>
+    <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-50 p-1 dark:bg-slate-950 sm:p-2' : ''}>
     {/* In full view the card is a flex column: header stays put, the timeline gets ALL remaining
-        height (no magic max-h that breaks when the toolbar wraps or a banner appears). */}
-    <Card className={fullscreen ? 'flex min-h-0 flex-1 flex-col' : ''}>
+        height (no magic max-h that breaks when the toolbar wraps or a banner appears). The outer
+        overlay + card padding are trimmed (near edge-to-edge) so the timeline reaches the top and
+        fills the screen — the windowed card keeps its roomier padding. */}
+    <Card className={fullscreen ? 'flex min-h-0 flex-1 flex-col !p-2 sm:!p-3 !rounded-xl' : ''}>
     {importOpen && (
       <ImportTasksModal
         projectId={projectId}
+        container={modalContainer}
         onClose={() => setImportOpen(false)}
         onImported={() => {
           qc.invalidateQueries({ queryKey: ['gantt', projectId] });
@@ -1649,6 +1652,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         base={base}
         phases={ganttQ.data?.tree ?? []}
         baselined={!!baselinedAt}
+        container={modalContainer}
         onClose={() => setWeightsOpen(false)}
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ['gantt', projectId] });
@@ -1663,6 +1667,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         taskId={stepsFor.id}
         taskName={stepsFor.name}
         canEdit={canEdit}
+        container={modalContainer}
         onClose={() => setStepsFor(null)}
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ['task-steps', stepsFor.id] });
@@ -1695,7 +1700,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
           {/* Standalone quick actions — Generate-AI + Select stay in the row; every other control
               lives in the consolidated ☰ Menu (below) to keep this toolbar tidy. */}
           {canPlan && (
-            <AiTimelineGenerate base={base} projectId={projectId} hasTasks={rows.length > 0} onApplied={invalidate} className={CTRL_BTN} />
+            <AiTimelineGenerate base={base} projectId={projectId} hasTasks={rows.length > 0} onApplied={invalidate} className={CTRL_BTN} container={modalContainer} />
           )}
           {canPlan && rows.length > 0 && (
             <button onClick={() => (selectMode ? exitSelect() : setSelectMode(true))} title="Select multiple tasks to delete" className={`${CTRL_BTN} ${selectMode ? '!border-brand-400 !text-brand-700 dark:!text-brand-300' : ''}`}>
@@ -1921,7 +1926,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
               )}
               {canEdit && (
                 <div className="mt-3 flex justify-center">
-                  <AiTimelineGenerate base={base} projectId={projectId} hasTasks={false} onApplied={invalidate} />
+                  <AiTimelineGenerate base={base} projectId={projectId} hasTasks={false} onApplied={invalidate} container={modalContainer} />
                 </div>
               )}
               {canEdit && <TemplateStarter base={base} onApplied={invalidate} />}
