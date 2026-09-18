@@ -1242,6 +1242,28 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullscreen]);
 
+  // While a header column-reorder drag is active, auto-scroll the table horizontally when the pointer
+  // nears the left/right edge — so a column can be dropped onto a target that's currently off-screen
+  // (native HTML5 drag doesn't auto-scroll on its own). Speed ramps with edge proximity; a rAF loop
+  // nudges scrollLeft directly (no re-render) and unwinds when the drag ends.
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!dragCol || !sc) return;
+    const EDGE = 64;   // px band from each edge that triggers scrolling
+    const MAX = 22;    // max px/frame at the very edge
+    let vx = 0, raf = 0;
+    const onOver = (e: DragEvent) => {
+      const r = sc.getBoundingClientRect();
+      if (e.clientX < r.left + EDGE) vx = -Math.min(MAX, Math.ceil(((r.left + EDGE - e.clientX) / EDGE) * MAX));
+      else if (e.clientX > r.right - EDGE) vx = Math.min(MAX, Math.ceil(((e.clientX - (r.right - EDGE)) / EDGE) * MAX));
+      else vx = 0;
+    };
+    const tick = () => { if (vx) sc.scrollLeft += vx; raf = requestAnimationFrame(tick); };
+    sc.addEventListener('dragover', onOver);
+    raf = requestAnimationFrame(tick);
+    return () => { sc.removeEventListener('dragover', onOver); cancelAnimationFrame(raf); };
+  }, [dragCol]);
+
   const toast = useToast();
   const confirm = useConfirm();
 
