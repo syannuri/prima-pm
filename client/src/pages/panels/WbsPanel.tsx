@@ -984,13 +984,15 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     if (i < 0 || j < 0 || j >= o.length) return o;
     const n = [...o]; [n[i], n[j]] = [n[j], n[i]]; return n;
   });
-  // Move `from` so it lands immediately before `to` (drag-and-drop, list or header).
-  const reorderCol = (from: ColKey, to: ColKey) => setColOrder((o) => {
+  // Move `from` next to `to` (drag-and-drop, list or header). `side` picks the drop slot relative to
+  // the target — a header drag passes the half the cursor released over, so dragging rightward lands
+  // AFTER the target (not perpetually before it). The ⚙ list omits `side` → before, as it always was.
+  const reorderCol = (from: ColKey, to: ColKey, side: 'before' | 'after' = 'before') => setColOrder((o) => {
     if (from === to) return o;
     const n = o.filter((k) => k !== from);
     const idx = n.indexOf(to);
     if (idx < 0) return o;
-    n.splice(idx, 0, from);
+    n.splice(side === 'after' ? idx + 1 : idx, 0, from);
     return n;
   });
   const resetColOrder = () => setColOrder(normalizeColOrder([]));
@@ -1166,10 +1168,17 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
   // Right-click a column header → a one-item "Hide column" menu (restore via ⚙ Options → Columns).
   const [colMenu, setColMenu] = useState<{ key: ColKey; label: string; x: number; y: number } | null>(null);
   const openColMenu = (key: ColKey, label: string, e: React.MouseEvent) => { e.preventDefault(); setColMenu({ key, label, x: e.clientX, y: e.clientY }); };
-  // Drag-to-reorder a column by its header (Phase 3). `dragCol` = the key being dragged; `dropCol`
-  // = the header currently hovered (draws an insert line). Drop → reorderCol(from → before target).
+  // Drag-to-reorder a column by its header (Phase 3). `dragCol` = the key being dragged; `dropCol` =
+  // the header currently hovered; `dropSide` = which edge of it the cursor is over → an insert line
+  // is drawn on that edge and the drop lands there. Drop → reorderCol(from, target, side).
   const [dragCol, setDragCol] = useState<ColKey | null>(null);
   const [dropCol, setDropCol] = useState<ColKey | null>(null);
+  const [dropSide, setDropSide] = useState<'before' | 'after'>('before');
+  // Which half of a header cell the pointer is over → the edge the column will drop against.
+  const dropSideOf = (e: React.DragEvent<HTMLTableCellElement>): 'before' | 'after' => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return e.clientX < r.left + r.width / 2 ? 'before' : 'after';
+  };
   // Header drag wiring for a middle column. Applied to every reorderable header (top row). The grip
   // resize handle stops propagation so a resize-drag never starts a reorder.
   const headDrag = (k: ColKey): Partial<React.HTMLAttributes<HTMLTableCellElement>> & { draggable: boolean } => ({
@@ -1177,26 +1186,30 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
     // A resize-drag (grip pointerdown) must never start a column reorder — bail if one is active.
     onDragStart: (e) => { if (colResize.current) { e.preventDefault(); return; } setDragCol(k); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch { /* some browsers */ } },
     onDragEnd: () => { setDragCol(null); setDropCol(null); },
-    onDragOver: (e) => { if (dragCol && dragCol !== k) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropCol(k); } },
+    onDragOver: (e) => { if (dragCol && dragCol !== k) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropCol(k); setDropSide(dropSideOf(e)); } },
     onDragLeave: () => setDropCol((c) => (c === k ? null : c)),
-    onDrop: (e) => { e.preventDefault(); if (dragCol && dragCol !== k) reorderCol(dragCol, k); setDragCol(null); setDropCol(null); },
+    onDrop: (e) => { e.preventDefault(); if (dragCol && dragCol !== k) reorderCol(dragCol, k, dropSideOf(e)); setDragCol(null); setDropCol(null); },
   });
-  // Insert-line + dragging affordance classes for a header cell being reordered.
-  const dragCls = (k: ColKey) => `${dragCol === k ? 'opacity-40' : ''} ${dropCol === k ? 'ring-2 ring-inset ring-brand-400' : ''}`;
+  // Affordance classes for a header being reordered: the dragged cell dims; the drop target shows a
+  // vertical insert line on the hovered edge (inset box-shadow = brand-500, no layout shift).
+  const dragCls = (k: ColKey) =>
+    dragCol === k ? 'opacity-40'
+    : dropCol === k ? (dropSide === 'after' ? 'shadow-[inset_-3px_0_0_0_#3b82f6]' : 'shadow-[inset_3px_0_0_0_#3b82f6]')
+    : '';
   // ── Reorderable middle-column renderers ──────────────────────────────────────
   // A single ordered list (`orderedCols`) drives the header top row, the Start/Finish sub-header
   // row, and every body cell. Identity (✓/WBS/Task) and the timeline render outside this list.
   const headTop = (k: ColKey): ReactNode => {
     switch (k) {
-      case 'owner': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('owner')} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className={`relative cursor-context-menu border-b-4 border-b-rose-400 align-bottom ${dragCls(k)}`} title="Owner (PIC) — drag to reorder · right-click to hide">Owner<ColGrip col="owner" /></th>;
-      case 'planDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className={`cursor-context-menu border-b-2 border-slate-800 !bg-slate-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-slate-900 dark:!bg-slate-700 ${dragCls(k)}`} title="Planned (baseline plan) dates — drag to reorder · right-click to hide">Plan</th>;
-      case 'actualDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className={`cursor-context-menu border-b-2 border-teal-800 !bg-teal-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-teal-900 dark:!bg-teal-700 ${dragCls(k)}`} title="Actual start & finish (tracking) — drag to reorder · right-click to hide">Actual</th>;
-      case 'dur': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('dur')} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className={`relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Duration — drag to reorder · right-click to hide">Dur<ColGrip col="dur" /></th>;
-      case 'budget': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('budget')} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className={`relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Linked Direct Cost (the EVM budget weight) — drag to reorder · right-click to hide">Budget<ColGrip col="budget" /></th>;
-      case 'weight': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('weight')} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className={`relative cursor-context-menu border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Manual work-package weight steers the % roll-up — drag to reorder · right-click to hide">Weight<ColGrip col="weight" /></th>;
-      case 'pct': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('pct')} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className={`relative cursor-context-menu border-b-4 border-b-violet-400 text-center align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="% complete — drag to reorder · right-click to hide"><span className="inline-flex flex-col items-center leading-tight"><span className="text-[9px] font-semibold uppercase tracking-wide text-blue-200">Progress</span><span>%</span></span><ColGrip col="pct" /></th>;
-      case 'status': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('status')} onContextMenu={(e) => openColMenu('status', 'Status', e)} className={`relative cursor-context-menu border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="Status — drag to reorder · right-click to hide">Status<ColGrip col="status" /></th>;
-      case 'var': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('var')} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className={`relative cursor-context-menu border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="Finish variance vs baseline (days) — drag to reorder · right-click to hide">Var<ColGrip col="var" /></th>;
+      case 'owner': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('owner')} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className={`relative cursor-grab active:cursor-grabbing border-b-4 border-b-rose-400 align-bottom ${dragCls(k)}`} title="Owner (PIC) — drag to reorder · right-click to hide">Owner<ColGrip col="owner" /></th>;
+      case 'planDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className={`cursor-grab active:cursor-grabbing border-b-2 border-slate-800 !bg-slate-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-slate-900 dark:!bg-slate-700 ${dragCls(k)}`} title="Planned (baseline plan) dates — drag to reorder · right-click to hide">Plan</th>;
+      case 'actualDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className={`cursor-grab active:cursor-grabbing border-b-2 border-teal-800 !bg-teal-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-teal-900 dark:!bg-teal-700 ${dragCls(k)}`} title="Actual start & finish (tracking) — drag to reorder · right-click to hide">Actual</th>;
+      case 'dur': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('dur')} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className={`relative cursor-grab active:cursor-grabbing border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Duration — drag to reorder · right-click to hide">Dur<ColGrip col="dur" /></th>;
+      case 'budget': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('budget')} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className={`relative cursor-grab active:cursor-grabbing border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Linked Direct Cost (the EVM budget weight) — drag to reorder · right-click to hide">Budget<ColGrip col="budget" /></th>;
+      case 'weight': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('weight')} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className={`relative cursor-grab active:cursor-grabbing border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Manual work-package weight steers the % roll-up — drag to reorder · right-click to hide">Weight<ColGrip col="weight" /></th>;
+      case 'pct': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('pct')} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className={`relative cursor-grab active:cursor-grabbing border-b-4 border-b-violet-400 text-center align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="% complete — drag to reorder · right-click to hide"><span className="inline-flex flex-col items-center leading-tight"><span className="text-[9px] font-semibold uppercase tracking-wide text-blue-200">Progress</span><span>%</span></span><ColGrip col="pct" /></th>;
+      case 'status': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('status')} onContextMenu={(e) => openColMenu('status', 'Status', e)} className={`relative cursor-grab active:cursor-grabbing border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="Status — drag to reorder · right-click to hide">Status<ColGrip col="status" /></th>;
+      case 'var': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('var')} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className={`relative cursor-grab active:cursor-grabbing border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="Finish variance vs baseline (days) — drag to reorder · right-click to hide">Var<ColGrip col="var" /></th>;
       default: return null;
     }
   };
