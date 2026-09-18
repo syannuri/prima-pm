@@ -2446,10 +2446,22 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
                               style={{ left: `${dragging ? msLeft + dShiftPct : msLeft}%` }}
                               title={r.pct >= 100 && node.actualFinish ? `Milestone reached · ${formatDate(new Date(node.actualFinish))}` : `Milestone (planned) · ${formatDate(new Date(r.end))}`}
                             />
-                            {/* milestone date label — a quiet marker so exec readers get the date without a hover */}
-                            <span className="pointer-events-none absolute top-1/2 z-[6] -translate-y-1/2 whitespace-nowrap text-[9px] font-medium tabular-nums text-slate-500 dark:text-slate-400" style={{ left: `calc(${Math.min(msLeft, 94)}% + 11px)` }}>
-                              {formatDate(new Date(msMs))}
-                            </span>
+                            {/* milestone date label — a quiet marker so exec readers get the date without
+                                a hover. Adaptive like the bar labels: trails right of the diamond, but
+                                flips to its LEFT (right-aligned) when the diamond hugs the right edge, so
+                                it never runs off or sits on the marker. Halo + z above bars keeps it
+                                legible on a dense timeline. */}
+                            {(() => {
+                              const leadLeft = msLeft > 82;
+                              return (
+                                <span
+                                  className={`pointer-events-none absolute top-1/2 z-[9] -translate-y-1/2 whitespace-nowrap text-[9px] font-medium tabular-nums ${leadLeft ? 'text-right' : 'text-left'} text-slate-600 [text-shadow:0_0_3px_rgb(255_255_255),0_0_3px_rgb(255_255_255)] dark:text-slate-300 dark:[text-shadow:0_0_3px_rgb(15_23_42),0_0_3px_rgb(15_23_42)]`}
+                                  style={leadLeft ? { right: `calc(${100 - msLeft}% + 11px)` } : { left: `calc(${msLeft}% + 11px)` }}
+                                >
+                                  {formatDate(new Date(msMs))}
+                                </span>
+                              );
+                            })()}
                           </>
                         ) : r.isParent ? (
                           <>
