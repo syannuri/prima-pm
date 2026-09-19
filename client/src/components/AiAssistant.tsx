@@ -18,7 +18,8 @@ interface ProposedRef { actionType: string; projectCode: string; routed: boolean
 interface NavRef { label: string; path: string }
 interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
 interface QueryTable { entity: string; columns: { key: string; label: string }[]; rows: Record<string, string | number | boolean | null>[]; total: number; limit: number }
-interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; grounded?: boolean; error?: boolean }
+interface CoverageResult { total: number; cited: number; coverage: number } // grounding: how many citable figures carry a marker
+interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; grounded?: boolean; citationCoverage?: CoverageResult; error?: boolean }
 interface TurnUsage { inputTokens: number; outputTokens: number; costUsd: number } // #5 cost meter
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 interface ApprovalItem { id: string; actionLabel: string; stepName: string; project: { code: string; name: string } | null }
@@ -33,7 +34,7 @@ interface AnettStrings {
   needAttention: string; approvalsWaiting: (n: number) => string; overdue: (code: string, n: number) => string; overduePrompt: (code: string) => string;
   proposalsTitle: string; waitingApprover: string; appliedSuffix: string; reviewInApprovals: string;
   remembering: string; teamSuffix: string;
-  groundedLabel: string; checkLabel: string;
+  groundedLabel: string; checkLabel: string; citedFn: (cited: number, total: number) => string; citedTitle: string;
   thanksUp: string; thanksDown: string; notePlaceholder: string; send: string; skip: string;
   likeTitle: string; likeAria: string; dislikeTitle: string; dislikeAria: string;
   retry: string; thinking: string; composing: string; inputPlaceholder: string;
@@ -59,6 +60,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     proposalsTitle: '🤖 Usulan aksi diajukan', waitingApprover: ' (menunggu approver)', appliedSuffix: ' (diterapkan langsung)', reviewInApprovals: 'Tinjau di Approvals →',
     remembering: 'Mengingat', teamSuffix: ' (tim)',
     groundedLabel: 'Berdasarkan data', checkLabel: 'Periksa lagi',
+    citedFn: (c, t) => `${c}/${t} tersitasi`, citedTitle: 'Berapa banyak angka spesifik yang membawa penanda sitiran (bisa diklik ke barisnya).',
     thanksUp: '👍 Terima kasih atas masukannya.', thanksDown: '👎 Terima kasih — Anett akan mengingatnya.', notePlaceholder: 'Apa yang kurang tepat? / seharusnya bagaimana?', send: 'Kirim', skip: 'Lewati',
     likeTitle: 'Jawaban ini membantu', likeAria: 'Suka', dislikeTitle: 'Jawaban ini kurang tepat', dislikeAria: 'Tidak suka',
     retry: 'Coba lagi', thinking: 'Berpikir…', composing: 'Menyusun jawaban…', inputPlaceholder: 'Tulis pertanyaan…',
@@ -86,6 +88,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     proposalsTitle: '🤖 Action proposals submitted', waitingApprover: ' (awaiting approver)', appliedSuffix: ' (applied directly)', reviewInApprovals: 'Review in Approvals →',
     remembering: 'Remembering', teamSuffix: ' (team)',
     groundedLabel: 'Grounded in data', checkLabel: 'Double-check',
+    citedFn: (c, t) => `${c}/${t} cited`, citedTitle: 'How many specific figures carry a citation marker (clickable to the source row).',
     thanksUp: '👍 Thanks for the feedback.', thanksDown: "👎 Thanks — Anett will remember this.", notePlaceholder: 'What was off? / what should it be?', send: 'Send', skip: 'Skip',
     likeTitle: 'This answer helped', likeAria: 'Like', dislikeTitle: 'This answer was off', dislikeAria: 'Dislike',
     retry: 'Try again', thinking: 'Thinking…', composing: 'Composing an answer…', inputPlaceholder: 'Type a question…',
@@ -402,21 +405,24 @@ export default function AiAssistant() {
     staleTime: 60_000,
   });
   const codeToId = new Map((projectsQ.data?.projects ?? []).map((p) => [p.code.toUpperCase(), p.id]));
-  const CITE_TABS = new Set(['Overview', 'Cost', 'Schedule', 'Risk']); // SOURCE values that map to a real ?tab=
-  // FOCUS_TABS: tabs whose panel supports ?focus=<id> (scroll+flash the exact row). Risk (RiskPanel),
-  // Schedule (WbsPanel, by task id) and Cost (CostPanel, by budget-line id) are proven end-to-end; an
-  // id that doesn't match just opens the tab (no flash), never a dead link — degrades gracefully.
-  const FOCUS_TABS = new Set(['Risk', 'Schedule', 'Cost']);
+  // SOURCE → real ?tab= value. Most sources equal their tab name, but ChangeRequest maps to the
+  // 'Change Req' tab (which carries a space in the ProjectPage tab id).
+  const SOURCE_TAB = new Map<string, string>([['Overview', 'Overview'], ['Cost', 'Cost'], ['Schedule', 'Schedule'], ['Risk', 'Risk'], ['ChangeRequest', 'Change Req']]);
+  // FOCUS_SOURCES: sources whose panel supports ?focus=<id> (scroll+flash the exact row). Risk (RiskPanel),
+  // Schedule (WbsPanel, by task id), Cost (CostPanel, by budget-line id) and ChangeRequest
+  // (ChangeRequestPanel, by CR id) are proven end-to-end; an id that doesn't match just opens the tab
+  // (no flash), never a dead link — degrades gracefully.
+  const FOCUS_SOURCES = new Set(['Risk', 'Schedule', 'Cost', 'ChangeRequest']);
   const renderCitation = (code: string, source: string | undefined, _raw: string, focus?: string) => {
     const id = codeToId.get(code.toUpperCase());
-    const tab = source && CITE_TABS.has(source) ? source : undefined;
-    const focusId = tab && focus && FOCUS_TABS.has(tab) ? focus : undefined;
-    const label = source ? `${code} · ${source}` : code;
+    const tab = source ? SOURCE_TAB.get(source) : undefined;
+    const focusId = tab && focus && source && FOCUS_SOURCES.has(source) ? focus : undefined;
+    const label = source ? `${code} · ${tab ?? source}` : code;
     if (!id) {
       // Unknown code (not in the accessible set) — show a muted, non-clickable chip, never a dead link.
       return <span className="mx-0.5 inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px align-middle text-[10px] font-medium text-slate-400 dark:bg-slate-800 dark:text-slate-500">{label}</span>;
     }
-    const qs = tab ? `?tab=${tab}${focusId ? `&focus=${encodeURIComponent(focusId)}` : ''}` : '';
+    const qs = tab ? `?tab=${encodeURIComponent(tab)}${focusId ? `&focus=${encodeURIComponent(focusId)}` : ''}` : '';
     return (
       <Link
         to={`/projects/${id}${qs}`}
@@ -444,7 +450,7 @@ export default function AiAssistant() {
 
   const ask = useMutation({
     // Only real Q&A turns go to the model — error notices are dropped from the sent history.
-    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage?: TurnUsage; grounded?: boolean }>(`/assistant/ask`, {
+    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage?: TurnUsage; grounded?: boolean; citationCoverage?: CoverageResult }>(`/assistant/ask`, {
       messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
       context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
       lang,
@@ -453,7 +459,7 @@ export default function AiAssistant() {
       if (res.usage) addCost(res.usage); // #5 cost meter
       // The new answer lands at the current end of the list; start the typewriter there (unless reduced-motion).
       if (!reduce && res.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
-      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined, tables: res.tables?.length ? res.tables : undefined, grounded: res.grounded }]);
+      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined, tables: res.tables?.length ? res.tables : undefined, grounded: res.grounded, citationCoverage: res.citationCoverage }]);
     },
     onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : L.errorGeneric, error: true }]),
   });
@@ -676,7 +682,7 @@ export default function AiAssistant() {
         for (const part of parts) {
           const line = part.split('\n').find((l) => l.startsWith('data: '));
           if (!line) continue;
-          let ev: { type: string; label?: string; delta?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; message?: string; usage?: TurnUsage; grounded?: boolean };
+          let ev: { type: string; label?: string; delta?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; message?: string; usage?: TurnUsage; grounded?: boolean; citationCoverage?: CoverageResult };
           try { ev = JSON.parse(line.slice(6)); } catch { continue; }
           started = true;
           if (ev.type === 'step' && ev.label) {
@@ -695,7 +701,7 @@ export default function AiAssistant() {
             if (ev.usage) addCost(ev.usage); // #5 cost meter
             // Tokens already animated the text live ⇒ skip the fake typewriter; else keep it.
             if (!reduce && ev.answer && !streamedText) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
-            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined, grounded: ev.grounded }]);
+            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined, grounded: ev.grounded, citationCoverage: ev.citationCoverage }]);
             setStreamText(''); setStreamReasoning('');
           } else if (ev.type === 'error') {
             setTurns((t) => [...t, { role: 'assistant', content: ev.message || L.errorGeneric, error: true }]);
@@ -1019,11 +1025,17 @@ export default function AiAssistant() {
                         answer actually cited data (skip chit-chat); ⚠ whenever the server flagged it (a
                         magnitude slip or a failed judge grade) so the user knows to double-check. */}
                     {t.role === 'assistant' && !t.error && i !== streamIdx && (t.grounded === false || (t.grounded === true && /\[\[cite:/.test(t.content))) && (
-                      <div className="mt-1.5">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {t.grounded === false ? (
                           <span title={lang === 'en' ? 'A figure or claim could not be verified against the data — please double-check.' : 'Ada angka/klaim yang belum terverifikasi dengan data — mohon periksa lagi.'} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-px text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">⚠ {L.checkLabel}</span>
                         ) : (
                           <span title={lang === 'en' ? 'Figures cited from your project data and checked for magnitude slips.' : 'Angka disitir dari data proyek Anda dan sudah dicek dari salah magnitudo.'} className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-px text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">✓ {L.groundedLabel}</span>
+                        )}
+                        {/* Coverage (grounding Fase 3): how many citable figures actually carry a marker.
+                            Only meaningful when the answer stated project figures; full coverage reads calm
+                            slate, a shortfall reads amber to nudge the eye toward the uncited numbers. */}
+                        {t.citationCoverage && t.citationCoverage.total > 0 && (
+                          <span title={L.citedTitle} className={`inline-flex items-center gap-1 rounded-full px-2 py-px text-[10px] font-medium ${t.citationCoverage.cited >= t.citationCoverage.total ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'}`}>{L.citedFn(t.citationCoverage.cited, t.citationCoverage.total)}</span>
                         )}
                       </div>
                     )}
