@@ -229,6 +229,7 @@ function AppearanceCard() {
 
 function SecurityCard() {
   const toast = useToast();
+  const { lang } = useLang();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -243,9 +244,11 @@ function SecurityCard() {
       // The server revoked all other sessions and refreshed THIS session's httpOnly cookies,
       // so this tab keeps working with no client-side token handling; others are signed out.
       reset();
-      toast.success('Password updated. Any other signed-in sessions have been logged out.');
+      toast.success(lang === 'id'
+        ? 'Kata sandi diperbarui. Sesi lain yang masih masuk telah dikeluarkan.'
+        : 'Password updated. Any other signed-in sessions have been logged out.');
     },
-    onError: (e) => setErr(e instanceof ApiError ? e.message : 'Could not change password'),
+    onError: (e) => setErr(e instanceof ApiError ? e.message : (lang === 'id' ? 'Tidak dapat mengubah kata sandi' : 'Could not change password')),
   });
 
   const nextOk = isPasswordValid(next);
@@ -255,33 +258,38 @@ function SecurityCard() {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErr('');
-    if (next !== confirm) { setErr('New password and confirmation do not match'); return; }
+    if (next !== confirm) { setErr(lang === 'id' ? 'Kata sandi baru dan konfirmasi tidak cocok' : 'New password and confirmation do not match'); return; }
     submit.mutate();
   };
 
   return (
-    <SettingsGroup title="Password" sub="Use a unique password of 10+ characters with at least one letter and one number.">
+    <SettingsGroup
+      title={lang === 'id' ? 'Kata Sandi' : 'Password'}
+      sub={lang === 'id'
+        ? 'Gunakan kata sandi unik minimal 10 karakter dengan setidaknya satu huruf dan satu angka.'
+        : 'Use a unique password of 10+ characters with at least one letter and one number.'}
+    >
       <form onSubmit={onSubmit} className="space-y-3">
-        <Field label="Current password">
+        <Field label={lang === 'id' ? 'Kata sandi saat ini' : 'Current password'}>
           <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required state={current ? 'valid' : undefined} />
         </Field>
-        <Field label="New password">
+        <Field label={lang === 'id' ? 'Kata sandi baru' : 'New password'}>
           <Input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required state={fieldState(next, nextOk)} />
           {!!next && (
             <span className="mt-1 flex flex-col gap-0.5">
-              <Rule ok={pwHasLen(next)}>At least 10 characters</Rule>
-              <Rule ok={pwHasMix(next)}>A letter and a number</Rule>
+              <Rule ok={pwHasLen(next)}>{lang === 'id' ? 'Minimal 10 karakter' : 'At least 10 characters'}</Rule>
+              <Rule ok={pwHasMix(next)}>{lang === 'id' ? 'Satu huruf dan satu angka' : 'A letter and a number'}</Rule>
             </span>
           )}
         </Field>
-        <Field label="Confirm new password">
+        <Field label={lang === 'id' ? 'Konfirmasi kata sandi baru' : 'Confirm new password'}>
           <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required state={fieldState(confirm, confirmOk)} />
-          {!!confirm && !confirmOk && <span className="mt-1 block text-xs text-red-500">Does not match the new password</span>}
+          {!!confirm && !confirmOk && <span className="mt-1 block text-xs text-red-500">{lang === 'id' ? 'Tidak cocok dengan kata sandi baru' : 'Does not match the new password'}</span>}
         </Field>
         {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">{err}</p>}
         <div className="flex justify-end pt-1">
           <Button type="submit" disabled={!canSubmit}>
-            {submit.isPending ? 'Saving…' : 'Update password'}
+            {submit.isPending ? (lang === 'id' ? 'Menyimpan…' : 'Saving…') : (lang === 'id' ? 'Perbarui kata sandi' : 'Update password')}
           </Button>
         </div>
       </form>
