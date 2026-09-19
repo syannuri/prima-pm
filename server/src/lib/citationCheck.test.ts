@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractMoneyIDR, candidateValues, verifyCitedValues, normalizeRupiahText, formatIdrHuman } from './citationCheck.js';
+import { extractMoneyIDR, candidateValues, verifyCitedValues, normalizeRupiahText, formatIdrHuman, citationCoverage } from './citationCheck.js';
 
 // #6 deterministic citation-value verification. Motivated by a real LAN case: Anett said the DRC saving
 // was "Rp 423,5 Miliar" when the actual BAC−AC was ~423 Juta (a 1000× unit slip the LLM judge passed).
@@ -129,5 +129,43 @@ describe('verifyCitedValues', () => {
     const three = '[{"bac":700000000},{"bac":1000000000},{"bac":3089000000}]';
     expect(verifyCitedValues('TOTAL Rp 4,789 Miliar.', three).ok).toBe(true);   // Σ of the three BACs
     expect(verifyCitedValues('TOTAL Rp 4,789 Triliun.', three).ok).toBe(false); // ×1000 off the Σ
+  });
+});
+
+// Grounding Fase 3: the deterministic citation-coverage metric. Conservative by design — only
+// ALWAYS-project-specific figures (EVM indices + rupiah scale amounts) count, never percentages or
+// bare counts, and coverage = 1 when there are none.
+describe('citationCoverage', () => {
+  it('is trivially full when the answer has no citable figures', () => {
+    expect(citationCoverage('Halo! Ada yang bisa saya bantu hari ini?')).toEqual({ total: 0, cited: 0, coverage: 1 });
+    // Percentages and bare counts are NOT citable figures (avoid false positives on ordinary prose).
+    expect(citationCoverage('Ada 5 risiko terbuka dan progres sekitar 30%.')).toEqual({ total: 0, cited: 0, coverage: 1 });
+  });
+
+  it('counts an EVM index as cited when a [[cite:…]] marker follows it', () => {
+    expect(citationCoverage('`AI-1` terlambat, SPI 0.82 [[cite:AI-1|Schedule]].')).toEqual({ total: 1, cited: 1, coverage: 1 });
+  });
+
+  it('flags EVM indices stated without any citation', () => {
+    expect(citationCoverage('Proyek itu terlambat, SPI 0.82 dan CPI 0.95.')).toEqual({ total: 2, cited: 0, coverage: 0 });
+  });
+
+  it('counts a rupiah scale figure, cited vs uncited', () => {
+    expect(citationCoverage('EMV risiko itu Rp 120 juta [[cite:AI-1|Risk|abc]].')).toMatchObject({ total: 1, cited: 1 });
+    expect(citationCoverage('Total anggaran sekitar Rp 6,8 miliar.')).toMatchObject({ total: 1, cited: 0 });
+  });
+
+  it('gives partial coverage when only some figures are cited', () => {
+    const r = citationCoverage('SPI 0.82 [[cite:AI-1|Schedule]], tapi biayanya Rp 2,3 miliar tanpa rujukan.');
+    expect(r.total).toBe(2);
+    expect(r.cited).toBe(1);
+    expect(r.coverage).toBeCloseTo(0.5, 5);
+  });
+
+  it('does not let a distant marker cover an earlier, unrelated figure', () => {
+    const far = 'Biayanya Rp 2,3 miliar. ' + 'x'.repeat(120) + ' SPI 0.9 [[cite:AI-1|Schedule]].';
+    const r = citationCoverage(far);
+    expect(r.total).toBe(2);
+    expect(r.cited).toBe(1); // only the SPI (with its adjacent marker) counts as cited
   });
 });

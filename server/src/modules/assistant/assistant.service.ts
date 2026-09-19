@@ -7,7 +7,7 @@ import { type RawUsage } from '../../lib/aiUsage.js';
 import { estimateCostUsd } from '../../lib/aiPricing.js';
 import { sampleAnswerQuality } from '../../lib/aiJudgeSample.js';
 import { gradeAnswer } from '../../lib/aiEval.js';
-import { verifyCitedValues, normalizeRupiahText, formatIdrHuman } from '../../lib/citationCheck.js';
+import { verifyCitedValues, normalizeRupiahText, formatIdrHuman, citationCoverage, type CoverageResult } from '../../lib/citationCheck.js';
 import { logger } from '../../lib/observability.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
@@ -865,7 +865,7 @@ function routeModel(messages: AssistantTurn[]): string {
   return model; // unsure → quality-first
 }
 
-export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void; onThinking?: (delta: string) => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage: TurnUsage; grounded: boolean }> {
+export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void; onThinking?: (delta: string) => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage: TurnUsage; grounded: boolean; citationCoverage: CoverageResult }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
   const port = getAiPort();
@@ -1015,6 +1015,16 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
       : '\n\n_⚠️ Catatan: ada angka rupiah di atas yang mungkin meleset ~1000× (mis. Juta vs Miliar) — mohon verifikasi di tab Biaya proyek._';
   }
 
+  // Grounding Fase 3: deterministic citation-coverage metric — what fraction of the project-specific
+  // figures (EVM indices, rupiah amounts) the answer stated carry a [[cite:…]] marker. Observability
+  // for how well citations are actually landing; NOT fed into `grounded` (kept conservative to avoid a
+  // false ⚠ on rollup/portfolio answers that legitimately don't cite). The guard: warn when the answer
+  // states figures but cites NONE at all — the unambiguous "citations silently missing" case.
+  const coverage = citationCoverage(answer);
+  if (coverage.total > 0 && coverage.cited === 0) {
+    logger.warn({ userId, figures: coverage.total }, '[assistant] answer states project figures with no citations');
+  }
+
   const costUsd = estimateCostUsd({ model: chosenModel, inputTokens: tok.input, outputTokens: tok.output, cacheCreationTokens: tok.cacheCreation, cacheReadTokens: tok.cacheRead });
   const usage: TurnUsage = { inputTokens: tok.input, outputTokens: tok.output, costUsd };
   // #5 quality-trend sampling: with probability AI_JUDGE_SAMPLE_RATE (dormant by default), judge this
@@ -1022,7 +1032,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // tool outputs are passed (bounded) as context so the judge grades groundedness against real data.
   const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
   sampleAnswerQuality({ question: lastUserMsg, answer, context: judgeContext, feature: 'assistant_qa', userId });
-  return { answer, proposals, navigate: navs, memories, tables, usage, grounded: grade.ok && valueCheck.ok };
+  return { answer, proposals, navigate: navs, memories, tables, usage, grounded: grade.ok && valueCheck.ok, citationCoverage: coverage };
 }
 
 // Deterministic (NO LLM, NO cost) briefing for the assistant's proactive open-state: what needs the
