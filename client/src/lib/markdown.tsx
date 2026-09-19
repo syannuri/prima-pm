@@ -23,9 +23,12 @@ export function safeUrl(url: string): string | null {
   return /^(https?:\/\/|mailto:)/i.test(u) ? u : null;
 }
 
-// Optional hook (used by the Anett assistant) to turn a [[cite:CODE|SOURCE]] marker into a clickable
-// citation chip. When not supplied (e.g. charter fields), the marker degrades to readable plain text.
-export type RenderCitation = (code: string, source: string | undefined, raw: string) => ReactNode;
+// Optional hook (used by the Anett assistant) to turn a [[cite:CODE|SOURCE|FOCUS]] marker into a
+// clickable citation chip. FOCUS is an optional entity id (e.g. a risk id) so the chip can deep-link
+// to the exact row, not just the tab. When not supplied (e.g. charter fields), the marker degrades to
+// readable plain text.
+export type RenderCitation = (code: string, source: string | undefined, raw: string, focus?: string) => ReactNode;
+// group 2 = everything after the first '|' (may itself contain a '|' → SOURCE|FOCUS), split below.
 const CITE_RE = /^\[\[cite:([^|\]]+?)(?:\|([^\]]+))?\]\]$/;
 
 // --- inline: [[cite:…]], `code`, [text](url), **bold**, *italic*, _italic_ ---
@@ -40,8 +43,9 @@ function renderInline(text: string, renderCitation?: RenderCitation): ReactNode 
     const cite = CITE_RE.exec(tok);
     if (cite) {
       const code = cite[1].trim();
-      const source = cite[2]?.trim();
-      if (renderCitation) return <Fragment key={i}>{renderCitation(code, source, tok)}</Fragment>;
+      // Second group is "SOURCE" or "SOURCE|FOCUS" — split so the entity id becomes the deep-link focus.
+      const [source, focus] = (cite[2] ?? '').split('|').map((s) => s.trim());
+      if (renderCitation) return <Fragment key={i}>{renderCitation(code, source || undefined, tok, focus || undefined)}</Fragment>;
       return <Fragment key={i}>{source ? `${code} · ${source}` : code}</Fragment>; // graceful plain text
     }
     const link = LINK_RE.exec(tok);

@@ -232,7 +232,7 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(out.foreign).toContain('tidak dapat diakses'); // cross-PM project is refused
     expect(out.mine).toContain('"ok":true');
     // The staged proposal is surfaced to the client for the "view in Approvals" card.
-    expect(res.body.proposals).toEqual([{ actionType: 'CREATE_RISK', projectCode: 'MINE-1', routed: true }]);
+    expect(res.body.proposals).toEqual([{ actionType: 'CREATE_RISK', projectCode: 'MINE-1', routed: true, applied: false }]);
     // The proposal landed as PENDING (nothing applied yet).
     const proposals = await runWithTenant(aico, () => prisma.aiActionProposal.findMany({ where: { actionType: 'CREATE_RISK' } }));
     expect(proposals.length).toBe(1);
