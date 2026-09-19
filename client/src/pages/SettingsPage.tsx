@@ -191,11 +191,21 @@ function AppearanceCard() {
   const { lang, setLang } = useLang();
   const dark = theme === 'dark';
   return (
-    <SettingsGroup title="Appearance" flush>
-      <SettingsRow title="Dark mode" sub={dark ? 'On — easier on the eyes in low light.' : 'Off — using the light theme.'}>
-        <Toggle checked={dark} onChange={() => toggle()} label="Toggle dark mode" />
+    <SettingsGroup title={lang === 'id' ? 'Tampilan' : 'Appearance'} flush>
+      <SettingsRow
+        title={lang === 'id' ? 'Mode gelap' : 'Dark mode'}
+        sub={
+          lang === 'id'
+            ? dark ? 'Aktif — lebih nyaman di mata saat cahaya redup.' : 'Nonaktif — memakai tema terang.'
+            : dark ? 'On — easier on the eyes in low light.' : 'Off — using the light theme.'
+        }
+      >
+        <Toggle checked={dark} onChange={() => toggle()} label={lang === 'id' ? 'Alihkan mode gelap' : 'Toggle dark mode'} />
       </SettingsRow>
-      <SettingsRow title="Language" sub="Greeting & dates. Auto-detected from your browser.">
+      <SettingsRow
+        title={lang === 'id' ? 'Bahasa' : 'Language'}
+        sub={lang === 'id' ? 'Sapaan & tanggal. Terdeteksi otomatis dari peramban Anda.' : 'Greeting & dates. Auto-detected from your browser.'}
+      >
         <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
           {LANGS.map((l) => (
             <button
