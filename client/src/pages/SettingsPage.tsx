@@ -60,6 +60,7 @@ const navActive =
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { lang } = useLang();
   const isAdmin = user?.role === 'ADMIN';
   // Platform (deployment-wide) settings live in the super-admin console → /admin/settings.
   const sections = useMemo(() => SECTIONS.filter((s) => !s.adminOnly || isAdmin), [isAdmin]);
@@ -93,6 +94,14 @@ export default function SettingsPage() {
 
   return (
     <div className="pb-12">
+      {/* Page title. */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{lang === 'id' ? 'Pengaturan' : 'Settings'}</h1>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          {lang === 'id' ? 'Kelola akun dan workspace Anda' : 'Manage your account and workspace'}
+        </p>
+      </div>
+
       {/* Profile header — monogram + identity + role chip. */}
       <header className="mb-6 flex items-center gap-4 border-b border-slate-200 pb-5 dark:border-slate-800">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-base font-bold text-white shadow-sm">
@@ -100,7 +109,7 @@ export default function SettingsPage() {
         </span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="truncate text-xl font-bold text-slate-800 dark:text-slate-100">{user?.name || 'Settings'}</h1>
+            <h2 className="truncate text-xl font-bold text-slate-800 dark:text-slate-100">{user?.name || 'Settings'}</h2>
             {user?.role && (
               <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 ring-1 ring-inset ring-brand-200 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-brand-400/30">
                 {user.role}
