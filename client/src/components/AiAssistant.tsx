@@ -403,17 +403,23 @@ export default function AiAssistant() {
   });
   const codeToId = new Map((projectsQ.data?.projects ?? []).map((p) => [p.code.toUpperCase(), p.id]));
   const CITE_TABS = new Set(['Overview', 'Cost', 'Schedule', 'Risk']); // SOURCE values that map to a real ?tab=
-  const renderCitation = (code: string, source: string | undefined) => {
+  // FOCUS_TABS: tabs whose panel supports ?focus=<id> (scroll+flash the exact row). Risk is proven
+  // end-to-end (RiskPanel matches by risk id); an id that doesn't match just opens the tab (no flash),
+  // never a dead link — so this degrades gracefully.
+  const FOCUS_TABS = new Set(['Risk']);
+  const renderCitation = (code: string, source: string | undefined, _raw: string, focus?: string) => {
     const id = codeToId.get(code.toUpperCase());
     const tab = source && CITE_TABS.has(source) ? source : undefined;
+    const focusId = tab && focus && FOCUS_TABS.has(tab) ? focus : undefined;
     const label = source ? `${code} · ${source}` : code;
     if (!id) {
       // Unknown code (not in the accessible set) — show a muted, non-clickable chip, never a dead link.
       return <span className="mx-0.5 inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px align-middle text-[10px] font-medium text-slate-400 dark:bg-slate-800 dark:text-slate-500">{label}</span>;
     }
+    const qs = tab ? `?tab=${tab}${focusId ? `&focus=${encodeURIComponent(focusId)}` : ''}` : '';
     return (
       <Link
-        to={`/projects/${id}${tab ? `?tab=${tab}` : ''}`}
+        to={`/projects/${id}${qs}`}
         onClick={() => setOpen(false)}
         title={`${lang === 'en' ? 'Open' : 'Buka'} ${label}`}
         className={`mx-0.5 inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px align-middle text-[10px] font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/40 ${uiV2 ? 'shadow-sm shadow-violet-900/10 ring-1 ring-white/50 dark:ring-white/5' : ''}`}
