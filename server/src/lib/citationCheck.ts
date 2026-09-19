@@ -104,6 +104,31 @@ export function candidateValues(context: string): number[] {
   return [...new Set([...uniq, ...derived])];
 }
 
+// ── Citation coverage (grounding Fase 3) ─────────────────────────────────────────────────────────
+// A "citable figure" is one that is ALWAYS project-specific data the citation rule expects a
+// [[cite:…]] marker for: an EVM index (SPI/CPI <n>) or a rupiah scale figure. Percentages and bare
+// counts are deliberately EXCLUDED — they appear too often in ordinary prose ("top 5", "about 30%")
+// to flag without false positives. Deterministic, no LLM.
+const CITABLE_RE = /\b(?:SPI|CPI)\s*[:=]?\s*\d(?:[.,]\d+)?|rp\.?\s*\d[\d.,]*\s*(?:ribu|rb|juta|jt|miliar|milyar|triliun|triliyun)\b/gi;
+
+export interface CoverageResult { total: number; cited: number; coverage: number }
+
+// Fraction of citable figures that carry a [[cite:…]] marker within the same clause (a small window
+// AFTER the figure, where the assistant places the marker). coverage = 1 when there are none — an
+// answer with no project figures is trivially "fully cited". Conservative by design: a marker placed
+// before its figure is missed, which only ever UNDER-counts, so it never over-flags.
+export function citationCoverage(answer: string): CoverageResult {
+  const WINDOW = 90; // chars after the figure to look for its marker (same sentence/clause)
+  let total = 0, cited = 0;
+  let m: RegExpExecArray | null;
+  CITABLE_RE.lastIndex = 0;
+  while ((m = CITABLE_RE.exec(answer)) !== null) {
+    total++;
+    if (/\[\[cite:/i.test(answer.slice(m.index, m.index + m[0].length + WINDOW))) cited++;
+  }
+  return { total, cited, coverage: total === 0 ? 1 : cited / total };
+}
+
 const REL_TOL = 0.02; // 2% — matches rounding like "3,09 Miliar" vs 3,089,000,000
 const near = (a: number, b: number): boolean => Math.abs(a - b) <= REL_TOL * Math.max(Math.abs(a), Math.abs(b));
 
