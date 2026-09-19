@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
@@ -70,6 +70,21 @@ export default function SettingsPage() {
   const requested = params.get('section');
   const active = sections.find((s) => s.key === requested) ?? sections[0];
   const contentRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  // On mobile the rail is a horizontal scroll, so the active pill can sit off-screen after a
+  // deep-link (?section=ai) or a switch. Centre it within the rail — only when the rail is
+  // actually scrollable (a no-op on the desktop vertical layout), scrolling the rail alone so
+  // the page never shifts.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || nav.scrollWidth <= nav.clientWidth) return;
+    const pill = document.getElementById(`settings-tab-${active.key}`);
+    if (!pill) return;
+    const nr = nav.getBoundingClientRect();
+    const pr = pill.getBoundingClientRect();
+    nav.scrollBy({ left: pr.left + pr.width / 2 - (nr.left + nr.width / 2), behavior: 'smooth' });
+  }, [active.key]);
 
   const go = (key: SectionKey) => {
     const p = new URLSearchParams(params);
@@ -125,6 +140,7 @@ export default function SettingsPage() {
       <div className="lg:grid lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:gap-8">
         {/* Category rail — a vertical tablist on desktop; a horizontal scroll of pills on mobile. */}
         <nav
+          ref={navRef}
           role="tablist"
           aria-label={lang === 'id' ? 'Bagian pengaturan' : 'Settings sections'}
           aria-orientation="vertical"
