@@ -402,21 +402,24 @@ export default function AiAssistant() {
     staleTime: 60_000,
   });
   const codeToId = new Map((projectsQ.data?.projects ?? []).map((p) => [p.code.toUpperCase(), p.id]));
-  const CITE_TABS = new Set(['Overview', 'Cost', 'Schedule', 'Risk']); // SOURCE values that map to a real ?tab=
-  // FOCUS_TABS: tabs whose panel supports ?focus=<id> (scroll+flash the exact row). Risk (RiskPanel),
-  // Schedule (WbsPanel, by task id) and Cost (CostPanel, by budget-line id) are proven end-to-end; an
-  // id that doesn't match just opens the tab (no flash), never a dead link — degrades gracefully.
-  const FOCUS_TABS = new Set(['Risk', 'Schedule', 'Cost']);
+  // SOURCE → real ?tab= value. Most sources equal their tab name, but ChangeRequest maps to the
+  // 'Change Req' tab (which carries a space in the ProjectPage tab id).
+  const SOURCE_TAB = new Map<string, string>([['Overview', 'Overview'], ['Cost', 'Cost'], ['Schedule', 'Schedule'], ['Risk', 'Risk'], ['ChangeRequest', 'Change Req']]);
+  // FOCUS_SOURCES: sources whose panel supports ?focus=<id> (scroll+flash the exact row). Risk (RiskPanel),
+  // Schedule (WbsPanel, by task id), Cost (CostPanel, by budget-line id) and ChangeRequest
+  // (ChangeRequestPanel, by CR id) are proven end-to-end; an id that doesn't match just opens the tab
+  // (no flash), never a dead link — degrades gracefully.
+  const FOCUS_SOURCES = new Set(['Risk', 'Schedule', 'Cost', 'ChangeRequest']);
   const renderCitation = (code: string, source: string | undefined, _raw: string, focus?: string) => {
     const id = codeToId.get(code.toUpperCase());
-    const tab = source && CITE_TABS.has(source) ? source : undefined;
-    const focusId = tab && focus && FOCUS_TABS.has(tab) ? focus : undefined;
-    const label = source ? `${code} · ${source}` : code;
+    const tab = source ? SOURCE_TAB.get(source) : undefined;
+    const focusId = tab && focus && source && FOCUS_SOURCES.has(source) ? focus : undefined;
+    const label = source ? `${code} · ${tab ?? source}` : code;
     if (!id) {
       // Unknown code (not in the accessible set) — show a muted, non-clickable chip, never a dead link.
       return <span className="mx-0.5 inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px align-middle text-[10px] font-medium text-slate-400 dark:bg-slate-800 dark:text-slate-500">{label}</span>;
     }
-    const qs = tab ? `?tab=${tab}${focusId ? `&focus=${encodeURIComponent(focusId)}` : ''}` : '';
+    const qs = tab ? `?tab=${encodeURIComponent(tab)}${focusId ? `&focus=${encodeURIComponent(focusId)}` : ''}` : '';
     return (
       <Link
         to={`/projects/${id}${qs}`}

@@ -308,7 +308,7 @@ export default function ProjectPage() {
       {activeTab === 'RAID' && <RaidPanel projectId={projectId} onJump={(t) => setTab(t as Tab)} />}
       {activeTab === 'Issues' && <IssuePanel projectId={projectId} />}
       {activeTab === 'Schedule' && chartered && <SchedulePanel projectId={projectId} focusTaskId={focus?.id ?? null} focusKey={focus?.key} onNavigateTab={(t) => goto(t as Tab)} />}
-      {activeTab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} />}
+      {activeTab === 'Change Req' && chartered && <ChangeRequestPanel projectId={projectId} projectCode={project.code} projectName={project.name} focusId={focus?.id ?? null} focusKey={focus?.key} />}
       {activeTab === 'Kick-Off' && chartered && <KickoffPanel projectId={projectId} />}
       {activeTab === 'UAT' && chartered && <UatPanel projectId={projectId} />}
       {activeTab === 'Closeout' && <CloseoutPanel projectId={projectId} />}

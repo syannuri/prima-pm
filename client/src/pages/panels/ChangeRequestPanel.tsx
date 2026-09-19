@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { Charter, ChangeImpact, ChangeRequest, CharterVersion } from '../../api/types';
@@ -12,7 +12,7 @@ const CR_COLOR: Record<string, string> = { SUBMITTED: 'amber', UNDER_REVIEW: 'sk
 const FILTERS = ['ALL', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'] as const;
 const label = (s: string) => s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-export default function ChangeRequestPanel({ projectId, projectCode, projectName }: { projectId: string; projectCode: string; projectName: string }) {
+export default function ChangeRequestPanel({ projectId, projectCode, projectName, focusId, focusKey }: { projectId: string; projectCode: string; projectName: string; focusId?: string | null; focusKey?: number }) {
   const qc = useQueryClient();
   const toast = useToast();
   const base = `/projects/${projectId}/charter`;
@@ -25,9 +25,19 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
   const [err, setErr] = useState('');
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL');
   const [detail, setDetail] = useState<ChangeRequest | null>(null);
+  // Deep-link from an Anett CR citation (?focus=<id>): scroll the CR row into view and flash it
+  // (mirrors the Risk/Cost/Schedule focus behaviour). An id that isn't in the list is a no-op.
+  const [flashId, setFlashId] = useState<string | null>(null);
 
   const charterQ = useQuery({ queryKey: ['charter', projectId], queryFn: () => api.get<{ charter: Charter | null }>(base) });
   const crQ = useQuery({ queryKey: ['charter-crs', projectId], queryFn: () => api.get<{ changeRequests: ChangeRequest[] }>(`${base}/change-requests`) });
+  useEffect(() => {
+    if (!focusId || !crQ.data?.changeRequests.some((c) => c.id === focusId)) return;
+    setFlashId(focusId);
+    const s = setTimeout(() => document.querySelector(`[data-cr-row="${focusId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+    const c = setTimeout(() => setFlashId(null), 2400);
+    return () => { clearTimeout(s); clearTimeout(c); };
+  }, [focusId, focusKey, crQ.data]);
   const verQ = useQuery({ queryKey: ['charter-versions', projectId], queryFn: () => api.get<{ versions: CharterVersion[] }>(`${base}/versions`) });
 
   const refresh = () => {
@@ -140,7 +150,7 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
                   </thead>
                   <tbody>
                     {filtered.map((cr) => (
-                      <tr key={cr.id} className="border-b border-slate-100 align-top dark:border-slate-800">
+                      <tr key={cr.id} data-cr-row={cr.id} className={`border-b border-slate-100 align-top transition-colors dark:border-slate-800 ${cr.id === flashId ? 'bg-amber-100 dark:bg-amber-900/40' : ''}`}>
                         <td className="py-2">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-slate-700 dark:text-slate-200">{cr.title}</span>
@@ -165,7 +175,7 @@ export default function ChangeRequestPanel({ projectId, projectCode, projectName
               </div>
               <div className="space-y-2 sm:hidden">
                 {filtered.map((cr) => (
-                  <div key={cr.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                  <div key={cr.id} data-cr-row={cr.id} className={`rounded-xl border p-3 transition-colors ${cr.id === flashId ? 'border-amber-300 bg-amber-100 dark:border-amber-700 dark:bg-amber-900/40' : 'border-slate-200 dark:border-slate-800'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-medium text-slate-700 dark:text-slate-200">{cr.title}</p>
