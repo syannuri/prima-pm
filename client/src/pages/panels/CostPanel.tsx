@@ -129,14 +129,23 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
     qc.invalidateQueries({ queryKey: ['gantt', projectId] }); // WBS mandays/budget + Owner prefilled from a manpower resource
   };
 
-  // Deep-link from a budget notification (?focus=): a project-level cost alert has no single line,
-  // so we flash the relevant summary section — 'baseline' (charter↔baseline banner) for a budget
-  // overrun, 'spent' (drawdown tiles) for an overspend.
+  // Deep-link from a budget notification or an Anett citation (?focus=). Three targets:
+  //  • 'baseline' / 'spent' — summary anchors (charter↔baseline banner / drawdown tiles).
+  //  • a budget-line id     — an Anett [[cite:CODE|Cost|<id>]]; open the accordion holding it and flash
+  //    the row (DirectCosts also expands the line's collapsed family). An unknown id is a no-op — the
+  //    tab still opened, so it's never a dead link.
   const [flash, setFlash] = useState<string | null>(null);
   useEffect(() => {
-    if (!focusId || (focusId !== 'baseline' && focusId !== 'spent') || !data) return;
+    if (!focusId || !data) return;
+    const isKeyword = focusId === 'baseline' || focusId === 'spent';
+    const isDirect = data.directCosts.some((d) => d.id === focusId);
+    const isIndirect = data.indirectCosts.some((i) => i.id === focusId);
+    if (!isKeyword && !isDirect && !isIndirect) return;
+    if (isDirect) setOpen((o) => ({ ...o, direct: true }));
+    if (isIndirect) setOpen((o) => ({ ...o, indirect: true }));
     setFlash(focusId);
-    const s = setTimeout(() => document.querySelector(`[data-cost-focus="${focusId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+    // A line citation needs the accordion (and DirectCosts' family) to expand first — give it a beat.
+    const s = setTimeout(() => document.querySelector(`[data-cost-focus="${focusId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), isKeyword ? 150 : 260);
     const c = setTimeout(() => setFlash(null), 2800);
     return () => { clearTimeout(s); clearTimeout(c); };
   }, [focusId, focusKey, data]);
@@ -161,8 +170,8 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
       )}
 
       {/* Cost lines as collapsible accordion sections (header + total always visible). */}
-      <DirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} onBookAc={bookToLine} onNavigateTab={onNavigateTab} />
-      <IndirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} onBookAc={bookToLine} />
+      <DirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} onBookAc={bookToLine} onNavigateTab={onNavigateTab} flashId={flash} />
+      <IndirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} onBookAc={bookToLine} flashId={flash} />
       <div ref={actualRef}>
         <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.actual} onToggle={() => toggle('actual')} target={acTarget} setTarget={setAcTarget} />
       </div>
@@ -445,7 +454,7 @@ function CharterVariance({ charter, bac }: { charter: number; bac: number }) {
   );
 }
 
-function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc, onNavigateTab }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void; onNavigateTab?: (tab: string) => void }) {
+function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc, onNavigateTab, flashId }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void; onNavigateTab?: (tab: string) => void; flashId?: string | null }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [importing, setImporting] = useState(false);
@@ -465,6 +474,13 @@ function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc
   // the row currently being dragged (drag-to-reorder within a family).
   const [collapsedFam, setCollapsedFam] = useState<Set<string>>(new Set());
   const [addingFamily, setAddingFamily] = useState<string | null>(null);
+  // An Anett cost-line citation (?focus=<lineId>) may target a line inside a collapsed family — expand
+  // that family so the flashed row is in the DOM for CostPanel to scroll to.
+  useEffect(() => {
+    if (!flashId) return;
+    const line = data.directCosts.find((d) => d.id === flashId);
+    if (line) setCollapsedFam((s) => { if (!s.has(familyOf(line.type))) return s; const n = new Set(s); n.delete(familyOf(line.type)); return n; });
+  }, [flashId, data.directCosts]);
   const [dragId, setDragId] = useState<string | null>(null);
   const toggleFam = (k: string) => setCollapsedFam((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   // Open a family's inline add-form, presetting the type to that family's first (or only) type.
@@ -747,7 +763,7 @@ function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc
               const editing = editId === d.id;
               const isMp = d.type === 'MANPOWER';
               return (
-              <tr key={d.id} draggable={!editing} onDragStart={() => setDragId(d.id)} onDragOver={(e) => { if (dragId) e.preventDefault(); }} onDrop={() => onRowDrop(d)} onDragEnd={() => setDragId(null)} className={`align-top ${di % 2 === 1 ? 'zebra' : ''} ${dragId === d.id ? 'opacity-40' : ''} ${!editing ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+              <tr key={d.id} data-cost-focus={d.id} draggable={!editing} onDragStart={() => setDragId(d.id)} onDragOver={(e) => { if (dragId) e.preventDefault(); }} onDrop={() => onRowDrop(d)} onDragEnd={() => setDragId(null)} className={`align-top ${di % 2 === 1 ? 'zebra' : ''} ${dragId === d.id ? 'opacity-40' : ''} ${!editing ? 'cursor-grab active:cursor-grabbing' : ''} ${flashId === d.id ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
                 <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
                   {editing && !isMp ? (
                     <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>
@@ -1000,7 +1016,7 @@ function DirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc
   );
 }
 
-function IndirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void }) {
+function IndirectCosts({ data, base, projectId, onChange, open, onToggle, onBookAc, flashId }: { data: CostSummary; base: string; projectId: string; onChange: () => void; open: boolean; onToggle: () => void; onBookAc: (target: string) => void; flashId?: string | null }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [importing, setImporting] = useState(false);
@@ -1072,7 +1088,7 @@ function IndirectCosts({ data, base, projectId, onChange, open, onToggle, onBook
             {data.indirectCosts.map((i, ii) => {
               const editing = editId === i.id;
               return (
-              <tr key={i.id} className={`align-top ${ii % 2 === 1 ? 'zebra' : ''}`}>
+              <tr key={i.id} data-cost-focus={i.id} className={`align-top ${ii % 2 === 1 ? 'zebra' : ''} ${flashId === i.id ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
                 <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
                   {editing ? (
                     <Select aria-label="Type" value={ef.type} onChange={(e) => setEf((p) => ({ ...p, type: e.target.value }))}>

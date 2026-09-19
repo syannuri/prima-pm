@@ -403,10 +403,10 @@ export default function AiAssistant() {
   });
   const codeToId = new Map((projectsQ.data?.projects ?? []).map((p) => [p.code.toUpperCase(), p.id]));
   const CITE_TABS = new Set(['Overview', 'Cost', 'Schedule', 'Risk']); // SOURCE values that map to a real ?tab=
-  // FOCUS_TABS: tabs whose panel supports ?focus=<id> (scroll+flash the exact row). Risk (RiskPanel)
-  // and Schedule (WbsPanel matches by task id) are proven end-to-end; an id that doesn't match just
-  // opens the tab (no flash), never a dead link — so this degrades gracefully.
-  const FOCUS_TABS = new Set(['Risk', 'Schedule']);
+  // FOCUS_TABS: tabs whose panel supports ?focus=<id> (scroll+flash the exact row). Risk (RiskPanel),
+  // Schedule (WbsPanel, by task id) and Cost (CostPanel, by budget-line id) are proven end-to-end; an
+  // id that doesn't match just opens the tab (no flash), never a dead link — degrades gracefully.
+  const FOCUS_TABS = new Set(['Risk', 'Schedule', 'Cost']);
   const renderCitation = (code: string, source: string | undefined, _raw: string, focus?: string) => {
     const id = codeToId.get(code.toUpperCase());
     const tab = source && CITE_TABS.has(source) ? source : undefined;
