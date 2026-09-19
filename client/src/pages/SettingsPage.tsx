@@ -40,15 +40,17 @@ const NAV_ICON: Record<SectionKey, string> = {
 };
 
 type SectionKey = 'general' | 'account' | 'workspace' | 'developer' | 'governance' | 'ai';
-interface SectionDef { key: SectionKey; label: string; desc: string; adminOnly?: boolean; render: () => ReactNode }
+// Nav chrome is bilingual (id/en) to match the page title; the individual feature cards keep their
+// own copy. label/desc carry both languages, picked by the active `lang` at render time.
+interface SectionDef { key: SectionKey; label: Record<Lang, string>; desc: Record<Lang, string>; adminOnly?: boolean; render: () => ReactNode }
 
 const SECTIONS: SectionDef[] = [
-  { key: 'general', label: 'General', desc: 'How Prismatix looks and speaks on this device.', render: () => <AppearanceCard /> },
-  { key: 'account', label: 'Account', desc: 'Your password and personal calendar feed.', render: () => <><SecurityCard /><CalendarFeedCard /></> },
-  { key: 'workspace', label: 'Workspace', desc: "Your organization's address and data model.", adminOnly: true, render: () => <><WorkspaceAddressCard /><CustomFieldsAdminCard /><CustomRolesAdminCard /></> },
-  { key: 'developer', label: 'Developer', desc: 'Workspace-wide API access, webhooks and no-code automations.', adminOnly: true, render: () => <><ApiKeysCard /><WebhooksCard /><AutomationsCard /></> },
-  { key: 'governance', label: 'Governance', desc: 'Approval routing for change requests and proposal intake scoring.', adminOnly: true, render: () => <><ApprovalWorkflowsCard /><IntakeScoringCard /></> },
-  { key: 'ai', label: 'AI', desc: 'Anett assistant — narrative, actions, memory, feedback and usage.', adminOnly: true, render: () => <><AiNarrativeCard /><AiActionOutcomesCard /><AiMemoryCard /><AiFeedbackInboxCard /><AiJudgeTrendCard /><AiUsageCard /></> },
+  { key: 'general', label: { en: 'General', id: 'Umum' }, desc: { en: 'How Prismatix looks and speaks on this device.', id: 'Tampilan dan bahasa Prismatix di perangkat ini.' }, render: () => <AppearanceCard /> },
+  { key: 'account', label: { en: 'Account', id: 'Akun' }, desc: { en: 'Your password and personal calendar feed.', id: 'Kata sandi dan umpan kalender pribadi Anda.' }, render: () => <><SecurityCard /><CalendarFeedCard /></> },
+  { key: 'workspace', label: { en: 'Workspace', id: 'Ruang Kerja' }, desc: { en: "Your organization's address and data model.", id: 'Alamat dan model data organisasi Anda.' }, adminOnly: true, render: () => <><WorkspaceAddressCard /><CustomFieldsAdminCard /><CustomRolesAdminCard /></> },
+  { key: 'developer', label: { en: 'Developer', id: 'Developer' }, desc: { en: 'Workspace-wide API access, webhooks and no-code automations.', id: 'Akses API, webhook, dan automasi tanpa-kode untuk seluruh ruang kerja.' }, adminOnly: true, render: () => <><ApiKeysCard /><WebhooksCard /><AutomationsCard /></> },
+  { key: 'governance', label: { en: 'Governance', id: 'Tata Kelola' }, desc: { en: 'Approval routing for change requests and proposal intake scoring.', id: 'Alur persetujuan permintaan perubahan dan penilaian proposal masuk.' }, adminOnly: true, render: () => <><ApprovalWorkflowsCard /><IntakeScoringCard /></> },
+  { key: 'ai', label: { en: 'AI', id: 'AI' }, desc: { en: 'Anett assistant — narrative, actions, memory, feedback and usage.', id: 'Asisten Anett — narasi, aksi, ingatan, umpan balik, dan penggunaan.' }, adminOnly: true, render: () => <><AiNarrativeCard /><AiActionOutcomesCard /><AiMemoryCard /><AiFeedbackInboxCard /><AiJudgeTrendCard /><AiUsageCard /></> },
 ];
 
 const navIdle =
@@ -124,7 +126,7 @@ export default function SettingsPage() {
         {/* Category rail — a vertical tablist on desktop; a horizontal scroll of pills on mobile. */}
         <nav
           role="tablist"
-          aria-label="Settings sections"
+          aria-label={lang === 'id' ? 'Bagian pengaturan' : 'Settings sections'}
           aria-orientation="vertical"
           onKeyDown={onKey}
           className="mb-5 flex gap-1 overflow-x-auto pb-1 lg:sticky lg:top-4 lg:mb-0 lg:flex-col lg:self-start lg:overflow-visible lg:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -144,17 +146,17 @@ export default function SettingsPage() {
                 className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition lg:w-full ${on ? navActive : navIdle}`}
               >
                 <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={NAV_ICON[s.key]} /></svg>
-                <span className="whitespace-nowrap">{s.label}</span>
+                <span className="whitespace-nowrap">{s.label[lang]}</span>
               </button>
             );
           })}
         </nav>
 
         {/* Active category — its header + cards. */}
-        <div ref={contentRef} role="tabpanel" aria-label={active.label} className="min-w-0 scroll-mt-4">
+        <div ref={contentRef} role="tabpanel" aria-label={active.label[lang]} className="min-w-0 scroll-mt-4">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{active.label}</h2>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{active.desc}</p>
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{active.label[lang]}</h2>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{active.desc[lang]}</p>
           </div>
           <div className="space-y-8">{active.render()}</div>
         </div>
