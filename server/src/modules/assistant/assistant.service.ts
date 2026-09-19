@@ -61,6 +61,7 @@ const SYSTEM_PROMPT_ID = [
   '- SITASI: Saat menyebut angka/status SPESIFIK sebuah proyek dari data (indeks EVM, biaya, tanggal, jumlah risiko/task), tambahkan penanda tepat setelahnya: [[cite:KODE|SUMBER]] — KODE = kode proyek (mis. AI-1), SUMBER = area asalnya salah satu dari Overview/Cost/Schedule/Risk. Contoh: "`AI-1` terlambat, SPI 0.82 [[cite:AI-1|Schedule]]." Hanya untuk proyek spesifik, maksimal satu penanda per fakta; JANGAN menyitir pernyataan umum atau proyek yang tak punya kode.',
   '- SITASI RISIKO TERTENTU: bila faktanya merujuk SATU risiko spesifik dari list_project_risks, tambahkan id risiko sebagai bagian KETIGA agar tautan membuka baris risikonya: [[cite:KODE|Risk|<id>]] — <id> = nilai field `id` risiko itu dari list_project_risks, SALIN PERSIS (jangan pakai kode/judul). Contoh: "Risiko integrasi vendor tinggi (EMV Rp 120 juta) [[cite:AI-1|Risk|ckz9a...]]." Untuk sitasi lain cukup dua bagian.',
   '- SITASI TUGAS TERTENTU: bila faktanya merujuk SATU tugas spesifik dari get_schedule_detail (mis. tugas di jalur kritis, terlambat, atau float-nya kecil), tambahkan id tugas sebagai bagian KETIGA: [[cite:KODE|Schedule|<id>]] — <id> = nilai field `id` tugas itu dari get_schedule_detail, SALIN PERSIS (jangan pakai WBS/nama). Contoh: "Uji integrasi jadi penentu, float 0 hari [[cite:AI-1|Schedule|ckz9b...]]."',
+  '- SITASI BARIS BIAYA TERTENTU: bila faktanya merujuk SATU baris anggaran spesifik dari get_project_costs (mis. satu baris yang over-budget atau habis pagu), tambahkan id baris sebagai bagian KETIGA: [[cite:KODE|Cost|<id>]] — <id> = nilai field `id` baris itu dari get_project_costs (baris direct atau indirect), SALIN PERSIS (jangan pakai label). Contoh: "Baris lisensi software over 15% [[cite:AI-1|Cost|ckz9c...]]." Untuk angka biaya AGREGAT (BAC, total actual, committed) cukup dua bagian: [[cite:KODE|Cost]].',
   '- KARTU VISUAL: Saat pengguna menanyakan EVM / kinerja biaya-jadwal / kesehatan sebuah proyek SPESIFIK, kamu BOLEH menambahkan SATU penanda tersendiri di akhir jawaban — [[chart:KODE|evm]] — untuk menampilkan kartu ringkas SPI/CPI + EV/AC/BAC proyek itu. Maksimal satu kartu per jawaban, hanya bila benar-benar membantu; JANGAN untuk pertanyaan umum/lintas-proyek.',
   '',
   'FORMAT JAWABAN (Markdown):',
@@ -93,6 +94,7 @@ const SYSTEM_PROMPT_EN = [
   '- CITATIONS: When you state a SPECIFIC project\'s number/status drawn from the data (EVM index, cost, a date, a risk/task count), append a marker right after it: [[cite:CODE|SOURCE]] — CODE = the project code (e.g. AI-1), SOURCE = the area it came from, one of Overview/Cost/Schedule/Risk. Example: "`AI-1` is behind schedule, SPI 0.82 [[cite:AI-1|Schedule]]." Cite specific projects only, at most one marker per fact; do NOT cite general statements or projects without a code.',
   '- SPECIFIC-RISK CITATIONS: when the fact refers to ONE specific risk from list_project_risks, append the risk id as a THIRD part so the link opens that risk\'s row: [[cite:CODE|Risk|<id>]] — <id> = that risk\'s `id` field from list_project_risks, COPIED EXACTLY (not the code/title). Example: "Vendor-integration risk is high (EMV Rp 120 juta) [[cite:AI-1|Risk|ckz9a...]]." Other citations need only two parts.',
   '- SPECIFIC-TASK CITATIONS: when the fact refers to ONE specific task from get_schedule_detail (e.g. a critical-path, late, or low-float task), append the task id as a THIRD part: [[cite:CODE|Schedule|<id>]] — <id> = that task\'s `id` field from get_schedule_detail, COPIED EXACTLY (not the WBS/name). Example: "Integration testing is the driver, 0 days float [[cite:AI-1|Schedule|ckz9b...]]."',
+  '- SPECIFIC-COST-LINE CITATIONS: when the fact refers to ONE specific budget line from get_project_costs (e.g. a line that is over budget or out of budget), append the line id as a THIRD part: [[cite:CODE|Cost|<id>]] — <id> = that line\'s `id` field from get_project_costs (a direct or indirect line), COPIED EXACTLY (not the label). Example: "The software-licensing line is 15% over [[cite:AI-1|Cost|ckz9c...]]." For AGGREGATE cost figures (BAC, total actual, committed) use just two parts: [[cite:CODE|Cost]].',
   '- VISUAL CARDS: When the user asks about a SPECIFIC project\'s EVM / cost & schedule performance / health, you MAY append ONE standalone marker at the end of the answer — [[chart:CODE|evm]] — to show a compact SPI/CPI + EV/AC/BAC card for that project. At most one card per answer, only when it materially helps; do NOT use it for general or multi-project questions.',
   '',
   'ANSWER FORMAT (Markdown):',
@@ -460,6 +462,7 @@ function compactReport(r: Awaited<ReturnType<typeof getProjectReport>>) {
 // remaining vs committed per line + a category rollup. Lines capped defensively to keep tokens low.
 function compactCosts(c: Awaited<ReturnType<typeof getCostSummary>>) {
   const direct = c.directCosts.slice(0, 60).map((d) => ({
+    id: d.id,
     label: d.label,
     type: d.type,
     budget: Number(d.type === 'MANPOWER' ? d.manpowerCost ?? 0 : d.amount ?? 0),
@@ -469,6 +472,7 @@ function compactCosts(c: Awaited<ReturnType<typeof getCostSummary>>) {
     committed: d.committed,
   }));
   const indirect = c.indirectCosts.slice(0, 60).map((i) => ({
+    id: i.id,
     description: i.description,
     type: i.type,
     budget: Number(i.amount),
