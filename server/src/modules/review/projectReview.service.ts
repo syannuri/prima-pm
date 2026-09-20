@@ -5,11 +5,15 @@
 // the assistant tool. Findings work with AI OFF; nothing here calls the model.
 
 import { prisma } from '../../lib/prisma.js';
+import { AppError } from '../../lib/errors.js';
+import { getTenantStore } from '../../lib/tenant/context.js';
+import { getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { listRequirements } from '../requirement/requirement.service.js';
 import { listRisks } from '../risk/risk.service.js';
 import { getCostSummary } from '../cost/cost.service.js';
 import { getProjectForecast } from '../forecast/forecast.service.js';
 import { computeCpm, type CpmTaskInput, type CpmEdgeInput } from '../schedule/schedule.helpers.js';
+import { resolvePersonasForCategory } from '../assistant/domainKnowledge.js';
 
 export type ReviewDimension = 'SCOPE' | 'SCHEDULE' | 'COST' | 'RISK' | 'GOVERNANCE';
 export type ReviewSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -193,4 +197,54 @@ export async function reviewProject(projectId: string): Promise<ProjectReview> {
     total: findings.length,
   };
   return { generatedAt: new Date().toISOString(), projectId: project.id, projectCode: project.code, projectName: project.name, category: charter?.category ?? null, findings, counts };
+}
+
+// ── AI narration (gated, GROUNDED) ────────────────────────────────────────────────────────────────
+// Layer an advisory narrative on top of the deterministic findings, framed in PMI standards + the
+// project's domain-expert persona(s). The model ONLY ranks/explains findings it is handed — it never
+// invents new ones (mirrors draftAttentionNarrative). Gated by the tenant narrative opt-in.
+
+export interface ReviewNarrative {
+  headline: string;
+  prioritized: { code: string; why: string; recommendation: string }[];
+  summary: string;
+}
+
+const NARRATE_SYSTEM = [
+  'Anda seorang reviewer proyek senior yang menulis audit ringkas & tegas dalam Bahasa Indonesia manajemen proyek.',
+  'Bingkai temuan dalam standar PMI/PMBOK dan, bila persona domain diberikan, tambahkan lensa pakar itu (mis. keamanan siber, arsitektur jaringan, SDLC).',
+  'HANYA gunakan temuan pada payload (sudah dikumpulkan deterministik & berprioritas). JANGAN menambah temuan, angka, atau standar yang tak ada di payload; JANGAN mengarang nomor klausul/versi/CVE.',
+  'headline: 1 kalimat kondisi keseluruhan. prioritized: 2-5 temuan terpenting (pakai field `code` PERSIS dari payload) dengan `why` (dampak) + `recommendation` (langkah konkret berbasis standar). summary: 1 kalimat penutup.',
+].join('\n');
+
+const NARRATE_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    headline: { type: 'string' },
+    prioritized: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, why: { type: 'string' }, recommendation: { type: 'string' } }, required: ['code', 'why', 'recommendation'], additionalProperties: false } },
+    summary: { type: 'string' },
+  },
+  required: ['headline', 'prioritized', 'summary'], additionalProperties: false,
+} as const;
+
+// Recompute the findings server-side (grounding) then narrate. Assumes the route already checked the
+// env gate (503). Throws aiNotEnabledError when the caller's tenant has not opted into AI narrative.
+export async function draftReviewNarrative(projectId: string): Promise<{ review: ProjectReview; narrative: ReviewNarrative }> {
+  const tid = getTenantStore()?.tenantId;
+  if (tid) {
+    const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true } });
+    if (t?.aiNarrativeEnabled !== true) throw aiNotEnabledError();
+  }
+  const review = await reviewProject(projectId);
+  const personas = resolvePersonasForCategory(review.category).map((p) => p.persona);
+  if (review.findings.length === 0) {
+    return { review, narrative: { headline: 'Tidak ada temuan berarti — proyek dalam kondisi sehat.', prioritized: [], summary: 'Audit tidak menemukan gap prioritas.' } };
+  }
+  const raw = await getAiPort().draftJson({
+    system: NARRATE_SYSTEM,
+    user: JSON.stringify({ project: review.projectCode, category: review.category, personas, findings: review.findings }),
+    jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 1100, feature: 'portfolio_qa',
+  });
+  if (raw == null || typeof raw !== 'object' || !('headline' in raw)) throw new AppError(502, 'AI tidak dapat menyusun narasi review saat ini.', 'AI_UNAVAILABLE');
+  return { review, narrative: raw as ReviewNarrative };
 }

@@ -43,6 +43,7 @@ import agileRoutes from '../agile/agile.routes.js';
 import timesheetRoutes from '../timesheet/timesheet.routes.js';
 import closeoutRoutes from '../closeout/closeout.routes.js';
 import evmRoutes from '../evm/evm.routes.js';
+import reviewRoutes from '../review/review.routes.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -423,5 +424,6 @@ router.use('/:projectId/agile', agileRoutes);
 router.use('/:projectId/timesheet', timesheetRoutes);
 router.use('/:projectId/closeout', closeoutRoutes);
 router.use('/:projectId/evm', evmRoutes);
+router.use('/:projectId/review', reviewRoutes);
 
 export default router;
