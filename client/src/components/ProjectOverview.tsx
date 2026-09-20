@@ -14,6 +14,7 @@ import AnettNudge from './AnettNudge';
 import InfoTip from './InfoTip';
 import { KpiIcon, accentSurface, type Accent } from './KpiIcon';
 import { useLang } from '../context/LanguageContext';
+import ProjectReviewCard from './ProjectReviewCard';
 
 // Graphic-first, mobile-friendly project summary — the default landing on phones.
 // Reuses the existing SVG charts (HealthBulletGauge SPI/CPI + EvmTrendChart S-curve) and
@@ -600,6 +601,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           hint={id ? 'Selisih tanggal selesai vs baseline (hari)' : 'Finish date variance vs baseline (days)'}
         />
       </div>
+      <ProjectReviewCard projectId={projectId} onJump={onJump} />
     </div>
   );
 }

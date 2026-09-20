@@ -482,6 +482,44 @@ describe('AI portfolio assistant — /assistant', () => {
     __setAiPort(answerPort);
   });
 
+  it('REVIEW: get_project_review audits an owned project + refuses a foreign one; endpoint + AI narrative work', async () => {
+    const mine = await runWithTenant(aico, () => prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { id: true } }));
+    // Tool: audits the owned project (returns findings) and refuses a foreign one.
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ executeTool }) {
+        const own = await executeTool('get_project_review', { project_code: 'MINE-1' });
+        const foreign = await executeTool('get_project_review', { project_code: 'OTHER-1' });
+        return JSON.stringify({ own, foreign });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    expect(Array.isArray(JSON.parse(out.own).findings)).toBe(true);
+    expect(out.foreign).toContain('tidak dapat diakses');
+
+    // Deterministic endpoint.
+    const ep = await request(app).get(api(`/projects/${mine!.id}/review`)).set(bearer(pmToken));
+    expect(ep.status).toBe(200);
+    expect(ep.body.projectCode).toBe('MINE-1');
+    expect(Array.isArray(ep.body.findings)).toBe(true);
+
+    // AI narrative (tenant opted into narrative earlier); a scripted draftJson returns a valid shape.
+    __setAiPort({
+      async draftJson() { return { headline: 'Kondisi perlu perhatian', prioritized: [], summary: 'ok' }; },
+      async draftNarrative() { return null; },
+      async runToolLoop() { return 'ok'; },
+    });
+    const nar = await request(app).post(api(`/projects/${mine!.id}/review/narrative`)).set(bearer(pmToken)).send({});
+    __setAiPort(answerPort);
+    expect(nar.status).toBe(200);
+    expect(nar.body.narrative.headline).toBe('Kondisi perlu perhatian');
+    expect(nar.body.review.projectCode).toBe('MINE-1');
+  });
+
   it('STREAM: /ask/stream emits live step events then the final answer', async () => {
     __setAiPort({
       async draftJson() { return null; },
