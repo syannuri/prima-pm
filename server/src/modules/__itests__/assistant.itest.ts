@@ -145,6 +145,34 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(captured).toContain('pmi_guidance');
   });
 
+  it('DOMAIN: domain_guidance grounds technical advice in a named framework + disclaimer, and the prompt advertises it', async () => {
+    let captured = '';
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system, executeTool }) {
+        captured = systemText(system);
+        const sec = await executeTool('domain_guidance', { topic: 'zero trust segmentation' });
+        const missing = await executeTool('domain_guidance', { topic: 'zzzznotarealtopic' });
+        return JSON.stringify({ sec, missing });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    const sec = JSON.parse(out.sec);
+    // Grounded in the security-infra persona + a named framework + advisory disclaimer.
+    expect(sec.persona).toMatch(/Keamanan|Security/i);
+    expect(JSON.stringify(sec.standards)).toMatch(/CIS|Zero Trust|NIST/i);
+    expect(sec.guidance.length).toBeGreaterThan(0);
+    expect(sec.disclaimer).toMatch(/advisory/i);
+    // Unknown topic → graceful index, not a hallucination.
+    expect(out.missing).toContain('availableTopics');
+    // The system prompt advertises the domain_guidance capability so the model knows to use it.
+    expect(captured).toContain('domain_guidance');
+  });
+
   it('GROUNDEDNESS GUARD: flags a hallucinated code with a caveat + grounded:false; clean answers pass', async () => {
     // A hallucinated / non-accessible project code (backtick-cited) trips the ungrounded-code grader.
     __setAiPort({
@@ -414,6 +442,44 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(res.body).toHaveProperty('approvalsWaiting');
     expect(res.body).toHaveProperty('overdueTasks');
     expect(Array.isArray(res.body.projectsWithOverdue)).toBe(true);
+  });
+
+  it('DOMAIN PERSONA: a technical charter category activates the expert persona(s); OTHER → PM-only', async () => {
+    const pmId = (await runWithTenant(aico, () => prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { pmUserId: true } })))!.pmUserId!;
+    const charterFields = { description: 'd', goals: 'g', hiScope: 's', hiCostIdr: 1000, hiScheduleStart: new Date(), hiScheduleEnd: new Date(), hiDeliverables: 'x', pmUserId: pmId, locked: false };
+    const { secId, plainId } = await runWithTenant(aico, async () => {
+      const sec = await prisma.project.create({ data: { code: 'SEC-1', name: 'Security Uplift', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: pmId } });
+      await prisma.projectCharter.create({ data: { projectId: sec.id, category: 'CYBERSECURITY_INFRA', ...charterFields } });
+      const plain = await prisma.project.create({ data: { code: 'PLAIN-1', name: 'Generic', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: pmId } });
+      await prisma.projectCharter.create({ data: { projectId: plain.id, category: 'OTHER', ...charterFields } });
+      return { secId: sec.id, plainId: plain.id };
+    });
+
+    let captured = '';
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system }) { captured = systemText(system); return 'ok'; },
+    });
+
+    // Viewing the CYBERSECURITY_INFRA project → the security personas activate.
+    const secRes = await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'review keamanan' }], context: { projectId: secId }, lang: 'en' });
+    const secCaptured = captured;
+    expect(secRes.status).toBe(200);
+    // Surfaced to the client for the persona chip (ids are language-independent).
+    expect(secRes.body.personas.map((p: { id: string }) => p.id)).toEqual(['cybersecurity-infrastructure', 'cybersecurity']);
+    // Injected into the (volatile) system prompt so Anett wears the persona…
+    expect(secCaptured).toContain('CYBERSECURITY_INFRA');
+    expect(secCaptured).toMatch(/reason as: .*Cyber Security/);
+    // …and the stable prompt advertises the tool regardless of the project.
+    expect(secCaptured).toContain('domain_guidance');
+
+    // Viewing an OTHER-category project → no forced technical persona (PM/Program only).
+    const plainRes = await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'status' }], context: { projectId: plainId }, lang: 'en' });
+    expect(plainRes.body.personas).toEqual([]);
+    expect(captured).not.toContain('reason as:');
+
+    __setAiPort(answerPort);
   });
 
   it('STREAM: /ask/stream emits live step events then the final answer', async () => {
