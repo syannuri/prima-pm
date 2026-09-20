@@ -12,6 +12,7 @@ import { startApproval, resolveWorkflow, createWorkflow } from '../approval/appr
 import { RISK_KINDS, RESPONSE_STRATEGIES } from '../risk/risk.schemas.js';
 import { recordBaseline } from './aiActionOutcomes.service.js';
 import { updateDirectLine } from '../cost/cost.service.js';
+import { applyBaselineLock } from '../projects/baseline.service.js';
 
 // =====================================================================
 // Stage C — semi-autonomous AI actions.
@@ -456,6 +457,57 @@ export async function listMyRaisedProposals(userId: string) {
   }));
 }
 
+// ---- Controlled re-baseline (schedule edits on a LOCKED / active project) -----------------------
+
+// A locked baseline freezes the WBS + schedule, so the schedule-editing family cannot write while a
+// project is active. When such an action is APPROVED, we run it as a controlled re-baseline: unlock
+// → apply → re-baseline exactly the tasks the change moved (or created) → re-lock, which captures a
+// new baseline revision. The human approval IS the authorization, so this needs no separate
+// BASELINE_UNLOCK sign-off. Untouched tasks keep their frozen baseline, so their earned-value
+// variance is preserved (a surgical re-baseline, not a project-wide reset).
+
+async function snapshotTaskPlans(projectId: string): Promise<Map<string, string>> {
+  const tasks = await prisma.task.findMany({ where: { projectId }, select: { id: true, planStart: true, planEnd: true } });
+  return new Map(tasks.map((t) => [t.id, `${t.planStart.getTime()}|${t.planEnd.getTime()}`]));
+}
+
+// Copy the current plan into the baseline for exactly the tasks whose plan changed or that are new
+// (mirrors setScheduleBaseline's baseline*←plan* semantics, but scoped to the touched rows).
+async function rebaselineChangedTasks(projectId: string, before: Map<string, string>): Promise<void> {
+  const tasks = await prisma.task.findMany({ where: { projectId }, select: { id: true, planStart: true, planEnd: true, weight: true } });
+  for (const t of tasks) {
+    if (before.get(t.id) === `${t.planStart.getTime()}|${t.planEnd.getTime()}`) continue; // unchanged → keep frozen baseline
+    await prisma.task.update({
+      where: { id: t.id },
+      data: { baselineStart: t.planStart, baselineFinish: t.planEnd, baselineWeight: t.weight },
+    });
+  }
+}
+
+async function runWithControlledRebaseline(
+  projectId: string,
+  reason: string,
+  actorId: string,
+  run: () => Promise<void>,
+): Promise<void> {
+  // Remember the exact prior lock state so a failed apply restores it (no drift, no spurious version).
+  const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { baselineLockedAt: true, baselineLockedById: true } });
+  const before = await snapshotTaskPlans(projectId);
+  await applyBaselineLock(projectId, undefined, actorId, false); // unlock — direct, not routed through approval
+  try {
+    await run();
+    await rebaselineChangedTasks(projectId, before);
+    await applyBaselineLock(projectId, reason, actorId, true); // re-lock — captures a new baseline revision
+  } catch (err) {
+    // Restore the exact prior locked state; do not capture a revision for a change that never landed.
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { baselineLockedAt: proj?.baselineLockedAt ?? new Date(), baselineLockedById: proj?.baselineLockedById ?? actorId },
+    });
+    throw err;
+  }
+}
+
 // ---- Finalize (called by approval.finalize on the terminal decision) ----------------------------
 
 // Approved → run the executor with the approver as actor; mark APPLIED, or FAILED if it throws (no
@@ -482,7 +534,20 @@ export async function finalizeProposal(
     return;
   }
   try {
-    await def.execute(projectId, parsed.data, actorId);
+    // Schedule-editing family on a LOCKED (active) baseline → run it as a controlled re-baseline so
+    // the approved change actually lands instead of dead-ending on assertBaselineUnlocked. Every other
+    // case (any action on an unlocked baseline, or a non-schedule action) runs the executor directly.
+    const isScheduleFamily = DIRECT_APPLY_WHEN_UNLOCKED.has(proposal.actionType as AiActionType);
+    if (isScheduleFamily && (await isBaselineLocked(projectId))) {
+      await runWithControlledRebaseline(
+        projectId,
+        `AI schedule change (approved): ${describeRow(proposal.actionType, parsed.data)}`,
+        actorId,
+        () => def.execute(projectId, parsed.data, actorId),
+      );
+    } else {
+      await def.execute(projectId, parsed.data, actorId);
+    }
     const appliedAt = new Date();
     await prisma.aiActionProposal.update({ where: { id: proposalId }, data: { status: 'APPLIED', appliedAt } });
     // Outcome learning — stamp a baseline + schedule measurement. Best-effort; never breaks finalize.
