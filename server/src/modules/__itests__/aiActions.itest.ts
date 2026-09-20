@@ -229,6 +229,47 @@ describe('Stage C — AI-proposed actions', () => {
     await prisma.task.update({ where: { id: taskId }, data: { baselineStart: null, baselineFinish: null } });
   });
 
+  it('a SUBTASK reschedule on a LOCKED baseline applies via re-baseline; the untouched parent keeps its frozen baseline', async () => {
+    // A child task under the existing parent (taskId). Give both a baseline that differs from where
+    // the child will move, so we can prove the child is re-baselined while the parent is NOT.
+    const parentBase = { start: new Date('2030-01-01'), end: new Date('2030-01-10') };
+    await prisma.task.update({ where: { id: taskId }, data: { baselineStart: parentBase.start, baselineFinish: parentBase.end } });
+    const sub = await prisma.task.create({ data: {
+      projectId, parentTaskId: taskId, wbsCode: '1.1', name: 'Design — detail',
+      planStart: new Date('2030-01-02'), planEnd: new Date('2030-01-06'),
+      baselineStart: new Date('2030-01-02'), baselineFinish: new Date('2030-01-06'), progressPct: 0,
+    } });
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: new Date(), baselineLockedById: pmId } });
+    const versionsBefore = await prisma.baselineVersion.count({ where: { projectId } });
+
+    const { id, applied, routed } = await proposeAction({ projectId, actionType: 'RESCHEDULE_TASK', params: { taskId: sub.id, startDate: '2032-03-01' } }, pmId);
+    expect(applied).toBe(false);
+    expect(routed).toBe(true);
+    // Nothing moved on the subtask while it awaits a decision.
+    expect((await prisma.task.findUnique({ where: { id: sub.id } }))?.planStart.toISOString().slice(0, 10)).toBe('2030-01-02');
+
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
+
+    const afterSub = await prisma.task.findUnique({ where: { id: sub.id } });
+    expect(afterSub!.planStart.toISOString().slice(0, 10)).toBe('2032-03-01');
+    // The moved SUBTASK was re-baselined (baseline follows the approved plan).
+    expect(afterSub!.baselineStart?.getTime()).toBe(afterSub!.planStart.getTime());
+    // The untouched PARENT kept its frozen baseline — surgical re-baseline, not a project-wide reset.
+    const afterParent = await prisma.task.findUnique({ where: { id: taskId } });
+    expect(afterParent!.baselineStart?.getTime()).toBe(parentBase.start.getTime());
+    expect(afterParent!.baselineFinish?.getTime()).toBe(parentBase.end.getTime());
+    // Project stayed locked (active) and captured exactly one new baseline revision.
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))!.baselineLockedAt).not.toBeNull();
+    expect(await prisma.baselineVersion.count({ where: { projectId } })).toBe(versionsBefore + 1);
+
+    await prisma.task.delete({ where: { id: sub.id } });
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null } });
+    await prisma.baselineVersion.deleteMany({ where: { projectId } });
+    await prisma.task.update({ where: { id: taskId }, data: { baselineStart: null, baselineFinish: null } });
+  });
+
   it('a non-schedule action (CREATE_RISK) still routes to approval even when unlocked', async () => {
     const { applied, routed } = await proposeAction({ projectId, actionType: 'CREATE_RISK', params: { title: 'Gate scope check', probabilityScore: 2, impactScore: 2 } }, pmId);
     expect(applied).toBe(false);
