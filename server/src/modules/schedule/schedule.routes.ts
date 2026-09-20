@@ -7,6 +7,7 @@ import { notifyActivationReady } from '../projects/activation.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { ApplyScheduleDraftSchema, generateScheduleDraft, applyScheduleDraft } from './scheduleSuggest.service.js';
 import { actualCostBasis } from '../cost/cost.service.js';
+import { proposeAction, rescheduleOne, isBaselineLocked } from '../aiActions/aiActions.service.js';
 
 const router = Router({ mergeParams: true });
 
@@ -85,10 +86,20 @@ router.post('/ai-generate', ...canWrite, asyncHandler(async (req, res) => {
   res.json(await generateScheduleDraft(req.params.projectId, lang));
 }));
 
-// Apply a (possibly PM-edited) AI schedule draft into the WBS. Same write authorization as tasks.
+// Apply a (possibly PM-edited) AI schedule draft into the WBS. Lock-aware: on an UNLOCKED baseline it
+// applies directly (as before) plus any reschedules of existing tasks; on a LOCKED/active project it
+// stages an ADD_WBS_PACKAGE proposal (→ approval + controlled re-baseline) instead of failing on the
+// frozen baseline, and returns { routed } so the client shows an "awaiting approval" state.
 router.post('/apply-ai-draft', ...canWrite, validateBody(ApplyScheduleDraftSchema), asyncHandler(async (req, res) => {
-  const { startDate, link, fit, level, assign, ...draft } = req.body;
-  const result = await applyScheduleDraft(req.params.projectId, draft, startDate, req.user!.id, { link, fit, level, assign });
+  const projectId = req.params.projectId;
+  if (await isBaselineLocked(projectId)) {
+    const staged = await proposeAction({ projectId, actionType: 'ADD_WBS_PACKAGE', params: req.body }, req.user!.id);
+    res.status(202).json({ routed: staged.routed, applied: staged.applied, proposalId: staged.id });
+    return;
+  }
+  const { startDate, link, fit, level, assign, edits, ...draft } = req.body;
+  const result = await applyScheduleDraft(projectId, draft, startDate, req.user!.id, { link, fit, level, assign });
+  for (const e of edits ?? []) await rescheduleOne(projectId, e, req.user!.id);
   res.status(201).json(result);
 }));
 

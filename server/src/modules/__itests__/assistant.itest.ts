@@ -520,6 +520,47 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(nar.body.review.projectCode).toBe('MINE-1');
   });
 
+  it('WBS PACKAGE: propose_wbs_package drafts + stages an ADD_WBS_PACKAGE proposal on an owned active project; foreign refused', async () => {
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: true } });
+    const pmId = (await runWithTenant(aico, () => prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { pmUserId: true } })))!.pmUserId!;
+    const pkgId = await runWithTenant(aico, async () => {
+      const p = await prisma.project.create({ data: { code: 'PKG-1', name: 'Package Proj', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: pmId, baselineLockedAt: new Date(), baselineLockedById: pmId } });
+      await prisma.projectCharter.create({ data: { projectId: p.id, description: 'Harden the platform', goals: 'secure baseline', category: 'CYBERSECURITY_INFRA', hiScope: 'security hardening', hiDeliverables: 'hardened config', hiCostIdr: 1000, hiScheduleStart: new Date('2030-01-01'), hiScheduleEnd: new Date('2030-06-01'), pmUserId: pmId, locked: true } });
+      return p.id;
+    });
+
+    let sysCaptured = '';
+    __setAiPort({
+      // generateScheduleDraft asks for a JSON draft — return a small valid one.
+      async draftJson() { return { phases: [{ name: 'Hardening', tasks: [{ name: 'Baseline review', durationDays: 3, ref: 't1' }] }] }; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system, executeTool }) {
+        sysCaptured = systemText(system);
+        const own = await executeTool('propose_wbs_package', { project_code: 'PKG-1', focus: 'security hardening' });
+        const foreign = await executeTool('propose_wbs_package', { project_code: 'OTHER-1' });
+        return JSON.stringify({ own, foreign });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    const own = JSON.parse(out.own);
+    expect(own.ok).toBe(true);
+    expect(own.routed).toBe(true); // locked/active → approval, not direct
+    expect(own.tasks).toBeGreaterThanOrEqual(1);
+    expect(out.foreign).toContain('tidak dapat diakses');
+    // The prompt advertises the capability.
+    expect(sysCaptured).toContain('propose_wbs_package');
+    // A PENDING ADD_WBS_PACKAGE proposal landed for that project.
+    const proposals = await runWithTenant(aico, () => prisma.aiActionProposal.findMany({ where: { projectId: pkgId, actionType: 'ADD_WBS_PACKAGE' } }));
+    expect(proposals.length).toBe(1);
+    expect(proposals[0].status).toBe('PENDING');
+    // Surfaced to the client as a proposal card.
+    expect(res.body.proposals.some((p: { actionType: string }) => p.actionType === 'ADD_WBS_PACKAGE')).toBe(true);
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
+  });
+
   it('STREAM: /ask/stream emits live step events then the final answer', async () => {
     __setAiPort({
       async draftJson() { return null; },

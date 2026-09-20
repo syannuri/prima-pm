@@ -133,7 +133,7 @@ const createTaskParams = z.object({
 // Reschedule ONE existing task by date/duration via the audited updateTask (full-replace: carry every
 // field forward, override only the dates; preserve the owner set). Shared by RESCHEDULE_TASK and the
 // edits[] of ADD_WBS_PACKAGE. Does NOT propagate — the caller decides.
-async function rescheduleOne(projectId: string, edit: { taskId: string; startDate?: Date; endDate?: Date; durationDays?: number }, actorId: string): Promise<void> {
+export async function rescheduleOne(projectId: string, edit: { taskId: string; startDate?: Date; endDate?: Date; durationDays?: number }, actorId: string): Promise<void> {
   const t = await prisma.task.findFirst({ where: { id: edit.taskId, projectId } });
   if (!t) throw BadRequest('Task not found on this project');
   const planStart = edit.startDate ?? t.planStart;
@@ -400,7 +400,7 @@ export interface ProposeResult { id: string; routed: boolean; applied: boolean }
 // human-in-the-loop approval route, so a controlled schedule change still goes through a decision.
 const DIRECT_APPLY_WHEN_UNLOCKED = new Set<AiActionType>(['RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'TIDY_SCHEDULE', 'ADD_WBS_PACKAGE']);
 
-async function isBaselineLocked(projectId: string): Promise<boolean> {
+export async function isBaselineLocked(projectId: string): Promise<boolean> {
   const p = await prisma.project.findFirst({ where: { id: projectId }, select: { baselineLockedAt: true } });
   return Boolean(p?.baselineLockedAt);
 }
