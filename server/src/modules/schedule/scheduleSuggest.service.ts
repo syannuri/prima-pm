@@ -6,6 +6,7 @@ import { AppError, BadRequest, NotFound } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
 import { getAiPort, aiNotEnabledError } from '../../lib/ai.js';
 import { assertBaselineUnlocked } from '../projects/baseline.service.js';
+import { resolvePersonasForCategory } from '../assistant/domainKnowledge.js';
 import { generateTaskCode, hasDependencyCycle } from './schedule.helpers.js';
 import { applyAutoSchedule } from './schedule.service.js';
 import {
@@ -57,7 +58,21 @@ export const DraftPhaseSchema = z.object({
   tasks: z.array(DraftTaskSchema).min(1).max(MAX_TASKS_PER_PHASE),
 });
 
-const ScheduleDraftBase = z.object({ phases: z.array(DraftPhaseSchema).min(1).max(MAX_PHASES) });
+// An optional reschedule of an EXISTING task (active-project package): move its start/end or set a
+// new duration. Only date/duration edits (v1) — reuses the RESCHEDULE_TASK path on apply.
+export const DraftEditSchema = z.object({
+  taskId: z.string().min(1).max(60),
+  startDate: z.coerce.date().optional(),
+  endDate: z.coerce.date().optional(),
+  durationDays: z.number().int().min(0).max(MAX_DURATION_DAYS).optional(),
+});
+export type DraftEdit = z.infer<typeof DraftEditSchema>;
+
+const ScheduleDraftBase = z.object({
+  phases: z.array(DraftPhaseSchema).min(1).max(MAX_PHASES),
+  // Reschedules of existing tasks the model proposes alongside the new work packages (bounded).
+  edits: z.array(DraftEditSchema).max(MAX_TOTAL_TASKS).optional(),
+});
 const withinTotalCap = (d: z.infer<typeof ScheduleDraftBase>) =>
   d.phases.reduce((n, p) => n + p.tasks.length, 0) <= MAX_TOTAL_TASKS;
 const totalCapIssue = { message: `A schedule may have at most ${MAX_TOTAL_TASKS} work packages`, path: ['phases'] };
@@ -116,6 +131,20 @@ const SCHEDULE_DRAFT_JSON_SCHEMA = {
           },
         },
         required: ['name', 'tasks'],
+        additionalProperties: false,
+      },
+    },
+    edits: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string' },
+          startDate: { type: 'string' },
+          endDate: { type: 'string' },
+          durationDays: { type: 'integer' },
+        },
+        required: ['taskId'],
         additionalProperties: false,
       },
     },
@@ -180,6 +209,21 @@ interface CharterContext {
   scheduleWorkingDaysBudget: number;
   // The bounded resource pool (register + charter hiResources) the model maps tasks onto.
   availableResources: AvailableResource[];
+  // Existing WBS leaf tasks (id/wbsCode/name/dates) — lets the model avoid duplicating work and
+  // propose reschedules (`edits`) of what is already there. Empty for a fresh timeline.
+  existingTasks: { id: string; wbsCode: string; name: string; start: string; end: string }[];
+}
+
+// The domain-expert persona framing derived from the charter category (#297). Empty for OTHER/unset.
+function personaFraming(category: string, lang: SuggestLang): string {
+  const personas = resolvePersonasForCategory(category);
+  if (!personas.length) return '';
+  const labels = personas.map((p) => p.personaEn).join(' + ');
+  const frameworks = [...new Set(personas.flatMap((p) => p.standards))].join(', ');
+  const areas = [...new Set(personas.flatMap((p) => p.expertiseAreas))].slice(0, 8).join(', ');
+  return lang === 'id'
+    ? `\n\nLENSA PAKAR DOMAIN: susun paket kerja seperti seorang ${labels} untuk proyek ${category}. Selaraskan dengan framework: ${frameworks}. Cakup area penting: ${areas}. JANGAN mengarang nomor klausul standar, versi produk, atau ID CVE.`
+    : `\n\nDOMAIN-EXPERT LENS: propose the work packages a ${labels} would for a ${category} project. Align to the frameworks: ${frameworks}. Cover the key areas: ${areas}. Do NOT invent standard clause numbers, product versions, or CVE ids.`;
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -207,8 +251,16 @@ export function buildScheduleSuggestPrompt(ctx: CharterContext, lang: SuggestLan
     scheduleWorkingDaysBudget: ctx.scheduleWorkingDaysBudget,
     // Only the fields the model needs to map roles — the register id stays server-side.
     availableResources: ctx.availableResources.map((r) => ({ ref: r.ref, label: r.label, capacityPerDay: r.capacityPerDay })),
+    // Existing WBS so the model can avoid duplicates and propose reschedules via `edits` (by taskId).
+    existingTasks: ctx.existingTasks ?? [],
   };
-  return { system: lang === 'id' ? SYSTEM_PROMPT_ID : SYSTEM_PROMPT_EN, user: JSON.stringify(payload) };
+  const base = lang === 'id' ? SYSTEM_PROMPT_ID : SYSTEM_PROMPT_EN;
+  const editsRule = (ctx.existingTasks?.length ?? 0)
+    ? (lang === 'id'
+        ? '\n\nTUGAS YANG SUDAH ADA: payload berisi `existingTasks` (id, wbsCode, nama, tanggal). Untuk menambah pekerjaan baru, buat fase/task baru seperti biasa DAN jangan menduplikasi yang sudah ada. Bila perlu MENGGESER tugas yang sudah ada, tambahkan entri ke `edits` = daftar {taskId, startDate?, endDate?, durationDays?} memakai `id` PERSIS dari existingTasks. `edits` HANYA untuk menggeser tanggal/durasi — bukan mengganti nama/menghapus.'
+        : '\n\nEXISTING TASKS: the payload has `existingTasks` (id, wbsCode, name, dates). To add new work, create new phases/tasks as usual AND do not duplicate what exists. If existing tasks must be RESCHEDULED, add entries to `edits` = a list of {taskId, startDate?, endDate?, durationDays?} using the EXACT `id` from existingTasks. `edits` is ONLY for date/duration shifts — not renames/deletes.')
+    : '';
+  return { system: base + personaFraming(ctx.charter.category, lang) + editsRule, user: JSON.stringify(payload) };
 }
 
 // Per-tenant opt-in — reuses Tenant.aiNarrativeEnabled (one switch for all AI), same as riskSuggest.
@@ -227,6 +279,14 @@ async function loadCharterContext(projectId: string): Promise<CharterContext> {
 
   const availableResources = await assembleResourcePool(charter.hiResources);
 
+  // Existing WBS leaf tasks (not summaries) → the model avoids duplicates and can propose reschedules.
+  const allTasks = await prisma.task.findMany({ where: { projectId }, select: { id: true, wbsCode: true, name: true, parentTaskId: true, planStart: true, planEnd: true } });
+  const parentIds = new Set(allTasks.map((t) => t.parentTaskId).filter(Boolean) as string[]);
+  const existingTasks = allTasks
+    .filter((t) => !parentIds.has(t.id))
+    .slice(0, 60)
+    .map((t) => ({ id: t.id, wbsCode: t.wbsCode, name: t.name, start: t.planStart.toISOString().slice(0, 10), end: t.planEnd.toISOString().slice(0, 10) }));
+
   return {
     project: { code: proj.code, name: proj.name, approach: proj.deliveryApproach },
     charter: {
@@ -240,6 +300,7 @@ async function loadCharterContext(projectId: string): Promise<CharterContext> {
     },
     scheduleWorkingDaysBudget: scheduleDayBudget(charter.hiScheduleStart, charter.hiScheduleEnd),
     availableResources,
+    existingTasks,
   };
 }
 
