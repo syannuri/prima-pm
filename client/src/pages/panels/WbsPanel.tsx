@@ -1753,7 +1753,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         <div className={`flex min-w-0 items-center gap-2 ${fullscreen ? 'min-w-0 flex-nowrap overflow-x-auto pb-1 [&>*]:shrink-0' : 'flex-wrap'}`}>
           {/* Standalone quick actions — Generate-AI + Select stay in the row; every other control
               lives in the consolidated ☰ Menu (below) to keep this toolbar tidy. */}
-          {canPlan && (
+          {/* Available even when the baseline is locked: on an active project the generator stages a
+              WBS package for approval (applied via controlled re-baseline) instead of a direct write. */}
+          {canEdit && (
             <AiTimelineGenerate base={base} projectId={projectId} hasTasks={rows.length > 0} onApplied={invalidate} className={CTRL_BTN} container={modalContainer} />
           )}
           {canPlan && rows.length > 0 && (

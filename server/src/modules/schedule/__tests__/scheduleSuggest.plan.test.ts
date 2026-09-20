@@ -203,6 +203,25 @@ describe('buildScheduleSuggestPrompt — language selection', () => {
     expect(buildScheduleSuggestPrompt(ctx, 'id').system).toContain('ALOKASI RESOURCE');
     expect(buildScheduleSuggestPrompt(ctx, 'id').system).toContain('MINIMALKAN CRITICAL PATH');
   });
+
+  it('injects the domain-expert persona + frameworks for a technical charter category', () => {
+    const sec = { ...ctx, charter: { ...ctx.charter, category: 'CYBERSECURITY_INFRA' } };
+    const sys = buildScheduleSuggestPrompt(sec, 'en').system;
+    expect(sys).toContain('DOMAIN-EXPERT LENS');
+    expect(sys).toMatch(/Cyber Security/);
+    expect(sys).toMatch(/CIS|NIST|ISO 27001/);
+    // A non-technical / unknown category adds no persona lens.
+    expect(buildScheduleSuggestPrompt(ctx, 'en').system).not.toContain('DOMAIN-EXPERT LENS');
+  });
+
+  it('surfaces existing tasks + the reschedule (edits) rule when the project already has a WBS', () => {
+    const withWbs = { ...ctx, existingTasks: [{ id: 't-1', wbsCode: '1', name: 'Design', start: '2026-01-02', end: '2026-01-06' }] };
+    const p = buildScheduleSuggestPrompt(withWbs, 'en');
+    expect(p.system).toContain('EXISTING TASKS');
+    expect(JSON.parse(p.user).existingTasks[0].id).toBe('t-1');
+    // No existing WBS → no edits rule.
+    expect(buildScheduleSuggestPrompt(ctx, 'en').system).not.toContain('EXISTING TASKS');
+  });
 });
 
 describe('draft schemas — bounds', () => {
@@ -215,5 +234,13 @@ describe('draft schemas — bounds', () => {
   it('apply schema carries an optional startDate', () => {
     const ok = ApplyScheduleDraftSchema.safeParse({ ...draft, startDate: '2026-01-05' });
     expect(ok.success).toBe(true);
+  });
+
+  it('accepts an optional edits[] (reschedules of existing tasks) and coerces the dates', () => {
+    const parsed = ScheduleDraftSchema.safeParse({ ...draft, edits: [{ taskId: 't-1', startDate: '2026-02-01', durationDays: 5 }] });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.edits?.[0].startDate).toBeInstanceOf(Date);
+    // A malformed edit (no taskId) is rejected.
+    expect(ScheduleDraftSchema.safeParse({ ...draft, edits: [{ startDate: '2026-02-01' }] }).success).toBe(false);
   });
 });

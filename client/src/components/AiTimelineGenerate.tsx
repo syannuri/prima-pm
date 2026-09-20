@@ -31,11 +31,15 @@ interface DraftPhase {
   tasks: DraftTask[];
 }
 interface PoolResource { ref: string; label: string; capacityPerDay: number }
+interface DraftEdit { taskId: string; startDate?: string; endDate?: string; durationDays?: number }
 interface GenerateResponse {
-  draft: { phases: DraftPhase[] };
+  draft: { phases: DraftPhase[]; edits?: DraftEdit[] };
   charter: { scheduleStart: string; scheduleEnd: string; scheduleWorkingDaysBudget: number };
   resources: PoolResource[];
 }
+// Apply returns the created summary on an UNLOCKED baseline, or a routed proposal on a LOCKED one.
+type ApplyResponse = { created: number; phases: number; links: number; levelingLinks: number; assigned: number; routed?: undefined }
+  | { routed: boolean; applied: boolean; proposalId: string };
 
 // Editable copies carry an `include` flag so the PM can drop phases / tasks before applying.
 type ETask = DraftTask & { include: boolean };
@@ -57,6 +61,7 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
   const t = (id: string, en: string) => (lang === 'id' ? id : en);
   const [open, setOpen] = useState(false);
   const [phases, setPhases] = useState<EPhase[]>([]);
+  const [edits, setEdits] = useState<DraftEdit[]>([]); // proposed reschedules of existing tasks (active project)
   const [charter, setCharter] = useState<GenerateResponse['charter'] | null>(null);
   const [resources, setResources] = useState<PoolResource[]>([]);
   const [startDate, setStartDate] = useState(formatDateInput(new Date()));
@@ -76,6 +81,7 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
     mutationFn: () => api.post<GenerateResponse>(`${base}/ai-generate`, { lang }),
     onSuccess: (res) => {
       setPhases(res.draft.phases.map((p) => ({ ...p, include: true, tasks: p.tasks.map((tk) => ({ ...tk, include: true })) })));
+      setEdits(res.draft.edits ?? []);
       setCharter(res.charter);
       setResources(res.resources ?? []);
       // Default start: the chartered start for a fresh schedule; today when appending.
@@ -118,10 +124,21 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
               })),
           }))
           .filter((p) => p.tasks.length > 0),
+        // Reschedules of existing tasks the model proposed (active-project package) — passed through.
+        edits: edits.length ? edits : undefined,
       };
-      return api.post<{ created: number; phases: number; links: number; levelingLinks: number; assigned: number }>(`${base}/apply-ai-draft`, payload);
+      return api.post<ApplyResponse>(`${base}/apply-ai-draft`, payload);
     },
     onSuccess: (res) => {
+      // LOCKED/active project → the package was staged for approval (applied via re-baseline once approved).
+      if ('routed' in res && res.routed !== undefined) {
+        toast.success(res.applied
+          ? t('Paket diterapkan langsung ke jadwal.', 'Package applied directly to the schedule.')
+          : t('Paket WBS diajukan untuk approval — diterapkan setelah disetujui.', 'WBS package submitted for approval — it applies once approved.'));
+        setOpen(false);
+        onApplied();
+        return;
+      }
       const links = res.links > 0
         ? t(` + ${res.links} keterkaitan (auto-schedule)`, ` + ${res.links} link${res.links === 1 ? '' : 's'} (auto-scheduled)`)
         : '';
@@ -233,6 +250,11 @@ export default function AiTimelineGenerate({ base, projectId, hasTasks, onApplie
                   {t('Perkiraan selesai', 'Projected end')}: <strong>{formatDate(projectedEnd)}</strong>
                   {charter && <> · {t('Akhir charter', 'Charter end')}: {formatDate(new Date(charter.scheduleEnd))}</>}
                 </div>
+                {edits.length > 0 && (
+                  <div className="mt-1 text-violet-700 dark:text-violet-300">
+                    🔧 {t(`+ ${edits.length} penjadwalan ulang task yang sudah ada (ikut diusulkan).`, `+ ${edits.length} reschedule${edits.length === 1 ? '' : 's'} of existing task${edits.length === 1 ? '' : 's'} (included in the proposal).`)}
+                  </div>
+                )}
                 {charter && (
                   overByDays > 0 ? (
                     <div className="mt-1 text-amber-700 dark:text-amber-400">
