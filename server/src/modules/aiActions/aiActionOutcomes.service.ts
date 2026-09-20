@@ -38,6 +38,7 @@ const SCORED_METRIC: Record<AiActionType, 'SPI' | null> = {
   RESCHEDULE_TASK: 'SPI', // a direct Gantt move — its effect on schedule performance is measurable
   EDIT_DEPENDENCY: 'SPI', // re-linking the network reshapes the critical path
   CREATE_TASK: null, // adding scope isn't a schedule-improvement lever — no verdict
+  ADD_WBS_PACKAGE: null, // a scope/plan package — not a single schedule-improvement lever
   CREATE_RISK: null,
   CREATE_CHANGE_REQUEST: null,
 };

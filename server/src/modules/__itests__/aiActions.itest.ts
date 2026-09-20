@@ -270,6 +270,47 @@ describe('Stage C — AI-proposed actions', () => {
     await prisma.task.update({ where: { id: taskId }, data: { baselineStart: null, baselineFinish: null } });
   });
 
+  it('ADD_WBS_PACKAGE on a LOCKED baseline routes to approval, then applies (new tasks + reschedule) via controlled re-baseline', async () => {
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: new Date(), baselineLockedById: pmId } });
+    const before = await prisma.task.findUnique({ where: { id: taskId } });
+    const taskCountBefore = await prisma.task.count({ where: { projectId } });
+    const versionsBefore = await prisma.baselineVersion.count({ where: { projectId } });
+
+    const params = {
+      phases: [{ name: 'Hardening', tasks: [{ name: 'Baseline config review', durationDays: 3, ref: 't1' }] }],
+      edits: [{ taskId, startDate: '2033-06-01' }],
+    };
+    const { id, applied, routed } = await proposeAction({ projectId, actionType: 'ADD_WBS_PACKAGE', params }, pmId);
+    expect(applied).toBe(false);
+    expect(routed).toBe(true); // locked → human-in-the-loop
+    // Nothing changed while it awaits a decision.
+    expect(await prisma.task.count({ where: { projectId } })).toBe(taskCountBefore);
+    expect((await prisma.task.findUnique({ where: { id: taskId } }))?.planStart.getTime()).toBe(before!.planStart.getTime());
+
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
+
+    // The new package landed…
+    expect(await prisma.task.count({ where: { projectId } })).toBeGreaterThan(taskCountBefore);
+    const added = await prisma.task.findFirst({ where: { projectId, name: 'Baseline config review' } });
+    expect(added).toBeTruthy();
+    expect(added!.baselineStart?.getTime()).toBe(added!.planStart.getTime()); // new task re-baselined
+    // …the existing task was rescheduled + re-baselined…
+    const moved = await prisma.task.findUnique({ where: { id: taskId } });
+    expect(moved!.planStart.toISOString().slice(0, 10)).toBe('2033-06-01');
+    expect(moved!.baselineStart?.getTime()).toBe(moved!.planStart.getTime());
+    // …the project stayed locked and captured exactly one new baseline revision.
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))!.baselineLockedAt).not.toBeNull();
+    expect(await prisma.baselineVersion.count({ where: { projectId } })).toBe(versionsBefore + 1);
+
+    // cleanup
+    await prisma.task.deleteMany({ where: { projectId, name: 'Baseline config review' } });
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null } });
+    await prisma.baselineVersion.deleteMany({ where: { projectId } });
+    await prisma.task.update({ where: { id: taskId }, data: { baselineStart: null, baselineFinish: null, planStart: before!.planStart, planEnd: before!.planEnd } });
+  });
+
   it('a non-schedule action (CREATE_RISK) still routes to approval even when unlocked', async () => {
     const { applied, routed } = await proposeAction({ projectId, actionType: 'CREATE_RISK', params: { title: 'Gate scope check', probabilityScore: 2, impactScore: 2 } }, pmId);
     expect(applied).toBe(false);

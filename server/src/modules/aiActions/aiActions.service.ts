@@ -7,6 +7,7 @@ import { createNotification } from '../notification/notification.service.js';
 import { createRisk } from '../risk/risk.service.js';
 import { setTaskProgress, applyAutoSchedule, updateTask, createTask, addDependency, updateDependency, deleteDependency } from '../schedule/schedule.service.js';
 import { DEPENDENCY_TYPES } from '../schedule/schedule.schemas.js';
+import { applyScheduleDraft, ApplyScheduleDraftSchema, type DraftEdit } from '../schedule/scheduleSuggest.service.js';
 import { createChangeRequest } from '../charter/charter.service.js';
 import { startApproval, resolveWorkflow, createWorkflow } from '../approval/approval.service.js';
 import { RISK_KINDS, RESPONSE_STRATEGIES } from '../risk/risk.schemas.js';
@@ -31,7 +32,7 @@ import { applyBaselineLock } from '../projects/baseline.service.js';
 export const AI_ACTION_TYPES = [
   'CREATE_RISK', 'UPDATE_TASK_PROGRESS', 'CREATE_CHANGE_REQUEST', 'TIDY_SCHEDULE', 'REASSIGN_MANPOWER',
   // Gantt-editing family (Fase 2) — reschedule a task, edit a dependency link, add a task.
-  'RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK',
+  'RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'ADD_WBS_PACKAGE',
 ] as const;
 export type AiActionType = (typeof AI_ACTION_TYPES)[number];
 
@@ -129,6 +130,28 @@ const createTaskParams = z.object({
   isMilestone: z.boolean().default(false),
 });
 
+// Reschedule ONE existing task by date/duration via the audited updateTask (full-replace: carry every
+// field forward, override only the dates; preserve the owner set). Shared by RESCHEDULE_TASK and the
+// edits[] of ADD_WBS_PACKAGE. Does NOT propagate — the caller decides.
+async function rescheduleOne(projectId: string, edit: { taskId: string; startDate?: Date; endDate?: Date; durationDays?: number }, actorId: string): Promise<void> {
+  const t = await prisma.task.findFirst({ where: { id: edit.taskId, projectId } });
+  if (!t) throw BadRequest('Task not found on this project');
+  const planStart = edit.startDate ?? t.planStart;
+  let planEnd: Date;
+  if (edit.endDate) planEnd = edit.endDate;
+  else if (edit.durationDays != null) planEnd = new Date(planStart.getTime() + edit.durationDays * MS_PER_DAY);
+  else planEnd = new Date(planStart.getTime() + (t.planEnd.getTime() - t.planStart.getTime())); // preserve duration
+  if (planEnd.getTime() < planStart.getTime()) throw BadRequest('The task would end before it starts');
+  await updateTask(projectId, edit.taskId, {
+    name: t.name, wbsCode: t.wbsCode, description: t.description, deliverable: t.deliverable,
+    acceptanceCriteria: t.acceptanceCriteria, parentTaskId: t.parentTaskId,
+    planStart, planEnd, actualStart: t.actualStart, actualFinish: t.actualFinish,
+    picUserId: t.picUserId, picResourceId: t.picResourceId,
+    progressPct: t.progressPct, weight: t.weight == null ? null : Number(t.weight),
+    isMilestone: t.isMilestone, sortOrder: t.sortOrder,
+  }, actorId);
+}
+
 // ---- The action registry: schema + human describe + audited executor -----------------------------
 
 interface ActionDef<P> {
@@ -222,24 +245,7 @@ const REGISTRY: Record<AiActionType, ActionDef<any>> = {
       return `an AI-proposed action (reschedule "${task?.name ?? 'a task'}")`;
     },
     execute: async (projectId, p: z.infer<typeof rescheduleTaskParams>, actorId) => {
-      const t = await prisma.task.findFirst({ where: { id: p.taskId, projectId } });
-      if (!t) throw BadRequest('Task not found on this project');
-      const planStart = p.startDate ?? t.planStart;
-      let planEnd: Date;
-      if (p.endDate) planEnd = p.endDate;
-      else if (p.durationDays != null) planEnd = new Date(planStart.getTime() + p.durationDays * MS_PER_DAY);
-      else planEnd = new Date(planStart.getTime() + (t.planEnd.getTime() - t.planStart.getTime())); // preserve duration
-      if (planEnd.getTime() < planStart.getTime()) throw BadRequest('The task would end before it starts');
-      // updateTask is a full replace — carry every existing field forward and override only the dates.
-      // ownerResourceIds is omitted on purpose so the existing owner set is preserved.
-      await updateTask(projectId, p.taskId, {
-        name: t.name, wbsCode: t.wbsCode, description: t.description, deliverable: t.deliverable,
-        acceptanceCriteria: t.acceptanceCriteria, parentTaskId: t.parentTaskId,
-        planStart, planEnd, actualStart: t.actualStart, actualFinish: t.actualFinish,
-        picUserId: t.picUserId, picResourceId: t.picResourceId,
-        progressPct: t.progressPct, weight: t.weight == null ? null : Number(t.weight),
-        isMilestone: t.isMilestone, sortOrder: t.sortOrder,
-      }, actorId);
+      await rescheduleOne(projectId, p, actorId);
       if (p.propagate) await applyAutoSchedule(projectId, { dryRun: false, actorId, mode: 'push' });
     },
   },
@@ -285,6 +291,23 @@ const REGISTRY: Record<AiActionType, ActionDef<any>> = {
       }, actorId);
     },
   },
+  // A persona/scope-aware WBS package: append new phases/tasks (applyScheduleDraft) AND optionally
+  // reschedule existing tasks (edits[]), applied as ONE change. On a LOCKED/active project this routes
+  // to approval and finalizeProposal wraps the whole execute in the controlled re-baseline.
+  ADD_WBS_PACKAGE: {
+    schema: ApplyScheduleDraftSchema,
+    describe: async (p: z.infer<typeof ApplyScheduleDraftSchema>) => {
+      const tasks = p.phases.reduce((n, ph) => n + ph.tasks.length, 0);
+      const edits = p.edits?.length ?? 0;
+      return `an AI-proposed action (add ${tasks} task(s) in ${p.phases.length} phase(s)${edits ? ` + reschedule ${edits}` : ''})`;
+    },
+    execute: async (projectId, p: z.infer<typeof ApplyScheduleDraftSchema>, actorId) => {
+      // Append the new phases/tasks (applyScheduleDraft ignores `edits` — we apply those below).
+      await applyScheduleDraft(projectId, { phases: p.phases, edits: p.edits }, p.startDate, actorId,
+        { link: p.link, fit: p.fit, level: p.level, assign: p.assign });
+      for (const e of (p.edits ?? []) as DraftEdit[]) await rescheduleOne(projectId, e, actorId);
+    },
+  },
 };
 
 function actionDef(actionType: string): ActionDef<unknown> {
@@ -310,6 +333,11 @@ function describeRow(actionType: string, params: unknown): string {
     case 'RESCHEDULE_TASK': return 'reschedule a task on the Gantt';
     case 'EDIT_DEPENDENCY': return `${String(p.op)} a task dependency`;
     case 'CREATE_TASK': return `add ${p.isMilestone ? 'milestone' : 'task'} "${p.name}"`;
+    case 'ADD_WBS_PACKAGE': {
+      const tasks = Array.isArray(p.phases) ? p.phases.reduce((n: number, ph: { tasks?: unknown[] }) => n + (ph.tasks?.length ?? 0), 0) : 0;
+      const edits = Array.isArray(p.edits) ? p.edits.length : 0;
+      return `add a WBS package (${tasks} task(s)${edits ? ` + reschedule ${edits}` : ''})`;
+    }
     default: return 'an AI-proposed action';
   }
 }
@@ -370,7 +398,7 @@ export interface ProposeResult { id: string; routed: boolean; applied: boolean }
 // Fase 3 — the schedule-editing family applies DIRECTLY when the baseline is unlocked (an edit the
 // requester could make by hand, done for them on their explicit ask). A locked baseline keeps the
 // human-in-the-loop approval route, so a controlled schedule change still goes through a decision.
-const DIRECT_APPLY_WHEN_UNLOCKED = new Set<AiActionType>(['RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'TIDY_SCHEDULE']);
+const DIRECT_APPLY_WHEN_UNLOCKED = new Set<AiActionType>(['RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'TIDY_SCHEDULE', 'ADD_WBS_PACKAGE']);
 
 async function isBaselineLocked(projectId: string): Promise<boolean> {
   const p = await prisma.project.findFirst({ where: { id: projectId }, select: { baselineLockedAt: true } });
