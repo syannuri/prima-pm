@@ -601,7 +601,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           hint={id ? 'Selisih tanggal selesai vs baseline (hari)' : 'Finish date variance vs baseline (days)'}
         />
       </div>
-      <ProjectReviewCard projectId={projectId} onJump={onJump} />
+      <div className="lg:col-span-12 lg:order-last"><ProjectReviewCard projectId={projectId} onJump={onJump} /></div>
     </div>
   );
 }
