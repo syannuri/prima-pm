@@ -200,20 +200,33 @@ describe('Stage C — AI-proposed actions', () => {
     expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
   });
 
-  it('a schedule edit on a LOCKED baseline routes to approval instead of applying directly', async () => {
-    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: new Date() } });
+  it('a schedule edit on a LOCKED baseline routes to approval, then approval applies it via a controlled re-baseline', async () => {
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: new Date(), baselineLockedById: pmId } });
     const before = await prisma.task.findUnique({ where: { id: taskId } });
+    const versionsBefore = await prisma.baselineVersion.count({ where: { projectId } });
     const { id, applied, routed } = await proposeAction({ projectId, actionType: 'RESCHEDULE_TASK', params: { taskId, startDate: '2031-01-01' } }, pmId);
     expect(applied).toBe(false);
     expect(routed).toBe(true); // human-in-the-loop, not direct
     // Nothing moved while it awaits a decision.
     expect((await prisma.task.findUnique({ where: { id: taskId } }))?.planStart.getTime()).toBe(before!.planStart.getTime());
-    // Approving still can't move a locked schedule → the executor blocks and the proposal FAILS.
+
+    // Approving now unlocks → applies → re-baselines the moved task → re-locks (no separate unlock approval).
     const req = await reqFor(id);
     await decideApproval(req!.id, adminId, 'APPROVED');
-    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('FAILED');
-    expect((await prisma.task.findUnique({ where: { id: taskId } }))?.planStart.getTime()).toBe(before!.planStart.getTime());
-    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null } });
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
+
+    const after = await prisma.task.findUnique({ where: { id: taskId } });
+    expect(after!.planStart.toISOString().slice(0, 10)).toBe('2031-01-01');
+    // The moved task was re-baselined (baseline follows the approved plan)…
+    expect(after!.baselineStart?.getTime()).toBe(after!.planStart.getTime());
+    // …the project stayed locked (active), and a new baseline revision was captured.
+    const proj = await prisma.project.findUnique({ where: { id: projectId } });
+    expect(proj!.baselineLockedAt).not.toBeNull();
+    expect(await prisma.baselineVersion.count({ where: { projectId } })).toBe(versionsBefore + 1);
+
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null } });
+    await prisma.baselineVersion.deleteMany({ where: { projectId } });
+    await prisma.task.update({ where: { id: taskId }, data: { baselineStart: null, baselineFinish: null } });
   });
 
   it('a non-schedule action (CREATE_RISK) still routes to approval even when unlocked', async () => {
