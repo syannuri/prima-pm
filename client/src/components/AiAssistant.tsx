@@ -19,7 +19,8 @@ interface NavRef { label: string; path: string }
 interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
 interface QueryTable { entity: string; columns: { key: string; label: string }[]; rows: Record<string, string | number | boolean | null>[]; total: number; limit: number }
 interface CoverageResult { total: number; cited: number; coverage: number } // grounding: how many citable figures carry a marker
-interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; grounded?: boolean; citationCoverage?: CoverageResult; error?: boolean }
+interface PersonaRef { id: string; label: string }
+interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; personas?: PersonaRef[]; grounded?: boolean; citationCoverage?: CoverageResult; error?: boolean }
 interface TurnUsage { inputTokens: number; outputTokens: number; costUsd: number } // #5 cost meter
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 interface ApprovalItem { id: string; actionLabel: string; stepName: string; project: { code: string; name: string } | null }
@@ -33,7 +34,7 @@ interface AnettStrings {
   greetPre: string; greetPost: string; greetPropose: string;
   needAttention: string; approvalsWaiting: (n: number) => string; overdue: (code: string, n: number) => string; overduePrompt: (code: string) => string;
   proposalsTitle: string; waitingApprover: string; appliedSuffix: string; reviewInApprovals: string;
-  remembering: string; teamSuffix: string;
+  remembering: string; teamSuffix: string; personaMode: string;
   groundedLabel: string; checkLabel: string; citedFn: (cited: number, total: number) => string; citedTitle: string;
   thanksUp: string; thanksDown: string; notePlaceholder: string; send: string; skip: string;
   likeTitle: string; likeAria: string; dislikeTitle: string; dislikeAria: string;
@@ -58,7 +59,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     greetPre: 'Halo, saya ', greetPost: '. Saya bantu memantau proyek Anda', greetPropose: ' — dan bisa mengusulkan aksi (perlu persetujuan)',
     needAttention: 'Perlu perhatian', approvalsWaiting: (n) => `${n} approval menunggu`, overdue: (c, n) => `${c}: ${n} telat`, overduePrompt: (c) => `Tugas apa saja yang telat di ${c}?`,
     proposalsTitle: '🤖 Usulan aksi diajukan', waitingApprover: ' (menunggu approver)', appliedSuffix: ' (diterapkan langsung)', reviewInApprovals: 'Tinjau di Approvals →',
-    remembering: 'Mengingat', teamSuffix: ' (tim)',
+    remembering: 'Mengingat', teamSuffix: ' (tim)', personaMode: 'Mode',
     groundedLabel: 'Berdasarkan data', checkLabel: 'Periksa lagi',
     citedFn: (c, t) => `${c}/${t} tersitasi`, citedTitle: 'Berapa banyak angka spesifik yang membawa penanda sitiran (bisa diklik ke barisnya).',
     thanksUp: '👍 Terima kasih atas masukannya.', thanksDown: '👎 Terima kasih — Anett akan mengingatnya.', notePlaceholder: 'Apa yang kurang tepat? / seharusnya bagaimana?', send: 'Kirim', skip: 'Lewati',
@@ -86,7 +87,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     greetPre: "Hi, I'm ", greetPost: '. I help you monitor your projects', greetPropose: ' — and can propose actions (needs approval)',
     needAttention: 'Needs attention', approvalsWaiting: (n) => `${n} approval${n === 1 ? '' : 's'} waiting`, overdue: (c, n) => `${c}: ${n} overdue`, overduePrompt: (c) => `Which tasks are overdue in ${c}?`,
     proposalsTitle: '🤖 Action proposals submitted', waitingApprover: ' (awaiting approver)', appliedSuffix: ' (applied directly)', reviewInApprovals: 'Review in Approvals →',
-    remembering: 'Remembering', teamSuffix: ' (team)',
+    remembering: 'Remembering', teamSuffix: ' (team)', personaMode: 'Mode',
     groundedLabel: 'Grounded in data', checkLabel: 'Double-check',
     citedFn: (c, t) => `${c}/${t} cited`, citedTitle: 'How many specific figures carry a citation marker (clickable to the source row).',
     thanksUp: '👍 Thanks for the feedback.', thanksDown: "👎 Thanks — Anett will remember this.", notePlaceholder: 'What was off? / what should it be?', send: 'Send', skip: 'Skip',
@@ -450,7 +451,7 @@ export default function AiAssistant() {
 
   const ask = useMutation({
     // Only real Q&A turns go to the model — error notices are dropped from the sent history.
-    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; usage?: TurnUsage; grounded?: boolean; citationCoverage?: CoverageResult }>(`/assistant/ask`, {
+    mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; personas?: PersonaRef[]; usage?: TurnUsage; grounded?: boolean; citationCoverage?: CoverageResult }>(`/assistant/ask`, {
       messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
       context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
       lang,
@@ -459,7 +460,7 @@ export default function AiAssistant() {
       if (res.usage) addCost(res.usage); // #5 cost meter
       // The new answer lands at the current end of the list; start the typewriter there (unless reduced-motion).
       if (!reduce && res.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
-      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined, tables: res.tables?.length ? res.tables : undefined, grounded: res.grounded, citationCoverage: res.citationCoverage }]);
+      setTurns((t) => [...t, { role: 'assistant', content: res.answer, proposals: res.proposals?.length ? res.proposals : undefined, navigate: res.navigate?.length ? res.navigate : undefined, memories: res.memories?.length ? res.memories : undefined, tables: res.tables?.length ? res.tables : undefined, personas: res.personas?.length ? res.personas : undefined, grounded: res.grounded, citationCoverage: res.citationCoverage }]);
     },
     onError: (e) => setTurns((t) => [...t, { role: 'assistant', content: e instanceof ApiError ? e.message : L.errorGeneric, error: true }]),
   });
@@ -682,7 +683,7 @@ export default function AiAssistant() {
         for (const part of parts) {
           const line = part.split('\n').find((l) => l.startsWith('data: '));
           if (!line) continue;
-          let ev: { type: string; label?: string; delta?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; message?: string; usage?: TurnUsage; grounded?: boolean; citationCoverage?: CoverageResult };
+          let ev: { type: string; label?: string; delta?: string; answer?: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; personas?: PersonaRef[]; message?: string; usage?: TurnUsage; grounded?: boolean; citationCoverage?: CoverageResult };
           try { ev = JSON.parse(line.slice(6)); } catch { continue; }
           started = true;
           if (ev.type === 'step' && ev.label) {
@@ -701,7 +702,7 @@ export default function AiAssistant() {
             if (ev.usage) addCost(ev.usage); // #5 cost meter
             // Tokens already animated the text live ⇒ skip the fake typewriter; else keep it.
             if (!reduce && ev.answer && !streamedText) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
-            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined, grounded: ev.grounded, citationCoverage: ev.citationCoverage }]);
+            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined, personas: ev.personas?.length ? ev.personas : undefined, grounded: ev.grounded, citationCoverage: ev.citationCoverage }]);
             setStreamText(''); setStreamReasoning('');
           } else if (ev.type === 'error') {
             setTurns((t) => [...t, { role: 'assistant', content: ev.message || L.errorGeneric, error: true }]);
@@ -1077,6 +1078,16 @@ export default function AiAssistant() {
                     {t.memories.map((m, j) => (
                       <span key={j} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/20 dark:text-emerald-300">
                         🧠 {L.remembering}{m.scope === 'TENANT' ? L.teamSuffix : ''}: {m.content}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* 🧠 Domain-expert persona(s) Anett adopted for this (technical-domain) project */}
+                {i !== streamIdx && t.personas && t.personas.length > 0 && (
+                  <div className="ml-10 mt-1.5 flex flex-wrap gap-1.5">
+                    {t.personas.map((p) => (
+                      <span key={p.id} className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300">
+                        🧠 {L.personaMode}: {p.label}
                       </span>
                     ))}
                   </div>
