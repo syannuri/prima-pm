@@ -1027,6 +1027,7 @@ export interface AiSettings {
   configured: boolean;
   enabled: boolean;
   actionsEnabled: boolean;
+  autopilotEnabled: boolean;
   proactiveEnabled: boolean;
   memoryEnabled: boolean;
   voiceEnabled: boolean;

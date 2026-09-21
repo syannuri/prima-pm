@@ -14,7 +14,7 @@ import { anettChatKey } from '../lib/anettChat';
 // Portfolio AI assistant — Q&A over the projects the user can access, and (Stage C) able to PROPOSE
 // actions that a human approves. Launcher sits bottom-RIGHT, stacked ABOVE the DM ChatWidget bubble.
 // Dormant unless AI is available (env + tenant). Persona: "Anett".
-interface ProposedRef { actionType: string; projectCode: string; routed: boolean; applied?: boolean }
+interface ProposedRef { actionType: string; projectCode: string; routed: boolean; applied?: boolean; goal?: string; steps?: number }
 interface NavRef { label: string; path: string }
 interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
 interface QueryTable { entity: string; columns: { key: string; label: string }[]; rows: Record<string, string | number | boolean | null>[]; total: number; limit: number }
@@ -33,7 +33,7 @@ interface AnettStrings {
   enlarge: string; shrink: string;
   greetPre: string; greetPost: string; greetPropose: string;
   needAttention: string; approvalsWaiting: (n: number) => string; overdue: (code: string, n: number) => string; overduePrompt: (code: string) => string;
-  proposalsTitle: string; waitingApprover: string; appliedSuffix: string; reviewInApprovals: string;
+  proposalsTitle: string; waitingApprover: string; appliedSuffix: string; reviewInApprovals: string; stepsWord: string;
   remembering: string; teamSuffix: string; personaMode: string;
   groundedLabel: string; checkLabel: string; citedFn: (cited: number, total: number) => string; citedTitle: string;
   thanksUp: string; thanksDown: string; notePlaceholder: string; send: string; skip: string;
@@ -58,7 +58,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     newChat: 'New Chat', newChatTitle: 'Percakapan baru', close: 'Tutup', enlarge: 'Perbesar', shrink: 'Perkecil',
     greetPre: 'Halo, saya ', greetPost: '. Saya bantu memantau proyek Anda', greetPropose: ' — dan bisa mengusulkan aksi (perlu persetujuan)',
     needAttention: 'Perlu perhatian', approvalsWaiting: (n) => `${n} approval menunggu`, overdue: (c, n) => `${c}: ${n} telat`, overduePrompt: (c) => `Tugas apa saja yang telat di ${c}?`,
-    proposalsTitle: '🤖 Usulan aksi diajukan', waitingApprover: ' (menunggu approver)', appliedSuffix: ' (diterapkan langsung)', reviewInApprovals: 'Tinjau di Approvals →',
+    proposalsTitle: '🤖 Usulan aksi diajukan', waitingApprover: ' (menunggu approver)', appliedSuffix: ' (diterapkan langsung)', reviewInApprovals: 'Tinjau di Approvals →', stepsWord: 'langkah',
     remembering: 'Mengingat', teamSuffix: ' (tim)', personaMode: 'Mode',
     groundedLabel: 'Berdasarkan data', checkLabel: 'Periksa lagi',
     citedFn: (c, t) => `${c}/${t} tersitasi`, citedTitle: 'Berapa banyak angka spesifik yang membawa penanda sitiran (bisa diklik ke barisnya).',
@@ -72,7 +72,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     needsApproval: (n) => `Menunggu persetujuan Anda (${n})`, approve: 'Setujui', reject: 'Tolak', viewAllApprovals: (n) => `+${n} lainnya di Approvals →`, approvedToast: 'Disetujui', rejectedToast: 'Ditolak',
     exportCsv: 'Ekspor CSV', rowsShown: (n, total) => `${n} dari ${total} baris`,
     footerPropose: '🤖 Bisa mengusulkan aksi · perlu persetujuan', footerRead: 'Hanya membaca', footerTail: ' · hasil AI bisa keliru — verifikasi angka penting.', errorGeneric: 'AI tidak dapat menjawab saat ini.',
-    actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal', REASSIGN_MANPOWER: 'Pindah alokasi manpower', RESCHEDULE_TASK: 'Ubah jadwal tugas', EDIT_DEPENDENCY: 'Ubah dependensi', CREATE_TASK: 'Tambah tugas' },
+    actionLabels: { CREATE_RISK: 'Tambah risiko', UPDATE_TASK_PROGRESS: 'Update progress tugas', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Rapikan jadwal', REASSIGN_MANPOWER: 'Pindah alokasi manpower', RESCHEDULE_TASK: 'Ubah jadwal tugas', EDIT_DEPENDENCY: 'Ubah dependensi', CREATE_TASK: 'Tambah tugas', ADD_WBS_PACKAGE: 'Tambah paket WBS', EXECUTE_PLAN: 'Rencana otopilot' },
     chips: (proj, propose) => proj
       ? ['Ringkas kesehatan proyek ini', 'Tugas apa saja yang telat di sini?', propose ? 'Usulkan mitigasi untuk proyek ini' : 'Apa risiko tertinggi di proyek ini?']
       : ['Proyek mana yang paling di belakang jadwal?', 'Ringkas kesehatan portofolio saya', propose ? 'Usulkan mitigasi untuk proyek paling berisiko' : 'Apa risiko tertinggi di proyek saya?'],
@@ -86,7 +86,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     newChat: 'New Chat', newChatTitle: 'New conversation', close: 'Close', enlarge: 'Enlarge', shrink: 'Shrink',
     greetPre: "Hi, I'm ", greetPost: '. I help you monitor your projects', greetPropose: ' — and can propose actions (needs approval)',
     needAttention: 'Needs attention', approvalsWaiting: (n) => `${n} approval${n === 1 ? '' : 's'} waiting`, overdue: (c, n) => `${c}: ${n} overdue`, overduePrompt: (c) => `Which tasks are overdue in ${c}?`,
-    proposalsTitle: '🤖 Action proposals submitted', waitingApprover: ' (awaiting approver)', appliedSuffix: ' (applied directly)', reviewInApprovals: 'Review in Approvals →',
+    proposalsTitle: '🤖 Action proposals submitted', waitingApprover: ' (awaiting approver)', appliedSuffix: ' (applied directly)', reviewInApprovals: 'Review in Approvals →', stepsWord: 'steps',
     remembering: 'Remembering', teamSuffix: ' (team)', personaMode: 'Mode',
     groundedLabel: 'Grounded in data', checkLabel: 'Double-check',
     citedFn: (c, t) => `${c}/${t} cited`, citedTitle: 'How many specific figures carry a citation marker (clickable to the source row).',
@@ -100,7 +100,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
     needsApproval: (n) => `Awaiting your approval (${n})`, approve: 'Approve', reject: 'Reject', viewAllApprovals: (n) => `+${n} more in Approvals →`, approvedToast: 'Approved', rejectedToast: 'Rejected',
     exportCsv: 'Export CSV', rowsShown: (n, total) => `${n} of ${total} rows`,
     footerPropose: '🤖 Can propose actions · needs approval', footerRead: 'Read-only', footerTail: ' · AI can be wrong — verify key numbers.', errorGeneric: "Anett can't answer right now.",
-    actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule', REASSIGN_MANPOWER: 'Reassign manpower', RESCHEDULE_TASK: 'Reschedule task', EDIT_DEPENDENCY: 'Edit dependency', CREATE_TASK: 'Add task' },
+    actionLabels: { CREATE_RISK: 'Add risk', UPDATE_TASK_PROGRESS: 'Update task progress', CREATE_CHANGE_REQUEST: 'Draft change request', TIDY_SCHEDULE: 'Tidy schedule', REASSIGN_MANPOWER: 'Reassign manpower', RESCHEDULE_TASK: 'Reschedule task', EDIT_DEPENDENCY: 'Edit dependency', CREATE_TASK: 'Add task', ADD_WBS_PACKAGE: 'Add WBS package', EXECUTE_PLAN: 'Autopilot plan' },
     chips: (proj, propose) => proj
       ? ['Summarize this project’s health', 'Which tasks are overdue here?', propose ? 'Propose mitigations for this project' : "What's the top risk in this project?"]
       : ['Which project is most behind schedule?', 'Summarize my portfolio health', propose ? 'Propose mitigations for the riskiest project' : "What's the top risk across my projects?"],
@@ -1048,7 +1048,12 @@ export default function AiAssistant() {
                     <div className="mb-1 flex items-center gap-1.5 font-semibold text-violet-700 dark:text-violet-300">{L.proposalsTitle}</div>
                     <ul className="space-y-0.5 text-slate-600 dark:text-slate-300">
                       {t.proposals.map((p, j) => (
-                        <li key={j}>• {ACTION_LABELS[p.actionType] ?? p.actionType} · <span className="font-mono">{p.projectCode}</span>{p.applied ? L.appliedSuffix : p.routed ? '' : L.waitingApprover}</li>
+                        <li key={j}>
+                          • {ACTION_LABELS[p.actionType] ?? p.actionType}
+                          {p.actionType === 'EXECUTE_PLAN' && p.goal ? <> · “{p.goal}”</> : null}
+                          {p.actionType === 'EXECUTE_PLAN' && p.steps ? <span className="text-slate-400"> ({p.steps} {L.stepsWord})</span> : null}
+                          {' · '}<span className="font-mono">{p.projectCode}</span>{p.applied ? L.appliedSuffix : p.routed ? '' : L.waitingApprover}
+                        </li>
                       ))}
                     </ul>
                     {t.proposals.some((p) => !p.applied) && (

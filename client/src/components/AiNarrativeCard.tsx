@@ -15,6 +15,8 @@ const CARD_T = {
     narrDescOff: 'Fitur AI belum dikonfigurasi pada deployment ini — hubungi admin platform untuk mengaktifkan.',
     actTitle: 'Izinkan AI mengusulkan aksi (perlu persetujuan)', actOn: 'Aksi AI diaktifkan', actOff: 'Aksi AI dimatikan', actAria: 'Izinkan aksi AI',
     actDesc1: 'AI dapat mengusulkan perubahan (buat risiko, update progress, draft CR, rapikan jadwal). Usulan', actDesc2: ' tidak pernah berjalan otomatis', actDesc3: ' — selalu lewat approval dulu.',
+    autoTitle: 'Autopilot: rencana multi-langkah (perlu persetujuan)', autoOn: 'Autopilot diaktifkan', autoOff: 'Autopilot dimatikan', autoAria: 'Izinkan autopilot AI',
+    autoDesc1: 'Anett dapat menyusun SATU tujuan menjadi rencana berurutan berisi beberapa aksi lalu menjalankannya sebagai satu kesatuan. Untuk proyek aktif seluruh rencana', autoDesc2: ' lewat satu approval', autoDesc3: ' dulu. Perlu “Aksi AI” aktif.',
     proTitle: 'Draft status mingguan otomatis (proaktif)', proOn: 'Draft mingguan otomatis diaktifkan', proOff: 'Draft mingguan otomatis dimatikan', proAria: 'Draft status mingguan otomatis',
     proDesc1: 'Setiap minggu AI menyusun draft narasi status + sinyal prediktif untuk tiap proyek aktif, muncul di', proDescReports: ' Reports', proDesc2: ' untuk ditinjau PM. ', proDescNever: 'Tidak pernah terbit otomatis', proDesc3: '.',
     memTitle: 'Ingatan Anett (lintas sesi)', memOn: 'Ingatan Anett diaktifkan', memOff: 'Ingatan Anett dimatikan', memAria: 'Aktifkan ingatan Anett',
@@ -30,6 +32,8 @@ const CARD_T = {
     narrDescOff: 'AI is not configured on this deployment — contact your platform admin to enable it.',
     actTitle: 'Let AI propose actions (needs approval)', actOn: 'AI actions enabled', actOff: 'AI actions disabled', actAria: 'Allow AI actions',
     actDesc1: 'AI can propose changes (create risk, update progress, draft CR, tidy schedule). Proposals', actDesc2: ' never run automatically', actDesc3: ' — always via approval first.',
+    autoTitle: 'Autopilot: multi-step plans (needs approval)', autoOn: 'Autopilot enabled', autoOff: 'Autopilot disabled', autoAria: 'Allow AI autopilot',
+    autoDesc1: 'Anett can turn ONE goal into an ordered plan of several actions and run them as one unit. On an active project the whole plan', autoDesc2: ' goes through one approval', autoDesc3: ' first. Requires “AI actions” on.',
     proTitle: 'Automatic weekly status draft (proactive)', proOn: 'Weekly auto-draft enabled', proOff: 'Weekly auto-draft disabled', proAria: 'Automatic weekly status draft',
     proDesc1: 'Each week AI drafts a status narrative + predictive signals for every active project, surfaced in', proDescReports: ' Reports', proDesc2: ' for the PM to review. ', proDescNever: 'Never published automatically', proDesc3: '.',
     memTitle: 'Anett memory (cross-session)', memOn: 'Anett memory enabled', memOff: 'Anett memory disabled', memAria: 'Enable Anett memory',
@@ -53,12 +57,13 @@ export default function AiNarrativeCard() {
     queryFn: () => api.get<AiSettings>('/ai-settings'),
   });
   const save = useMutation({
-    mutationFn: (patch: { enabled?: boolean; actionsEnabled?: boolean; proactiveEnabled?: boolean; memoryEnabled?: boolean; voiceEnabled?: boolean }) => api.patch<AiSettings>('/ai-settings', patch),
+    mutationFn: (patch: { enabled?: boolean; actionsEnabled?: boolean; autopilotEnabled?: boolean; proactiveEnabled?: boolean; memoryEnabled?: boolean; voiceEnabled?: boolean }) => api.patch<AiSettings>('/ai-settings', patch),
     onSuccess: (s, patch) => {
       qc.setQueryData(['ai-settings'], s);
       if (patch.voiceEnabled !== undefined) toast.success(s.voiceEnabled ? t.voiceOn : t.voiceOff);
       else if (patch.memoryEnabled !== undefined) toast.success(s.memoryEnabled ? t.memOn : t.memOff);
       else if (patch.proactiveEnabled !== undefined) toast.success(s.proactiveEnabled ? t.proOn : t.proOff);
+      else if (patch.autopilotEnabled !== undefined) toast.success(s.autopilotEnabled ? t.autoOn : t.autoOff);
       else if (patch.actionsEnabled !== undefined) toast.success(s.actionsEnabled ? t.actOn : t.actOff);
       else toast.success(s.enabled ? t.narrOn : t.narrOff);
     },
@@ -100,6 +105,24 @@ export default function AiNarrativeCard() {
               onChange={(v) => save.mutate({ actionsEnabled: v })}
               disabled={!data.configured || save.isPending}
               label={t.actAria}
+            />
+          </div>
+
+          {/* Autopilot (multi-step) — a SEPARATE, STRONGER opt-in ON TOP of "AI actions": lets Anett
+              compose ONE ordered plan of several actions and run them as a unit (one approval on an
+              active project). Disabled unless AI actions is on (it rides on that gate). */}
+          <div className="mt-4 flex items-start justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
+            <div>
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{t.autoTitle}</div>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                {t.autoDesc1}<span className="font-medium">{t.autoDesc2}</span>{t.autoDesc3}
+              </p>
+            </div>
+            <Toggle
+              checked={data.autopilotEnabled}
+              onChange={(v) => save.mutate({ autopilotEnabled: v })}
+              disabled={!data.configured || !data.actionsEnabled || save.isPending}
+              label={t.autoAria}
             />
           </div>
 
