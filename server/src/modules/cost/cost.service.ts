@@ -7,6 +7,7 @@ import { materialAmount, manpowerCost } from '../../calc/cost.js';
 import type { RiskForReserve } from '../../calc/risk.js';
 import { computeBaseline } from './cost.rollup.js';
 import { assertBaselineUnlocked } from '../projects/baseline.service.js';
+import { workingDaysBetween } from '../schedule/schedule.helpers.js';
 import type { ActualCostInput, DirectLineInput, IndirectLineInput } from './cost.schemas.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
@@ -480,6 +481,32 @@ export async function setAutoPostLabourAc(projectId: string, enabled: boolean, a
   await writeAudit({ projectId, userId: actorId, entity: 'Project', entityId: projectId, action: 'UPDATE', after: { autoPostLabourAc: enabled } });
   if (enabled) await resyncLabourAc(projectId, actorId, 'timesheet-auto');
   return { autoPostLabourAc: enabled };
+}
+
+// Draft a MANPOWER budget deterministically from the schedule: for every leaf task that has an
+// assigned lead resource (picResourceId) but no manpower line yet, one line = (task working days)
+// mandays for that resource — the rate is inherited from the resource pool downstream (never invented).
+// This is the grounded core of "Anett fills the empty Cost tab": it derives real budget from the real
+// plan. Milestones (zero-duration) and already-costed tasks are skipped. Returns [] when nothing is
+// assignable (the caller then advises assigning resources first).
+export async function draftManpowerBudget(
+  projectId: string,
+): Promise<{ kind: 'MANPOWER'; resourceId: string; planMandays: number; taskId: string }[]> {
+  const [tasks, existing] = await Promise.all([
+    prisma.task.findMany({
+      where: { projectId, isMilestone: false, picResourceId: { not: null } },
+      select: { id: true, picResourceId: true, planStart: true, planEnd: true },
+    }),
+    prisma.costItemDirect.findMany({ where: { projectId, type: 'MANPOWER', taskId: { not: null } }, select: { taskId: true } }),
+  ]);
+  const costed = new Set(existing.map((e) => e.taskId));
+  const items: { kind: 'MANPOWER'; resourceId: string; planMandays: number; taskId: string }[] = [];
+  for (const t of tasks) {
+    if (costed.has(t.id)) continue; // don't double-budget a task that already has a manpower line
+    const mandays = Math.max(1, workingDaysBetween(t.planStart.getTime(), t.planEnd.getTime()));
+    items.push({ kind: 'MANPOWER', resourceId: t.picResourceId!, planMandays: mandays, taskId: t.id });
+  }
+  return items;
 }
 
 export async function getCostSummary(projectId: string) {

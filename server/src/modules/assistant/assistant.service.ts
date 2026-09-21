@@ -12,7 +12,7 @@ import { logger } from '../../lib/observability.js';
 import { listProjects } from '../projects/projects.service.js';
 import { getProjectReport } from '../report/report.service.js';
 import { listRisks } from '../risk/risk.service.js';
-import { getCostSummary, getPortfolioActualCosts } from '../cost/cost.service.js';
+import { getCostSummary, getPortfolioActualCosts, draftManpowerBudget } from '../cost/cost.service.js';
 import { getCpm } from '../schedule/schedule.service.js';
 import { reviewProject } from '../review/projectReview.service.js';
 import { generateScheduleDraft } from '../schedule/scheduleSuggest.service.js';
@@ -44,6 +44,7 @@ const SYSTEM_PROMPT_ID = [
   'Anda adalah "Anett", PM Assistant untuk aplikasi manajemen proyek Prismatix. Anda menjawab pertanyaan pengguna tentang proyek-proyek yang DAPAT DIAKSES olehnya.',
   'Jika pengguna menyapa atau menanyakan nama Anda, perkenalkan diri sebagai Anett secara singkat dan ramah. Jangan menyebut nama diri di setiap jawaban.',
   'Jawab dalam Bahasa Indonesia manajemen proyek yang natural dan ringkas.',
+  'GAYA (PRESISI, ANTI-BERTELE): Langsung ke jawaban di kalimat pertama — tanpa basa-basi, tanpa mengulang pertanyaan, tanpa "tentu", "baik", atau ringkasan pembuka. Default SANGAT ringkas: 1–3 kalimat atau beberapa bullet pendek untuk hal sederhana; uraikan panjang HANYA bila diminta atau memang kompleks. Sebut angka/nama kunci apa adanya, hilangkan kata pengisi, jangan ulang isi tool. Satu ajakan tindak lanjut saja bila perlu. Berhenti begitu pertanyaan terjawab.',
   '',
   'ATURAN (WAJIB):',
   '- Gunakan tool untuk mengambil data sebelum menjawab hal yang butuh angka. Jangan mengarang angka, tanggal, atau nama.',
@@ -80,6 +81,7 @@ const SYSTEM_PROMPT_EN = [
   'You are "Anett", the PM Assistant for the Prismatix project-management app. You answer the user\'s questions about the projects they CAN ACCESS.',
   'If the user greets you or asks your name, introduce yourself as Anett briefly and warmly. Do not repeat your name in every answer.',
   'Answer in natural, concise project-management English.',
+  'STYLE (PRECISE, NO RAMBLING): Lead with the answer in the first sentence — no preamble, no restating the question, no "sure"/"certainly"/opening summary. Default VERY brief: 1–3 sentences or a few short bullets for simple things; go long ONLY when asked or genuinely complex. State key numbers/names plainly, cut filler, do not echo tool output. At most one follow-up nudge if useful. Stop as soon as the question is answered.',
   '',
   'RULES (MANDATORY):',
   '- Use tools to fetch data before answering anything that needs numbers. Do not make up numbers, dates, or names.',
@@ -363,6 +365,7 @@ const PROPOSE_ACTION_TOOL: AiToolDef = {
     '- RESCHEDULE_TASK: { taskId, startDate? (YYYY-MM-DD), endDate? , durationDays? , propagate? } — geser/ubah durasi sebuah task di Gantt. Beri minimal salah satu dari startDate/endDate/durationDays; kalau hanya startDate, durasi lama dipertahankan. propagate (default true) menggeser task penerus mengikuti dependensi. Ambil taskId dari get_schedule_detail.',
     '- EDIT_DEPENDENCY: { op "add"|"update"|"remove", predecessorTaskId?, successorTaskId?, dependencyId?, type? "FS"|"SS"|"FF"|"SF", lagDays? } — add butuh predecessorTaskId+successorTaskId; update/remove pakai dependencyId ATAU pasangan predecessor+successor. Ambil taskId dari get_schedule_detail.',
     '- CREATE_TASK: { name, startDate (YYYY-MM-DD), endDate? , durationDays?, parentTaskId?, isMilestone? } — tambah task/milestone baru. Milestone: end = start.',
+    '- CREATE_COST_ITEM: { kind "MANPOWER"|"MATERIAL"|"INDIRECT", ... } — tambah SATU baris budget. MANPOWER: { resourceId, planMandays, taskId? } (rate/role/label DIWARISI dari resource — JANGAN mengarang tarif; ambil resourceId dari get_resource_conflicts/data). MATERIAL: { materialType, label, qty, unitCost, subCategory? (wajib bila OTHER) }. INDIRECT: { indirectType, description, amount, subCategory? (wajib bila OTHER) }. Untuk mengisi SELURUH budget sekaligus pakai propose_cost_budget.',
     'project_code dari list_projects. rationale = alasan singkat mengapa aksi ini diusulkan.',
     'CATATAN GERBANG: RESCHEDULE_TASK/EDIT_DEPENDENCY/CREATE_TASK/TIDY_SCHEDULE — bila baseline jadwal BELUM terkunci, perubahan DITERAPKAN LANGSUNG (tak perlu approval); bila SUDAH terkunci, ajukan CREATE_CHANGE_REQUEST (impactAreas ["SCHEDULE"]) sebagai gantinya. Tetap konfirmasi ke pengguna sebelum memanggil.',
   ].join('\n'),
@@ -393,6 +396,25 @@ const PROPOSE_WBS_PACKAGE_TOOL: AiToolDef = {
       project_code: { type: 'string' },
       focus: { type: 'string', description: 'Fokus/scope opsional yang diminta (mis. "fase hardening keamanan").' },
     },
+    required: ['project_code'],
+    additionalProperties: false,
+  },
+};
+
+// Cost — generate a whole MANPOWER budget from the schedule (tasks with an assigned lead resource →
+// mandays × the resource's rate), then stage it as GENERATE_COST_BUDGET. Grounded & deterministic
+// (rates inherited, never invented). Same Stage-C gate as propose_action.
+const PROPOSE_COST_BUDGET_TOOL: AiToolDef = {
+  name: 'propose_cost_budget',
+  description: [
+    'ISI BUDGET yang kosong: susun baris MANPOWER otomatis dari jadwal — tiap task yang punya resource lead ter-assign & belum punya baris manpower → (hari kerja task) mandays untuk resource itu; tarif DIWARISI dari resource (tidak pernah dikarang). Distaging sebagai GENERATE_COST_BUDGET (perlu approval bila proyek aktif).',
+    'Gunakan saat pengguna minta "isi/buat/bentuk cost/budget" atau menyebut Cost masih kosong. Untuk satu baris (mis. material/indirect) pakai propose_action CREATE_COST_ITEM.',
+    'Bila TIDAK ada task ber-resource, tool mengembalikan kosong — sarankan pengguna meng-assign resource ke task dulu (Anett bisa mengusulkannya), lalu ulangi. Material/indirect tidak diturunkan otomatis — tambahkan via CREATE_COST_ITEM bila perlu. Selalu konfirmasi ke pengguna sebelum memanggil.',
+    'project_code dari list_projects.',
+  ].join('\n'),
+  input_schema: {
+    type: 'object',
+    properties: { project_code: { type: 'string' } },
     required: ['project_code'],
     additionalProperties: false,
   },
@@ -676,6 +698,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'domain_guidance': return en ? 'Referencing domain expertise' : 'Merujuk keahlian domain';
     case 'propose_action': return en ? 'Preparing an action proposal' : 'Menyiapkan usulan aksi';
     case 'propose_wbs_package': return en ? 'Drafting a WBS package' : 'Menyusun paket WBS';
+    case 'propose_cost_budget': return en ? 'Building the cost budget' : 'Menyusun budget biaya';
     case 'propose_autopilot_plan': return en ? 'Composing an autopilot plan' : 'Menyusun rencana otopilot';
     case 'get_action_effectiveness': return en ? 'Checking the action track record' : 'Memeriksa rekam jejak aksi';
     case 'remember': return en ? 'Saving a memory' : 'Menyimpan ingatan';
@@ -921,6 +944,29 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
           return JSON.stringify({ error: err instanceof AppError ? err.message : 'Gagal menyusun paket WBS.' });
         }
       }
+      case 'propose_cost_budget': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        if (ctx.role === 'VIEWER') return JSON.stringify({ error: 'Peran read-only tidak dapat mengusulkan perubahan.' });
+        const proj = await prisma.project.findUnique({ where: { id }, select: { status: true } });
+        if (proj?.status === 'CLOSED') return JSON.stringify({ error: 'Proyek sudah ditutup (read-only). Buka kembali untuk mengubah.' });
+        try {
+          const items = await draftManpowerBudget(id);
+          if (items.length === 0) {
+            return JSON.stringify({ ok: false, empty: true, message: 'Tidak ada task ber-resource untuk diturunkan jadi budget. Assign resource ke task dulu (bisa via aksi), lalu ulangi. Untuk material/indirect, tambahkan via CREATE_COST_ITEM.' });
+          }
+          const { routed, applied } = await proposeAction({ projectId: id, actionType: 'GENERATE_COST_BUDGET', params: { items }, rationale: 'Diturunkan dari penugasan resource pada jadwal' }, ctx.userId);
+          ctx.proposals.push({ actionType: 'GENERATE_COST_BUDGET', projectCode: (typeof args.project_code === 'string' ? args.project_code.trim() : ''), routed, applied });
+          const message = applied
+            ? `Budget (${items.length} baris manpower) dibentuk langsung (baseline belum terkunci) — Cost & BAC kini terisi.`
+            : routed
+              ? `Budget (${items.length} baris manpower) diajukan untuk approval — diterapkan via re-baseline setelah disetujui.`
+              : 'Budget tersimpan namun belum ada approver — minta admin mengatur workflow AI action.';
+          return JSON.stringify({ ok: true, applied, routed, lines: items.length, message });
+        } catch (err) {
+          return JSON.stringify({ error: err instanceof AppError ? err.message : 'Gagal menyusun budget.' });
+        }
+      }
       case 'propose_autopilot_plan': {
         const id = resolveId();
         if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
@@ -1104,7 +1150,7 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // Autopilot (multi-step) rides on top of the action gate + its own opt-in.
   const autopilotEnabled = actionsEnabled && (await callerAutopilotEnabled());
   const tools = actionsEnabled
-    ? [...TOOLS, PROPOSE_ACTION_TOOL, PROPOSE_WBS_PACKAGE_TOOL, ACTION_EFFECTIVENESS_TOOL, ...(autopilotEnabled ? [PROPOSE_AUTOPILOT_PLAN_TOOL] : [])]
+    ? [...TOOLS, PROPOSE_ACTION_TOOL, PROPOSE_WBS_PACKAGE_TOOL, PROPOSE_COST_BUDGET_TOOL, ACTION_EFFECTIVENESS_TOOL, ...(autopilotEnabled ? [PROPOSE_AUTOPILOT_PLAN_TOOL] : [])]
     : TOOLS;
   const actionNote = actionsEnabled
     ? (en

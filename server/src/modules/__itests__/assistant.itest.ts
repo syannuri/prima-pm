@@ -635,6 +635,53 @@ describe('AI portfolio assistant — /assistant', () => {
     await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false, aiAutopilotEnabled: false } });
   });
 
+  it('COST: propose_cost_budget forms a manpower budget from the schedule; CREATE_COST_ITEM adds a material line; empty project advises', async () => {
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: true } });
+    const pmId = (await runWithTenant(aico, () => prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { pmUserId: true } })))!.pmUserId!;
+    // COST-1 has a task with an assigned resource → derivable manpower budget. COST-EMPTY has none.
+    const costId = await runWithTenant(aico, async () => {
+      const p = await prisma.project.create({ data: { code: 'COST-1', name: 'Cost Proj', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: pmId } });
+      const r = await prisma.resource.create({ data: { name: 'Dev X', capacityPerDay: 1, unitCostPerManday: 100, personnelRole: 'PROJECT_PERSONNEL' } });
+      await prisma.task.create({ data: { projectId: p.id, wbsCode: '1', name: 'Build', planStart: new Date('2030-02-04'), planEnd: new Date('2030-02-08'), picResourceId: r.id, progressPct: 0 } });
+      return p.id;
+    });
+    await runWithTenant(aico, async () => {
+      await prisma.project.create({ data: { code: 'COST-EMPTY', name: 'No Res Proj', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: pmId } });
+    });
+
+    let sysCaptured = '';
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system, executeTool }) {
+        sysCaptured = systemText(system);
+        const budget = await executeTool('propose_cost_budget', { project_code: 'COST-1' });
+        const empty = await executeTool('propose_cost_budget', { project_code: 'COST-EMPTY' });
+        const material = await executeTool('propose_action', { project_code: 'COST-1', action_type: 'CREATE_COST_ITEM', params: { kind: 'MATERIAL', materialType: 'HARDWARE_EQUIPMENT', label: 'Server', qty: 2, unitCost: 5000 } });
+        return JSON.stringify({ budget, empty, material });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    // Budget derived + applied directly (unlocked); Cost now has a manpower line + BAC.
+    expect(JSON.parse(out.budget)).toMatchObject({ ok: true, applied: true });
+    expect(JSON.parse(out.empty)).toMatchObject({ empty: true });
+    expect(JSON.parse(out.material)).toMatchObject({ ok: true, applied: true });
+    // The precise/no-ramble style directive is present in the prompt.
+    expect(sysCaptured).toContain('ANTI-BERTELE');
+    const [manpower, material] = await runWithTenant(aico, () => Promise.all([
+      prisma.costItemDirect.findFirst({ where: { projectId: costId, type: 'MANPOWER' } }),
+      prisma.costItemDirect.findFirst({ where: { projectId: costId, label: 'Server' } }),
+    ]));
+    expect(Number(manpower?.manpowerCost)).toBeGreaterThan(0); // rate 100 × working days
+    expect(Number(material?.amount)).toBe(10000); // 2 × 5000
+    const bac = Number((await runWithTenant(aico, () => prisma.costBaseline.findUnique({ where: { projectId: costId }, select: { budgetAtCompletion: true } })))?.budgetAtCompletion ?? 0);
+    expect(bac).toBeGreaterThanOrEqual(10000);
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
+  });
+
   it('STREAM: /ask/stream emits live step events then the final answer', async () => {
     __setAiPort({
       async draftJson() { return null; },
