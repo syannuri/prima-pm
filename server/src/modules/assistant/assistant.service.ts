@@ -398,6 +398,50 @@ const PROPOSE_WBS_PACKAGE_TOOL: AiToolDef = {
   },
 };
 
+// Autopilot (multi-step) — the ONE tool that stages a whole ORDERED PLAN of several actions as a
+// single unit (EXECUTE_PLAN). Exposed only when the caller's tenant opted into aiAutopilotEnabled (on
+// top of aiActionsEnabled). Like propose_action it does NOT execute: an all-schedule plan applies
+// directly on an unlocked baseline, otherwise the whole plan lands as ONE approval. Each step reuses
+// the SAME shapes as propose_action's action_type/params.
+const PLAN_STEP_TYPE_LIST = AI_ACTION_TYPES.filter((t) => t !== 'EXECUTE_PLAN');
+const PROPOSE_AUTOPILOT_PLAN_TOOL: AiToolDef = {
+  name: 'propose_autopilot_plan',
+  description: [
+    'USULKAN sebuah RENCANA OTOPILOT: SATU tujuan tingkat-tinggi diubah menjadi DAFTAR AKSI BERURUTAN yang dijalankan sebagai satu kesatuan. TIDAK langsung dieksekusi tanpa gerbang.',
+    'Gunakan saat pengguna minta tujuan multi-langkah — mis. "siapkan proyek ini untuk aktivasi", "pulihkan slip jadwal", "susun governance dasar", "beresi temuan review". Untuk satu aksi tunggal pakai propose_action; untuk sekadar daftar task pakai propose_wbs_package.',
+    'ALUR yang benar: kumpulkan bukti dulu (baca data + get_project_review bila relevan) → susun rencana berurutan yang koheren → KONFIRMASI ringkas ke pengguna → baru panggil tool ini.',
+    'Tiap langkah: { action_type, params, rationale? } dengan action_type & bentuk params SAMA seperti propose_action (CREATE_RISK/CREATE_CHANGE_REQUEST/TIDY_SCHEDULE/REASSIGN_MANPOWER/RESCHEDULE_TASK/EDIT_DEPENDENCY/CREATE_TASK/ADD_WBS_PACKAGE). TIDAK boleh menyusun rencana di dalam rencana.',
+    'BATASAN: 1–12 langkah; tiap langkah harus valid sendiri dan MERUJUK entitas yang SUDAH ADA (jangan andalkan hasil langkah sebelumnya — mis. jangan me-reschedule task yang baru dibuat langkah lain). Untuk pekerjaan yang benar-benar baru gunakan SATU langkah ADD_WBS_PACKAGE.',
+    'GERBANG: rencana yang SEMUA langkahnya jadwal (RESCHEDULE_TASK/EDIT_DEPENDENCY/CREATE_TASK/TIDY_SCHEDULE/ADD_WBS_PACKAGE) diterapkan LANGSUNG bila baseline belum terkunci; rencana yang menyentuh risk/CR SELALU lewat approval; pada proyek AKTIF (baseline terkunci) seluruh rencana lewat SATU approval lalu diterapkan via SATU controlled re-baseline. Uang tidak pernah dibuat.',
+    'project_code dari list_projects. goal = kalimat singkat tujuan rencana.',
+  ].join('\n'),
+  input_schema: {
+    type: 'object',
+    properties: {
+      project_code: { type: 'string' },
+      goal: { type: 'string', description: 'Kalimat singkat tujuan rencana (mis. "Siapkan proyek untuk aktivasi").' },
+      steps: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 12,
+        description: 'Langkah berurutan. Tiap item: { action_type, params, rationale? }.',
+        items: {
+          type: 'object',
+          properties: {
+            action_type: { type: 'string', enum: [...PLAN_STEP_TYPE_LIST] },
+            params: { type: 'object', description: 'Parameter sesuai action_type (lihat propose_action).' },
+            rationale: { type: 'string', description: 'Alasan singkat langkah ini.' },
+          },
+          required: ['action_type', 'params'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['project_code', 'goal', 'steps'],
+    additionalProperties: false,
+  },
+};
+
 // Outcome learning — read-only track record of how APPLIED AI actions moved SPI. Exposed alongside
 // propose_action (same Stage-C gate) so Anett can cite evidence before proposing. Correlational, not
 // causal — the tool result says so and the model must relay that honestly.
@@ -468,6 +512,15 @@ async function callerActionsEnabled(): Promise<boolean> {
   return tenant?.aiActionsEnabled === true;
 }
 
+// Whether the CALLER's tenant has opted into AUTOPILOT (multi-step plans) — a SEPARATE, stronger
+// opt-in on top of aiActionsEnabled. Governs whether Anett is given the propose_autopilot_plan tool.
+async function callerAutopilotEnabled(): Promise<boolean> {
+  const tid = getTenantStore()?.tenantId;
+  if (!tid) return true; // single-tenant deploy: env gate alone governs
+  const tenant = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiAutopilotEnabled: true } });
+  return tenant?.aiAutopilotEnabled === true;
+}
+
 // Whether the assistant is usable for the caller right now: global env gate + the caller tenant's
 // opt-in. Drives the client's show/hide of the AI assistant launcher.
 export async function assistantAvailable(): Promise<boolean> {
@@ -485,9 +538,16 @@ export async function assistantActionsAvailable(): Promise<boolean> {
   return callerActionsEnabled();
 }
 
+// Whether Anett may compose multi-step AUTOPILOT plans for the caller — env + actions opt-in + the
+// separate aiAutopilotEnabled opt-in. Drives the client's capability-aware autopilot affordance.
+export async function assistantAutopilotAvailable(): Promise<boolean> {
+  if (!aiEnabled()) return false;
+  return (await callerActionsEnabled()) && (await callerAutopilotEnabled());
+}
+
 // A proposal Anett staged during a turn (surfaced to the client so it can show a "view in Approvals"
 // card). Kept minimal — the full detail lives in the approvals inbox.
-export interface ProposedRef { actionType: string; projectCode: string; routed: boolean; applied?: boolean }
+export interface ProposedRef { actionType: string; projectCode: string; routed: boolean; applied?: boolean; goal?: string; steps?: number }
 
 // A grounded in-app navigation target the process guide surfaced (id-less top-level route only) — the
 // client renders it as a real router-Link button so "buka Reports" actually navigates.
@@ -616,6 +676,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'domain_guidance': return en ? 'Referencing domain expertise' : 'Merujuk keahlian domain';
     case 'propose_action': return en ? 'Preparing an action proposal' : 'Menyiapkan usulan aksi';
     case 'propose_wbs_package': return en ? 'Drafting a WBS package' : 'Menyusun paket WBS';
+    case 'propose_autopilot_plan': return en ? 'Composing an autopilot plan' : 'Menyusun rencana otopilot';
     case 'get_action_effectiveness': return en ? 'Checking the action track record' : 'Memeriksa rekam jejak aksi';
     case 'remember': return en ? 'Saving a memory' : 'Menyimpan ingatan';
     case 'forget': return en ? 'Removing a memory' : 'Menghapus ingatan';
@@ -625,7 +686,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
 
 function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedRef[]; navs: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; memoryEnabled: boolean; en: boolean; emitStep?: (label: string) => void; projectsSummary: ProjectSummary[] }) {
   return async (name: string, input: unknown): Promise<string> => {
-    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string; question?: string; focus?: string };
+    const args = (input ?? {}) as { project_code?: string; action_type?: string; params?: unknown; rationale?: string; topic?: string; content?: string; scope?: string; kind?: string; query?: string; question?: string; focus?: string; goal?: string; steps?: unknown };
     // Stream a live "thinking" step for this tool call (best-effort; SSE only).
     ctx.emitStep?.(stepLabel(name, typeof args.project_code === 'string' ? args.project_code.trim() : '', ctx.en));
     // Resolve a project reference the model passes as `project_code`. It's often not a clean code:
@@ -860,6 +921,36 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
           return JSON.stringify({ error: err instanceof AppError ? err.message : 'Gagal menyusun paket WBS.' });
         }
       }
+      case 'propose_autopilot_plan': {
+        const id = resolveId();
+        if (!id) return JSON.stringify({ error: 'Proyek tidak ditemukan atau tidak dapat diakses.' });
+        if (ctx.role === 'VIEWER') return JSON.stringify({ error: 'Peran read-only tidak dapat mengusulkan perubahan.' });
+        const proj = await prisma.project.findUnique({ where: { id }, select: { status: true } });
+        if (proj?.status === 'CLOSED') return JSON.stringify({ error: 'Proyek sudah ditutup (read-only). Buka kembali untuk mengubah.' });
+        const goal = typeof args.goal === 'string' ? args.goal.trim() : '';
+        // Map the tool's snake-cased steps onto the server plan schema (actionType/params/rationale).
+        const rawSteps = Array.isArray(args.steps) ? (args.steps as Record<string, unknown>[]) : [];
+        const steps = rawSteps.map((s) => ({
+          actionType: typeof s?.action_type === 'string' ? s.action_type : '',
+          params: s?.params,
+          rationale: typeof s?.rationale === 'string' ? s.rationale : undefined,
+        }));
+        try {
+          const { routed, applied } = await proposeAction(
+            { projectId: id, actionType: 'EXECUTE_PLAN', params: { goal, steps }, rationale: goal || null },
+            ctx.userId,
+          );
+          ctx.proposals.push({ actionType: 'EXECUTE_PLAN', projectCode: (typeof args.project_code === 'string' ? args.project_code.trim() : ''), routed, applied, goal, steps: steps.length });
+          const message = applied
+            ? `Rencana otopilot (${steps.length} langkah) diterapkan langsung ke proyek (baseline belum terkunci).`
+            : routed
+              ? `Rencana otopilot (${steps.length} langkah) diajukan untuk approval — seluruh rencana berjalan sebagai satu kesatuan setelah disetujui.`
+              : 'Rencana tersimpan namun belum ada approver yang bisa dituju — minta admin mengatur workflow AI action.';
+          return JSON.stringify({ ok: true, applied, routed, steps: steps.length, message });
+        } catch (err) {
+          return JSON.stringify({ error: err instanceof AppError ? err.message : 'Gagal mengajukan rencana otopilot.' });
+        }
+      }
       case 'get_portfolio_attention': {
         const { items } = await getPortfolioAttention(ctx.userId, ctx.role);
         return JSON.stringify({ items: items.map((i) => ({ code: i.code, name: i.name, score: i.score, health: i.health, reasons: i.reasons })) });
@@ -1010,11 +1101,20 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   // Stage C — only expose the propose_action tool when the caller's tenant opted in AND the caller
   // is not a read-only role (Anett can then STAGE actions for approval, never execute them).
   const actionsEnabled = role !== 'VIEWER' && (await callerActionsEnabled());
-  const tools = actionsEnabled ? [...TOOLS, PROPOSE_ACTION_TOOL, PROPOSE_WBS_PACKAGE_TOOL, ACTION_EFFECTIVENESS_TOOL] : TOOLS;
+  // Autopilot (multi-step) rides on top of the action gate + its own opt-in.
+  const autopilotEnabled = actionsEnabled && (await callerAutopilotEnabled());
+  const tools = actionsEnabled
+    ? [...TOOLS, PROPOSE_ACTION_TOOL, PROPOSE_WBS_PACKAGE_TOOL, ACTION_EFFECTIVENESS_TOOL, ...(autopilotEnabled ? [PROPOSE_AUTOPILOT_PLAN_TOOL] : [])]
+    : TOOLS;
   const actionNote = actionsEnabled
     ? (en
         ? '\n\nYou CAN propose actions (not execute them) via the propose_action tool; an action only runs after a human approves it. Confirm with the user before submitting.'
         : '\n\nAnda DAPAT mengusulkan aksi (bukan mengeksekusi) via tool propose_action; aksi hanya berjalan setelah disetujui manusia. Konfirmasikan ke pengguna sebelum mengajukan.')
+    : '';
+  const autopilotNote = autopilotEnabled
+    ? (en
+        ? '\n\nAUTOPILOT: for a MULTI-STEP goal (e.g. "prepare this project for activation", "recover the slip", "fix the review findings"), gather evidence first (read data + get_project_review when relevant), then stage ONE ordered plan via propose_autopilot_plan instead of many single actions. Confirm the plan with the user before submitting. When asked to review AND fix, run get_project_review first, present the findings, THEN offer a remediation plan built from them.'
+        : '\n\nOTOPILOT: untuk tujuan MULTI-LANGKAH (mis. "siapkan proyek ini untuk aktivasi", "pulihkan slip", "beresi temuan review"), kumpulkan bukti dulu (baca data + get_project_review bila relevan), lalu ajukan SATU rencana berurutan via propose_autopilot_plan alih-alih banyak aksi tunggal. Konfirmasi rencana ke pengguna sebelum mengajukan. Bila diminta review SEKALIGUS perbaiki, jalankan get_project_review dulu, sampaikan temuannya, BARU tawarkan rencana perbaikan yang disusun dari temuan itu.')
     : '';
 
   // Cross-session memory — inject what Anett remembers (bounded), and expose remember/forget, only
@@ -1045,8 +1145,8 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     ? `${systemPromptFor('en')}\n\nHow-to guide topics (get_process_guide): ${guideIndex()}.\n\nPMI/PMBOK advisory topics (pmi_guidance): ${pmiIndex()}.\n\nDomain-expert personas (domain_guidance): ${domainIndex()}.`
     : `${systemPromptFor('id')}\n\nTopik panduan cara-pakai (get_process_guide): ${guideIndex()}.\n\nTopik advisory PMI/PMBOK (pmi_guidance): ${pmiIndex()}.\n\nPersona pakar domain (domain_guidance): ${domainIndex()}.`;
   const volatileSystem = en
-    ? `${actionNote}${memoryNote}${contextNote}${personaNote}${memoryBlock}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.`
-    : `${actionNote}${memoryNote}${contextNote}${personaNote}${memoryBlock}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.`;
+    ? `${actionNote}${autopilotNote}${memoryNote}${contextNote}${personaNote}${memoryBlock}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.`
+    : `${actionNote}${autopilotNote}${memoryNote}${contextNote}${personaNote}${memoryBlock}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.`;
   const system: SystemPrompt = [{ text: stableSystem, cache: true }, { text: volatileSystem, cache: true }];
   // #5 cost meter: total this turn's tokens across every loop step (both the answer and any #1
   // regeneration) for a live per-conversation meter.

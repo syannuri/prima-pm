@@ -5,7 +5,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { AppError } from '../../lib/errors.js';
 import { transcribeAudio, synthesizeSpeech, voiceServerAvailable, MAX_STT_BYTES } from './voice.service.js';
-import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
+import { askAssistant, assistantAvailable, assistantActionsAvailable, assistantAutopilotAvailable, assistantBriefing, type AssistantTurn } from './assistant.service.js';
 import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { recordFeedback, listFeedbackInbox, analyzeFeedback, adoptFeedbackSuggestion, feedbackDistillEnabled } from './feedback.service.js';
 import { distillConversation, autoDistillEnabled } from './memoryDistill.service.js';
@@ -17,9 +17,9 @@ router.use(requireAuth);
 // Availability probe: `aiAvailable` = launcher on (env + narrative opt-in); `actionsAvailable` = Stage C
 // propose enabled (env + the separate aiActionsEnabled opt-in) → drives Anett's capability-aware UI.
 router.get('/available', asyncHandler(async (_req, res) => {
-  const [aiAvailable, actionsAvailable, voiceServer] = await Promise.all([assistantAvailable(), assistantActionsAvailable(), voiceServerAvailable()]);
+  const [aiAvailable, actionsAvailable, autopilotAvailable, voiceServer] = await Promise.all([assistantAvailable(), assistantActionsAvailable(), assistantAutopilotAvailable(), voiceServerAvailable()]);
   // autoDistill hints the client to POST the transcript at session end (server still enforces the gate).
-  res.json({ aiAvailable, actionsAvailable, voiceServer, autoDistill: autoDistillEnabled() });
+  res.json({ aiAvailable, actionsAvailable, autopilotAvailable, voiceServer, autoDistill: autoDistillEnabled() });
 }));
 
 // ── Server-side voice (Whisper STT + ElevenLabs TTS) — dormant unless keys set + tenant opt-in ──────

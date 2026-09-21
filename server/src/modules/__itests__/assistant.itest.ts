@@ -84,7 +84,7 @@ describe('AI portfolio assistant — /assistant', () => {
   it('/available reflects the gates (false before opt-in)', async () => {
     const res = await request(app).get(availUrl()).set(bearer(pmToken));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ aiAvailable: false, actionsAvailable: false, voiceServer: false, autoDistill: false });
+    expect(res.body).toEqual({ aiAvailable: false, actionsAvailable: false, autopilotAvailable: false, voiceServer: false, autoDistill: false });
   });
 
   it('400 on an empty message list', async () => {
@@ -95,7 +95,7 @@ describe('AI portfolio assistant — /assistant', () => {
 
   it('200 returns an answer once the tenant opts in', async () => {
     const avail = await request(app).get(availUrl()).set(bearer(pmToken));
-    expect(avail.body).toEqual({ aiAvailable: true, actionsAvailable: false, voiceServer: false, autoDistill: false }); // narrative on, actions/voice not yet
+    expect(avail.body).toEqual({ aiAvailable: true, actionsAvailable: false, autopilotAvailable: false, voiceServer: false, autoDistill: false }); // narrative on, actions/voice not yet
     const res = await ask(pmToken);
     expect(res.status).toBe(200);
     expect(res.body.answer).toContain('asisten');
@@ -559,6 +559,80 @@ describe('AI portfolio assistant — /assistant', () => {
     // Surfaced to the client as a proposal card.
     expect(res.body.proposals.some((p: { actionType: string }) => p.actionType === 'ADD_WBS_PACKAGE')).toBe(true);
     await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
+  });
+
+  it('AUTOPILOT GATE: with actions on but autopilot OFF, propose_autopilot_plan is refused (separate opt-in)', async () => {
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: true, aiAutopilotEnabled: false } });
+    let sysCaptured = '';
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system, executeTool }) {
+        sysCaptured = systemText(system);
+        const mine = await executeTool('propose_autopilot_plan', { project_code: 'MINE-1', goal: 'tidy up', steps: [{ action_type: 'TIDY_SCHEDULE', params: { mode: 'push' } }] });
+        return JSON.stringify({ mine });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    expect(out.mine).toContain('Autopilot AI belum diaktifkan'); // gated by the separate opt-in
+    // The prompt does NOT advertise the autopilot tool while it is off.
+    expect(sysCaptured).not.toContain('propose_autopilot_plan');
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false } });
+  });
+
+  it('AUTOPILOT: propose_autopilot_plan direct-applies an all-schedule plan, routes a mixed plan; foreign refused', async () => {
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: true, aiAutopilotEnabled: true } });
+    const pmId = (await runWithTenant(aico, () => prisma.project.findFirst({ where: { code: 'MINE-1' }, select: { pmUserId: true } })))!.pmUserId!;
+    // A fresh unlocked project so an all-schedule plan can apply directly (no baseline lock).
+    const apId = await runWithTenant(aico, async () => {
+      const p = await prisma.project.create({ data: { code: 'AUTO-1', name: 'Autopilot Proj', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: pmId } });
+      await prisma.task.create({ data: { projectId: p.id, wbsCode: '1', name: 'Design', planStart: new Date('2030-02-01'), planEnd: new Date('2030-02-06'), progressPct: 0 } });
+      return p.id;
+    });
+    const taskId = (await runWithTenant(aico, () => prisma.task.findFirst({ where: { projectId: apId }, select: { id: true } })))!.id;
+
+    let sysCaptured = '';
+    __setAiPort({
+      async draftJson() { return null; },
+      async draftNarrative() { return null; },
+      async runToolLoop({ system, executeTool }) {
+        sysCaptured = systemText(system);
+        // All-schedule plan on an unlocked baseline → applies directly.
+        const allSched = await executeTool('propose_autopilot_plan', { project_code: 'AUTO-1', goal: 'tidy and shift', steps: [
+          { action_type: 'TIDY_SCHEDULE', params: { mode: 'push' } },
+          { action_type: 'RESCHEDULE_TASK', params: { taskId, startDate: '2030-03-01' } },
+        ] });
+        // Mixed plan (schedule + risk) → always routes for approval.
+        const mixed = await executeTool('propose_autopilot_plan', { project_code: 'AUTO-1', goal: 'shift and log risk', steps: [
+          { action_type: 'RESCHEDULE_TASK', params: { taskId, startDate: '2030-04-01' } },
+          { action_type: 'CREATE_RISK', params: { title: 'Plan risk', probabilityScore: 3, impactScore: 3 } },
+        ] });
+        const foreign = await executeTool('propose_autopilot_plan', { project_code: 'OTHER-1', goal: 'x', steps: [{ action_type: 'TIDY_SCHEDULE', params: {} }] });
+        return JSON.stringify({ allSched, mixed, foreign });
+      },
+    });
+    const res = await ask(pmToken);
+    __setAiPort(answerPort);
+    expect(res.status).toBe(200);
+    const out = JSON.parse(res.body.answer);
+    expect(JSON.parse(out.allSched)).toMatchObject({ ok: true, applied: true, steps: 2 });
+    expect(JSON.parse(out.mixed)).toMatchObject({ ok: true, routed: true, applied: false });
+    expect(out.foreign).toContain('tidak dapat diakses');
+    // The prompt advertises the autopilot capability when enabled.
+    expect(sysCaptured).toContain('propose_autopilot_plan');
+    // The direct-applied plan is APPLIED and the task moved; the mixed plan is PENDING.
+    const plans = await runWithTenant(aico, () => prisma.aiActionProposal.findMany({ where: { projectId: apId, actionType: 'EXECUTE_PLAN' }, orderBy: { createdAt: 'asc' } }));
+    expect(plans.length).toBe(2);
+    expect(plans[0].status).toBe('APPLIED');
+    expect(plans[1].status).toBe('PENDING');
+    // Surfaced to the client with goal + step count.
+    const planRef = res.body.proposals.find((p: { actionType: string }) => p.actionType === 'EXECUTE_PLAN');
+    expect(planRef).toMatchObject({ actionType: 'EXECUTE_PLAN', projectCode: 'AUTO-1', steps: 2 });
+    expect(planRef.goal).toBeTruthy();
+    await prisma.tenant.update({ where: { id: aico }, data: { aiActionsEnabled: false, aiAutopilotEnabled: false } });
   });
 
   it('STREAM: /ask/stream emits live step events then the final answer', async () => {
