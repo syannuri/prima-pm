@@ -319,6 +319,78 @@ describe('Stage C — AI-proposed actions', () => {
     expect(await prisma.risk.count({ where: { projectId, title: 'Gate scope check' } })).toBe(0);
   });
 
+  // ---- Cost family: CREATE_COST_ITEM + GENERATE_COST_BUDGET ---------------------------------------
+  // Cost lines need an unlocked (combined) baseline → they apply DIRECTLY when unlocked and recompute
+  // the BAC, so an empty Cost tab "forms". On a LOCKED project they route + apply via re-baseline.
+
+  const bac = async () => Number((await prisma.costBaseline.findUnique({ where: { projectId }, select: { budgetAtCompletion: true } }))?.budgetAtCompletion ?? 0);
+
+  it('CREATE_COST_ITEM (manpower) applies directly on an unlocked baseline and forms the BAC', async () => {
+    await prisma.costItemDirect.deleteMany({ where: { projectId } });
+    const res = await prisma.resource.create({ data: { name: 'Dev A', capacityPerDay: 1, unitCostPerManday: 100, personnelRole: 'PROJECT_PERSONNEL' } });
+    const { id, applied, routed } = await proposeAction({ projectId, actionType: 'CREATE_COST_ITEM', params: { kind: 'MANPOWER', resourceId: res.id, planMandays: 5, taskId } }, pmId);
+    expect(applied).toBe(true);
+    expect(routed).toBe(false);
+    expect(await reqFor(id)).toBeNull();
+    const line = await prisma.costItemDirect.findFirst({ where: { projectId, type: 'MANPOWER' } });
+    expect(Number(line?.manpowerCost)).toBe(500); // rate 100 × 5 mandays, rate inherited from the resource
+    expect(await bac()).toBeGreaterThanOrEqual(500); // an empty Cost tab now has a budget
+  });
+
+  it('CREATE_COST_ITEM (material + indirect) apply directly and add to the BAC', async () => {
+    await prisma.costItemDirect.deleteMany({ where: { projectId } });
+    await prisma.costItemIndirect.deleteMany({ where: { projectId } });
+    await proposeAction({ projectId, actionType: 'CREATE_COST_ITEM', params: { kind: 'MATERIAL', materialType: 'HARDWARE_EQUIPMENT', label: 'Laptops', qty: 3, unitCost: 1000 } }, pmId);
+    await proposeAction({ projectId, actionType: 'CREATE_COST_ITEM', params: { kind: 'INDIRECT', indirectType: 'TRANSPORTATION', description: 'Site visits', amount: 400 } }, pmId);
+    expect(Number((await prisma.costItemDirect.findFirst({ where: { projectId, label: 'Laptops' } }))?.amount)).toBe(3000);
+    expect(await prisma.costItemIndirect.count({ where: { projectId } })).toBe(1);
+    expect(await bac()).toBeGreaterThanOrEqual(3400);
+  });
+
+  it('CREATE_COST_ITEM rejects manpower without a resourceId (400)', async () => {
+    await expect(proposeAction({ projectId, actionType: 'CREATE_COST_ITEM', params: { kind: 'MANPOWER', planMandays: 5 } }, pmId))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('GENERATE_COST_BUDGET applies a whole budget in one action', async () => {
+    await prisma.costItemDirect.deleteMany({ where: { projectId } });
+    await prisma.costItemIndirect.deleteMany({ where: { projectId } });
+    const res = await prisma.resource.create({ data: { name: 'Dev B', capacityPerDay: 1, unitCostPerManday: 200, personnelRole: 'PROJECT_PERSONNEL' } });
+    const { applied } = await proposeAction({ projectId, actionType: 'GENERATE_COST_BUDGET', params: { items: [
+      { kind: 'MANPOWER', resourceId: res.id, planMandays: 10 },
+      { kind: 'MATERIAL', materialType: 'SOFTWARE_LICENSE', label: 'IDE seats', qty: 5, unitCost: 100 },
+      { kind: 'INDIRECT', indirectType: 'MEALS_PERDIEM', description: 'Per diem', amount: 300 },
+    ] } }, pmId);
+    expect(applied).toBe(true);
+    expect(await prisma.costItemDirect.count({ where: { projectId } })).toBe(2);
+    expect(await prisma.costItemIndirect.count({ where: { projectId } })).toBe(1);
+    expect(await bac()).toBeGreaterThanOrEqual(2000 + 500 + 300);
+  });
+
+  it('a cost line on a LOCKED baseline routes to approval, then applies via controlled re-baseline', async () => {
+    await prisma.costItemDirect.deleteMany({ where: { projectId } });
+    const res = await prisma.resource.create({ data: { name: 'Dev C', capacityPerDay: 1, unitCostPerManday: 150, personnelRole: 'PROJECT_PERSONNEL' } });
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: new Date(), baselineLockedById: pmId } });
+    const versionsBefore = await prisma.baselineVersion.count({ where: { projectId } });
+
+    const { id, applied, routed } = await proposeAction({ projectId, actionType: 'CREATE_COST_ITEM', params: { kind: 'MANPOWER', resourceId: res.id, planMandays: 4, taskId } }, pmId);
+    expect(applied).toBe(false);
+    expect(routed).toBe(true); // locked → human-in-the-loop
+    expect(await prisma.costItemDirect.count({ where: { projectId } })).toBe(0);
+
+    const req = await reqFor(id);
+    await decideApproval(req!.id, adminId, 'APPROVED');
+    expect((await prisma.aiActionProposal.findUnique({ where: { id } }))?.status).toBe('APPLIED');
+    expect(Number((await prisma.costItemDirect.findFirst({ where: { projectId, type: 'MANPOWER' } }))?.manpowerCost)).toBe(600);
+    // Project stayed locked and captured a new baseline revision (combined cost+schedule).
+    expect((await prisma.project.findUnique({ where: { id: projectId } }))!.baselineLockedAt).not.toBeNull();
+    expect(await prisma.baselineVersion.count({ where: { projectId } })).toBe(versionsBefore + 1);
+
+    await prisma.project.update({ where: { id: projectId }, data: { baselineLockedAt: null, baselineLockedById: null } });
+    await prisma.baselineVersion.deleteMany({ where: { projectId } });
+    await prisma.costItemDirect.deleteMany({ where: { projectId } });
+  });
+
   // ---- Fase 1: requester visibility ---------------------------------------------------------------
 
   it('notifies the requester too when they are also an AI-action approver (no silent self-proposal)', async () => {

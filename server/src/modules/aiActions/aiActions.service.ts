@@ -12,7 +12,8 @@ import { createChangeRequest } from '../charter/charter.service.js';
 import { startApproval, resolveWorkflow, createWorkflow } from '../approval/approval.service.js';
 import { RISK_KINDS, RESPONSE_STRATEGIES } from '../risk/risk.schemas.js';
 import { recordBaseline } from './aiActionOutcomes.service.js';
-import { updateDirectLine } from '../cost/cost.service.js';
+import { updateDirectLine, addDirectLine, addIndirectLine } from '../cost/cost.service.js';
+import { MATERIAL_TYPES, INDIRECT_TYPES } from '../cost/cost.schemas.js';
 import { applyBaselineLock } from '../projects/baseline.service.js';
 
 // =====================================================================
@@ -33,6 +34,8 @@ export const AI_ACTION_TYPES = [
   'CREATE_RISK', 'UPDATE_TASK_PROGRESS', 'CREATE_CHANGE_REQUEST', 'TIDY_SCHEDULE', 'REASSIGN_MANPOWER',
   // Gantt-editing family (Fase 2) — reschedule a task, edit a dependency link, add a task.
   'RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'ADD_WBS_PACKAGE',
+  // Cost family — add ONE budget line, or generate a WHOLE budget (fills an empty Cost tab).
+  'CREATE_COST_ITEM', 'GENERATE_COST_BUDGET',
   // Autopilot (multi-step) — one ordered PLAN of several of the above actions, run as one unit.
   'EXECUTE_PLAN',
 ] as const;
@@ -136,6 +139,72 @@ const createTaskParams = z.object({
   isMilestone: z.boolean().default(false),
 });
 
+// ---- Cost family ---------------------------------------------------------------------------------
+
+// Sane upper bounds so one line can't carry an absurd amount (defensive; the human still approves).
+const COST_QTY_MAX = 1_000_000;
+const COST_UNIT_MAX = 1e15;
+const COST_MANDAYS_MAX = 100_000;
+
+// One budget line. `kind` picks the branch; only that branch's fields are required (superRefine). A
+// MANPOWER line MUST reference a pooled resourceId so the rate/role/label are INHERITED (Anett never
+// invents a rate). MATERIAL is any non-manpower direct type (priced qty×unitCost). INDIRECT is an
+// overhead line (flat amount). OTHER types need a subCategory.
+const createCostItemParams = z.object({
+  kind: z.enum(['MANPOWER', 'MATERIAL', 'INDIRECT']),
+  // manpower
+  resourceId: z.string().uuid().optional(),
+  planMandays: z.coerce.number().positive().max(COST_MANDAYS_MAX).optional(),
+  taskId: z.string().uuid().optional(),
+  // material (direct, non-manpower)
+  materialType: z.enum(MATERIAL_TYPES).optional(),
+  label: z.string().min(1).max(200).optional(),
+  qty: z.coerce.number().positive().max(COST_QTY_MAX).optional(),
+  unitCost: z.coerce.number().nonnegative().max(COST_UNIT_MAX).optional(),
+  // indirect (overhead)
+  indirectType: z.enum(INDIRECT_TYPES).optional(),
+  description: z.string().min(1).max(300).optional(),
+  amount: z.coerce.number().nonnegative().max(COST_UNIT_MAX).optional(),
+  // required when the chosen material/indirect type is OTHER
+  subCategory: z.string().max(120).optional(),
+}).superRefine((d, ctx) => {
+  const need = (path: string, msg: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: msg });
+  if (d.kind === 'MANPOWER') {
+    if (!d.resourceId) need('resourceId', 'Manpower needs a pooled resourceId (rate is inherited)');
+    if (d.planMandays == null) need('planMandays', 'Manpower needs planMandays');
+  } else if (d.kind === 'MATERIAL') {
+    if (!d.materialType) need('materialType', 'Material needs a type');
+    if (!d.label) need('label', 'Material needs a label');
+    if (d.qty == null) need('qty', 'Material needs qty');
+    if (d.unitCost == null) need('unitCost', 'Material needs unitCost');
+    if (d.materialType === 'OTHER' && !d.subCategory?.trim()) need('subCategory', 'Specify the category for OTHER');
+  } else {
+    if (!d.indirectType) need('indirectType', 'Indirect needs a type');
+    if (!d.description) need('description', 'Indirect needs a description');
+    if (d.amount == null) need('amount', 'Indirect needs an amount');
+    if (d.indirectType === 'OTHER' && !d.subCategory?.trim()) need('subCategory', 'Specify the category for OTHER');
+  }
+});
+type CreateCostItemInput = z.infer<typeof createCostItemParams>;
+
+// Apply ONE cost line via the audited cost services (which recompute the baseline BAC per row). Shared
+// by CREATE_COST_ITEM and each item of GENERATE_COST_BUDGET.
+async function applyCostItem(projectId: string, p: CreateCostItemInput, actorId: string): Promise<void> {
+  if (p.kind === 'MANPOWER') {
+    await addDirectLine(projectId, { type: 'MANPOWER', resourceId: p.resourceId, planMandays: p.planMandays, taskId: p.taskId }, actorId);
+  } else if (p.kind === 'MATERIAL') {
+    await addDirectLine(projectId, { type: p.materialType!, label: p.label, qty: p.qty, unitCost: p.unitCost, subCategory: p.subCategory }, actorId);
+  } else {
+    await addIndirectLine(projectId, { type: p.indirectType!, description: p.description!, amount: p.amount!, subCategory: p.subCategory }, actorId);
+  }
+}
+
+// A whole budget = an ordered list of cost lines applied as one unit (fills an empty Cost tab).
+const generateCostBudgetParams = z.object({
+  items: z.array(createCostItemParams).min(1).max(60),
+});
+type GenerateCostBudgetInput = z.infer<typeof generateCostBudgetParams>;
+
 // Reschedule ONE existing task by date/duration via the audited updateTask (full-replace: carry every
 // field forward, override only the dates; preserve the owner set). Shared by RESCHEDULE_TASK and the
 // edits[] of ADD_WBS_PACKAGE. Does NOT propagate — the caller decides.
@@ -173,6 +242,8 @@ const STEP_PARAM_SCHEMAS: Record<PlanStepType, z.ZodTypeAny> = {
   EDIT_DEPENDENCY: editDependencyParams,
   CREATE_TASK: createTaskParams,
   ADD_WBS_PACKAGE: ApplyScheduleDraftSchema,
+  CREATE_COST_ITEM: createCostItemParams,
+  GENERATE_COST_BUDGET: generateCostBudgetParams,
 };
 
 // One ordered step: a whitelisted action + its params (validated against that action's own schema) +
@@ -368,6 +439,37 @@ const REGISTRY: Record<AiActionType, ActionDef<any>> = {
       for (const e of (p.edits ?? []) as DraftEdit[]) await rescheduleOne(projectId, e, actorId);
     },
   },
+  // Cost — add ONE budget line (manpower/material/indirect). Recomputes the baseline BAC per row.
+  CREATE_COST_ITEM: {
+    schema: createCostItemParams,
+    describe: async (p: CreateCostItemInput) => {
+      if (p.kind === 'MANPOWER') {
+        const r = p.resourceId ? await prisma.resource.findFirst({ where: { id: p.resourceId }, select: { name: true } }) : null;
+        return `an AI-proposed action (add manpower budget for ${r?.name ?? 'a resource'}, ${p.planMandays} mandays)`;
+      }
+      if (p.kind === 'MATERIAL') return `an AI-proposed action (add budget line "${p.label}", ${p.qty}×${p.unitCost})`;
+      return `an AI-proposed action (add indirect cost "${p.description}", ${p.amount})`;
+    },
+    execute: async (projectId, p: CreateCostItemInput, actorId) => {
+      await applyCostItem(projectId, p, actorId);
+    },
+  },
+  // Cost — generate a WHOLE budget as one unit: several lines applied in order (fills an empty Cost tab).
+  // Stop-on-first-failure with a per-item index in the error, mirroring EXECUTE_PLAN.
+  GENERATE_COST_BUDGET: {
+    schema: generateCostBudgetParams,
+    describe: async (p: GenerateCostBudgetInput) => `an AI-proposed action (generate a budget of ${p.items.length} line${p.items.length === 1 ? '' : 's'})`,
+    execute: async (projectId, p: GenerateCostBudgetInput, actorId) => {
+      for (let i = 0; i < p.items.length; i++) {
+        try {
+          await applyCostItem(projectId, p.items[i], actorId);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'failed';
+          throw new Error(`cost line ${i + 1}/${p.items.length}: ${msg}`);
+        }
+      }
+    },
+  },
   // Autopilot (multi-step): run an ordered list of the above actions as ONE unit. Stop-on-first-failure
   // — a failing step aborts the plan and its 1-based index/type is surfaced in the error (→ failureNote),
   // leaving earlier steps applied (same per-call transaction model as single actions). When the plan
@@ -431,6 +533,15 @@ function describeRow(actionType: string, params: unknown): string {
       const tasks = Array.isArray(p.phases) ? p.phases.reduce((n: number, ph: { tasks?: unknown[] }) => n + (ph.tasks?.length ?? 0), 0) : 0;
       const edits = Array.isArray(p.edits) ? p.edits.length : 0;
       return `add a WBS package (${tasks} task(s)${edits ? ` + reschedule ${edits}` : ''})`;
+    }
+    case 'CREATE_COST_ITEM': {
+      if (p.kind === 'MANPOWER') return `add a manpower budget line (${p.planMandays} mandays)`;
+      if (p.kind === 'MATERIAL') return `add budget line "${p.label}"`;
+      return `add indirect cost "${p.description}"`;
+    }
+    case 'GENERATE_COST_BUDGET': {
+      const items = Array.isArray(p.items) ? p.items.length : 0;
+      return `generate a budget (${items} line${items === 1 ? '' : 's'})`;
     }
     case 'EXECUTE_PLAN': {
       const steps = Array.isArray(p.steps) ? p.steps.length : 0;
@@ -525,7 +636,10 @@ export interface ProposeResult { id: string; routed: boolean; applied: boolean }
 // Fase 3 — the schedule-editing family applies DIRECTLY when the baseline is unlocked (an edit the
 // requester could make by hand, done for them on their explicit ask). A locked baseline keeps the
 // human-in-the-loop approval route, so a controlled schedule change still goes through a decision.
-const DIRECT_APPLY_WHEN_UNLOCKED = new Set<AiActionType>(['RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'TIDY_SCHEDULE', 'ADD_WBS_PACKAGE']);
+// Schedule-editing family + cost-line family. Both need an UNLOCKED (combined) baseline: they apply
+// directly when the baseline is open, and on a LOCKED/active project they route for approval and are
+// applied via the controlled re-baseline (unlock → apply → re-baseline → re-lock).
+const DIRECT_APPLY_WHEN_UNLOCKED = new Set<AiActionType>(['RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'TIDY_SCHEDULE', 'ADD_WBS_PACKAGE', 'CREATE_COST_ITEM', 'GENERATE_COST_BUDGET']);
 
 export async function isBaselineLocked(projectId: string): Promise<boolean> {
   const p = await prisma.project.findFirst({ where: { id: projectId }, select: { baselineLockedAt: true } });

@@ -39,6 +39,8 @@ const SCORED_METRIC: Record<AiActionType, 'SPI' | null> = {
   EDIT_DEPENDENCY: 'SPI', // re-linking the network reshapes the critical path
   CREATE_TASK: null, // adding scope isn't a schedule-improvement lever — no verdict
   ADD_WBS_PACKAGE: null, // a scope/plan package — not a single schedule-improvement lever
+  CREATE_COST_ITEM: null, // a budget line — affects cost, not SPI
+  GENERATE_COST_BUDGET: null, // a whole budget — affects cost, not SPI
   EXECUTE_PLAN: null, // a composite multi-step plan — no single metric lever to score
   CREATE_RISK: null,
   CREATE_CHANGE_REQUEST: null,
