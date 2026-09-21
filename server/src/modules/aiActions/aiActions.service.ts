@@ -33,8 +33,14 @@ export const AI_ACTION_TYPES = [
   'CREATE_RISK', 'UPDATE_TASK_PROGRESS', 'CREATE_CHANGE_REQUEST', 'TIDY_SCHEDULE', 'REASSIGN_MANPOWER',
   // Gantt-editing family (Fase 2) — reschedule a task, edit a dependency link, add a task.
   'RESCHEDULE_TASK', 'EDIT_DEPENDENCY', 'CREATE_TASK', 'ADD_WBS_PACKAGE',
+  // Autopilot (multi-step) — one ordered PLAN of several of the above actions, run as one unit.
+  'EXECUTE_PLAN',
 ] as const;
 export type AiActionType = (typeof AI_ACTION_TYPES)[number];
+
+// The action types a plan STEP may hold — every action except EXECUTE_PLAN itself (no nesting).
+export const PLAN_STEP_TYPES = AI_ACTION_TYPES.filter((t) => t !== 'EXECUTE_PLAN') as Exclude<AiActionType, 'EXECUTE_PLAN'>[];
+export type PlanStepType = (typeof PLAN_STEP_TYPES)[number];
 
 const MS_PER_DAY = 86_400_000;
 
@@ -150,6 +156,60 @@ export async function rescheduleOne(projectId: string, edit: { taskId: string; s
     progressPct: t.progressPct, weight: t.weight == null ? null : Number(t.weight),
     isMilestone: t.isMilestone, sortOrder: t.sortOrder,
   }, actorId);
+}
+
+// ---- Autopilot (multi-step) plan schema ----------------------------------------------------------
+
+// Per-step parameter schemas, keyed by action type — the SAME narrow schemas the single-action
+// registry uses, so a plan step can never smuggle in a shape the executor would reject. EXECUTE_PLAN
+// is deliberately absent (a plan cannot nest a plan).
+const STEP_PARAM_SCHEMAS: Record<PlanStepType, z.ZodTypeAny> = {
+  CREATE_RISK: createRiskParams,
+  UPDATE_TASK_PROGRESS: updateTaskProgressParams,
+  CREATE_CHANGE_REQUEST: createChangeRequestParams,
+  TIDY_SCHEDULE: tidyScheduleParams,
+  REASSIGN_MANPOWER: reassignManpowerParams,
+  RESCHEDULE_TASK: rescheduleTaskParams,
+  EDIT_DEPENDENCY: editDependencyParams,
+  CREATE_TASK: createTaskParams,
+  ADD_WBS_PACKAGE: ApplyScheduleDraftSchema,
+};
+
+// One ordered step: a whitelisted action + its params (validated against that action's own schema) +
+// an optional short justification. params is kept as raw JSON here (z.unknown) and RE-PARSED by the
+// executor at run time so coercion/defaults apply identically to a single action.
+const planStepSchema = z.object({
+  actionType: z.enum(PLAN_STEP_TYPES as [PlanStepType, ...PlanStepType[]]),
+  params: z.unknown(),
+  rationale: z.string().max(2000).optional(),
+}).superRefine((step, ctx) => {
+  const schema = STEP_PARAM_SCHEMAS[step.actionType];
+  const parsed = schema.safeParse(step.params);
+  if (!parsed.success) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['params'], message: `invalid parameters for ${step.actionType}` });
+  }
+});
+export type PlanStep = z.infer<typeof planStepSchema>;
+
+// Cap steps so one plan can't fan out into an unbounded batch of writes / re-baselines.
+const MAX_PLAN_STEPS = 12;
+
+// A whole autopilot plan: a human-readable goal + 1..MAX_PLAN_STEPS ordered steps. Stored verbatim in
+// the proposal params and executed in order (stop-on-first-failure) by the EXECUTE_PLAN executor.
+const executePlanParams = z.object({
+  goal: z.string().min(3).max(400),
+  steps: z.array(planStepSchema).min(1).max(MAX_PLAN_STEPS),
+});
+export type ExecutePlanParams = z.infer<typeof executePlanParams>;
+
+// True when every step of a validated plan is schedule-editing family (the only actions that
+// direct-apply on an unlocked baseline). Used to decide a plan's routing: an all-schedule plan may
+// direct-apply just like a single schedule edit; a plan touching risk/CR/etc. always routes so a
+// human still signs off on those non-schedule writes.
+function planIsAllScheduleFamily(params: unknown): boolean {
+  const parsed = executePlanParams.safeParse(params);
+  if (!parsed.success) return false;
+  return parsed.data.steps.every((s) => DIRECT_APPLY_WHEN_UNLOCKED.has(s.actionType as AiActionType));
 }
 
 // ---- The action registry: schema + human describe + audited executor -----------------------------
@@ -308,6 +368,40 @@ const REGISTRY: Record<AiActionType, ActionDef<any>> = {
       for (const e of (p.edits ?? []) as DraftEdit[]) await rescheduleOne(projectId, e, actorId);
     },
   },
+  // Autopilot (multi-step): run an ordered list of the above actions as ONE unit. Stop-on-first-failure
+  // — a failing step aborts the plan and its 1-based index/type is surfaced in the error (→ failureNote),
+  // leaving earlier steps applied (same per-call transaction model as single actions). When the plan
+  // touches the schedule on a LOCKED project, the WHOLE step loop runs inside a SINGLE controlled
+  // re-baseline (unlock once → apply all → re-baseline changed tasks → re-lock once). EXECUTE_PLAN is
+  // NOT in DIRECT_APPLY_WHEN_UNLOCKED, so finalizeProposal runs this executor directly and lets the plan
+  // manage its own re-baseline (avoiding a double unlock).
+  EXECUTE_PLAN: {
+    schema: executePlanParams,
+    describe: async (p: ExecutePlanParams) =>
+      `an AI autopilot plan: "${p.goal}" (${p.steps.length} step${p.steps.length === 1 ? '' : 's'})`,
+    execute: async (projectId, p: ExecutePlanParams, actorId) => {
+      const runSteps = async () => {
+        for (let i = 0; i < p.steps.length; i++) {
+          const s = p.steps[i];
+          const def = actionDef(s.actionType); // never EXECUTE_PLAN — the step schema forbids nesting
+          const parsed = def.schema.safeParse(s.params);
+          if (!parsed.success) throw new Error(`step ${i + 1}/${p.steps.length} (${s.actionType}): invalid parameters`);
+          try {
+            await def.execute(projectId, parsed.data, actorId);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'execution failed';
+            throw new Error(`step ${i + 1}/${p.steps.length} (${s.actionType}): ${msg}`);
+          }
+        }
+      };
+      const hasScheduleStep = p.steps.some((s) => DIRECT_APPLY_WHEN_UNLOCKED.has(s.actionType as AiActionType));
+      if (hasScheduleStep && (await isBaselineLocked(projectId))) {
+        await runWithControlledRebaseline(projectId, `AI autopilot plan (approved): ${p.goal}`.slice(0, 180), actorId, runSteps);
+      } else {
+        await runSteps();
+      }
+    },
+  },
 };
 
 function actionDef(actionType: string): ActionDef<unknown> {
@@ -338,6 +432,11 @@ function describeRow(actionType: string, params: unknown): string {
       const edits = Array.isArray(p.edits) ? p.edits.length : 0;
       return `add a WBS package (${tasks} task(s)${edits ? ` + reschedule ${edits}` : ''})`;
     }
+    case 'EXECUTE_PLAN': {
+      const steps = Array.isArray(p.steps) ? p.steps.length : 0;
+      const goal = typeof p.goal === 'string' ? p.goal : 'a goal';
+      return `run an autopilot plan for "${goal}" (${steps} step${steps === 1 ? '' : 's'})`;
+    }
     default: return 'an AI-proposed action';
   }
 }
@@ -367,6 +466,34 @@ async function assertActionsEnabled(projectId: string): Promise<void> {
   const hasTenant = Boolean(getTenantStore()?.tenantId || proj.tenantId);
   if (hasTenant && proj.tenant?.aiActionsEnabled !== true) {
     throw Forbidden('Aksi AI belum diaktifkan untuk workspace ini.');
+  }
+}
+
+// Autopilot (multi-step) needs its OWN opt-in on top of aiActionsEnabled — a stronger consent for
+// letting Anett run a whole ordered plan as one unit. Drives the client's show/hide of the autopilot
+// affordance (a plan proposal implies both action + autopilot consent).
+export async function aiAutopilotAvailableForProject(projectId: string): Promise<boolean> {
+  if (!(await aiActionsAvailableForProject(projectId))) return false;
+  const proj = await prisma.project.findFirst({
+    where: { id: projectId, deletedAt: null },
+    select: { tenantId: true, tenant: { select: { aiAutopilotEnabled: true } } },
+  });
+  if (!proj) return false;
+  const hasTenant = Boolean(getTenantStore()?.tenantId || proj.tenantId);
+  return hasTenant ? proj.tenant?.aiAutopilotEnabled === true : true;
+}
+
+// Gate a plan: it must clear the action gate AND the separate autopilot opt-in. 503 (env) / 403 (tenant).
+async function assertAutopilotEnabled(projectId: string): Promise<void> {
+  await assertActionsEnabled(projectId); // env + aiActionsEnabled
+  const proj = await prisma.project.findFirst({
+    where: { id: projectId, deletedAt: null },
+    select: { tenantId: true, tenant: { select: { aiAutopilotEnabled: true } } },
+  });
+  if (!proj) throw NotFound('Project not found');
+  const hasTenant = Boolean(getTenantStore()?.tenantId || proj.tenantId);
+  if (hasTenant && proj.tenant?.aiAutopilotEnabled !== true) {
+    throw Forbidden('Autopilot AI belum diaktifkan untuk workspace ini.');
   }
 }
 
@@ -411,7 +538,9 @@ export async function isBaselineLocked(projectId: string): Promise<boolean> {
 //   routed=true   → it landed in an approver's inbox (awaiting a human decision)
 //   both false    → stored PENDING but no approver was resolvable (a human must fix the workflow)
 export async function proposeAction(input: ProposeInput, actorId: string): Promise<ProposeResult> {
-  await assertActionsEnabled(input.projectId);
+  // A multi-step plan needs the stronger autopilot consent; every other action needs the action gate.
+  if (input.actionType === 'EXECUTE_PLAN') await assertAutopilotEnabled(input.projectId);
+  else await assertActionsEnabled(input.projectId);
   const def = actionDef(input.actionType);
   const parsed = def.schema.safeParse(input.params);
   if (!parsed.success) throw BadRequest('AI action parameters are invalid', parsed.error.flatten());
@@ -430,8 +559,12 @@ export async function proposeAction(input: ProposeInput, actorId: string): Promi
 
   // Direct-apply path — reuse finalizeProposal so the write, APPLIED/FAILED stamping, outcome
   // baseline and failure notice are identical to the approve path. A failed execution surfaces its
-  // real reason to the caller (Anett relays it) rather than leaving a silent FAILED row.
-  if (DIRECT_APPLY_WHEN_UNLOCKED.has(input.actionType as AiActionType) && !(await isBaselineLocked(input.projectId))) {
+  // real reason to the caller (Anett relays it) rather than leaving a silent FAILED row. A plan may
+  // direct-apply too, but ONLY when every step is schedule-editing family — a plan that also creates a
+  // risk/CR always routes so a human still signs off on those non-schedule writes.
+  const canDirectApply = DIRECT_APPLY_WHEN_UNLOCKED.has(input.actionType as AiActionType)
+    || (input.actionType === 'EXECUTE_PLAN' && planIsAllScheduleFamily(parsed.data));
+  if (canDirectApply && !(await isBaselineLocked(input.projectId))) {
     await finalizeProposal(proposal.id, input.projectId, 'APPROVED', actorId);
     const final = await prisma.aiActionProposal.findUnique({ where: { id: proposal.id }, select: { status: true, failureNote: true } });
     if (final?.status === 'FAILED') throw BadRequest(final.failureNote ?? 'Could not apply the AI action');

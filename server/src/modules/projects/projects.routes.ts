@@ -14,7 +14,7 @@ import { getNextSteps } from './nextsteps.js';
 import { aiAvailableForProject } from '../charter/crImpact.service.js';
 import { extractFromNotes } from '../dataextract/dataExtract.service.js';
 import { getProjectPredictive } from '../predictive/predictive.service.js';
-import { aiActionsAvailableForProject, proposeAction, listProjectProposals, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
+import { aiActionsAvailableForProject, aiAutopilotAvailableForProject, proposeAction, listProjectProposals, AI_ACTION_TYPES } from '../aiActions/aiActions.service.js';
 import { getActionEffectiveness } from '../aiActions/aiActionOutcomes.service.js';
 import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
@@ -353,7 +353,11 @@ router.get(
   '/:projectId/ai-actions/available',
   requireProjectAccess(),
   asyncHandler(async (req, res) => {
-    res.json({ aiActionsAvailable: await aiActionsAvailableForProject(req.params.projectId) });
+    const [aiActionsAvailable, aiAutopilotAvailable] = await Promise.all([
+      aiActionsAvailableForProject(req.params.projectId),
+      aiAutopilotAvailableForProject(req.params.projectId),
+    ]);
+    res.json({ aiActionsAvailable, aiAutopilotAvailable });
   }),
 );
 

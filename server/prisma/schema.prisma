@@ -341,6 +341,12 @@ model Tenant {
   // schedule) that a human must approve before they execute. Default off even when narrative AI is
   // on, so a tenant explicitly consents to AI-drafted change actions. Still env-gated too.
   aiActionsEnabled Boolean   @default(false)
+  // Autopilot (multi-step) — a SEPARATE, STRONGER opt-in ON TOP OF aiActionsEnabled: it lets Anett
+  // compose a single ordered PLAN of several whitelisted actions (EXECUTE_PLAN) and run them as one
+  // unit — direct when the baseline is unlocked, else via one approval that executes the whole plan
+  // (schedule steps wrapped in a single controlled re-baseline). Multi-step autonomy is more powerful
+  // than proposing one action, so it needs its own explicit consent. Default off; still env-gated.
+  aiAutopilotEnabled Boolean @default(false)
   // Proactive AI — a SEPARATE, stronger opt-in still: it lets a scheduled weekly sweep auto-DRAFT a
   // status narrative + predictive flags for every active project (spending on the AI provider with
   // no human click), landing them as PENDING briefings a PM reviews. Default off even when narrative
