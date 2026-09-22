@@ -2,7 +2,7 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/errors.js';
 import { getTenantStore } from '../../lib/tenant/context.js';
-import { aiEnabled, aiConfig, getAiPort, strictToolsEnabled, type AiToolDef, type SystemPrompt, aiNotEnabledError } from '../../lib/ai.js';
+import { aiEnabled, aiConfig, getAiPort, strictToolsEnabled, type AiToolDef, type SystemPrompt, type AiEffort, aiNotEnabledError } from '../../lib/ai.js';
 import { type RawUsage } from '../../lib/aiUsage.js';
 import { estimateCostUsd } from '../../lib/aiPricing.js';
 import { sampleAnswerQuality } from '../../lib/aiJudgeSample.js';
@@ -1104,6 +1104,44 @@ function routeModel(messages: AssistantTurn[]): string {
   return model; // unsure → quality-first
 }
 
+// #DeepReason deep-reasoning escalation (DORMANT unless AI_DEEP_REASONING): a hard, multi-tool
+// investigation (root-cause "why", cross-tab/portfolio audits, multi-part questions) is otherwise cut
+// short by the default maxSteps:6 / maxTokens:1500 loop budget — the model runs out of tool calls
+// before it can chain the reads a real analysis needs. When enabled AND the turn looks hard, raise the
+// budget (more tool steps + a longer synthesis) and bump the thinking effort. Deterministic keyword +
+// shape heuristic (no LLM, no extra call); quality-first — a false positive only costs a bit more, a
+// false negative just keeps today's behaviour. All ceilings are env-tunable for cost control.
+function deepReasoningEnabled(): boolean {
+  return process.env.AI_DEEP_REASONING === '1' || process.env.AI_DEEP_REASONING === 'true';
+}
+// Signals of a genuinely hard turn beyond the plain "analytical" COMPLEX_RE: root-cause, cross-cutting
+// audits, comparison/trade-off, and program/portfolio-wide reasoning that fans out over many projects.
+const DEEP_RE = /\b(root[\s-]?cause|why is|why are|why did|audit|investigat|diagnos|reconcil|discrepan|trade[\s-]?off|end[\s-]?to[\s-]?end|across (all |the )?projects?|portfolio[\s-]?wide|deep[\s-]?dive|akar masalah|selidik|telusuri|investigasi|diagnos|rekonsiliasi|menyeluruh|lintas proyek|seluruh proyek)\b/i;
+function assessTurnDepth(messages: AssistantTurn[]): boolean {
+  const last = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  if (DEEP_RE.test(last)) return true;
+  // A multi-part question (several "?") or a long analytical prompt fans out over many tools too.
+  const questionMarks = (last.match(/\?/g) ?? []).length;
+  if (questionMarks >= 2 && COMPLEX_RE.test(last)) return true;
+  if (last.length > 320 && COMPLEX_RE.test(last)) return true;
+  return false;
+}
+const clampInt = (v: string | undefined, def: number, lo: number, hi: number): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.trunc(n))) : def;
+};
+// The escalated loop budget for a deep turn. Env-tunable so ops can dial cost without a rebuild; each
+// value is clamped to a sane band so a bad env can't blow up latency/spend.
+function deepReasoningBudget(): { maxSteps: number; maxTokens: number; effort: AiEffort } {
+  const effortEnv = process.env.AI_DEEP_EFFORT;
+  const effort: AiEffort = effortEnv === 'medium' || effortEnv === 'max' ? effortEnv : 'high';
+  return {
+    maxSteps: clampInt(process.env.AI_DEEP_MAX_STEPS, 12, 6, 20),
+    maxTokens: clampInt(process.env.AI_DEEP_MAX_TOKENS, 4000, 1500, 8000),
+    effort,
+  };
+}
+
 export async function askAssistant(userId: string, role: Role, messages: AssistantTurn[], context?: AskContext, lang: AssistantLang = 'id', emitStep?: (label: string) => void, stream?: { onText?: (delta: string) => void; onTextReset?: () => void; onThinking?: (delta: string) => void }): Promise<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; personas: { id: string; label: string }[]; usage: TurnUsage; grounded: boolean; citationCoverage: CoverageResult }> {
   const en = lang === 'en';
   await assertCallerTenantOptedIn();
@@ -1205,6 +1243,11 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   };
   // #3 smart model routing: pick the model for this turn (cheap for a clear lookup, capable otherwise).
   const chosenModel = routeModel(messages);
+  // #DeepReason: on a hard, multi-tool turn (and only when enabled), raise the loop budget + effort so
+  // the analysis isn't cut short at 6 steps. Never downgrades — a routed cheap model ignores `effort`.
+  const deep = deepReasoningEnabled() && assessTurnDepth(messages);
+  const budget = deep ? deepReasoningBudget() : { maxSteps: 6, maxTokens: 1500, effort: undefined as AiEffort | undefined };
+  if (deep) emitStep?.(en ? '🧠 Deep reasoning' : '🧠 Analisis mendalam');
   // #5: collect the tool outputs this turn so the quality-judge can VERIFY the answer's facts against
   // the data Anett actually fetched (fair groundedness), instead of scoring data-heavy answers blind.
   const toolOutputs: string[] = [];
@@ -1221,10 +1264,11 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
     messages: msgs,
     tools: [...tools, ...memoryTools],
     executeTool,
-    maxSteps: 6,
-    maxTokens: 1500,
+    maxSteps: budget.maxSteps,
+    maxTokens: budget.maxTokens,
     feature: 'assistant_qa',
     model: chosenModel,
+    effort: budget.effort,
     onText: streaming ? stream?.onText : undefined,
     onTextReset: streaming ? stream?.onTextReset : undefined,
     onThinking: streaming ? stream?.onThinking : undefined,

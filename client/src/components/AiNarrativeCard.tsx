@@ -19,6 +19,8 @@ const CARD_T = {
     autoDesc1: 'Anett dapat menyusun SATU tujuan menjadi rencana berurutan berisi beberapa aksi lalu menjalankannya sebagai satu kesatuan. Untuk proyek aktif seluruh rencana', autoDesc2: ' lewat satu approval', autoDesc3: ' dulu. Perlu “Aksi AI” aktif.',
     proTitle: 'Draft status mingguan otomatis (proaktif)', proOn: 'Draft mingguan otomatis diaktifkan', proOff: 'Draft mingguan otomatis dimatikan', proAria: 'Draft status mingguan otomatis',
     proDesc1: 'Setiap minggu AI menyusun draft narasi status + sinyal prediktif untuk tiap proyek aktif, muncul di', proDescReports: ' Reports', proDesc2: ' untuk ditinjau PM. ', proDescNever: 'Tidak pernah terbit otomatis', proDesc3: '.',
+    rtTitle: 'Proaktif real-time (berbasis kejadian)', rtOn: 'Proaktif real-time diaktifkan', rtOff: 'Proaktif real-time dimatikan', rtAria: 'Proaktif real-time berbasis kejadian',
+    rtDesc: 'Selain sapuan mingguan, Anett bereaksi seketika saat ada kejadian penting (risiko HIGH/CRITICAL baru, CR diajukan) atau saat kinerja menembus ambang (cost overrun / slip jadwal) — langsung membuat draft briefing untuk ditinjau. Perlu “proaktif” aktif.',
     memTitle: 'Ingatan Anett (lintas sesi)', memOn: 'Ingatan Anett diaktifkan', memOff: 'Ingatan Anett dimatikan', memAria: 'Aktifkan ingatan Anett',
     memDesc1: 'Anett mengingat preferensi & fakta durable (pribadi + tingkat organisasi) dan', memDescLearn: ' belajar dari feedback 👎', memDesc2: ' Anda, dipakai pada percakapan berikutnya. Kelola daftarnya di kartu “Ingatan Anett” di bawah.',
     voiceTitle: 'Suara natural (server)', voiceOn: 'Suara server diaktifkan', voiceOff: 'Suara server dimatikan', voiceAria: 'Aktifkan suara server',
@@ -36,6 +38,8 @@ const CARD_T = {
     autoDesc1: 'Anett can turn ONE goal into an ordered plan of several actions and run them as one unit. On an active project the whole plan', autoDesc2: ' goes through one approval', autoDesc3: ' first. Requires “AI actions” on.',
     proTitle: 'Automatic weekly status draft (proactive)', proOn: 'Weekly auto-draft enabled', proOff: 'Weekly auto-draft disabled', proAria: 'Automatic weekly status draft',
     proDesc1: 'Each week AI drafts a status narrative + predictive signals for every active project, surfaced in', proDescReports: ' Reports', proDesc2: ' for the PM to review. ', proDescNever: 'Never published automatically', proDesc3: '.',
+    rtTitle: 'Real-time proactive (event-driven)', rtOn: 'Real-time proactive enabled', rtOff: 'Real-time proactive disabled', rtAria: 'Event-driven real-time proactive',
+    rtDesc: 'Beyond the weekly sweep, Anett reacts the moment something important happens (a new HIGH/CRITICAL risk, a raised CR) or performance crosses a threshold (cost overrun / schedule slip) — drafting an instant briefing to review. Requires “proactive” on.',
     memTitle: 'Anett memory (cross-session)', memOn: 'Anett memory enabled', memOff: 'Anett memory disabled', memAria: 'Enable Anett memory',
     memDesc1: 'Anett remembers durable preferences & facts (personal + org-wide) and', memDescLearn: ' learns from your 👎 feedback', memDesc2: ', applied in later conversations. Manage the list in the “Anett memory” card below.',
     voiceTitle: 'Natural voice (server)', voiceOn: 'Server voice enabled', voiceOff: 'Server voice disabled', voiceAria: 'Enable server voice',
@@ -57,11 +61,12 @@ export default function AiNarrativeCard() {
     queryFn: () => api.get<AiSettings>('/ai-settings'),
   });
   const save = useMutation({
-    mutationFn: (patch: { enabled?: boolean; actionsEnabled?: boolean; autopilotEnabled?: boolean; proactiveEnabled?: boolean; memoryEnabled?: boolean; voiceEnabled?: boolean }) => api.patch<AiSettings>('/ai-settings', patch),
+    mutationFn: (patch: { enabled?: boolean; actionsEnabled?: boolean; autopilotEnabled?: boolean; proactiveEnabled?: boolean; proactiveRealtime?: boolean; memoryEnabled?: boolean; voiceEnabled?: boolean }) => api.patch<AiSettings>('/ai-settings', patch),
     onSuccess: (s, patch) => {
       qc.setQueryData(['ai-settings'], s);
       if (patch.voiceEnabled !== undefined) toast.success(s.voiceEnabled ? t.voiceOn : t.voiceOff);
       else if (patch.memoryEnabled !== undefined) toast.success(s.memoryEnabled ? t.memOn : t.memOff);
+      else if (patch.proactiveRealtime !== undefined) toast.success(s.proactiveRealtime ? t.rtOn : t.rtOff);
       else if (patch.proactiveEnabled !== undefined) toast.success(s.proactiveEnabled ? t.proOn : t.proOff);
       else if (patch.autopilotEnabled !== undefined) toast.success(s.autopilotEnabled ? t.autoOn : t.autoOff);
       else if (patch.actionsEnabled !== undefined) toast.success(s.actionsEnabled ? t.actOn : t.actOff);
@@ -141,6 +146,22 @@ export default function AiNarrativeCard() {
               onChange={(v) => save.mutate({ proactiveEnabled: v })}
               disabled={!data.configured || save.isPending}
               label={t.proAria}
+            />
+          </div>
+
+          {/* Real-time (event-driven) — a sub-opt-in on top of weekly proactive: react to domain events
+              (new HIGH/CRITICAL risk, raised CR) + a breach scan (overrun / slip HIGH) with an instant
+              briefing. Nested (indented) and disabled unless weekly proactive is on. */}
+          <div className="mt-4 ml-6 flex items-start justify-between gap-3 border-l-2 border-slate-200 pl-4 dark:border-slate-700">
+            <div>
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{t.rtTitle}</div>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t.rtDesc}</p>
+            </div>
+            <Toggle
+              checked={data.proactiveRealtime}
+              onChange={(v) => save.mutate({ proactiveRealtime: v })}
+              disabled={!data.configured || !data.proactiveEnabled || save.isPending}
+              label={t.rtAria}
             />
           </div>
 

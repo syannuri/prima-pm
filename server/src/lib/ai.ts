@@ -34,7 +34,8 @@ export function aiConfig() {
 
 // Effort knob (#D "adaptive effort"): tune thinking depth / token spend without a code change. Default
 // 'medium' (unchanged). Raise to 'high'/'max' for more rigorous analysis, 'low' for cheap/fast.
-type AiEffort = 'low' | 'medium' | 'high' | 'max';
+// Exported so a caller (the Q&A deep-reasoning escalation) can pass a per-turn override to runToolLoop.
+export type AiEffort = 'low' | 'medium' | 'high' | 'max';
 export function aiEffort(): AiEffort {
   const v = process.env.AI_EFFORT;
   return v === 'low' || v === 'high' || v === 'max' ? v : 'medium';
@@ -132,6 +133,10 @@ export interface AiPort {
     // #3 smart model routing: override the model for this turn (e.g. a cheap model for a simple
     // lookup). Optional — defaults to aiConfig().model.
     model?: string;
+    // Deep-reasoning escalation (#DeepReason): override the effort/thinking budget for THIS turn (a
+    // hard, multi-tool investigation). Threaded into output_config on 4.6+ models; ignored on cheap
+    // models that reject the effort param. Optional — defaults to the global aiEffort() env knob.
+    effort?: AiEffort;
     // Real-time streaming (improvement #2): `onText` fires with each answer-text delta as Claude
     // generates it; `onTextReset` fires when a step turns out to be a tool call, so any preamble text
     // streamed that step is discarded on the client (only the final end_turn text is the answer).
@@ -331,7 +336,7 @@ function liveAiPort(): AiPort {
       const parsed = NarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
     },
-    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, model: modelOverride, onText, onTextReset, onThinking, onUsage }) {
+    async runToolLoop({ system, messages, tools, executeTool, maxSteps = 6, maxTokens = 1500, feature, model: modelOverride, effort: effortOverride, onText, onTextReset, onThinking, onUsage }) {
       await assertAiBudget(); // #4: block if the tenant is over its monthly AI budget (no-op unless configured)
       const { apiKey, model: defaultModel } = aiConfig();
       const model = modelOverride || defaultModel; // #3 smart model routing
@@ -350,7 +355,7 @@ function liveAiPort(): AiPort {
           model,
           max_tokens: maxTokens,
           thinking: modern ? { type: 'adaptive', display: 'summarized' } : undefined,
-          output_config: modern ? { effort: aiEffort() } : undefined,
+          output_config: modern ? { effort: effortOverride ?? aiEffort() } : undefined,
           system: toSystemBlocks(sys, (s) => redactor.redact(s)),
           // AiToolDef carries a raw JSON-schema object (with `type: 'object'` at runtime); cast to
           // the SDK's Tool shape whose InputSchema requires the literal `type`.

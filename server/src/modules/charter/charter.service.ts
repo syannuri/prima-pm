@@ -191,6 +191,9 @@ export async function createChangeRequest(
     },
   });
   await writeAudit({ projectId, userId: actorId, entity: 'ChangeRequest', entityId: cr.id, action: 'CREATE', after: cr });
+  // Fan out a domain event so outbound webhooks / automations / event-driven proactive (Phase 2) can
+  // react to a raised CR. Emitted BEFORE the routing branch so it fires whichever path returns.
+  await emitDomainEvent('change_request.created', { projectId, changeRequestId: cr.id, title: cr.title, type: cr.type, magnitude: cr.magnitude });
 
   // If an admin-configured approval workflow matches this CR, route it through the multi-step chain
   // instead of the legacy single-decider notification. Dynamic import keeps the module graph acyclic

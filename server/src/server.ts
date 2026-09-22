@@ -10,6 +10,7 @@ import { escalateOverdueApprovals } from './modules/approval/approval.service.js
 import { runTrialReminderSweep } from './modules/billing/trialReminders.js';
 import { runDigestSweepIfDue } from './modules/notification/digest.service.js';
 import { runProactiveSweepIfDue, finalizeDueBatches, runInstantTriggerSweepIfDue } from './modules/report/proactive.service.js';
+import { runProactiveEventDrainIfDue } from './modules/report/proactiveEvents.service.js';
 import { measureDueOutcomes } from './modules/aiActions/aiActionOutcomes.service.js';
 import { logger, release, initSentry } from './lib/observability.js';
 
@@ -213,6 +214,22 @@ async function main() {
   const instantTimer = setInterval(() => void sweepInstant(), INSTANT_SWEEP_MS);
   instantTimer.unref();
 
+  // Event-driven proactive drain (Phase 2): frequent tick that turns queued domain-event/breach
+  // triggers into coalesced instant briefings — near-real-time, not just at the weekly window. Dormant
+  // unless a tenant opted into aiProactiveRealtime; a cheap indexed no-op when nothing is pending.
+  const EVENT_DRAIN_MS = Number(process.env.PROACTIVE_EVENT_MS ?? 5 * 60 * 1000);
+  const sweepEventDrain = async () => {
+    try {
+      const r = await runProactiveEventDrainIfDue();
+      if (r.drafted > 0) console.log(`[prima-pm] event-drained ${r.drafted} proactive briefing(s)`);
+    } catch (err) {
+      console.error('[prima-pm] proactive event drain failed', err);
+    }
+  };
+  void sweepEventDrain();
+  const eventDrainTimer = setInterval(() => void sweepEventDrain(), EVENT_DRAIN_MS);
+  eventDrainTimer.unref();
+
   // AI outcome-learning sweep: resolve applied Stage-C action proposals whose measurement horizon
   // has elapsed (baseline SPI vs SPI now → IMPROVED/UNCHANGED/WORSENED). Deterministic, no LLM/spend;
   // a cheap indexed no-op when nothing is due. Every 6h.
@@ -234,6 +251,7 @@ async function main() {
     clearInterval(pruneTimer);
     clearInterval(memoryPruneTimer);
     clearInterval(autoCaptureTimer);
+    clearInterval(eventDrainTimer);
     clearInterval(webhookTimer);
     clearInterval(approvalSlaTimer);
     clearInterval(trialReminderTimer);
