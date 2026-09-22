@@ -1029,6 +1029,7 @@ export interface AiSettings {
   actionsEnabled: boolean;
   autopilotEnabled: boolean;
   proactiveEnabled: boolean;
+  proactiveRealtime: boolean;
   memoryEnabled: boolean;
   voiceEnabled: boolean;
 }

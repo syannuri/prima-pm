@@ -15,7 +15,7 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   'ProjectDependency', 'Task', 'TaskStep', 'TaskDependency', 'ChangeRequest', 'Attachment', 'Sprint',
   'SprintSnapshot', 'EvmSnapshot', 'BacklogItem', 'LessonLearned', 'AcceptanceSignoff',
   'UatTestCase', 'KickoffMeeting', 'KickoffAttendee', 'KickoffActionItem', 'Requirement',
-  'RequirementTaskLink', 'ProjectCommentary', 'AiBriefing', 'AiMemory', 'AiFeedback', 'AiUsage',
+  'RequirementTaskLink', 'ProjectCommentary', 'AiBriefing', 'AiProactiveTrigger', 'AiMemory', 'AiFeedback', 'AiUsage',
   'ProjectEmbedding', 'CustomFieldDef', 'CustomFieldValue', 'Program', 'CrossProjectLink', 'CustomRole',
   'Proposal', // Project Intake & Portfolio Selection
   'AiJudgeSample', // round-6 #5: quality-trend sampling

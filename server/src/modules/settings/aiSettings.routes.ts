@@ -16,11 +16,11 @@ import { getJudgeTrend } from '../assistant/judgeTrend.service.js';
 const router = Router();
 router.use(requireAuth, requireRole('ADMIN'));
 
-async function currentFlags(): Promise<{ enabled: boolean; actionsEnabled: boolean; autopilotEnabled: boolean; proactiveEnabled: boolean; memoryEnabled: boolean; voiceEnabled: boolean }> {
+async function currentFlags(): Promise<{ enabled: boolean; actionsEnabled: boolean; autopilotEnabled: boolean; proactiveEnabled: boolean; proactiveRealtime: boolean; memoryEnabled: boolean; voiceEnabled: boolean }> {
   const tid = getTenantStore()?.tenantId;
-  if (!tid) return { enabled: false, actionsEnabled: false, autopilotEnabled: false, proactiveEnabled: false, memoryEnabled: false, voiceEnabled: false };
-  const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true, aiActionsEnabled: true, aiAutopilotEnabled: true, aiProactiveEnabled: true, aiMemoryEnabled: true, aiVoiceEnabled: true } });
-  return { enabled: t?.aiNarrativeEnabled ?? false, actionsEnabled: t?.aiActionsEnabled ?? false, autopilotEnabled: t?.aiAutopilotEnabled ?? false, proactiveEnabled: t?.aiProactiveEnabled ?? false, memoryEnabled: t?.aiMemoryEnabled ?? false, voiceEnabled: t?.aiVoiceEnabled ?? false };
+  if (!tid) return { enabled: false, actionsEnabled: false, autopilotEnabled: false, proactiveEnabled: false, proactiveRealtime: false, memoryEnabled: false, voiceEnabled: false };
+  const t = await prisma.tenant.findUnique({ where: { id: tid }, select: { aiNarrativeEnabled: true, aiActionsEnabled: true, aiAutopilotEnabled: true, aiProactiveEnabled: true, aiProactiveRealtime: true, aiMemoryEnabled: true, aiVoiceEnabled: true } });
+  return { enabled: t?.aiNarrativeEnabled ?? false, actionsEnabled: t?.aiActionsEnabled ?? false, autopilotEnabled: t?.aiAutopilotEnabled ?? false, proactiveEnabled: t?.aiProactiveEnabled ?? false, proactiveRealtime: t?.aiProactiveRealtime ?? false, memoryEnabled: t?.aiMemoryEnabled ?? false, voiceEnabled: t?.aiVoiceEnabled ?? false };
 }
 
 router.get(
@@ -34,8 +34,8 @@ router.get(
 // actions opt-in (aiActionsEnabled) — a SEPARATE, stronger consent. Either may be sent.
 router.patch(
   '/',
-  validateBody(z.object({ enabled: z.boolean().optional(), actionsEnabled: z.boolean().optional(), autopilotEnabled: z.boolean().optional(), proactiveEnabled: z.boolean().optional(), memoryEnabled: z.boolean().optional(), voiceEnabled: z.boolean().optional() })
-    .refine((b) => b.enabled !== undefined || b.actionsEnabled !== undefined || b.autopilotEnabled !== undefined || b.proactiveEnabled !== undefined || b.memoryEnabled !== undefined || b.voiceEnabled !== undefined, { message: 'Nothing to update' })),
+  validateBody(z.object({ enabled: z.boolean().optional(), actionsEnabled: z.boolean().optional(), autopilotEnabled: z.boolean().optional(), proactiveEnabled: z.boolean().optional(), proactiveRealtime: z.boolean().optional(), memoryEnabled: z.boolean().optional(), voiceEnabled: z.boolean().optional() })
+    .refine((b) => b.enabled !== undefined || b.actionsEnabled !== undefined || b.autopilotEnabled !== undefined || b.proactiveEnabled !== undefined || b.proactiveRealtime !== undefined || b.memoryEnabled !== undefined || b.voiceEnabled !== undefined, { message: 'Nothing to update' })),
   asyncHandler(async (req, res) => {
     const tid = getTenantStore()?.tenantId;
     if (!tid) throw BadRequest('No active workspace to configure.');
@@ -46,6 +46,7 @@ router.patch(
         ...(req.body.actionsEnabled !== undefined ? { aiActionsEnabled: req.body.actionsEnabled } : {}),
         ...(req.body.autopilotEnabled !== undefined ? { aiAutopilotEnabled: req.body.autopilotEnabled } : {}),
         ...(req.body.proactiveEnabled !== undefined ? { aiProactiveEnabled: req.body.proactiveEnabled } : {}),
+        ...(req.body.proactiveRealtime !== undefined ? { aiProactiveRealtime: req.body.proactiveRealtime } : {}),
         ...(req.body.memoryEnabled !== undefined ? { aiMemoryEnabled: req.body.memoryEnabled } : {}),
         ...(req.body.voiceEnabled !== undefined ? { aiVoiceEnabled: req.body.voiceEnabled } : {}),
       },

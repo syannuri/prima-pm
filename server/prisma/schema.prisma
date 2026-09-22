@@ -352,6 +352,11 @@ model Tenant {
   // no human click), landing them as PENDING briefings a PM reviews. Default off even when narrative
   // AI is on, so a tenant explicitly consents to unattended AI spend. Env-gated too.
   aiProactiveEnabled Boolean @default(false)
+  // Event-driven proactive (Phase 2) — a sub-opt-in ON TOP of aiProactiveEnabled: instead of only the
+  // calendar sweep, Anett reacts to DOMAIN EVENTS (a new HIGH risk, a raised change request) and to a
+  // deterministic breach scan (cost overrun / schedule slip crossing HIGH), enqueuing a trigger that a
+  // debounced worker turns into an instant event-framed briefing. Default off; requires aiProactiveEnabled.
+  aiProactiveRealtime Boolean @default(false)
   // Cross-session AI memory — lets Anett remember durable facts/preferences (per-user) and
   // org-shared facts/glossary/feedback-corrections (per-tenant) across sessions, injected into its
   // prompt. A SEPARATE opt-in: default off even when narrative AI is on. See docs/AI-MEMORY-FEEDBACK-PLAN.md.
@@ -364,6 +369,7 @@ model Tenant {
 
   memberships Membership[]
   aiBriefings AiBriefing[]
+  aiProactiveTriggers AiProactiveTrigger[]
   aiMemories AiMemory[]
   aiFeedbacks AiFeedback[]
   billingEvents  BillingEvent[]
@@ -732,6 +738,7 @@ model Project {
   requirements     Requirement[]
   commentaries     ProjectCommentary[]
   aiBriefings      AiBriefing[]
+  aiProactiveTriggers AiProactiveTrigger[]
   approvalRequests ApprovalRequest[]
   aiActionProposals AiActionProposal[]
   aiActionOutcomes AiActionOutcome[]
@@ -1210,6 +1217,33 @@ model AiBriefing {
   @@unique([projectId, period, periodKey])
   @@index([tenantId])
   @@index([projectId, status])
+}
+
+/// Event-driven proactive (Phase 2). A lightweight queue: a domain event (new HIGH risk / raised CR)
+/// or a deterministic breach scan (cost overrun / schedule slip HIGH) inserts ONE row here in the
+/// request/scan path (no LLM there). A debounced worker later coalesces the pending rows per project
+/// into a single event-framed AiBriefing, then stamps processedAt. Tenant-scoped (in SCOPED_MODELS) so
+/// a tenant hard-delete cascades. kind ∈ RISK_SPIKE|CR_RAISED|BASELINE_BREACH|OVERDUE_CASCADE.
+model AiProactiveTrigger {
+  id        String  @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant? @relation(fields: [tenantId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  kind    String  // RISK_SPIKE | CR_RAISED | BASELINE_BREACH | OVERDUE_CASCADE
+  summary String  @db.Text // short human line describing what fired (drives the briefing framing)
+
+  // Idempotency: at most one unprocessed trigger of a kind per project per day (a persistent breach or
+  // a burst of edits collapses to one). YYYY-MM-DD in the tenant/server day.
+  dayKey  String
+
+  createdAt   DateTime  @default(now())
+  processedAt DateTime? // null = pending; set when a briefing has been drafted from it
+
+  @@unique([projectId, kind, dayKey])
+  @@index([tenantId])
+  @@index([projectId, processedAt])
 }
 
 enum AiMemoryScope {
