@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { Project } from '../api/types';
@@ -8,19 +8,49 @@ import { useAuth } from '../context/AuthContext';
 import { canGovernProject } from '../lib/perms';
 import ActivateModal from './ActivateModal';
 
+// Which manual lifecycle transitions are legal from a given status. Exported so a host (e.g. the
+// Schedule focus-mode menu) can render the same moves as menu items without duplicating the policy.
+export function legalLifecycle(status: Project['status']) {
+  return {
+    canActivate: status === 'CHARTERED',
+    canResume: status === 'ON_HOLD',
+    canHold: status === 'CHARTERED' || status === 'IN_PROGRESS',
+    canReopen: status === 'CLOSED',
+  };
+}
+
+// The modal/action a controlled parent can drive. 'resume' is modal-less (a direct transition fired
+// in an effect); 'activate' opens the guided ActivateModal (guests only — governors use onReview).
+export type LifecycleModal = null | 'hold' | 'reopen' | 'resume' | 'activate';
+
 // Manual lifecycle transitions (ADMIN/PMO): Activate (→IN_PROGRESS), Put on hold
 // (→ON_HOLD, reason required), Resume (→IN_PROGRESS). DRAFT→CHARTERED happens via
 // charter commit; CLOSED is handled by CloseProjectModal. The backend state-machine
 // (STATUS_TRANSITIONS) is the source of truth — this just exposes the legal moves.
-export default function LifecycleActions({ project, onReview }: { project: Project; onReview?: () => void }) {
+//
+// Two modes:
+//  • Default (uncontrolled): renders its own trigger buttons + owns the modal state — the normal
+//    project header on every tab.
+//  • Controlled host (renderTriggers=false + modal/onModalChange): renders NO buttons, only the
+//    modals + mutation, driven by the parent. The parent renders the triggers as menu items and
+//    mounts this host OUTSIDE the auto-closing overflow menu (which unmounts its children on click).
+export default function LifecycleActions({
+  project, onReview, renderTriggers = true, modal: modalProp, onModalChange,
+}: {
+  project: Project;
+  onReview?: () => void;
+  renderTriggers?: boolean;
+  modal?: LifecycleModal;
+  onModalChange?: (m: LifecycleModal) => void;
+}) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
-  // Reason-required modal, shared by "hold" and "reopen".
-  const [modal, setModal] = useState<null | 'hold' | 'reopen'>(null);
+  const controlled = onModalChange !== undefined;
+  const [internalModal, setInternalModal] = useState<LifecycleModal>(null);
+  const modal = controlled ? (modalProp ?? null) : internalModal;
+  const setModal = (m: LifecycleModal) => { if (controlled) onModalChange!(m); else setInternalModal(m); };
   const [reason, setReason] = useState('');
-  // Activation goes through a guided modal (baseline-readiness checklist).
-  const [activating, setActivating] = useState(false);
 
   const canManage = canGovernProject(user, project);
 
@@ -42,42 +72,57 @@ export default function LifecycleActions({ project, onReview }: { project: Proje
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to update status'),
   });
 
+  // Controlled 'resume' is a modal-less transition — fire it once when the parent requests it.
+  // (Resume carries no reason, so there's no modal to show.)
+  useEffect(() => {
+    if (modal === 'resume' && !change.isPending) change.mutate({ status: 'IN_PROGRESS' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal]);
+
+  // Clear the reason box each time the hold/reopen modal opens (covers the controlled path, where the
+  // parent's menu item opens it without going through the local trigger).
+  useEffect(() => {
+    if (modal === 'hold' || modal === 'reopen') setReason('');
+  }, [modal]);
+
   if (!canManage) return null;
 
-  const s = project.status;
-  const canActivate = s === 'CHARTERED';
-  const canResume = s === 'ON_HOLD';
-  const canHold = s === 'CHARTERED' || s === 'IN_PROGRESS';
-  const canReopen = s === 'CLOSED';
-
+  const { canActivate, canResume, canHold, canReopen } = legalLifecycle(project.status);
   if (!canActivate && !canResume && !canHold && !canReopen) return null;
 
   const isReopen = modal === 'reopen';
   const submit = () =>
     change.mutate(isReopen ? { status: 'IN_PROGRESS', reopenReason: reason.trim() } : { status: 'ON_HOLD', holdReason: reason.trim() });
+  // Guided ActivateModal shows when activation is requested and no onReview handler is wired (guests).
+  const activateOpen = modal === 'activate' && !onReview;
 
   return (
     <>
-      {canActivate && (
-        <Button variant="secondary" data-tour="activate" onClick={onReview ?? (() => setActivating(true))}>
-          ▶ Activate
-        </Button>
-      )}
-      {/* Fallback plain activate modal when no review handler is wired (kept for safety). */}
-      {activating && !onReview && <ActivateModal project={project} onClose={() => setActivating(false)} />}
-      {canResume && (
-        <Button variant="secondary" disabled={change.isPending} onClick={() => change.mutate({ status: 'IN_PROGRESS' })}>
-          ▶ Resume
-        </Button>
-      )}
-      {canHold && (
-        <Button variant="secondary" onClick={() => { setReason(''); setModal('hold'); }}>⏸ Put on hold</Button>
-      )}
-      {canReopen && (
-        <Button variant="secondary" onClick={() => { setReason(''); setModal('reopen'); }}>↩ Reopen</Button>
+      {renderTriggers && (
+        <>
+          {canActivate && (
+            <Button variant="secondary" data-tour="activate" onClick={onReview ?? (() => setModal('activate'))}>
+              ▶ Activate
+            </Button>
+          )}
+          {canResume && (
+            <Button variant="secondary" disabled={change.isPending} onClick={() => change.mutate({ status: 'IN_PROGRESS' })}>
+              ▶ Resume
+            </Button>
+          )}
+          {canHold && (
+            <Button variant="secondary" onClick={() => setModal('hold')}>⏸ Put on hold</Button>
+          )}
+          {canReopen && (
+            <Button variant="secondary" onClick={() => setModal('reopen')}>↩ Reopen</Button>
+          )}
+        </>
       )}
 
-      {modal && (
+      {/* Fallback plain activate modal when no review handler is wired (kept for safety / guests). */}
+      {activateOpen && <ActivateModal project={project} onClose={() => setModal(null)} />}
+
+      {(modal === 'hold' || modal === 'reopen') && (
         <Modal onClose={() => setModal(null)} title={isReopen ? 'Reopen closed project' : 'Put project on hold'}>
           <div className="space-y-3">
             <p className="text-sm text-slate-500 dark:text-slate-400">
