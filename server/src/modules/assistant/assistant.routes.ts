@@ -47,11 +47,15 @@ router.get('/briefing', asyncHandler(async (req, res) => {
 }));
 
 // Recent conversation (last turns + the new question) + optional current-view context. Bounded to
-// keep token cost + payload sane.
+// keep token cost + payload sane. The per-message cap must cover a RESENT assistant answer, not just
+// a typed question: #DeepReason raises the output ceiling to AI_DEEP_MAX_TOKENS (up to 8000 tokens),
+// so a long deep-reasoning answer carried back as history would blow a 4000-char cap and 400 the whole
+// next turn ("Invalid request"). Keep this in sync with the client's history-truncation bound.
+const MAX_MSG_CHARS = 8000;
 const askSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
-    content: z.string().min(1).max(4000),
+    content: z.string().min(1).max(MAX_MSG_CHARS),
   })).min(1).max(20),
   context: z.object({
     projectId: z.string().uuid().nullish(),

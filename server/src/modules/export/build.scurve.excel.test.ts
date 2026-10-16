@@ -28,12 +28,12 @@ const cellsOf = (ws: ExcelJS.Worksheet): string[] => {
 
 describe('buildScurveWorkbook', () => {
   it('produces a valid xlsx with both sheets, EVM summary + series + snapshots', async () => {
-    const buf = Buffer.from(await buildScurveWorkbook(base));
+    const buf = await buildScurveWorkbook(base);
     expect(buf.length).toBeGreaterThan(0);
     expect(buf.subarray(0, 2).toString()).toBe('PK'); // xlsx = zip
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf);
+    await wb.xlsx.load(buf as unknown as Parameters<typeof wb.xlsx.load>[0]); // exceljs declares its own Buffer type, distinct from @types/node 22's generic Buffer
     const sc = wb.getWorksheet('S-Curve');
     const sn = wb.getWorksheet('EVM Snapshots');
     expect(sc).toBeTruthy();
@@ -52,10 +52,10 @@ describe('buildScurveWorkbook', () => {
 
   it('builds without a chart image and with no series (baseline not locked)', async () => {
     const noChart = { ...base, chartPng: null, forecast: { ...base.forecast, sCurve: [] }, snapshots: [] } as unknown as ScurveExport;
-    const buf = Buffer.from(await buildScurveWorkbook(noChart));
+    const buf = await buildScurveWorkbook(noChart);
     expect(buf.subarray(0, 2).toString()).toBe('PK');
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf);
+    await wb.xlsx.load(buf as unknown as Parameters<typeof wb.xlsx.load>[0]); // exceljs declares its own Buffer type, distinct from @types/node 22's generic Buffer
     expect(cellsOf(wb.getWorksheet('S-Curve')!).some((v) => v.includes('No S-curve data'))).toBe(true);
     expect(wb.model.media.length).toBe(0);
   });

@@ -22,6 +22,11 @@ interface CoverageResult { total: number; cited: number; coverage: number } // g
 interface PersonaRef { id: string; label: string }
 interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; personas?: PersonaRef[]; grounded?: boolean; citationCoverage?: CoverageResult; error?: boolean }
 interface TurnUsage { inputTokens: number; outputTokens: number; costUsd: number } // #5 cost meter
+
+// Per-message content cap sent to /assistant/ask — kept in sync with the server's askSchema
+// (MAX_MSG_CHARS). Covers a resent deep-reasoning answer (output ceiling up to 8000 tokens), not just
+// a typed question, so a long turn in history can't 400 the whole request ("Invalid request").
+const MAX_MSG_CHARS = 8000;
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 interface ApprovalItem { id: string; actionLabel: string; stepName: string; project: { code: string; name: string } | null }
 
@@ -450,9 +455,11 @@ export default function AiAssistant() {
   });
 
   const ask = useMutation({
-    // Only real Q&A turns go to the model — error notices are dropped from the sent history.
+    // Only real Q&A turns go to the model — error notices are dropped from the sent history. Each
+    // message content is truncated to the server's per-message cap (MAX_MSG_CHARS): a long deep-reasoning
+    // answer carried back as history would otherwise 400 the whole turn ("Invalid request").
     mutationFn: (history: Turn[]) => api.post<{ answer: string; proposals: ProposedRef[]; navigate: NavRef[]; memories: MemoryRef[]; tables: QueryTable[]; personas?: PersonaRef[]; usage?: TurnUsage; grounded?: boolean; citationCoverage?: CoverageResult }>(`/assistant/ask`, {
-      messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content })),
+      messages: history.filter((t) => !t.error).slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, MAX_MSG_CHARS) })),
       context: currentProjectId ? { projectId: currentProjectId, tab: currentTab } : undefined,
       lang,
     }),
