@@ -45,17 +45,24 @@ export default function SchedulePanel({ projectId, focusTaskId, focusKey }: { pr
   const syncRows = syncQ.data?.rows ?? [];
   const resourceAlerts = syncRows.filter((r) => r.status !== 'OK').length;
 
+  const switcher = <ViewSwitcher value={view} onChange={setView} resourceAlerts={resourceAlerts} />;
   return (
     <div className="space-y-4">
-      <ViewSwitcher value={view} onChange={setView} resourceAlerts={resourceAlerts} />
-      {view === 'gantt' && (
-        <div id="section-wbs" className="scroll-mt-24"><WbsPanel projectId={projectId} focusTaskId={focusTaskId} focusKey={focusKey} /></div>
-      )}
-      {view === 'cpm' && (
-        <div id="section-cpm" className="scroll-mt-24"><CriticalPathPanel projectId={projectId} /></div>
-      )}
-      {view === 'resources' && (
-        <div id="section-manpower" className="scroll-mt-24"><ManpowerSync rows={syncRows} /></div>
+      {view === 'gantt' ? (
+        // The switcher rides the Gantt's own toolbar row (toolbarLead) rather than a standalone row,
+        // so the timeline rises one row higher. Critical Path / Resources have no such toolbar, so
+        // they keep the switcher as a standalone header above the panel.
+        <div id="section-wbs" className="scroll-mt-24"><WbsPanel projectId={projectId} focusTaskId={focusTaskId} focusKey={focusKey} toolbarLead={switcher} /></div>
+      ) : (
+        <>
+          {switcher}
+          {view === 'cpm' && (
+            <div id="section-cpm" className="scroll-mt-24"><CriticalPathPanel projectId={projectId} /></div>
+          )}
+          {view === 'resources' && (
+            <div id="section-manpower" className="scroll-mt-24"><ManpowerSync rows={syncRows} /></div>
+          )}
+        </>
       )}
     </div>
   );

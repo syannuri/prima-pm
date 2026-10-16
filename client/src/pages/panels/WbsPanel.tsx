@@ -566,7 +566,7 @@ function nextTaskStart(rows: Row[], parentId: string | null): Date | null {
   return Number.isFinite(maxEnd) ? new Date(maxEnd) : null;
 }
 
-export default function WbsPanel({ projectId, focusTaskId, focusKey }: { projectId: string; focusTaskId?: string | null; focusKey?: number }) {
+export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead }: { projectId: string; focusTaskId?: string | null; focusKey?: number; toolbarLead?: ReactNode }) {
   const qc = useQueryClient();
   const base = `/projects/${projectId}/schedule`;
   const canEdit = useProjectWrite(projectId);
@@ -1739,6 +1739,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey }: { project
         </div>
       )}
       <div className={`flex flex-wrap items-center gap-2 ${fullscreen ? 'justify-between mb-2' : 'mb-1'}`}>
+        {/* The Schedule view switcher (Gantt · Critical Path · Resources) is injected here so it
+            shares the Gantt toolbar row instead of taking a row of its own above the panel. */}
+        {toolbarLead}
         {/* Slip summary on the left (non-fullscreen) — shares the row with the right-aligned
             controls so the table rises directly beneath the buttons instead of a row lower. */}
         {!fullscreen && slipBanner}
