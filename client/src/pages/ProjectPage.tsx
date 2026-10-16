@@ -4,7 +4,7 @@ import { pushRecentProject } from '../lib/recentProjects';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
-import { Badge, Card, Modal, Spinner } from '../components/ui';
+import { Badge, Button, Card, Modal, Spinner } from '../components/ui';
 import BaselineGate from '../components/BaselineGate';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
@@ -32,7 +32,7 @@ import KickoffPanel from './panels/KickoffPanel';
 import EvmTrendPanel from './panels/EvmTrendPanel';
 import EditProjectModal from '../components/EditProjectModal';
 import CloseProjectModal from '../components/CloseProjectModal';
-import LifecycleActions from '../components/LifecycleActions';
+import LifecycleActions, { legalLifecycle, type LifecycleModal } from '../components/LifecycleActions';
 import ActivationReviewModal from '../components/ActivationReviewModal';
 import EvmHealth from '../components/EvmHealth';
 import ProjectOverview from '../components/ProjectOverview';
@@ -115,6 +115,20 @@ export default function ProjectPage() {
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
   const { lang } = useLang();
   const [editOpen, setEditOpen] = useState(false);
+  // Schedule "Focus timeline" mode (desktop): collapse the project name row + tab strip into a slim
+  // bar so the Gantt gets the full height. Reversible toggle, remembered per user in localStorage.
+  // The hidden actions (lifecycle / close / nav) live in the slim bar's ⋯ menu; because that overflow
+  // menu unmounts its children on click, their modals are mounted OUTSIDE it and driven by state here.
+  const focusKey = `prima.scheduleFocus.${user?.id ?? 'anon'}`;
+  const [scheduleFocus, setScheduleFocusState] = useState<boolean>(() => {
+    try { return localStorage.getItem(focusKey) === '1'; } catch { return false; }
+  });
+  const setScheduleFocus = (v: boolean) => {
+    setScheduleFocusState(v);
+    try { localStorage.setItem(focusKey, v ? '1' : '0'); } catch { /* storage disabled */ }
+  };
+  const [lifecycleModal, setLifecycleModal] = useState<LifecycleModal>(null);
+  const [closeOpen, setCloseOpen] = useState(false);
 
   const exportReport = async (kind: 'excel' | 'pdf') => {
     setExporting(kind);
@@ -185,8 +199,75 @@ export default function ProjectPage() {
     isMobile && MOBILE_HIDDEN.includes(chosenTab) ? landingTab
     : chosenTab;
 
+  // Schedule "Focus timeline" is desktop-only (phones already hide More + scroll the tab bar).
+  const focusActive = activeTab === 'Schedule' && scheduleFocus && !isMobile;
+  const lifecycle = legalLifecycle(project.status);
+  // Mirror CloseProjectModal's CLOSEABLE set (DRAFT must be chartered first; CLOSED is terminal).
+  const closeable = project.status === 'CHARTERED' || project.status === 'IN_PROGRESS' || project.status === 'ON_HOLD';
+
+  // "Jump to" — deep-link to any tab (and Schedule sub-views), grouped by management domain. Shared
+  // by the normal header's ⋯ More and the focus-mode slim menu, so navigation never gets stranded.
+  const jumpTo = (
+    <>
+      <MenuHeader>{lang === 'id' ? 'Lompat ke' : 'Jump to'}</MenuHeader>
+      {TAB_GROUPS.map((g) => {
+        const gTabs = g.tabs.filter((t) => tabs.includes(t));
+        if (!gTabs.length) return null;
+        return (
+          <Fragment key={g.label}>
+            <MenuGroupHeader>{lang === 'id' ? (GROUP_LABEL_ID[g.label] ?? g.label) : g.label}</MenuGroupHeader>
+            {gTabs.map((t) => (
+              <Fragment key={t}>
+                {/* The Schedule tab is surfaced as "Timeline" in this Jump-to menu (the on-page
+                    tab label stays "Schedule"); it has three segmented sub-views the menu
+                    deep-links into: Gantt, Critical Path, and Resources (manpower sync). */}
+                <MenuItem icon={TAB_ICONS[t]} active={t === activeTab} onClick={() => goto(t)}>{t === 'Schedule' ? 'Timeline' : t}</MenuItem>
+                {t === 'Schedule' && (
+                  <>
+                    <MenuItem indent onClick={() => gotoScheduleView('gantt')}>↳ Gantt Chart</MenuItem>
+                    <MenuItem indent onClick={() => gotoScheduleView('cpm')}>↳ Critical Path</MenuItem>
+                    <MenuItem indent onClick={() => gotoScheduleView('resources')}>↳ Resources (Manpower)</MenuItem>
+                  </>
+                )}
+              </Fragment>
+            ))}
+          </Fragment>
+        );
+      })}
+    </>
+  );
+
   return (
     <div className="space-y-1.5">
+      {focusActive ? (
+        /* ── Schedule Focus mode: a slim bar (status + baseline gate + one ⋯ menu) replaces the
+           project-name row AND the tab strip, handing the Gantt the full viewport height. Everything
+           hidden (navigation, lifecycle, close, edit, exports) lives in the ⋯ menu; a "Show full
+           header" item exits focus. Reversible + remembered per user. ── */
+        <div className="flex items-center gap-2">
+          <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'} solid>{project.status}</Badge>
+          <BaselineGate projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} />
+          <div className="ml-auto flex items-center gap-2">
+            <MoreMenu title={project.name} label={lang === 'id' ? '⋯ Menu' : '⋯ Menu'}>
+              <MenuItem icon="⤢" onClick={() => setScheduleFocus(false)}>{lang === 'id' ? 'Tampilkan header penuh' : 'Show full header'}</MenuItem>
+              {(canEdit || chartered) && <MenuDivider />}
+              {(canEdit || chartered) && <MenuHeader>{lang === 'id' ? 'Aksi' : 'Actions'}</MenuHeader>}
+              {canEdit && <MenuItem icon="✏️" onClick={() => setEditOpen(true)}>{lang === 'id' ? 'Ubah detail' : 'Edit details'}</MenuItem>}
+              {chartered && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('excel')}>{exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
+              {chartered && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('pdf')}>{exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
+              {/* Lifecycle + close — hosted outside the menu (below) and driven by the state these set.
+                  Governors activate via the PMO review card; a guest self-serves the ActivateModal. */}
+              {canEdit && lifecycle.canActivate && <MenuItem icon="▶" onClick={() => { if (user?.role === 'GUEST') setLifecycleModal('activate'); else setReviewOpen(true); }}>{lang === 'id' ? 'Aktifkan' : 'Activate'}</MenuItem>}
+              {canEdit && lifecycle.canResume && <MenuItem icon="▶" onClick={() => setLifecycleModal('resume')}>{lang === 'id' ? 'Lanjutkan' : 'Resume'}</MenuItem>}
+              {canEdit && lifecycle.canHold && <MenuItem icon="⏸" onClick={() => setLifecycleModal('hold')}>{lang === 'id' ? 'Tahan sementara' : 'Put on hold'}</MenuItem>}
+              {canEdit && lifecycle.canReopen && <MenuItem icon="↩" onClick={() => setLifecycleModal('reopen')}>{lang === 'id' ? 'Buka kembali' : 'Reopen'}</MenuItem>}
+              {canEdit && closeable && <MenuItem danger icon="⏹" onClick={() => setCloseOpen(true)}>{lang === 'id' ? 'Tutup proyek' : 'Close project'}</MenuItem>}
+              <MenuDivider />
+              {jumpTo}
+            </MoreMenu>
+          </div>
+        </div>
+      ) : (
       <div>
         {/* Header leads straight with the project name — the in-page breadcrumb link and the
             project-code chip were dropped to keep the top tight and lift the tab bar up. The
@@ -207,6 +288,12 @@ export default function ProjectPage() {
                 (onReview omitted) — the review endpoint is ADMIN/PMO-only and would 403 a guest. */}
             <LifecycleActions project={project} onReview={user?.role === 'GUEST' ? undefined : () => setReviewOpen(true)} />
             <CloseProjectModal project={project} />
+            {/* Enter "Focus timeline" — Schedule tab only, desktop only (collapses the chrome). */}
+            {activeTab === 'Schedule' && !isMobile && (
+              <Button variant="secondary" onClick={() => setScheduleFocus(true)} title={lang === 'id' ? 'Fokuskan timeline (sembunyikan header & tab)' : 'Focus the timeline (hide header & tabs)'}>
+                ⤢ {lang === 'id' ? 'Fokus' : 'Focus'}
+              </Button>
+            )}
             {/* "⋯ More" (edit + exports + jump-to) is desktop-only; phones keep the header lean. */}
             {!isMobile && (
             <MoreMenu title={project.name}>
@@ -215,39 +302,11 @@ export default function ProjectPage() {
               {/* Exports hidden on phones — download/print is a desktop task. */}
               {chartered && !isMobile && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('excel')}>{exporting === 'excel' ? 'Exporting…' : 'Download Excel'}</MenuItem>}
               {chartered && !isMobile && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('pdf')}>{exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}</MenuItem>}
-              {/* Jump to — deep-link to any tab (and to sections within Schedule), grouped by
-                  management domain. Handy on phones where the two-level tab bar scrolls. */}
               {canEdit && <MenuDivider />}
-              <MenuHeader>{lang === 'id' ? 'Lompat ke' : 'Jump to'}</MenuHeader>
-              {TAB_GROUPS.map((g) => {
-                const gTabs = g.tabs.filter((t) => tabs.includes(t));
-                if (!gTabs.length) return null;
-                return (
-                  <Fragment key={g.label}>
-                    <MenuGroupHeader>{lang === 'id' ? (GROUP_LABEL_ID[g.label] ?? g.label) : g.label}</MenuGroupHeader>
-                    {gTabs.map((t) => (
-                      <Fragment key={t}>
-                        {/* The Schedule tab is surfaced as "Timeline" in this Jump-to menu (the on-page
-                            tab label stays "Schedule"); it now has three segmented sub-views the menu
-                            deep-links into: Gantt, Critical Path, and Resources (manpower sync). */}
-                        <MenuItem icon={TAB_ICONS[t]} active={t === activeTab} onClick={() => goto(t)}>{t === 'Schedule' ? 'Timeline' : t}</MenuItem>
-                        {t === 'Schedule' && (
-                          <>
-                            <MenuItem indent onClick={() => gotoScheduleView('gantt')}>↳ Gantt Chart</MenuItem>
-                            <MenuItem indent onClick={() => gotoScheduleView('cpm')}>↳ Critical Path</MenuItem>
-                            <MenuItem indent onClick={() => gotoScheduleView('resources')}>↳ Resources (Manpower)</MenuItem>
-                          </>
-                        )}
-                      </Fragment>
-                    ))}
-                  </Fragment>
-                );
-              })}
+              {jumpTo}
             </MoreMenu>
             )}
           </div>
-          {/* Controlled modal, mounted outside the menu so it survives the menu closing. */}
-          <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
         </div>
         {/* Header carries NO inline status/alert banners — project status shows as the badge
             beside the name, and every notification (budget/risk/schedule signals, pending change
@@ -255,6 +314,17 @@ export default function ProjectPage() {
             (EVM health strip + PM/Client/Margin/Next-step chips) are hidden too; that info stays in
             Monitoring → Health and the graphic Overview tab. */}
       </div>
+      )}
+
+      {/* Controlled modals — mounted OUTSIDE the overflow menu (which unmounts its children on click)
+          so they survive it closing; driven by the state the menu items / buttons set. */}
+      <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
+      {focusActive && (
+        <>
+          <LifecycleActions project={project} renderTriggers={false} modal={lifecycleModal} onModalChange={setLifecycleModal} onReview={user?.role === 'GUEST' ? undefined : () => setReviewOpen(true)} />
+          <CloseProjectModal project={project} open={closeOpen} onOpenChange={setCloseOpen} />
+        </>
+      )}
 
       {/* Activation review modal still mounts — it's opened from the bell's "activation ready"
           deep-link (?review=activation) or the lifecycle action, not an inline banner. */}
@@ -266,7 +336,8 @@ export default function ProjectPage() {
           top on a tab switch — the align-to-top scroll then lands consistently for every tab,
           not just the tall ones (WBS/Gantt). 3.5rem = the 56px top bar. */}
       <div className="space-y-2 sm:min-h-[calc(100vh-3.5rem)]">
-      <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} isMobile={isMobile} onSelect={(t) => setTab(t)} />
+      {/* In Schedule Focus mode the tab strip is hidden — navigation moves into the slim bar's ⋯ menu. */}
+      {!focusActive && <GroupedTabs tabs={tabs} activeTab={activeTab} changeCount={changeCount} isMobile={isMobile} onSelect={(t) => setTab(t)} />}
 
       {/* Suspense boundary for the lazy Schedule/Gantt panel — the fallback replaces only the panel
           area (below the tab strip) while its chunk loads, not the tabs. */}

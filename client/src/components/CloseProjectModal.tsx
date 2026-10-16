@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { ClosureItem, ClosureReadiness, Project } from '../api/types';
@@ -36,15 +36,28 @@ function CheckRow({ item }: { item: ClosureItem }) {
 // Guided project closure: shows a readiness checklist (schedule-completeness is the
 // only hard blocker; the rest are advisory). ADMIN/PMO can force-close past a blocker
 // with a mandatory reason. See server closure.ts for the policy.
-export default function CloseProjectModal({ project }: { project: Project }) {
+// Uncontrolled by default (renders its own "Close project" button). Pass open/onOpenChange to drive
+// it from elsewhere (e.g. a menu item) — then the button is suppressed and only the modal mounts.
+export default function CloseProjectModal({ project, open: openProp, onOpenChange }: {
+  project: Project;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
+  const controlled = onOpenChange !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlled ? !!openProp : internalOpen;
+  const setOpen = (o: boolean) => { if (controlled) onOpenChange!(o); else setInternalOpen(o); };
   const [note, setNote] = useState('');
 
   const canManage = canGovernProject(user, project);
   const closeable = CLOSEABLE.includes(project.status);
+
+  // Reset the note each time the modal opens (covers the controlled path, which opens without going
+  // through the local button that used to clear it).
+  useEffect(() => { if (open) setNote(''); }, [open]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['closure-readiness', project.id],
@@ -83,7 +96,9 @@ export default function CloseProjectModal({ project }: { project: Project }) {
 
   return (
     <>
-      <Button variant="secondary" onClick={() => { setNote(''); setOpen(true); }}>Close project</Button>
+      {!controlled && (
+        <Button variant="secondary" onClick={() => { setNote(''); setOpen(true); }}>Close project</Button>
+      )}
 
       {open && (
         <Modal onClose={() => setOpen(false)} title="Close project" size="lg">
