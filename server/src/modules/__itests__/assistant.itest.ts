@@ -101,6 +101,26 @@ describe('AI portfolio assistant — /assistant', () => {
     expect(res.body.answer).toContain('asisten');
   });
 
+  it('accepts a long assistant answer resent as history (deep-reasoning output, up to the 8000-char cap)', async () => {
+    // Regression: a #DeepReason answer can exceed the old 4000-char cap; carried back as history on the
+    // next turn it 400'd the whole request ("Invalid request"). The cap is now 8000 (MAX_MSG_CHARS).
+    const longAnswer = 'x'.repeat(6000); // between the old 4000 and the new 8000 cap
+    const res = await request(app).post(askUrl()).set(bearer(pmToken)).send({
+      messages: [
+        { role: 'user', content: 'audit akar masalah proyek ini' },
+        { role: 'assistant', content: longAnswer },
+        { role: 'user', content: 'lanjutkan' },
+      ],
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('400 when a single message exceeds the per-message char cap', async () => {
+    const tooLong = 'x'.repeat(8001);
+    const res = await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: tooLong }] });
+    expect(res.status).toBe(400);
+  });
+
   it('replies in English when the caller sends lang:"en" (else Indonesian)', async () => {
     let captured = '';
     __setAiPort({

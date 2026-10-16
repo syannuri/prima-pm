@@ -210,8 +210,9 @@ interface CharterContext {
   // The bounded resource pool (register + charter hiResources) the model maps tasks onto.
   availableResources: AvailableResource[];
   // Existing WBS leaf tasks (id/wbsCode/name/dates) — lets the model avoid duplicating work and
-  // propose reschedules (`edits`) of what is already there. Empty for a fresh timeline.
-  existingTasks: { id: string; wbsCode: string; name: string; start: string; end: string }[];
+  // propose reschedules (`edits`) of what is already there. Optional: absent/empty for a fresh
+  // timeline (the builder defaults it with `?? []`), so callers need not supply it.
+  existingTasks?: { id: string; wbsCode: string; name: string; start: string; end: string }[];
 }
 
 // The domain-expert persona framing derived from the charter category (#297). Empty for OTHER/unset.
