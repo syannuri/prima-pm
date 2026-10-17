@@ -5,6 +5,7 @@ import { activeTenantIsPersonal } from './tenant/context.js';
 import { recordAiUsage, type AiFeature, type RawUsage } from './aiUsage.js';
 import { assertAiBudget } from './aiBudget.js';
 import { createRedactor } from './aiRedact.js';
+import { sampleDraftQuality } from './aiJudgeSample.js';
 
 // The Forbidden thrown when an AI feature is gated off for the caller's tenant. A guest's personal
 // sandbox has no governance surface and can NEVER opt in, so the generic "not enabled for this
@@ -324,6 +325,10 @@ function liveAiPort(): AiPort {
       if (res.stop_reason === 'refusal') return null;
       const text = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
       if (!text) return null;
+      // Quality sampling (#5): judge a fraction of answer-like features' output in the background. The
+      // single choke point here (mirrors recordAiUsage above) covers every draftJson/draftNarrative
+      // feature at once; non-answer features + the judge itself are filtered inside sampleDraftQuality.
+      sampleDraftQuality({ feature, system, user, answer: text });
       try {
         return JSON.parse(redactor.restore(text)) as unknown; // restore any tokenised value in the output
       } catch {

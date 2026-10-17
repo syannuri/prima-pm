@@ -24,6 +24,7 @@ export type AiFeature =
   | 'evm_explain'
   | 'risk_suggest'
   | 'portfolio_qa'
+  | 'review'
   | 'proactive'
   | 'data_extract'
   | 'resource_realloc'

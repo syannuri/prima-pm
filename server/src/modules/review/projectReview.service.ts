@@ -243,7 +243,7 @@ export async function draftReviewNarrative(projectId: string): Promise<{ review:
   const raw = await getAiPort().draftJson({
     system: NARRATE_SYSTEM,
     user: JSON.stringify({ project: review.projectCode, category: review.category, personas, findings: review.findings }),
-    jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 1100, feature: 'portfolio_qa',
+    jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 1100, feature: 'review',
   });
   if (raw == null || typeof raw !== 'object' || !('headline' in raw)) throw new AppError(502, 'AI tidak dapat menyusun narasi review saat ini.', 'AI_UNAVAILABLE');
   return { review, narrative: raw as ReviewNarrative };

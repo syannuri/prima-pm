@@ -12,6 +12,31 @@ import { logger } from './observability.js';
 const SNIPPET = 500; // question/answer/rationale are clipped to this many chars (privacy + row size)
 const clip = (s: string): string => (s.length > SNIPPET ? s.slice(0, SNIPPET) : s);
 
+// Features whose draftJson output is a user-facing "answer" worth judging for quality. Wired at the
+// single lib/ai.ts choke point (sampleDraftQuality) so EVERY answer-like surface is measured, not just
+// Anett chat (which self-samples via runToolLoop). Deliberately EXCLUDES: 'eval_judge' (the judge must
+// never judge itself → recursion + cost blow-up), 'data_extract' (structured extraction, not prose),
+// and 'memory_distill'/'feedback_distill' (internal learning steps, never shown to a user).
+const QUALITY_ANSWER_FEATURES = new Set<string>([
+  'narrative', 'proactive', 'cr_impact', 'evm_explain', 'risk_suggest',
+  'portfolio_qa', 'review', 'schedule_suggest', 'whatif', 'resource_realloc',
+]);
+
+// Is this feature one whose generated answer we sample for quality? (allowlist above)
+export function isQualityAnswerFeature(feature?: string | null): boolean {
+  return !!feature && QUALITY_ANSWER_FEATURES.has(feature);
+}
+
+// Fire-and-forget quality sampling for a structured (draftJson) generative call. The model's JSON
+// output is the `answer`; the user prompt is the `question`; the system prompt (which carries the
+// grounding data) is the judge `context`. No-op for non-answer features (allowlist) or when sampling is
+// disarmed (sampleAnswerQuality re-checks shouldSampleJudge). Keeps all sampling POLICY here so the
+// lib/ai.ts choke point stays a one-liner.
+export function sampleDraftQuality(input: { feature?: string | null; system: string; user: string; answer: string }): void {
+  if (!isQualityAnswerFeature(input.feature)) return;
+  sampleAnswerQuality({ question: input.user, answer: input.answer, context: input.system, feature: input.feature! });
+}
+
 // Fraction of answers to sample, clamped to [0, 1]. 0 (default) ⇒ feature off.
 export function judgeSampleRate(): number {
   const r = Number(process.env.AI_JUDGE_SAMPLE_RATE);
