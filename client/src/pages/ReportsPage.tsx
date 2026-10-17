@@ -152,7 +152,7 @@ export default function ReportsPage() {
           </Card>
 
           {/* Proactive AI briefings inbox — pending auto-drafts across the user's projects. */}
-          {canEditCommentary && <AiBriefingsInbox onOpen={(pid) => setProjectId(pid)} />}
+          {canEditCommentary && <AiBriefingsInbox onOpen={(pid) => { setProjectId(pid); setView('project'); }} />}
 
           {/* Project Report — the built view */}
           {view === 'project' && (
