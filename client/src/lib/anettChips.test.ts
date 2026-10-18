@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectChips, CHIP_POOL, type ChipCtx } from './anettChips';
+import { selectChips, resolveFollowups, CHIP_POOL, type ChipCtx } from './anettChips';
 
 const base: ChipCtx = { proj: false, propose: false, overdue: 0, approvals: 0, lang: 'id' };
 
@@ -53,5 +53,38 @@ describe('selectChips', () => {
     const en = selectChips({ ...base, lang: 'en' }, 0);
     const enLabels = new Set(CHIP_POOL.map((c) => c.label.en));
     for (const text of en) expect(enLabels.has(text)).toBe(true);
+  });
+});
+
+describe('resolveFollowups (contextual follow-up chips)', () => {
+  const STATIC = ['Summarize my portfolio', 'What is waiting for my approval?'];
+  const codes = new Set(['AI-1', 'AI-2']);
+  const base = { accessibleCodes: codes, priorQuestions: [] as string[], lang: 'en' as const, staticFallback: STATIC };
+
+  it('prefers the model suggestions when present and grounded', () => {
+    const out = resolveFollowups({ ...base, answer: 'done', modelFollowups: ['Any pending change requests?', 'Next step?'] });
+    expect(out).toEqual(['Any pending change requests?', 'Next step?']);
+  });
+
+  it('drops a suggestion that names an inaccessible project code (grounding)', () => {
+    const out = resolveFollowups({ ...base, answer: 'x', modelFollowups: ['How is `AI-9` doing?', 'How is `AI-1` doing?'] });
+    expect(out).toEqual(['How is `AI-1` doing?']); // AI-9 is not accessible → dropped
+  });
+
+  it('dedups a suggestion already asked earlier in the session', () => {
+    const out = resolveFollowups({ ...base, priorQuestions: ['Summarize my portfolio'], answer: 'x', modelFollowups: ['summarize my portfolio', 'Which project is riskiest?'] });
+    expect(out).toEqual(['Which project is riskiest?']);
+  });
+
+  it('falls back to citation-derived follow-ups when the model emits none', () => {
+    const answer = 'PRJ is behind [[cite:AI-1|Schedule|t123]] and a risk is high [[cite:AI-1|Risk|r9]].';
+    const out = resolveFollowups({ ...base, answer, modelFollowups: [] });
+    expect(out.some((q) => /critical path/i.test(q))).toBe(true);   // from Schedule cite
+    expect(out.some((q) => /mitigation/i.test(q))).toBe(true);      // from Risk cite
+  });
+
+  it('falls back to the static list when there is nothing contextual', () => {
+    const out = resolveFollowups({ ...base, answer: 'A plain answer with no citations.', modelFollowups: [] });
+    expect(out).toEqual(STATIC);
   });
 });
