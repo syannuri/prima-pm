@@ -1444,6 +1444,24 @@ model ChunkEmbedding {
   @@index([tenantId, projectId])
 }
 
+// Follow-up chip click telemetry (Anett elevation #4). One row per clicked follow-up suggestion, so an
+// admin can measure whether the chips are actually used — and which kind pulls its weight (model vs
+// derived vs static questions, and navigational deep-links). Tenant-scoped; best-effort write that
+// never blocks the UI. No PII beyond the optional user attribution.
+model AiFollowupEvent {
+  id       String  @id @default(uuid())
+  tenantId String?
+
+  kind   String // question | nav
+  origin String // model | derived | static | nav_cite
+
+  userId String? // optional attribution (denormalized, no FK)
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
 // Tenant-defined custom field (Tier-3). Definitions are workspace-level configuration managed by an
 // ADMIN; the actual per-entity values live in CustomFieldValue keyed by entity + entityId. Tenant-scoped
 // (in SCOPED_MODELS). `entity` is a plain string ("project" | "task") so adding entity types later needs

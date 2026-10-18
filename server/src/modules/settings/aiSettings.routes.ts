@@ -9,6 +9,7 @@ import { aiEnabled } from '../../lib/ai.js';
 import { BadRequest } from '../../lib/errors.js';
 import { getActionEffectiveness, listRecentOutcomes } from '../aiActions/aiActionOutcomes.service.js';
 import { getJudgeTrend } from '../assistant/judgeTrend.service.js';
+import { getFollowupStats } from '../assistant/followup.service.js';
 
 // Per-tenant AI Status Narrative opt-in — self-serve for the tenant's own ADMIN (distinct from the
 // deployment-global /settings, which is super-admin only). `configured` reflects the global env gate
@@ -80,6 +81,15 @@ router.get(
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
     const feature = typeof req.query.feature === 'string' ? req.query.feature : null;
     res.json(await getJudgeTrend({ role: req.user!.role }, { days, feature }));
+  }),
+);
+
+// #4 follow-up chip usage: click counts by kind + origin over a window, for the Settings → AI card.
+router.get(
+  '/followup-stats',
+  asyncHandler(async (req, res) => {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    res.json(await getFollowupStats({ role: req.user!.role }, { days }));
   }),
 );
 

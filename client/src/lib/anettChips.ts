@@ -119,7 +119,11 @@ export function citedLinks(answer: string, max = 2): CitedLink[] {
   return out;
 }
 
-// Resolve the follow-up chips to show, in precedence order:
+// Where the shown follow-up questions came from (for #4 click telemetry).
+export type FollowupOrigin = 'model' | 'derived' | 'static';
+export interface ResolvedFollowups { items: string[]; origin: FollowupOrigin }
+
+// Resolve the follow-up chips to show, in precedence order (tagged with their origin):
 //   1. the model's [[followups:…]] suggestions (grounded + deduped),
 //   2. else contextual follow-ups derived from the answer's citations (grounded + deduped),
 //   3. else the static fallback list.
@@ -130,7 +134,7 @@ export function resolveFollowups(input: {
   priorQuestions: string[];
   lang: 'id' | 'en';
   staticFallback: string[];
-}): string[] {
+}): ResolvedFollowups {
   const prior = new Set(input.priorQuestions.map(normQ));
   const refine = (qs: string[]): string[] => {
     const seen = new Set<string>();
@@ -141,8 +145,8 @@ export function resolveFollowups(input: {
       .slice(0, 4);
   };
   const model = refine(input.modelFollowups);
-  if (model.length) return model;
+  if (model.length) return { items: model, origin: 'model' };
   const derived = refine(citedFollowups(input.answer, input.lang));
-  if (derived.length) return derived;
-  return input.staticFallback;
+  if (derived.length) return { items: derived, origin: 'derived' };
+  return { items: input.staticFallback, origin: 'static' };
 }
