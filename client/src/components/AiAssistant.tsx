@@ -742,6 +742,10 @@ export default function AiAssistant() {
     setInput('');
     void runAskStream(next);
   };
+  // #4 follow-up click telemetry: fire-and-forget; never blocks or errors into the UI.
+  const trackFollowupClick = (kind: 'question' | 'nav', origin: string) => {
+    void api.post('/assistant/followup-click', { kind, origin }).catch(() => {});
+  };
   // Keep a stable handle to the latest sendText so the open-Anett bus (#B nudges) can ask a prefilled
   // question without re-subscribing on every render.
   sendRef.current = sendText;
@@ -1174,7 +1178,7 @@ export default function AiAssistant() {
               // #1 smart fallback + #2 ground/dedup: prefer the model's [[followups:…]] (grounded vs the
               // accessible codes + deduped against what was asked), else synthesise from what the answer
               // cited, else the static nudges. See lib/anettChips.resolveFollowups.
-              const shown = resolveFollowups({
+              const resolved = resolveFollowups({
                 answer: lastAnswer,
                 modelFollowups: followupRefs(lastAnswer),
                 accessibleCodes: new Set(codeToId.keys()),
@@ -1182,6 +1186,7 @@ export default function AiAssistant() {
                 lang,
                 staticFallback: followups,
               });
+              const shown = resolved.items;
               // #3 actionable chips: deep-link to the rows the answer referenced (jump, don't re-ask).
               // Only links resolvable to an accessible project + a real tab are shown.
               const navLinks = citedLinks(lastAnswer)
@@ -1195,7 +1200,7 @@ export default function AiAssistant() {
                       <Link
                         key={`nav-${l.code}-${l.source}`}
                         to={`/projects/${l.id}?tab=${encodeURIComponent(l.tab)}${focusId}`}
-                        onClick={() => setOpen(false)}
+                        onClick={() => { trackFollowupClick('nav', 'nav_cite'); setOpen(false); }}
                         className="inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/40"
                       >
                         <span aria-hidden>↗</span> {l.code} · {l.tab}
@@ -1203,7 +1208,7 @@ export default function AiAssistant() {
                     );
                   })}
                   {shown.map((c) => (
-                    <button key={c} onClick={() => sendText(c)} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+                    <button key={c} onClick={() => { trackFollowupClick('question', resolved.origin); sendText(c); }} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
                       {c}
                     </button>
                   ))}

@@ -10,6 +10,7 @@ import { listMemories, addMemory, updateMemory, deleteMemory, normalizeKind, typ
 import { recordFeedback, listFeedbackInbox, analyzeFeedback, adoptFeedbackSuggestion, feedbackDistillEnabled } from './feedback.service.js';
 import { distillConversation, autoDistillEnabled } from './memoryDistill.service.js';
 import { getSearchStatus } from './search.service.js';
+import { recordFollowupClick } from './followup.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -150,6 +151,12 @@ router.get('/feedback/inbox', asyncHandler(async (req, res) => {
 // cached for this tenant? ADMIN/PMO only (guard in the service). Lets an operator confirm the pilot.
 router.get('/search/status', asyncHandler(async (req, res) => {
   res.json(await getSearchStatus({ role: req.user!.role }));
+}));
+
+// Follow-up chip click telemetry (elevation #4): fire-and-forget record, any authenticated user.
+router.post('/followup-click', validateBody(z.object({ kind: z.enum(['question', 'nav']), origin: z.enum(['model', 'derived', 'static', 'nav_cite']) })), asyncHandler(async (req, res) => {
+  await recordFollowupClick({ kind: req.body.kind, origin: req.body.origin, userId: req.user!.id });
+  res.status(204).end();
 }));
 
 // Feedback → auto prompt-improvement (#2): distill recurring 👎 into suggested GUIDANCE rules (ADMIN/PMO).

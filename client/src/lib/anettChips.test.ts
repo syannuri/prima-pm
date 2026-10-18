@@ -61,31 +61,32 @@ describe('resolveFollowups (contextual follow-up chips)', () => {
   const codes = new Set(['AI-1', 'AI-2']);
   const base = { accessibleCodes: codes, priorQuestions: [] as string[], lang: 'en' as const, staticFallback: STATIC };
 
-  it('prefers the model suggestions when present and grounded', () => {
+  it('prefers the model suggestions when present and grounded (origin=model)', () => {
     const out = resolveFollowups({ ...base, answer: 'done', modelFollowups: ['Any pending change requests?', 'Next step?'] });
-    expect(out).toEqual(['Any pending change requests?', 'Next step?']);
+    expect(out).toEqual({ items: ['Any pending change requests?', 'Next step?'], origin: 'model' });
   });
 
   it('drops a suggestion that names an inaccessible project code (grounding)', () => {
     const out = resolveFollowups({ ...base, answer: 'x', modelFollowups: ['How is `AI-9` doing?', 'How is `AI-1` doing?'] });
-    expect(out).toEqual(['How is `AI-1` doing?']); // AI-9 is not accessible → dropped
+    expect(out.items).toEqual(['How is `AI-1` doing?']); // AI-9 is not accessible → dropped
   });
 
   it('dedups a suggestion already asked earlier in the session', () => {
     const out = resolveFollowups({ ...base, priorQuestions: ['Summarize my portfolio'], answer: 'x', modelFollowups: ['summarize my portfolio', 'Which project is riskiest?'] });
-    expect(out).toEqual(['Which project is riskiest?']);
+    expect(out.items).toEqual(['Which project is riskiest?']);
   });
 
-  it('falls back to citation-derived follow-ups when the model emits none', () => {
+  it('falls back to citation-derived follow-ups when the model emits none (origin=derived)', () => {
     const answer = 'PRJ is behind [[cite:AI-1|Schedule|t123]] and a risk is high [[cite:AI-1|Risk|r9]].';
     const out = resolveFollowups({ ...base, answer, modelFollowups: [] });
-    expect(out.some((q) => /critical path/i.test(q))).toBe(true);   // from Schedule cite
-    expect(out.some((q) => /mitigation/i.test(q))).toBe(true);      // from Risk cite
+    expect(out.origin).toBe('derived');
+    expect(out.items.some((q) => /critical path/i.test(q))).toBe(true);   // from Schedule cite
+    expect(out.items.some((q) => /mitigation/i.test(q))).toBe(true);      // from Risk cite
   });
 
-  it('falls back to the static list when there is nothing contextual', () => {
+  it('falls back to the static list when there is nothing contextual (origin=static)', () => {
     const out = resolveFollowups({ ...base, answer: 'A plain answer with no citations.', modelFollowups: [] });
-    expect(out).toEqual(STATIC);
+    expect(out).toEqual({ items: STATIC, origin: 'static' });
   });
 });
 

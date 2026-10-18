@@ -19,6 +19,7 @@ import AiMemoryCard from '../components/AiMemoryCard';
 import AiFeedbackInboxCard from '../components/AiFeedbackInboxCard';
 import AiUsageCard from '../components/AiUsageCard';
 import AiJudgeTrendCard from '../components/AiJudgeTrendCard';
+import AiFollowupStatsCard from '../components/AiFollowupStatsCard';
 import WorkspaceAddressCard from '../components/WorkspaceAddressCard';
 import CalendarFeedCard from '../components/CalendarFeedCard';
 import CustomFieldsAdminCard from '../components/CustomFieldsAdminCard';
@@ -50,7 +51,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'workspace', label: { en: 'Workspace', id: 'Ruang Kerja' }, desc: { en: "Your organization's address and data model.", id: 'Alamat dan model data organisasi Anda.' }, adminOnly: true, render: () => <><WorkspaceAddressCard /><CustomFieldsAdminCard /><CustomRolesAdminCard /></> },
   { key: 'developer', label: { en: 'Developer', id: 'Developer' }, desc: { en: 'Workspace-wide API access, webhooks and no-code automations.', id: 'Akses API, webhook, dan automasi tanpa-kode untuk seluruh ruang kerja.' }, adminOnly: true, render: () => <><ApiKeysCard /><WebhooksCard /><AutomationsCard /></> },
   { key: 'governance', label: { en: 'Governance', id: 'Tata Kelola' }, desc: { en: 'Approval routing for change requests and proposal intake scoring.', id: 'Alur persetujuan permintaan perubahan dan penilaian proposal masuk.' }, adminOnly: true, render: () => <><ApprovalWorkflowsCard /><IntakeScoringCard /></> },
-  { key: 'ai', label: { en: 'AI', id: 'AI' }, desc: { en: 'Anett assistant — narrative, actions, memory, feedback and usage.', id: 'Asisten Anett — narasi, aksi, ingatan, umpan balik, dan penggunaan.' }, adminOnly: true, render: () => <><AiNarrativeCard /><AiActionOutcomesCard /><AiMemoryCard /><AiFeedbackInboxCard /><AiJudgeTrendCard /><AiUsageCard /></> },
+  { key: 'ai', label: { en: 'AI', id: 'AI' }, desc: { en: 'Anett assistant — narrative, actions, memory, feedback and usage.', id: 'Asisten Anett — narasi, aksi, ingatan, umpan balik, dan penggunaan.' }, adminOnly: true, render: () => <><AiNarrativeCard /><AiActionOutcomesCard /><AiMemoryCard /><AiFeedbackInboxCard /><AiJudgeTrendCard /><AiFollowupStatsCard /><AiUsageCard /></> },
 ];
 
 const navIdle =

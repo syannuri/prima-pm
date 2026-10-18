@@ -20,4 +20,5 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   'Proposal', // Project Intake & Portfolio Selection
   'AiJudgeSample', // round-6 #5: quality-trend sampling
   'ChunkEmbedding', // RAG v2: chunk-level embedding cache
+  'AiFollowupEvent', // Anett #4: follow-up chip click telemetry
 ]);
