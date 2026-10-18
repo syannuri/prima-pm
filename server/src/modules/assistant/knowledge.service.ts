@@ -95,3 +95,34 @@ async function lexicalRetrieve(q: string, projectIds: string[], k: number): Prom
 export async function countTenantChunks(): Promise<number> {
   return prisma.chunkEmbedding.count();
 }
+
+// ---- Auto-grounding (RAG v2 Phase 3) ----
+
+// Gate for injecting retrieved chunks into every Anett turn. Dormant by default; needs the Voyage key
+// too (we only auto-ground on high-quality semantic hits, not the lexical fallback).
+export function ragGroundingEnabled(): boolean {
+  return process.env.AI_RAG_GROUNDING === '1' || process.env.AI_RAG_GROUNDING === 'true';
+}
+
+const RAG_BLOCK_K = 6;
+const RAG_CHUNK_CLIP = 400;
+
+// Build a "Relevant knowledge" system segment: retrieve the top chunks for the question and format them
+// with the exact citation marker so the model grounds on + cites them WITHOUT a tool round-trip. Returns
+// '' when disabled, not armed, errored, or nothing relevant — the caller then omits the segment (zero
+// behaviour change). Bounded (k + per-chunk clip) to keep tokens/cost low.
+export async function buildRagGroundingBlock(query: string, projectIds: string[], en: boolean): Promise<string> {
+  if (!ragGroundingEnabled() || !embeddingsEnabled()) return '';
+  let hits: ChunkHit[] = [];
+  try { hits = (await retrieveChunks(query, projectIds, { k: RAG_BLOCK_K })).hits; } catch { return ''; }
+  if (hits.length === 0) return '';
+  const lines = hits.map((h) => {
+    // charter/lesson/issue → project-level Overview citation (2 parts); the rest deep-link the row.
+    const cite = h.source === 'Overview' ? `[[cite:${h.code}|Overview]]` : `[[cite:${h.code}|${h.source}|${h.entityId}]]`;
+    return `- (${h.code} · ${h.source}) ${h.text.slice(0, RAG_CHUNK_CLIP)} ${cite}`;
+  });
+  const header = en
+    ? 'Relevant knowledge retrieved for this question — ground your answer on these and cite the row with the marker shown (do not invent beyond them):'
+    : 'Pengetahuan relevan untuk pertanyaan ini — jadikan dasar jawaban dan sitir barisnya dengan penanda yang tertera (jangan mengarang di luar ini):';
+  return `${header}\n${lines.join('\n')}`;
+}
