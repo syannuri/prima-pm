@@ -524,7 +524,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           chart's drag-to-zoom) — an explicit "EVM Trend →" link handles the jump. */}
       {(hasTrend || trendQ.isLoading) && (
         <Panel className="lg:col-span-8 lg:order-2">
-          <div className="mb-2 flex items-center justify-between gap-2">
+          {/* flex-wrap so the control cluster drops to its own line on narrow phones instead of the
+              rightmost control (EVM Trend →) clipping past the card edge. */}
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 gap-y-2">
             <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
               <KpiIcon name="lineChart" accent="teal" className="h-6 w-6" />
               {sCurveTab === 'progress' ? (id ? 'Kurva-S — Progres' : 'S-curve — Progress') : (id ? 'Kurva-S — Biaya' : 'S-curve — Cost')}

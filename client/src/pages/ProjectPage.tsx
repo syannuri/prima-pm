@@ -531,28 +531,68 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
 
 // Mobile project-section navigator: a sticky "current section" trigger + a bottom-sheet picker of
 // every section grouped by domain. One tap to jump; far easier than swiping a long horizontal strip.
+// Which groups get a dedicated quick-access "strip" (the rest live behind "More sections").
+const PRIMARY_GROUPS = ['Overview', 'Schedule', 'Cost'];
+
 function MobileSectionNav({ groups, activeTab, changeCount, onSelect }: { groups: { label: string; tabs: Tab[] }[]; activeTab: Tab; changeCount: number; onSelect: (t: Tab) => void }) {
   const [open, setOpen] = useState(false);
   const { lang } = useLang();
-  const activeGroup = groups.find((g) => g.tabs.includes(activeTab));
   const tabLabel = (t: Tab) => (t === 'Schedule' ? 'Timeline' : t); // mirror the sidebar drawer
   const groupLabel = (l: string) => (lang === 'id' ? GROUP_LABEL_ID[l] ?? l : l);
 
+  // Prototype A: up to 3 primary group "strips" (white bars, circular icon badge, corner dot/count)
+  // + a "More sections" strip opening the full grouped picker. One tap to the common sections.
+  const primary = PRIMARY_GROUPS.map((l) => groups.find((g) => g.label === l)).filter((g): g is { label: string; tabs: Tab[] } => !!g);
+  const primaryLabels = new Set(primary.map((g) => g.label));
+  const rest = groups.filter((g) => !primaryLabels.has(g.label));
+  const activeInPrimary = primary.some((g) => g.tabs.includes(activeTab));
+  const restChanges = rest.some((g) => g.tabs.includes('Audit')) ? changeCount : 0;
+
+  // One white strip button: circular icon badge (left) + label (+ sub) + chevron; a small circle in
+  // the top-right corner marks the active strip, or shows a red count badge (pending changes).
+  const Strip = ({ icon, title, sub, active, badge, onClick, haspopup }: { icon: string; title: string; sub?: string; active: boolean; badge?: number; onClick: () => void; haspopup?: boolean }) => (
+    <button
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      aria-haspopup={haspopup ? 'dialog' : undefined}
+      className={`relative flex w-full items-center gap-3 rounded-2xl border bg-white px-3.5 py-2.5 text-left shadow-sm transition active:scale-[0.99] dark:bg-slate-900 ${active ? 'border-blue-500 ring-2 ring-blue-500/20 dark:border-blue-500' : 'border-slate-200 dark:border-slate-700'}`}
+    >
+      {badge && badge > 0
+        ? <span className="absolute right-2.5 top-2 grid h-5 min-w-[20px] place-items-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">{badge}</span>
+        : active ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-blue-500" /> : null}
+      <span aria-hidden className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg ${active ? 'bg-blue-600' : 'bg-blue-50 dark:bg-slate-800'}`}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-bold text-slate-800 dark:text-slate-100">{title}</span>
+        {sub && <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{sub}</span>}
+      </span>
+      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+    </button>
+  );
+
   return (
-    <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-100 px-4 pb-3 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <button
+    <div className="sticky -top-6 z-[31] -mx-4 space-y-2 border-b border-slate-200 bg-slate-100 px-4 pb-3 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      {primary.map((g) => {
+        const active = g.tabs.includes(activeTab);
+        return (
+          <Strip
+            key={g.label}
+            icon={TAB_ICONS[g.tabs[0]]}
+            title={groupLabel(g.label)}
+            sub={g.tabs.length > 1 ? g.tabs.map(tabLabel).join(' · ') : undefined}
+            active={active}
+            onClick={() => onSelect(active ? activeTab : g.tabs[0])}
+          />
+        );
+      })}
+      <Strip
+        icon="⋯"
+        title={lang === 'id' ? 'Bagian lain' : 'More sections'}
+        sub={!activeInPrimary ? `${lang === 'id' ? 'Kini' : 'Now'}: ${tabLabel(activeTab)}` : rest.map((g) => groupLabel(g.label)).join(' · ')}
+        active={!activeInPrimary}
+        badge={restChanges}
+        haspopup
         onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-left shadow-sm transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span aria-hidden className="text-base">{TAB_ICONS[activeTab]}</span>
-          <span className="min-w-0 truncate text-sm font-bold text-slate-800 dark:text-slate-100">
-            {activeGroup && groupLabel(activeGroup.label) !== tabLabel(activeTab) ? `${groupLabel(activeGroup.label)} · ` : ''}{tabLabel(activeTab)}
-          </span>
-        </span>
-        <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-      </button>
+      />
 
       {open && (
         <Modal title={lang === 'id' ? 'Bagian proyek' : 'Project sections'} onClose={() => setOpen(false)}>
