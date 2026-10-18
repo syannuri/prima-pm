@@ -336,8 +336,7 @@ export default function ProjectPage() {
               {chartered && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('excel')}>{exporting === 'excel' ? 'Exporting…' : (lang === 'id' ? 'Unduh Excel' : 'Download Excel')}</MenuItem>}
               {chartered && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('pdf')}>{exporting === 'pdf' ? 'Exporting…' : (lang === 'id' ? 'Unduh PDF' : 'Download PDF')}</MenuItem>}
               {canEdit && closeable && <MenuItem danger icon="⏹" onClick={() => setCloseOpen(true)}>{lang === 'id' ? 'Tutup proyek' : 'Close project'}</MenuItem>}
-              <MenuDivider />
-              {jumpTo}
+              {/* No jump-to here — section navigation lives in the sidebar drawer (MobileSectionNav). */}
             </MoreMenu>
           </div>
         </div>
