@@ -31,6 +31,7 @@ import { findDomainTopic, domainIndex, resolvePersonasForCategory, DOMAIN_DISCLA
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
 import { searchProjectsDetailed } from './search.service.js';
+import { retrieveChunks } from './knowledge.service.js';
 
 // Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
 // projects the CALLER can access, via a server-side manual tool loop. The API key and all data
@@ -342,6 +343,20 @@ export const TOOLS: AiToolDef[] = [
     input_schema: {
       type: 'object',
       properties: { query: { type: 'string', description: 'Kata kunci / frasa yang dicari, mis. "scope creep", "migrasi database", "risiko vendor".' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'search_knowledge',
+    description: [
+      'CARI tingkat-RINCI (RAG) lintas proyek yang dapat diakses: mengembalikan POTONGAN paling relevan — bagian charter, satu risk, satu change request, lesson, issue, task, atau baris biaya — bukan sekadar nama proyek.',
+      'Gunakan untuk pertanyaan SPESIFIK-ISI: "apa kata charter soal ruang lingkup", "risk mana yang menyebut lead time vendor", "cari klausa/kriteria tentang X". Lebih tajam dari search_projects (yang hanya menemukan proyek mana).',
+      'Tiap hasil membawa {code, source, entityType, entityId} — pakai untuk MENYITIR baris persisnya: [[cite:CODE|SOURCE|entityId]] (mis. [[cite:AI-1|Risk|<entityId>]]). Ringkas isi potongan; jangan salin mentah.',
+    ].join('\n'),
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Pertanyaan/istilah untuk dicari di isi proyek, mis. "kriteria penerimaan UAT", "mitigasi risiko keamanan".' } },
       required: ['query'],
       additionalProperties: false,
     },
@@ -693,6 +708,7 @@ function stepLabel(name: string, code: string, en: boolean): string {
     case 'list_change_requests': return en ? `Reviewing${c} change requests` : `Meninjau change request${c}`;
     case 'query_data': return en ? 'Querying your data' : 'Menjalankan query data';
     case 'search_projects': return en ? 'Searching across projects' : 'Mencari lintas proyek';
+    case 'search_knowledge': return en ? 'Retrieving relevant details' : 'Menelusuri rincian relevan';
     case 'get_process_guide': return en ? 'Looking up the how-to guide' : 'Mencari panduan cara-pakai';
     case 'pmi_guidance': return en ? 'Referencing PMI/PMBOK standards' : 'Merujuk standar PMI/PMBOK';
     case 'domain_guidance': return en ? 'Referencing domain expertise' : 'Merujuk keahlian domain';
@@ -1046,6 +1062,12 @@ function makeExecuteTool(ctx: { userId: string; role: Role; proposals: ProposedR
         // measurable in prod logs once Voyage is armed.
         logger.info({ userId: ctx.userId, mode, count: hits.length }, '[assistant] project search');
         return JSON.stringify({ mode, count: hits.length, results: hits.map((h) => ({ code: h.code, name: h.name, snippet: h.snippet })) });
+      }
+      case 'search_knowledge': {
+        const { mode, hits } = await retrieveChunks(typeof args.query === 'string' ? args.query : '', ctx.projectsSummary.map((p) => p.id));
+        logger.info({ userId: ctx.userId, mode, count: hits.length }, '[assistant] knowledge retrieve');
+        // Each hit carries citation metadata so Anett can deep-link the exact row via [[cite:CODE|SOURCE|entityId]].
+        return JSON.stringify({ mode, count: hits.length, results: hits.map((h) => ({ code: h.code, source: h.source, entityType: h.entityType, entityId: h.entityId, text: h.text })) });
       }
       case 'remember': {
         if (!ctx.memoryEnabled) return JSON.stringify({ error: 'Memori AI tidak aktif untuk workspace ini.' });
