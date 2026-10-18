@@ -4,7 +4,7 @@ import { pushRecentProject } from '../lib/recentProjects';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
-import { Badge, Button, Card, Modal, Spinner } from '../components/ui';
+import { Badge, Button, Card, Spinner } from '../components/ui';
 import BaselineGate from '../components/BaselineGate';
 import { useToast } from '../components/Toast';
 import { ApiError } from '../api/client';
@@ -531,97 +531,87 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
 
 // Mobile project-section navigator: a sticky "current section" trigger + a bottom-sheet picker of
 // every section grouped by domain. One tap to jump; far easier than swiping a long horizontal strip.
-// Which groups get a dedicated quick-access "strip" (the rest live behind "More sections").
-const PRIMARY_GROUPS = ['Overview', 'Schedule', 'Cost'];
-
+// Mobile section nav = a slim sticky trigger (shows the current section) that opens an OFF-CANVAS
+// SIDEBAR drawer sliding in from the left with every section grouped by domain. The menu is hidden by
+// default so project content fills the screen; one tap jumps to any section.
 function MobileSectionNav({ groups, activeTab, changeCount, onSelect }: { groups: { label: string; tabs: Tab[] }[]; activeTab: Tab; changeCount: number; onSelect: (t: Tab) => void }) {
   const [open, setOpen] = useState(false);
   const { lang } = useLang();
-  const tabLabel = (t: Tab) => (t === 'Schedule' ? 'Timeline' : t); // mirror the sidebar drawer
+  const tabLabel = (t: Tab) => (t === 'Schedule' ? 'Timeline' : t);
   const groupLabel = (l: string) => (lang === 'id' ? GROUP_LABEL_ID[l] ?? l : l);
 
-  // Prototype A: up to 3 primary group "strips" (white bars, circular icon badge, corner dot/count)
-  // + a "More sections" strip opening the full grouped picker. One tap to the common sections.
-  const primary = PRIMARY_GROUPS.map((l) => groups.find((g) => g.label === l)).filter((g): g is { label: string; tabs: Tab[] } => !!g);
-  const primaryLabels = new Set(primary.map((g) => g.label));
-  const rest = groups.filter((g) => !primaryLabels.has(g.label));
-  const activeInPrimary = primary.some((g) => g.tabs.includes(activeTab));
-  const restChanges = rest.some((g) => g.tabs.includes('Audit')) ? changeCount : 0;
+  // Close on Escape while the drawer is open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
 
-  // One white strip button: circular icon badge (left) + label (+ sub) + chevron; a small circle in
-  // the top-right corner marks the active strip, or shows a red count badge (pending changes).
-  const Strip = ({ icon, title, sub, active, badge, onClick, haspopup }: { icon: string; title: string; sub?: string; active: boolean; badge?: number; onClick: () => void; haspopup?: boolean }) => (
-    <button
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
-      aria-haspopup={haspopup ? 'dialog' : undefined}
-      className={`relative flex w-full items-center gap-2.5 rounded-xl border bg-white px-3 py-1.5 text-left shadow-sm transition active:scale-[0.99] dark:bg-slate-900 ${active ? 'border-blue-500 ring-1 ring-blue-500/20 dark:border-blue-500' : 'border-slate-200 dark:border-slate-700'}`}
-    >
-      {badge && badge > 0
-        ? <span className="absolute right-2 top-1.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">{badge}</span>
-        : active ? <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-blue-500" /> : null}
-      <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm ${active ? 'bg-blue-600' : 'bg-blue-50 dark:bg-slate-800'}`}>{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">{title}</span>
-        {sub && <span className="block truncate text-[11px] leading-tight text-slate-500 dark:text-slate-400">{sub}</span>}
-      </span>
-      <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
-    </button>
-  );
+  const pick = (t: Tab) => { onSelect(t); setOpen(false); };
 
   return (
-    <div className="sticky -top-6 z-[31] -mx-4 space-y-1.5 border-b border-slate-200 bg-slate-100 px-4 pb-2.5 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      {primary.map((g) => {
-        const active = g.tabs.includes(activeTab);
-        return (
-          <Strip
-            key={g.label}
-            icon={TAB_ICONS[g.tabs[0]]}
-            title={groupLabel(g.label)}
-            sub={g.tabs.length > 1 ? g.tabs.map(tabLabel).join(' · ') : undefined}
-            active={active}
-            onClick={() => onSelect(active ? activeTab : g.tabs[0])}
-          />
-        );
-      })}
-      <Strip
-        icon="⋯"
-        title={lang === 'id' ? 'Bagian lain' : 'More sections'}
-        sub={!activeInPrimary ? `${lang === 'id' ? 'Kini' : 'Now'}: ${tabLabel(activeTab)}` : rest.map((g) => groupLabel(g.label)).join(' · ')}
-        active={!activeInPrimary}
-        badge={restChanges}
-        haspopup
-        onClick={() => setOpen(true)}
-      />
+    <>
+      {/* Slim sticky trigger — the menu lives off-canvas; this bar just shows the current section. */}
+      <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-100 px-4 pb-2.5 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+        <button
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900"
+        >
+          <span aria-hidden className="flex shrink-0 flex-col gap-[3px]">
+            <span className="block h-0.5 w-4 rounded-full bg-slate-600 dark:bg-slate-300" />
+            <span className="block h-0.5 w-4 rounded-full bg-slate-600 dark:bg-slate-300" />
+            <span className="block h-0.5 w-4 rounded-full bg-slate-600 dark:bg-slate-300" />
+          </span>
+          <span aria-hidden className="text-base">{TAB_ICONS[activeTab]}</span>
+          <span className="min-w-0 truncate text-sm font-bold text-slate-800 dark:text-slate-100">{tabLabel(activeTab)}</span>
+          {changeCount > 0 && <span className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">{changeCount}</span>}
+          <span className="ml-auto shrink-0 text-xs text-slate-400 dark:text-slate-500">{lang === 'id' ? 'bagian ›' : 'sections ›'}</span>
+        </button>
+      </div>
 
-      {open && (
-        <Modal title={lang === 'id' ? 'Bagian proyek' : 'Project sections'} onClose={() => setOpen(false)}>
-          <div className="space-y-4">
+      {/* Off-canvas sidebar. Always mounted so it animates; pointer-events + aria-hidden off when closed. */}
+      <div className={`fixed inset-0 z-40 ${open ? '' : 'pointer-events-none'}`} aria-hidden={!open}>
+        <div onClick={() => setOpen(false)} className={`absolute inset-0 bg-slate-900/45 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`} />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={lang === 'id' ? 'Bagian proyek' : 'Project sections'}
+          className={`absolute inset-y-0 left-0 flex w-[290px] max-w-[85%] flex-col bg-white shadow-2xl transition-transform duration-200 dark:bg-slate-900 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        >
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 dark:border-slate-800">
+            <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100">{lang === 'id' ? 'Bagian proyek' : 'Project sections'}</span>
+            <button onClick={() => setOpen(false)} aria-label={lang === 'id' ? 'Tutup' : 'Close'} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800">✕</button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-6 pt-1">
             {groups.map((g) => (
               <div key={g.label}>
-                <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{groupLabel(g.label)}</div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {g.tabs.map((t) => {
-                    const active = activeTab === t;
-                    return (
-                      <button
-                        key={t}
-                        onClick={() => { onSelect(t); setOpen(false); }}
-                        aria-current={active ? 'page' : undefined}
-                        className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition active:scale-[0.98] ${active ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}
-                      >
-                        <span aria-hidden>{TAB_ICONS[t]}</span>
-                        <span className="min-w-0 truncate">{tabLabel(t)}</span>
-                        {t === 'Audit' && changeCount > 0 && <span className="ml-auto grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-black/10 px-1 text-xs font-semibold dark:bg-white/15">{changeCount}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* Overview is self-evident (single, self-named) → no header; every other group gets one. */}
+                {g.label !== 'Overview' && (
+                  <div className="mb-0.5 mt-3 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{groupLabel(g.label)}</div>
+                )}
+                {g.tabs.map((t) => {
+                  const active = activeTab === t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => pick(t)}
+                      aria-current={active ? 'page' : undefined}
+                      className={`mt-0.5 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold transition active:scale-[0.99] ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'}`}
+                    >
+                      <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm ${active ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800'}`}>{TAB_ICONS[t]}</span>
+                      <span className="min-w-0 truncate">{tabLabel(t)}</span>
+                      {t === 'Audit' && changeCount > 0 && <span className={`ml-auto grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full px-1 text-xs font-semibold ${active ? 'bg-white/25' : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'}`}>{changeCount}</span>}
+                    </button>
+                  );
+                })}
               </div>
             ))}
           </div>
-        </Modal>
-      )}
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
