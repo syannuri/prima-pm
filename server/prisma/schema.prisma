@@ -1418,6 +1418,32 @@ model ProjectEmbedding {
   @@index([tenantId])
 }
 
+// Chunk-level embedding cache (RAG v2). Unlike ProjectEmbedding (one vector per project), this stores
+// one vector per SOURCE ENTITY — a charter section, a risk, a change request, a lesson, an issue, a
+// task, a cost line — so retrieval returns the most relevant PIECES of a project (and Anett can cite
+// the exact row). `source`/`entityId` map onto the existing [[cite:CODE|SOURCE|id]] deep-links.
+// Tenant-scoped. Vector is plain JSON number[] (brute-force cosine in Node — no pgvector); re-embed
+// only when a chunk's docHash changes. Dormant unless VOYAGE_API_KEY is set (else search falls to FTS).
+model ChunkEmbedding {
+  id         String @id @default(uuid())
+  tenantId   String
+  projectId  String
+  entityType String // charter | risk | cr | lesson | issue | task | cost
+  entityId   String // source row id for citations; charter uses "<charterId>:<section>"
+  source     String // citation SOURCE: Overview | Risk | ChangeRequest | Schedule | Cost
+  code       String // project code (denormalized so a hit can build its citation without a join)
+  text       String // the chunk text that was embedded
+  model      String // embedding model id the vector was produced with
+  docHash    String // sha256(model\ntext); changed ⇒ re-embed
+  vector     Json // number[] embedding
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, entityType, entityId])
+  @@index([tenantId, projectId])
+}
+
 // Tenant-defined custom field (Tier-3). Definitions are workspace-level configuration managed by an
 // ADMIN; the actual per-entity values live in CustomFieldValue keyed by entity + entityId. Tenant-scoped
 // (in SCOPED_MODELS). `entity` is a plain string ("project" | "task") so adding entity types later needs

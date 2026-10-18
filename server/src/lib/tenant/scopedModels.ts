@@ -19,4 +19,5 @@ export const SCOPED_MODELS: ReadonlySet<string> = new Set([
   'ProjectEmbedding', 'CustomFieldDef', 'CustomFieldValue', 'Program', 'CrossProjectLink', 'CustomRole',
   'Proposal', // Project Intake & Portfolio Selection
   'AiJudgeSample', // round-6 #5: quality-trend sampling
+  'ChunkEmbedding', // RAG v2: chunk-level embedding cache
 ]);
