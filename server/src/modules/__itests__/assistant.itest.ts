@@ -130,11 +130,11 @@ describe('AI portfolio assistant — /assistant', () => {
     });
 
     await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'How is my project?' }], lang: 'en' });
-    expect(captured).toContain('project-management English');
-    expect(captured).not.toContain('Bahasa Indonesia');
+    expect(captured).toContain('Reply in the SAME LANGUAGE'); // EN base prompt selected
+    expect(captured).not.toContain('BAHASA YANG SAMA'); // not the ID base prompt
 
     await request(app).post(askUrl()).set(bearer(pmToken)).send({ messages: [{ role: 'user', content: 'Bagaimana proyek saya?' }] }); // no lang → id
-    expect(captured).toContain('Bahasa Indonesia');
+    expect(captured).toContain('BAHASA YANG SAMA'); // ID base prompt selected
 
     __setAiPort(answerPort);
   });
