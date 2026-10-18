@@ -7,7 +7,7 @@ import AnettChartCard from './AnettChartCard';
 import { onOpenAnett } from '../lib/anettBus';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { useLang } from '../context/LanguageContext';
-import { selectChips, resolveFollowups } from '../lib/anettChips';
+import { selectChips, resolveFollowups, citedLinks } from '../lib/anettChips';
 import { useAuth } from '../context/AuthContext';
 import { anettChatKey } from '../lib/anettChat';
 
@@ -1182,8 +1182,26 @@ export default function AiAssistant() {
                 lang,
                 staticFallback: followups,
               });
+              // #3 actionable chips: deep-link to the rows the answer referenced (jump, don't re-ask).
+              // Only links resolvable to an accessible project + a real tab are shown.
+              const navLinks = citedLinks(lastAnswer)
+                .map((l) => ({ ...l, id: codeToId.get(l.code), tab: SOURCE_TAB.get(l.source) }))
+                .filter((l): l is typeof l & { id: string; tab: string } => !!l.id && !!l.tab);
               return (
                 <div className="ml-10 flex flex-wrap gap-1.5">
+                  {navLinks.map((l) => {
+                    const focusId = l.entityId && FOCUS_SOURCES.has(l.source) ? `&focus=${encodeURIComponent(l.entityId)}` : '';
+                    return (
+                      <Link
+                        key={`nav-${l.code}-${l.source}`}
+                        to={`/projects/${l.id}?tab=${encodeURIComponent(l.tab)}${focusId}`}
+                        onClick={() => setOpen(false)}
+                        className="inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/40"
+                      >
+                        <span aria-hidden>↗</span> {l.code} · {l.tab}
+                      </Link>
+                    );
+                  })}
                   {shown.map((c) => (
                     <button key={c} onClick={() => sendText(c)} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
                       {c}

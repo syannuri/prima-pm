@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectChips, resolveFollowups, CHIP_POOL, type ChipCtx } from './anettChips';
+import { selectChips, resolveFollowups, citedLinks, CHIP_POOL, type ChipCtx } from './anettChips';
 
 const base: ChipCtx = { proj: false, propose: false, overdue: 0, approvals: 0, lang: 'id' };
 
@@ -86,5 +86,26 @@ describe('resolveFollowups (contextual follow-up chips)', () => {
   it('falls back to the static list when there is nothing contextual', () => {
     const out = resolveFollowups({ ...base, answer: 'A plain answer with no citations.', modelFollowups: [] });
     expect(out).toEqual(STATIC);
+  });
+});
+
+describe('citedLinks (navigational follow-up chips)', () => {
+  it('extracts distinct code+source deep-link targets with the row id', () => {
+    const answer = 'Behind [[cite:AI-1|Schedule|t123]], risk high [[cite:AI-1|Risk|r9]], aggregate [[cite:AI-2|Cost]].';
+    const links = citedLinks(answer, 5);
+    expect(links).toEqual([
+      { code: 'AI-1', source: 'Schedule', entityId: 't123' },
+      { code: 'AI-1', source: 'Risk', entityId: 'r9' },
+      { code: 'AI-2', source: 'Cost', entityId: undefined },
+    ]);
+  });
+  it('dedups repeats and caps the count', () => {
+    const answer = '[[cite:AI-1|Risk|a]] [[cite:AI-1|Risk|b]] [[cite:AI-2|Cost]] [[cite:AI-3|Schedule|x]]';
+    const links = citedLinks(answer, 2);
+    expect(links).toHaveLength(2);
+    expect(links[0]).toMatchObject({ code: 'AI-1', source: 'Risk' }); // first wins; duplicate dropped
+  });
+  it('returns [] when there are no citations', () => {
+    expect(citedLinks('a plain answer')).toEqual([]);
   });
 });
