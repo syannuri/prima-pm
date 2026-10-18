@@ -14,6 +14,7 @@ import { getCostSummary } from '../cost/cost.service.js';
 import { getProjectForecast } from '../forecast/forecast.service.js';
 import { computeCpm, type CpmTaskInput, type CpmEdgeInput } from '../schedule/schedule.helpers.js';
 import { resolvePersonasForCategory } from '../assistant/domainKnowledge.js';
+import { buildRagGroundingBlock } from '../assistant/knowledge.service.js';
 
 export type ReviewDimension = 'SCOPE' | 'SCHEDULE' | 'COST' | 'RISK' | 'GOVERNANCE';
 export type ReviewSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -240,9 +241,14 @@ export async function draftReviewNarrative(projectId: string): Promise<{ review:
   if (review.findings.length === 0) {
     return { review, narrative: { headline: 'Tidak ada temuan berarti — proyek dalam kondisi sehat.', prioritized: [], summary: 'Audit tidak menemukan gap prioritas.' } };
   }
+  // RAG v2 Phase 4: ground the narrative on the project's own text relevant to the findings, so it can
+  // reference + cite specific risks/CRs/lessons/clauses. Dormant unless AI_RAG_GROUNDING + Voyage → '';
+  // the findings themselves seed the retrieval query. (ID narrative → en=false.)
+  const seedQuery = review.findings.map((f) => `${f.title} ${f.detail ?? ''}`).join(' ');
+  const grounding = await buildRagGroundingBlock(seedQuery, [projectId], false);
   const raw = await getAiPort().draftJson({
     system: NARRATE_SYSTEM,
-    user: JSON.stringify({ project: review.projectCode, category: review.category, personas, findings: review.findings }),
+    user: JSON.stringify({ project: review.projectCode, category: review.category, personas, findings: review.findings }) + (grounding ? `\n\n${grounding}` : ''),
     jsonSchema: NARRATE_JSON_SCHEMA, maxTokens: 1100, feature: 'review',
   });
   if (raw == null || typeof raw !== 'object' || !('headline' in raw)) throw new AppError(502, 'AI tidak dapat menyusun narasi review saat ini.', 'AI_UNAVAILABLE');
