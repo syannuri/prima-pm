@@ -7,7 +7,7 @@ import AnettChartCard from './AnettChartCard';
 import { onOpenAnett } from '../lib/anettBus';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { useLang } from '../context/LanguageContext';
-import { selectChips } from '../lib/anettChips';
+import { selectChips, resolveFollowups } from '../lib/anettChips';
 import { useAuth } from '../context/AuthContext';
 import { anettChatKey } from '../lib/anettChat';
 
@@ -1170,8 +1170,18 @@ export default function AiAssistant() {
                 (the [[followups:…]] marker it emitted for this turn); fall back to the static nudges
                 when it didn't emit any. */}
             {lastIsAnswer && !busy && streamIdx === null && (() => {
-              const contextual = followupRefs(turns[turns.length - 1].content);
-              const shown = contextual.length ? contextual : followups;
+              const lastAnswer = turns[turns.length - 1].content;
+              // #1 smart fallback + #2 ground/dedup: prefer the model's [[followups:…]] (grounded vs the
+              // accessible codes + deduped against what was asked), else synthesise from what the answer
+              // cited, else the static nudges. See lib/anettChips.resolveFollowups.
+              const shown = resolveFollowups({
+                answer: lastAnswer,
+                modelFollowups: followupRefs(lastAnswer),
+                accessibleCodes: new Set(codeToId.keys()),
+                priorQuestions: turns.filter((t) => t.role === 'user').map((t) => t.content),
+                lang,
+                staticFallback: followups,
+              });
               return (
                 <div className="ml-10 flex flex-wrap gap-1.5">
                   {shown.map((c) => (
