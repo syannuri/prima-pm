@@ -31,7 +31,7 @@ import { findDomainTopic, domainIndex, resolvePersonasForCategory, DOMAIN_DISCLA
 import { callerMemoryEnabled, loadMemoriesForPrompt, buildMemoryBlock, addMemory, forgetMemory, normalizeKind, type MemScope } from './memory.service.js';
 import { runQuery, queryCatalog, type QuerySpec, type QueryTable } from './query.service.js';
 import { searchProjectsDetailed } from './search.service.js';
-import { retrieveChunks } from './knowledge.service.js';
+import { retrieveChunks, buildRagGroundingBlock } from './knowledge.service.js';
 
 // Cross-project (portfolio) Q&A assistant (Phase 4). READ-ONLY: it answers questions about the
 // projects the CALLER can access, via a server-side manual tool loop. The API key and all data
@@ -1253,7 +1253,18 @@ export async function askAssistant(userId: string, role: Role, messages: Assista
   const volatileSystem = en
     ? `${actionNote}${autopilotNote}${memoryNote}${contextNote}${personaNote}${memoryBlock}\n\nProjects the user can access (codes): ${accessibleCodes || '(none)'}.`
     : `${actionNote}${autopilotNote}${memoryNote}${contextNote}${personaNote}${memoryBlock}\n\nProyek yang dapat diakses pengguna (kode): ${accessibleCodes || '(tidak ada)'}.`;
-  const system: SystemPrompt = [{ text: stableSystem, cache: true }, { text: volatileSystem, cache: true }];
+  // RAG v2 Phase 3: auto-ground on retrieved chunks. When armed (AI_RAG_GROUNDING + Voyage), fetch the
+  // top chunks for the latest question and inject them as a THIRD, uncached system segment (it changes
+  // per turn → no cache breakpoint, keeping the stable/volatile breakpoints intact). '' when dormant →
+  // the segment is omitted and behaviour is unchanged.
+  const latestUserMsg = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  const ragBlock = await buildRagGroundingBlock(latestUserMsg, projectsSummary.map((p) => p.id), en);
+  if (ragBlock) emitStep?.(en ? '📚 Grounding on project knowledge' : '📚 Menautkan pengetahuan proyek');
+  const system: SystemPrompt = [
+    { text: stableSystem, cache: true },
+    { text: volatileSystem, cache: true },
+    ...(ragBlock ? [{ text: ragBlock, cache: false }] : []),
+  ];
   // #5 cost meter: total this turn's tokens across every loop step (both the answer and any #1
   // regeneration) for a live per-conversation meter.
   const tok = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };

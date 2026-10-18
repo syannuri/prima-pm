@@ -4,7 +4,7 @@ import { runWithTenant, runAsSystem } from '../../lib/tenant/context.js';
 import { backfillDefaultTenant } from '../../lib/tenant/backfill.js';
 import { wipeDb } from '../../test/tenancy.harness.js';
 import { __setEmbedder } from '../../lib/embeddings.js';
-import { retrieveChunks } from '../assistant/knowledge.service.js';
+import { retrieveChunks, buildRagGroundingBlock } from '../assistant/knowledge.service.js';
 import { getSearchStatus } from '../assistant/search.service.js';
 
 // RAG v2 Phase 2: chunk retrieval. A deterministic fake embedder maps text → a 3-dim keyword-count
@@ -49,6 +49,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   __setEmbedder(null);
+  delete process.env.AI_RAG_GROUNDING;
   if (prevKey === undefined) delete process.env.VOYAGE_API_KEY; else process.env.VOYAGE_API_KEY = prevKey;
   if (prevFlag === undefined) delete process.env.MULTITENANCY_ENFORCE; else process.env.MULTITENANCY_ENFORCE = prevFlag;
 });
@@ -92,5 +93,27 @@ describe('retrieveChunks', () => {
     const status = await runWithTenant(tid, () => getSearchStatus({ role: 'ADMIN' }));
     expect(status.enabled).toBe(true);
     expect(status.cachedChunks).toBeGreaterThan(0);
+  });
+});
+
+describe('buildRagGroundingBlock (auto-grounding, Phase 3)', () => {
+  it('is empty when the flag is off (zero behaviour change)', async () => {
+    process.env.VOYAGE_API_KEY = 'test-key';
+    delete process.env.AI_RAG_GROUNDING;
+    expect(await runWithTenant(tid, () => buildRagGroundingBlock('vendor', [projectId], true))).toBe('');
+  });
+
+  it('is empty when embeddings are disabled, even with the flag on', async () => {
+    process.env.AI_RAG_GROUNDING = '1';
+    delete process.env.VOYAGE_API_KEY;
+    expect(await runWithTenant(tid, () => buildRagGroundingBlock('vendor', [projectId], true))).toBe('');
+  });
+
+  it('injects the retrieved chunk text + a row-level citation marker when armed', async () => {
+    process.env.AI_RAG_GROUNDING = '1';
+    process.env.VOYAGE_API_KEY = 'test-key';
+    const block = await runWithTenant(tid, () => buildRagGroundingBlock('vendor', [projectId], true));
+    expect(block.toLowerCase()).toContain('vendor');
+    expect(block).toContain(`[[cite:KN-1|Risk|${riskId}]]`); // exact-row citation hint
   });
 });
