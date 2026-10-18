@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { useLang } from '../context/LanguageContext';
+import { openAnett, anettAvailable } from '../lib/anettBus';
 
 // "Review Anett" — surfaces the deterministic project audit (GET /projects/:id/review) on demand, with
 // an optional AI narrative (POST .../narrative, gated). Findings deep-link to their tab via onJump.
@@ -10,7 +11,7 @@ type Sev = 'HIGH' | 'MEDIUM' | 'LOW';
 type Dim = 'SCOPE' | 'SCHEDULE' | 'COST' | 'RISK' | 'GOVERNANCE';
 interface Finding { id: string; dimension: Dim; severity: Sev; code: string; title: string; detail: string; count?: number; refs?: { kind: string; id: string }[] }
 interface ProjectReview { generatedAt: string; projectCode: string; projectName: string; category: string | null; findings: Finding[]; counts: { high: number; medium: number; low: number; total: number } }
-interface Narrative { headline: string; prioritized: { code: string; why: string; recommendation: string }[]; summary: string }
+interface Narrative { headline: string; prioritized: { code: string; why: string; recommendation: string }[]; summary: string; followups?: string[] }
 
 const DIM_TAB: Record<Dim, string> = { SCOPE: 'Requirements', SCHEDULE: 'Schedule', COST: 'Cost', RISK: 'Risk', GOVERNANCE: 'Charter' };
 const SEV_DOT: Record<Sev, string> = { HIGH: 'bg-red-500', MEDIUM: 'bg-amber-400', LOW: 'bg-slate-300 dark:bg-slate-600' };
@@ -116,6 +117,16 @@ export default function ProjectReviewCard({ projectId, onJump }: { projectId: st
                     ))}
                   </ul>
                   <div className="mt-1.5 text-xs italic text-slate-500 dark:text-slate-400">{narrateM.data.narrative.summary}</div>
+                  {/* #5 contextual follow-ups: open Anett prefilled to dig into the findings. */}
+                  {anettAvailable() && (narrateM.data.narrative.followups ?? []).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {narrateM.data.narrative.followups!.map((q) => (
+                        <button key={q} onClick={() => openAnett(q)} className="rounded-full border border-violet-200 bg-white px-2.5 py-1 text-xs text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-slate-900 dark:text-violet-300 dark:hover:bg-violet-900/30">
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

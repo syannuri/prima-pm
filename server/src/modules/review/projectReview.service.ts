@@ -209,6 +209,7 @@ export interface ReviewNarrative {
   headline: string;
   prioritized: { code: string; why: string; recommendation: string }[];
   summary: string;
+  followups: string[]; // contextual next-questions the user can ask Anett (elevation #5)
 }
 
 const NARRATE_SYSTEM = [
@@ -216,6 +217,7 @@ const NARRATE_SYSTEM = [
   'Bingkai temuan dalam standar PMI/PMBOK dan, bila persona domain diberikan, tambahkan lensa pakar itu (mis. keamanan siber, arsitektur jaringan, SDLC).',
   'HANYA gunakan temuan pada payload (sudah dikumpulkan deterministik & berprioritas). JANGAN menambah temuan, angka, atau standar yang tak ada di payload; JANGAN mengarang nomor klausul/versi/CVE.',
   'headline: 1 kalimat kondisi keseluruhan. prioritized: 2-5 temuan terpenting (pakai field `code` PERSIS dari payload) dengan `why` (dampak) + `recommendation` (langkah konkret berbasis standar). summary: 1 kalimat penutup.',
+  'followups: 2-3 pertanyaan lanjutan SINGKAT & SPESIFIK yang mungkin ditanyakan pengguna untuk menindaklanjuti temuan (mis. "Apa mitigasi untuk risiko tertinggi?", "Tugas mana di jalur kritis?"), dari sudut pandang pengguna, masing-masing ≤8 kata. Kosongkan ([]) bila tak ada yang berguna.',
 ].join('\n');
 
 const NARRATE_JSON_SCHEMA = {
@@ -224,8 +226,9 @@ const NARRATE_JSON_SCHEMA = {
     headline: { type: 'string' },
     prioritized: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, why: { type: 'string' }, recommendation: { type: 'string' } }, required: ['code', 'why', 'recommendation'], additionalProperties: false } },
     summary: { type: 'string' },
+    followups: { type: 'array', items: { type: 'string' } },
   },
-  required: ['headline', 'prioritized', 'summary'], additionalProperties: false,
+  required: ['headline', 'prioritized', 'summary', 'followups'], additionalProperties: false,
 } as const;
 
 // Recompute the findings server-side (grounding) then narrate. Assumes the route already checked the
@@ -239,7 +242,7 @@ export async function draftReviewNarrative(projectId: string): Promise<{ review:
   const review = await reviewProject(projectId);
   const personas = resolvePersonasForCategory(review.category).map((p) => p.persona);
   if (review.findings.length === 0) {
-    return { review, narrative: { headline: 'Tidak ada temuan berarti — proyek dalam kondisi sehat.', prioritized: [], summary: 'Audit tidak menemukan gap prioritas.' } };
+    return { review, narrative: { headline: 'Tidak ada temuan berarti — proyek dalam kondisi sehat.', prioritized: [], summary: 'Audit tidak menemukan gap prioritas.', followups: [] } };
   }
   // RAG v2 Phase 4: ground the narrative on the project's own text relevant to the findings, so it can
   // reference + cite specific risks/CRs/lessons/clauses. Dormant unless AI_RAG_GROUNDING + Voyage → '';
