@@ -56,11 +56,12 @@ export async function searchProjects(query: string, projectIds: string[]): Promi
 // Pilot status probe (#4): is semantic search armed, on which model, and how many project vectors are
 // already cached for this tenant? ADMIN/PMO only (reuses the governance-role rule). Lets an operator
 // confirm arming worked (enabled:true) and watch the cache warm up, without spending on a search.
-export async function getSearchStatus(caller: { role: Role }): Promise<{ enabled: boolean; model: string; cachedVectors: number }> {
+export async function getSearchStatus(caller: { role: Role }): Promise<{ enabled: boolean; model: string; cachedVectors: number; cachedChunks: number }> {
   if (!canWriteTenantScope(caller.role)) throw Forbidden('Hanya admin/PMO yang dapat melihat status pencarian.');
-  // projectEmbedding is a tenant-scoped model → count is auto-filtered to the caller's tenant.
+  // projectEmbedding + chunkEmbedding are tenant-scoped → counts auto-filter to the caller's tenant.
   const cachedVectors = await prisma.projectEmbedding.count();
-  return { enabled: embeddingsEnabled(), model: embeddingModel(), cachedVectors };
+  const cachedChunks = await prisma.chunkEmbedding.count(); // RAG v2 chunk cache
+  return { enabled: embeddingsEnabled(), model: embeddingModel(), cachedVectors, cachedChunks };
 }
 
 async function ftsSearchProjects(query: string, projectIds: string[]): Promise<SearchHit[]> {
