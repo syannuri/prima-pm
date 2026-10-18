@@ -281,9 +281,16 @@ function VoiceListeningBar({ stream }: { stream: MediaStream }) {
 }
 // Strip common markdown so the spoken answer sounds natural (not "asterisk asterisk …").
 // Rich answer cards (#2): a [[chart:CODE|TYPE]] marker becomes a visual card rendered below the text.
-// stripCharts removes the marker from the prose; chartRefs collects the (deduped) refs to render.
+// Also strips the [[followups:...]] marker from the prose (it renders as next-question chips, not text).
 function stripCharts(s: string): string {
-  return s.replace(/\[\[chart:[^\]]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trimEnd();
+  return s.replace(/\[\[(?:chart|followups):[^\]]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trimEnd();
+}
+// Contextual follow-ups: a [[followups:a|b|c]] marker (emitted at the end of an answer) becomes
+// clickable next-question chips tailored to the conversation. Returns [] when the marker is absent.
+function followupRefs(s: string): string[] {
+  const m = s.match(/\[\[followups:([^\]]+)\]\]/);
+  if (!m) return [];
+  return [...new Set(m[1].split('|').map((x) => x.trim()).filter(Boolean))].slice(0, 4);
 }
 function chartRefs(s: string): { code: string; type: string }[] {
   const seen = new Set<string>();
@@ -298,7 +305,7 @@ function chartRefs(s: string): { code: string; type: string }[] {
 function stripMarkdown(s: string): string {
   return s
     .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/\[\[(?:cite|chart):[^\]]+\]\]/g, '') // drop citation/chart markers so TTS doesn't read them
+    .replace(/\[\[(?:cite|chart|followups):[^\]]+\]\]/g, '') // drop citation/chart/followup markers so TTS doesn't read them
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[*_`#>]/g, '')
     .replace(/^\s*[-•]\s*/gm, '')
@@ -1159,16 +1166,22 @@ export default function AiAssistant() {
               </div>
             ))}
 
-            {/* Dynamic follow-up chips after the latest answer — nudge the next useful question */}
-            {lastIsAnswer && !busy && streamIdx === null && (
-              <div className="ml-10 flex flex-wrap gap-1.5">
-                {followups.map((c) => (
-                  <button key={c} onClick={() => sendText(c)} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
-                    {c}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Follow-up chips after the latest answer. Prefer the model's CONTEXTUAL suggestions
+                (the [[followups:…]] marker it emitted for this turn); fall back to the static nudges
+                when it didn't emit any. */}
+            {lastIsAnswer && !busy && streamIdx === null && (() => {
+              const contextual = followupRefs(turns[turns.length - 1].content);
+              const shown = contextual.length ? contextual : followups;
+              return (
+                <div className="ml-10 flex flex-wrap gap-1.5">
+                  {shown.map((c) => (
+                    <button key={c} onClick={() => sendText(c)} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* Thinking — live reasoning steps stream in (✓ done), with an active "composing" line */}
             {busy && (
