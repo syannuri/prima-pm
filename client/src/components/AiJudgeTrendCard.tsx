@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { Badge, Spinner } from './ui';
@@ -23,15 +24,42 @@ interface TrendRecent {
   rationale: string;
   createdAt: string;
 }
+interface FeatureStat {
+  feature: string;
+  count: number;
+  avgOverall: number;
+  passRate: number;
+  avgGroundedness: number;
+  avgHelpfulness: number;
+  avgClarity: number;
+}
 interface JudgeTrend {
   enabled: boolean;
   sampleRate: number;
+  feature: string | null;
   totalSamples: number;
   avgOverall: number;
   passRate: number;
   buckets: TrendBucket[];
+  byFeature: FeatureStat[];
   recent: TrendRecent[];
 }
+
+// Friendly display names for the AiUsage feature labels (keys match the server's AiFeature strings).
+const FEATURE_LABELS: Record<string, string> = {
+  assistant_qa: 'Chat (Anett)',
+  narrative: 'Status narrative',
+  proactive: 'Briefings',
+  review: 'Project review',
+  evm_explain: 'EVM explainer',
+  cr_impact: 'CR impact',
+  risk_suggest: 'Risk suggestions',
+  schedule_suggest: 'Schedule / WBS',
+  whatif: 'What-if',
+  resource_realloc: 'Resource realloc',
+  portfolio_qa: 'Portfolio Q&A',
+};
+const featureLabel = (f: string): string => FEATURE_LABELS[f] ?? f;
 
 const T = {
   id: {
@@ -41,6 +69,7 @@ const T = {
     empty: 'Belum ada sampel. Muncul setelah Anett menjawab saat sampling aktif.',
     avg: 'Rata-rata', pass: 'Lulus', samples: 'sampel', recent: 'Terbaru',
     dims: 'Grounded / Guna / Jelas',
+    byFeature: 'Per fitur', all: 'Semua fitur',
   },
   en: {
     title: 'AI answer quality',
@@ -49,6 +78,7 @@ const T = {
     empty: 'No samples yet. They appear after Anett answers while sampling is on.',
     avg: 'Average', pass: 'Pass', samples: 'samples', recent: 'Recent',
     dims: 'Grounded / Helpful / Clear',
+    byFeature: 'By feature', all: 'All features',
   },
 };
 
@@ -57,7 +87,13 @@ const scoreColor = (v: number): string => (v >= 4 ? 'emerald' : v >= 3 ? 'amber'
 export default function AiJudgeTrendCard() {
   const { lang } = useLang();
   const t = T[lang];
-  const q = useQuery({ queryKey: ['ai-judge-trend'], queryFn: () => api.get<JudgeTrend>('/ai-settings/judge-trend?days=30') });
+  // Active feature filter (null = all). Buckets/headline/recent scope to it; the by-feature list below
+  // is always the full breakdown (server computes it over every feature regardless of the filter).
+  const [feature, setFeature] = useState<string | null>(null);
+  const q = useQuery({
+    queryKey: ['ai-judge-trend', feature],
+    queryFn: () => api.get<JudgeTrend>(`/ai-settings/judge-trend?days=30${feature ? `&feature=${encodeURIComponent(feature)}` : ''}`),
+  });
 
   const data = q.data;
   const loading = q.isLoading;
@@ -95,6 +131,38 @@ export default function AiJudgeTrendCard() {
               />
             ))}
           </div>
+
+          {/* Per-feature breakdown — doubles as the filter: click a row to scope the bars/headline/recent
+              above to that surface, click "All features" to reset. Always shows every sampled feature. */}
+          {data.byFeature.length > 0 && (
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{t.byFeature}</div>
+              <ul className="space-y-0.5">
+                <li>
+                  <button
+                    onClick={() => setFeature(null)}
+                    className={`flex w-full items-center justify-between rounded px-2 py-1 text-xs transition ${feature === null ? 'bg-violet-50 font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}
+                  >
+                    <span>{t.all}</span>
+                    <span className="tabular-nums text-slate-400">{data.byFeature.reduce((n, f) => n + f.count, 0)}</span>
+                  </button>
+                </li>
+                {data.byFeature.map((f) => (
+                  <li key={f.feature}>
+                    <button
+                      onClick={() => setFeature(f.feature)}
+                      className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-xs transition ${feature === f.feature ? 'bg-violet-50 font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50'}`}
+                      title={`${t.dims}: ${f.avgGroundedness.toFixed(1)}/${f.avgHelpfulness.toFixed(1)}/${f.avgClarity.toFixed(1)}`}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-left">{featureLabel(f.feature)}</span>
+                      <span className="shrink-0 text-slate-400">{Math.round(f.passRate * 100)}% · {f.count}</span>
+                      <Badge color={scoreColor(f.avgOverall)}>{f.avgOverall.toFixed(1)}</Badge>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Recent judged answers with rationale. */}
           <div>

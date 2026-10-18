@@ -87,6 +87,27 @@ describe('AiJudgeSample (#5 quality-trend sampling)', () => {
     expect(empty.passRate).toBe(0);
   });
 
+  it('breaks the trend down by feature (volume-sorted) and filters to one feature (phase 2)', async () => {
+    __setAiPort(judgePort(5, 5, 5)); // overall 5 ⇒ pass
+    // tidB starts empty (asserted above). Record 2 'review' + 1 'proactive'.
+    await runWithTenant(tidB, () => recordJudgeSample({ question: 'q', answer: 'a', feature: 'review' }));
+    await runWithTenant(tidB, () => recordJudgeSample({ question: 'q', answer: 'a', feature: 'review' }));
+    await runWithTenant(tidB, () => recordJudgeSample({ question: 'q', answer: 'a', feature: 'proactive' }));
+
+    const trend = await runWithTenant(tidB, () => getJudgeTrend({ role: 'ADMIN' }, { days: 30 }));
+    expect(trend.feature).toBeNull();
+    expect(trend.totalSamples).toBe(3);
+    // byFeature covers every feature, sorted by volume (review=2 leads proactive=1).
+    expect(trend.byFeature.map((f) => f.feature)).toEqual(['review', 'proactive']);
+    expect(trend.byFeature[0]).toMatchObject({ feature: 'review', count: 2, passRate: 1 });
+
+    // Filtering scopes the headline/buckets to one feature; byFeature stays the full breakdown.
+    const only = await runWithTenant(tidB, () => getJudgeTrend({ role: 'ADMIN' }, { days: 30, feature: 'proactive' }));
+    expect(only.feature).toBe('proactive');
+    expect(only.totalSamples).toBe(1);
+    expect(only.byFeature.length).toBe(2);
+  });
+
   it('passes the tool context to the judge so groundedness is graded against real data', async () => {
     let capturedUser = '';
     __setAiPort({
