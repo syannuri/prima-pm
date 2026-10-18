@@ -98,6 +98,27 @@ export function citedFollowups(answer: string, lang: 'id' | 'en'): string[] {
   return out;
 }
 
+// ── Navigational follow-up chips (elevation #3) ──────────────────────────────────────────────────
+// Besides "ask a follow-up", offer "jump to the row this answer referenced": parse the answer's
+// [[cite:CODE|SOURCE|id]] markers into deep-link targets (the component resolves CODE→id + tab and
+// renders a Link). Distinct by CODE+SOURCE, capped so the row stays tidy.
+export interface CitedLink { code: string; source: string; entityId?: string }
+const CITE_RE_FULL = /\[\[cite:([A-Za-z0-9-]+)\|(\w+)(?:\|([^\]]+))?\]\]/g;
+export function citedLinks(answer: string, max = 2): CitedLink[] {
+  const out: CitedLink[] = [];
+  const seen = new Set<string>();
+  for (const m of answer.matchAll(CITE_RE_FULL)) {
+    const code = m[1].toUpperCase();
+    const source = m[2];
+    const key = `${code}|${source}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ code, source, entityId: m[3]?.trim() || undefined });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 // Resolve the follow-up chips to show, in precedence order:
 //   1. the model's [[followups:…]] suggestions (grounded + deduped),
 //   2. else contextual follow-ups derived from the answer's citations (grounded + deduped),
