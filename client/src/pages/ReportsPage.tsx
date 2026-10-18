@@ -81,7 +81,9 @@ export default function ReportsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
-      <div>
+      {/* The page title + hub blurb are redundant on phones — the top bar already shows "Reports" —
+          so they're desktop-only, lifting the view tabs + content up. */}
+      <div className="hidden sm:block">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{isGuest ? 'My Reports' : 'Reports'}</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           {isGuest
@@ -107,7 +109,7 @@ export default function ReportsPage() {
             );
           })}
         </div>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{activeNav.desc}</p>
+        <p className="mt-2 hidden text-sm text-slate-500 dark:text-slate-400 sm:block">{activeNav.desc}</p>
       </div>
 
         <div className="min-w-0 space-y-5">
