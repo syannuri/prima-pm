@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment, lazy, Suspense } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { pushRecentProject } from '../lib/recentProjects';
+import { setPageTitle } from '../lib/pageTitle';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { Project } from '../api/types';
@@ -155,6 +156,13 @@ export default function ProjectPage() {
   });
   const changeCount = auditMeta?.total ?? 0;
 
+  // Publish the project name as the contextual top-bar title on mobile (Layout reads it); clear on
+  // leave. Above the early return so the hook order is stable.
+  useEffect(() => {
+    setPageTitle(data?.project?.name ?? null);
+    return () => setPageTitle(null);
+  }, [data?.project?.name]);
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-10">
@@ -272,7 +280,9 @@ export default function ProjectPage() {
         {/* Header leads straight with the project name — the in-page breadcrumb link and the
             project-code chip were dropped to keep the top tight and lift the tab bar up. The
             top-bar (and browser back) already carry the "back to projects" affordance. */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* DESKTOP header (sm+): name + status badges + inline lifecycle/close + ⋯ More. On phones the
+            name moves into the top bar and these actions tuck into the mobile ⋯ band below. */}
+        <div className="hidden flex-wrap items-center gap-3 sm:flex">
           <h1 className="min-w-0 break-words text-xl font-bold text-slate-800 dark:text-slate-100 sm:text-2xl">{project.name}</h1>
           <span className="flex items-center gap-2">
             <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'} solid>{project.status}</Badge>
@@ -308,6 +318,29 @@ export default function ProjectPage() {
             )}
           </div>
         </div>
+        {/* MOBILE header band (sm-): slim elevated row — condensed status pills + a ⋯ overflow that
+            holds the lifecycle / export / close / edit / jump-to actions (hidden from the body to keep
+            the top compact). The project name lives in the top bar (setPageTitle). */}
+        <div className="-mx-4 mb-1 flex items-center gap-2 border-b border-slate-200 bg-gradient-to-br from-blue-50/70 to-slate-50 px-4 py-2 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950 sm:hidden">
+          <Badge color={PROJECT_STATUS_BADGE[project.status] ?? 'slate'} solid>{project.status}</Badge>
+          <Badge color={DELIVERY_APPROACH_BADGE[project.deliveryApproach]}>{DELIVERY_APPROACH_LABEL[project.deliveryApproach]}</Badge>
+          <BaselineGate projectId={projectId} onNavigateTab={(t) => goto(t as Tab)} />
+          <div className="ml-auto">
+            <MoreMenu title={project.name} label="⋯">
+              {canEdit && <MenuHeader>{lang === 'id' ? 'Aksi' : 'Actions'}</MenuHeader>}
+              {canEdit && <MenuItem icon="✏️" onClick={() => setEditOpen(true)}>{lang === 'id' ? 'Ubah detail' : 'Edit details'}</MenuItem>}
+              {canEdit && lifecycle.canActivate && <MenuItem icon="▶" onClick={() => { if (user?.role === 'GUEST') setLifecycleModal('activate'); else setReviewOpen(true); }}>{lang === 'id' ? 'Aktifkan' : 'Activate'}</MenuItem>}
+              {canEdit && lifecycle.canResume && <MenuItem icon="▶" onClick={() => setLifecycleModal('resume')}>{lang === 'id' ? 'Lanjutkan' : 'Resume'}</MenuItem>}
+              {canEdit && lifecycle.canHold && <MenuItem icon="⏸" onClick={() => setLifecycleModal('hold')}>{lang === 'id' ? 'Tahan sementara' : 'Put on hold'}</MenuItem>}
+              {canEdit && lifecycle.canReopen && <MenuItem icon="↩" onClick={() => setLifecycleModal('reopen')}>{lang === 'id' ? 'Buka kembali' : 'Reopen'}</MenuItem>}
+              {chartered && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('excel')}>{exporting === 'excel' ? 'Exporting…' : (lang === 'id' ? 'Unduh Excel' : 'Download Excel')}</MenuItem>}
+              {chartered && <MenuItem icon="⬇️" disabled={exporting !== null} onClick={() => exportReport('pdf')}>{exporting === 'pdf' ? 'Exporting…' : (lang === 'id' ? 'Unduh PDF' : 'Download PDF')}</MenuItem>}
+              {canEdit && closeable && <MenuItem danger icon="⏹" onClick={() => setCloseOpen(true)}>{lang === 'id' ? 'Tutup proyek' : 'Close project'}</MenuItem>}
+              <MenuDivider />
+              {jumpTo}
+            </MoreMenu>
+          </div>
+        </div>
         {/* Header carries NO inline status/alert banners — project status shows as the badge
             beside the name, and every notification (budget/risk/schedule signals, pending change
             requests, activation-ready) lives only in the top-bar notification bell. The meta rows
@@ -319,7 +352,9 @@ export default function ProjectPage() {
       {/* Controlled modals — mounted OUTSIDE the overflow menu (which unmounts its children on click)
           so they survive it closing; driven by the state the menu items / buttons set. */}
       <EditProjectModal project={project} open={editOpen} onOpenChange={setEditOpen} />
-      {focusActive && (
+      {/* Controlled lifecycle/close modals — needed by the Focus-mode ⋯ AND the mobile ⋯ band (both
+          drive them via state instead of inline trigger buttons). */}
+      {(focusActive || isMobile) && (
         <>
           <LifecycleActions project={project} renderTriggers={false} modal={lifecycleModal} onModalChange={setLifecycleModal} onReview={user?.role === 'GUEST' ? undefined : () => setReviewOpen(true)} />
           <CloseProjectModal project={project} open={closeOpen} onOpenChange={setCloseOpen} />

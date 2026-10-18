@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { subscribePageTitle, getPageTitle } from '../lib/pageTitle';
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet } from '../context/LanguageContext';
 import { useOnboarding } from '../context/OnboardingContext';
@@ -53,6 +54,10 @@ export default function Layout({ children }: { children: ReactNode }) {
     : path === '/settings' ? 'Settings'
     : path === '/manual' ? 'Manual'
     : '';
+  // A page can publish a contextual mobile title (e.g. ProjectPage → the project name) that overrides
+  // the generic route title above. Falls back to pageTitle when none is set.
+  const titleOverride = useSyncExternalStore(subscribePageTitle, getPageTitle, () => null);
+  const mobileTitle = titleOverride ?? pageTitle;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('prima_sidebar_collapsed') === '1');
@@ -142,8 +147,8 @@ export default function Layout({ children }: { children: ReactNode }) {
             </button>
           )}
           {/* Section title on every non-Home page (phones) — mirrors the menu name. */}
-          {!showGreeting && pageTitle && (
-            <div className="min-w-0 truncate text-base font-semibold text-white md:hidden">{pageTitle}</div>
+          {!showGreeting && mobileTitle && (
+            <div className="min-w-0 truncate text-base font-semibold text-white md:hidden">{mobileTitle}</div>
           )}
           <button
             onClick={toggle}
