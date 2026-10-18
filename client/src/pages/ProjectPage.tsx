@@ -555,22 +555,22 @@ function MobileSectionNav({ groups, activeTab, changeCount, onSelect }: { groups
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       aria-haspopup={haspopup ? 'dialog' : undefined}
-      className={`relative flex w-full items-center gap-3 rounded-2xl border bg-white px-3.5 py-2.5 text-left shadow-sm transition active:scale-[0.99] dark:bg-slate-900 ${active ? 'border-blue-500 ring-2 ring-blue-500/20 dark:border-blue-500' : 'border-slate-200 dark:border-slate-700'}`}
+      className={`relative flex w-full items-center gap-2.5 rounded-xl border bg-white px-3 py-1.5 text-left shadow-sm transition active:scale-[0.99] dark:bg-slate-900 ${active ? 'border-blue-500 ring-1 ring-blue-500/20 dark:border-blue-500' : 'border-slate-200 dark:border-slate-700'}`}
     >
       {badge && badge > 0
-        ? <span className="absolute right-2.5 top-2 grid h-5 min-w-[20px] place-items-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">{badge}</span>
-        : active ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-blue-500" /> : null}
-      <span aria-hidden className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg ${active ? 'bg-blue-600' : 'bg-blue-50 dark:bg-slate-800'}`}>{icon}</span>
+        ? <span className="absolute right-2 top-1.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">{badge}</span>
+        : active ? <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-blue-500" /> : null}
+      <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm ${active ? 'bg-blue-600' : 'bg-blue-50 dark:bg-slate-800'}`}>{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-bold text-slate-800 dark:text-slate-100">{title}</span>
-        {sub && <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{sub}</span>}
+        <span className="block truncate text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">{title}</span>
+        {sub && <span className="block truncate text-[11px] leading-tight text-slate-500 dark:text-slate-400">{sub}</span>}
       </span>
-      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+      <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
     </button>
   );
 
   return (
-    <div className="sticky -top-6 z-[31] -mx-4 space-y-2 border-b border-slate-200 bg-slate-100 px-4 pb-3 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+    <div className="sticky -top-6 z-[31] -mx-4 space-y-1.5 border-b border-slate-200 bg-slate-100 px-4 pb-2.5 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
       {primary.map((g) => {
         const active = g.tabs.includes(activeTab);
         return (
