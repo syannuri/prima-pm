@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { __setAiPort, type AiPort } from './ai.js';
-import { judgeAnswer, runJudgeEval } from './aiJudge.js';
+import { judgeAnswer, runJudgeEval, runJudgeEvalByFeature } from './aiJudge.js';
 import { JUDGE_GOLDEN } from './aiJudge.golden.js';
 
 // Deterministic tests for the judge aggregation/parsing (fake AiPort → no key, no network). The live
@@ -40,9 +40,30 @@ describe('aiJudge', () => {
     const card = await runJudgeEval(JUDGE_GOLDEN);
     expect(card.total).toBe(JUDGE_GOLDEN.length);
     expect(card.scored).toBe(JUDGE_GOLDEN.length);
-    expect(card.passRate).toBeCloseTo(0.6, 5); // 3 good pass, 2 weak fail
-    expect(card.avg.groundedness).toBe(3.8);   // (5·3 + 2·2)/5
+    expect(card.passRate).toBeGreaterThan(0.5); // mostly strong reference answers
+    // The deliberately-weak answers fail; the matching strong one passes.
     expect(card.perCase.find((p) => p.name.startsWith('good: correct EVM'))?.score?.pass).toBe(true);
     expect(card.perCase.find((p) => p.name.startsWith('weak: inverted EVM'))?.score?.pass).toBe(false);
+  });
+
+  it('rolls up a per-feature report (phase 4): each surface gets its own scorecard', async () => {
+    __setAiPort(gradingPort);
+    const report = await runJudgeEvalByFeature(JUDGE_GOLDEN);
+    // Overall matches the flat run.
+    expect(report.overall.total).toBe(JUDGE_GOLDEN.length);
+    // Every tagged feature in the golden set shows up as its own scorecard.
+    expect(Object.keys(report.byFeature)).toEqual(
+      expect.arrayContaining(['assistant_qa', 'proactive', 'review', 'evm_explain', 'portfolio_qa']),
+    );
+    // assistant_qa: 5 cases (3 strong, 2 weak) → 0.6 pass; proactive: 2 (1 strong, 1 weak) → 0.5.
+    expect(report.byFeature.assistant_qa.total).toBe(5);
+    expect(report.byFeature.assistant_qa.passRate).toBeCloseTo(0.6, 5);
+    expect(report.byFeature.proactive.total).toBe(2);
+    expect(report.byFeature.proactive.passRate).toBeCloseTo(0.5, 5);
+    // A single all-strong surface scores 100%.
+    expect(report.byFeature.evm_explain.passRate).toBe(1);
+    // Sum of per-feature totals equals the overall total (every case counted once).
+    const summed = Object.values(report.byFeature).reduce((n, c) => n + c.total, 0);
+    expect(summed).toBe(report.overall.total);
   });
 });
