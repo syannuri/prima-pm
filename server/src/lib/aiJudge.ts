@@ -59,7 +59,9 @@ export async function judgeAnswer(input: { question: string; answer: string; con
   return { groundedness, helpfulness, clarity, overall, pass: overall >= JUDGE_PASS, rationale: String(raw.rationale ?? '') };
 }
 
-export interface JudgeCase { name: string; question: string; answer: string; context?: string }
+// A golden case; `feature` (optional) tags it to a generative surface so the offline report can score
+// each feature separately (phase 4) — mirrors the live AiJudgeSample.feature breakdown.
+export interface JudgeCase { name: string; question: string; answer: string; context?: string; feature?: string }
 export interface JudgeScorecard {
   total: number;
   scored: number; // cases the judge actually returned a score for
@@ -68,16 +70,24 @@ export interface JudgeScorecard {
   perCase: { name: string; score: JudgeScore | null }[];
 }
 
-// Run the judge over a set of (question, answer) cases and aggregate a scorecard. Unscored cases (judge
-// declined) are excluded from the averages but counted in `total`.
-export async function runJudgeEval(cases: JudgeCase[]): Promise<JudgeScorecard> {
-  const perCase: { name: string; score: JudgeScore | null }[] = [];
+// One judged case, carrying its feature tag for the per-feature roll-up.
+interface JudgedCase { name: string; feature?: string; score: JudgeScore | null }
+
+// Judge every case once (sequential — the judge is a model call). Unscored = judge declined/failed.
+async function judgeAll(cases: JudgeCase[]): Promise<JudgedCase[]> {
+  const out: JudgedCase[] = [];
   for (const c of cases) {
     let score: JudgeScore | null = null;
     try { score = await judgeAnswer({ question: c.question, answer: c.answer, context: c.context }); } catch { score = null; }
-    perCase.push({ name: c.name, score });
+    out.push({ name: c.name, feature: c.feature, score });
   }
-  const scores = perCase.map((p) => p.score).filter((s): s is JudgeScore => s != null);
+  return out;
+}
+
+// Aggregate judged cases into a scorecard. Unscored cases are excluded from the averages but counted in
+// `total`. Pure — no model/I/O — so it's shared by the overall and per-feature roll-ups.
+function aggregate(total: number, judged: JudgedCase[]): JudgeScorecard {
+  const scores = judged.map((p) => p.score).filter((s): s is JudgeScore => s != null);
   const n = scores.length || 1;
   const sum = (sel: (s: JudgeScore) => number) => scores.reduce((a, s) => a + sel(s), 0);
   const avg = {
@@ -87,5 +97,31 @@ export async function runJudgeEval(cases: JudgeCase[]): Promise<JudgeScorecard> 
     overall: Math.round((sum((s) => s.overall) / n) * 100) / 100,
   };
   const passRate = scores.length ? scores.filter((s) => s.pass).length / scores.length : 0;
-  return { total: cases.length, scored: scores.length, avg, passRate, perCase };
+  return { total, scored: scores.length, avg, passRate, perCase: judged.map(({ name, score }) => ({ name, score })) };
+}
+
+// Run the judge over a set of (question, answer) cases and aggregate a single scorecard.
+export async function runJudgeEval(cases: JudgeCase[]): Promise<JudgeScorecard> {
+  return aggregate(cases.length, await judgeAll(cases));
+}
+
+// Per-feature offline report (phase 4): judge every case ONCE, then roll up both an overall scorecard
+// and one scorecard per `feature` tag — a pre-ship quality signal per generative surface that does NOT
+// depend on live traffic. Untagged cases fall under 'unknown'.
+export interface JudgeFeatureReport {
+  overall: JudgeScorecard;
+  byFeature: Record<string, JudgeScorecard>;
+}
+export async function runJudgeEvalByFeature(cases: JudgeCase[]): Promise<JudgeFeatureReport> {
+  const judged = await judgeAll(cases);
+  const groups = new Map<string, JudgedCase[]>();
+  for (const j of judged) {
+    const key = j.feature ?? 'unknown';
+    const g = groups.get(key) ?? [];
+    if (g.length === 0) groups.set(key, g);
+    g.push(j);
+  }
+  const byFeature: Record<string, JudgeScorecard> = {};
+  for (const [feat, g] of groups) byFeature[feat] = aggregate(g.length, g);
+  return { overall: aggregate(cases.length, judged), byFeature };
 }
