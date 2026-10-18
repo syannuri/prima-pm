@@ -309,6 +309,7 @@ function liveAiPort(): AiPort {
       // Structured output (constrains to valid JSON) + adaptive thinking (light reasoning) + medium
       // effort (cost/quality balance). System prompt is stable per feature ⇒ prompt-cached.
       const modern = supportsModernThinking(model);
+      const startedAt = Date.now();
       const res = await client.messages.create({
         model,
         max_tokens: maxTokens ?? 2000,
@@ -320,7 +321,7 @@ function liveAiPort(): AiPort {
         system: [{ type: 'text', text: redactor.redact(system), cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: redactor.redact(user) }],
       });
-      await recordAiUsage({ feature: feature ?? 'unknown', model, usage: res.usage });
+      await recordAiUsage({ feature: feature ?? 'unknown', model, usage: res.usage, latencyMs: Date.now() - startedAt });
       // Guard the refusal stop reason BEFORE reading content (empty/partial on a refusal).
       if (res.stop_reason === 'refusal') return null;
       const text = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
@@ -356,6 +357,7 @@ function liveAiPort(): AiPort {
       // appends the tool-limit nudge (uncached — the cache segments keep their breakpoints).
       const callStep = async (m: Anthropic.MessageParam[], { withTools, synthesis }: { withTools: boolean; synthesis: boolean }): Promise<LoopStep> => {
         const sys = synthesis ? appendSynthesisNudge(system) : system;
+        const startedAt = Date.now();
         const stream = client.messages.stream({
           model,
           max_tokens: maxTokens,
@@ -372,7 +374,7 @@ function liveAiPort(): AiPort {
         if (onThinking) stream.on('thinking', (delta) => onThinking(delta));
         const res = await stream.finalMessage();
         // Record every step of the loop (each is a billed API call), incl. the #3 synthesis call.
-        await recordAiUsage({ feature: feature ?? 'assistant_qa', model, usage: res.usage });
+        await recordAiUsage({ feature: feature ?? 'assistant_qa', model, usage: res.usage, latencyMs: Date.now() - startedAt });
         onUsage?.(res.usage as RawUsage); // #5 cost meter: surface this step's tokens to the caller
         return { stopReason: res.stop_reason, content: res.content };
       };
