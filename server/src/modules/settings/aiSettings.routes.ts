@@ -78,7 +78,8 @@ router.get(
   '/judge-trend',
   asyncHandler(async (req, res) => {
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
-    res.json(await getJudgeTrend({ role: req.user!.role }, { days }));
+    const feature = typeof req.query.feature === 'string' ? req.query.feature : null;
+    res.json(await getJudgeTrend({ role: req.user!.role }, { days, feature }));
   }),
 );
 
