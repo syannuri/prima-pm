@@ -1336,6 +1336,8 @@ model AiUsage {
   cacheCreationTokens Int @default(0) // prompt-cache WRITE (billed ~1.25x input)
   cacheReadTokens     Int @default(0) // prompt-cache READ (billed ~0.1x input)
 
+  latencyMs Int? // wall-clock ms of the model call (phase 5); null for pre-existing rows / untimed paths
+
   // Optional attribution (denormalized, no FK — mirrors other AI author fields).
   userId    String?
   projectId String?

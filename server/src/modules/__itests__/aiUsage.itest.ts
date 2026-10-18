@@ -42,8 +42,8 @@ beforeAll(async () => {
 
   // Tenant A: two opus calls (assistant_qa + cr_impact). Tenant B: one call that must NOT leak into A.
   await runWithTenant(tidA, async () => {
-    await prisma.aiUsage.create({ data: { tenantId: tidA, feature: 'assistant_qa', model: 'claude-opus-4-8', inputTokens: 1_000_000, outputTokens: 200_000, cacheCreationTokens: 0, cacheReadTokens: 0 } });
-    await prisma.aiUsage.create({ data: { tenantId: tidA, feature: 'cr_impact', model: 'claude-opus-4-8', inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 1_000_000 } });
+    await prisma.aiUsage.create({ data: { tenantId: tidA, feature: 'assistant_qa', model: 'claude-opus-4-8', inputTokens: 1_000_000, outputTokens: 200_000, cacheCreationTokens: 0, cacheReadTokens: 0, latencyMs: 1000 } });
+    await prisma.aiUsage.create({ data: { tenantId: tidA, feature: 'cr_impact', model: 'claude-opus-4-8', inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 1_000_000, latencyMs: 3000 } });
   });
   await runWithTenant(tidB, async () => {
     await prisma.aiUsage.create({ data: { tenantId: tidB, feature: 'assistant_qa', model: 'claude-opus-4-8', inputTokens: 5_000_000, outputTokens: 5_000_000, cacheCreationTokens: 0, cacheReadTokens: 0 } });
@@ -68,6 +68,19 @@ describe('/ai-usage/summary', () => {
     expect(res.body.totals.estimatedCostUsd).toBeCloseTo(10.5, 5);
     const features = res.body.byFeature.map((b: { key: string }) => b.key).sort();
     expect(features).toEqual(['assistant_qa', 'cr_impact']);
+  });
+
+  it('computes p50/p95 call latency per feature and overall (phase 5)', async () => {
+    const res = await request(app).get(api('/ai-usage/summary?window=30d')).set(bearer(adminToken));
+    expect(res.status).toBe(200);
+    // Tenant A latencies: assistant_qa=1000ms, cr_impact=3000ms → overall p50=1000, p95=3000.
+    expect(res.body.totals.p50LatencyMs).toBe(1000);
+    expect(res.body.totals.p95LatencyMs).toBe(3000);
+    const qa = res.body.byFeature.find((b: { key: string }) => b.key === 'assistant_qa');
+    expect(qa.p50LatencyMs).toBe(1000);
+    expect(qa.p95LatencyMs).toBe(1000);
+    const cr = res.body.byFeature.find((b: { key: string }) => b.key === 'cr_impact');
+    expect(cr.p50LatencyMs).toBe(3000);
   });
 
   it('defaults to the calendar-month window', async () => {

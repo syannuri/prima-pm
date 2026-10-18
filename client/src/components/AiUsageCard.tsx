@@ -17,6 +17,8 @@ interface Bucket {
   cacheCreationTokens: number;
   cacheReadTokens: number;
   estimatedCostUsd: number;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
 }
 interface Summary {
   window: string;
@@ -47,17 +49,23 @@ const T = {
     month: 'Bulan ini', d30: '30 hari', estCost: 'Estimasi biaya', calls: 'panggilan', tokens: 'token',
     inTok: 'Input', outTok: 'Output', cache: 'Cache', feature: 'Fitur', empty: 'Belum ada penggunaan AI pada periode ini. Angka akan terisi otomatis saat fitur AI dipakai.',
     estimate: 'Estimasi — bukan tagihan resmi.', budget: 'Anggaran AI bulan ini', ofCap: 'dari',
+    latency: 'Latensi p50/p95',
   },
   en: {
     title: 'AI usage & cost', sub: 'Workspace-wide — tokens & estimated cost of Claude calls. The cost figure is an ESTIMATE from per-token pricing, not a bill.',
     month: 'This month', d30: '30 days', estCost: 'Estimated cost', calls: 'calls', tokens: 'tokens',
     inTok: 'Input', outTok: 'Output', cache: 'Cache', feature: 'Feature', empty: 'No AI usage in this window yet. Figures fill in automatically as AI features are used.',
     estimate: 'Estimate — not an official bill.', budget: 'AI budget this month', ofCap: 'of',
+    latency: 'Latency p50/p95',
   },
 };
 
 const fmtInt = (n: number) => n.toLocaleString();
 const fmtUsd = (n: number) => `$${n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2)}`;
+// Latency: null → "—"; ≥1s shown in seconds, else milliseconds.
+const fmtMs = (n: number | null) => (n == null ? '—' : n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${Math.round(n)}ms`);
+const fmtLatency = (b: { p50LatencyMs: number | null; p95LatencyMs: number | null }) =>
+  b.p50LatencyMs == null ? '—' : `${fmtMs(b.p50LatencyMs)} / ${fmtMs(b.p95LatencyMs)}`;
 
 export default function AiUsageCard() {
   const { lang } = useLang();
@@ -113,7 +121,7 @@ export default function AiUsageCard() {
         <p className="py-4 text-sm text-slate-500 dark:text-slate-400">{t.empty}</p>
       ) : (
         <div className="mt-3 space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <div className="rounded-xl bg-violet-50 p-3 dark:bg-violet-900/20">
               <div className="text-2xl font-semibold text-violet-700 dark:text-violet-300">{fmtUsd(totals.estimatedCostUsd)}</div>
               <div className="text-xs text-slate-500 dark:text-slate-400">{t.estCost}</div>
@@ -130,6 +138,10 @@ export default function AiUsageCard() {
               <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{fmtInt(cacheTok)}</div>
               <div className="text-xs text-slate-500 dark:text-slate-400">{t.cache} {t.tokens}</div>
             </div>
+            <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+              <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{fmtLatency(totals)}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t.latency}</div>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
@@ -139,6 +151,7 @@ export default function AiUsageCard() {
                   <th className="px-3 py-2 font-medium">{t.feature}</th>
                   <th className="px-3 py-2 text-right font-medium">{t.calls}</th>
                   <th className="px-3 py-2 text-right font-medium">{t.tokens}</th>
+                  <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">{t.latency}</th>
                   <th className="px-3 py-2 text-right font-medium">{t.estCost}</th>
                 </tr>
               </thead>
@@ -148,6 +161,7 @@ export default function AiUsageCard() {
                     <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{FEATURE_LABEL[lang][b.key] ?? b.key}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{fmtInt(b.calls)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{fmtInt(b.inputTokens + b.outputTokens + b.cacheCreationTokens + b.cacheReadTokens)}</td>
+                    <td className="hidden px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300 sm:table-cell">{fmtLatency(b)}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">{fmtUsd(b.estimatedCostUsd)}</td>
                   </tr>
                 ))}

@@ -42,6 +42,7 @@ export async function recordAiUsage(input: {
   feature: AiFeature;
   model: string;
   usage: RawUsage | null | undefined;
+  latencyMs?: number | null; // wall-clock of the model call (phase 5); omit on untimed paths
   userId?: string | null;
   projectId?: string | null;
 }): Promise<void> {
@@ -57,6 +58,7 @@ export async function recordAiUsage(input: {
         outputTokens: u.output_tokens ?? 0,
         cacheCreationTokens: u.cache_creation_input_tokens ?? 0,
         cacheReadTokens: u.cache_read_input_tokens ?? 0,
+        latencyMs: input.latencyMs != null && Number.isFinite(input.latencyMs) ? Math.round(input.latencyMs) : null,
         userId: input.userId ?? null,
         projectId: input.projectId ?? null,
       },
@@ -86,6 +88,15 @@ export interface UsageBucket {
   cacheCreationTokens: number;
   cacheReadTokens: number;
   estimatedCostUsd: number;
+  p50LatencyMs: number | null; // median call latency (phase 5); null when no timed calls in the bucket
+  p95LatencyMs: number | null; // 95th-percentile call latency; null when no timed calls
+}
+
+// Nearest-rank percentile over an ascending-sorted array. Null for an empty set. p∈[0,100].
+function percentile(sortedAsc: number[], p: number): number | null {
+  if (sortedAsc.length === 0) return null;
+  const idx = Math.min(sortedAsc.length - 1, Math.max(0, Math.ceil((p / 100) * sortedAsc.length) - 1));
+  return sortedAsc[idx];
 }
 
 export interface UsageSummary {
@@ -103,22 +114,26 @@ export async function summarizeTenantUsage(since: Date): Promise<UsageSummary> {
     select: {
       feature: true, model: true,
       inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true,
+      latencyMs: true,
     },
   });
   return rollup(rows, since);
 }
 
+type UsageRow = { feature: string; model: string; inputTokens: number; outputTokens: number; cacheCreationTokens: number; cacheReadTokens: number; latencyMs?: number | null };
+
 // Shared roll-up used by both the tenant and (platform) system-wide summaries.
-export function rollup(
-  rows: Array<{ feature: string; model: string; inputTokens: number; outputTokens: number; cacheCreationTokens: number; cacheReadTokens: number }>,
-  since: Date,
-): UsageSummary {
+export function rollup(rows: UsageRow[], since: Date): UsageSummary {
   const byFeature = new Map<string, UsageBucket>();
   const byModel = new Map<string, UsageBucket>();
-  const totals: Omit<UsageBucket, 'key'> = { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, estimatedCostUsd: 0 };
+  // Latency samples collected per key (+ overall) so we can compute p50/p95 after the pass.
+  const latByFeature = new Map<string, number[]>();
+  const latByModel = new Map<string, number[]>();
+  const latTotal: number[] = [];
+  const totals: Omit<UsageBucket, 'key'> = { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, estimatedCostUsd: 0, p50LatencyMs: null, p95LatencyMs: null };
 
-  const bump = (map: Map<string, UsageBucket>, key: string, r: typeof rows[number], cost: number) => {
-    const b = map.get(key) ?? { key, calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, estimatedCostUsd: 0 };
+  const bump = (map: Map<string, UsageBucket>, key: string, r: UsageRow, cost: number) => {
+    const b = map.get(key) ?? { key, calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, estimatedCostUsd: 0, p50LatencyMs: null, p95LatencyMs: null };
     b.calls += 1;
     b.inputTokens += r.inputTokens;
     b.outputTokens += r.outputTokens;
@@ -126,6 +141,11 @@ export function rollup(
     b.cacheReadTokens += r.cacheReadTokens;
     b.estimatedCostUsd += cost;
     map.set(key, b);
+  };
+  const pushLat = (map: Map<string, number[]>, key: string, lat: number) => {
+    const a = map.get(key) ?? [];
+    if (a.length === 0) map.set(key, a);
+    a.push(lat);
   };
 
   for (const r of rows) {
@@ -138,7 +158,26 @@ export function rollup(
     totals.estimatedCostUsd += cost;
     bump(byFeature, r.feature, r, cost);
     bump(byModel, r.model, r, cost);
+    if (r.latencyMs != null) {
+      latTotal.push(r.latencyMs);
+      pushLat(latByFeature, r.feature, r.latencyMs);
+      pushLat(latByModel, r.model, r.latencyMs);
+    }
   }
+
+  // Attach p50/p95 to each bucket from its collected latency samples.
+  const attachLatency = (map: Map<string, UsageBucket>, latMap: Map<string, number[]>) => {
+    for (const [key, b] of map) {
+      const arr = (latMap.get(key) ?? []).slice().sort((x, y) => x - y);
+      b.p50LatencyMs = percentile(arr, 50);
+      b.p95LatencyMs = percentile(arr, 95);
+    }
+  };
+  attachLatency(byFeature, latByFeature);
+  attachLatency(byModel, latByModel);
+  const latTotalSorted = latTotal.slice().sort((x, y) => x - y);
+  totals.p50LatencyMs = percentile(latTotalSorted, 50);
+  totals.p95LatencyMs = percentile(latTotalSorted, 95);
 
   const sort = (a: UsageBucket, b: UsageBucket) => b.estimatedCostUsd - a.estimatedCostUsd;
   return {
