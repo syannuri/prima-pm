@@ -1105,16 +1105,9 @@ export default function AiAssistant() {
                     ))}
                   </div>
                 )}
-                {/* 🧠 Domain-expert persona(s) Anett adopted for this (technical-domain) project */}
-                {i !== streamIdx && t.personas && t.personas.length > 0 && (
-                  <div className="ml-10 mt-1.5 flex flex-wrap gap-1.5">
-                    {t.personas.map((p) => (
-                      <span key={p.id} className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300">
-                        🧠 {L.personaMode}: {p.label}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {/* Domain-expert persona runs in the BACKGROUND only — it shapes the answer server-side
+                    but the "Mode: …" chip is intentionally hidden (user request). Persona data still
+                    flows in `t.personas`; just not surfaced in the UI. */}
                 {/* Data query result — a table Anett built from a natural-language question + CSV export */}
                 {i !== streamIdx && t.tables && t.tables.map((tbl, k) => (
                   <div key={k} className="ml-10 mt-1.5 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
