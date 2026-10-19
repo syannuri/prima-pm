@@ -53,6 +53,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     : path.startsWith('/admin/settings') ? (id ? 'Pengaturan Platform' : 'Platform settings')
     : path === '/settings' ? 'Settings'
     : path === '/manual' ? 'Manual'
+    : path === '/notifications' ? (id ? 'Notifikasi' : 'Notifications')
     : '';
   // A page can publish a contextual mobile title (e.g. ProjectPage → the project name) that overrides
   // the generic route title above. Falls back to pageTitle when none is set.

@@ -112,8 +112,8 @@ export default function SettingsPage() {
 
   return (
     <div className="pb-12">
-      {/* Page title. */}
-      <div className="mb-6">
+      {/* Page title — redundant on phones (top bar shows "Settings") → desktop-only. */}
+      <div className="mb-6 hidden sm:block">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{lang === 'id' ? 'Pengaturan' : 'Settings'}</h1>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
           {lang === 'id' ? 'Kelola akun dan workspace Anda' : 'Manage your account and workspace'}
