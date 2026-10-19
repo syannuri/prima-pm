@@ -419,9 +419,9 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 
 /* Floating frosted bottom tab bar + a soft radial glow behind the active tab's icon. */
 .m-tabbar {
-  background: rgba(255, 255, 255, 0.82);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
-          backdrop-filter: blur(22px) saturate(1.4);
+  background: rgba(255, 255, 255, 0.58);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+          backdrop-filter: blur(24px) saturate(1.6);
 }
 .dark .m-tabbar { background: rgba(14, 19, 38, 0.72); }
 .m-tab-glow::after {

@@ -89,7 +89,7 @@ export default function MobileDashboard() {
   return (
     <div className="space-y-3">
       {/* Hero — a progress-ring health dial with side stats (per the Mobile v2 prototype). */}
-      <div className={`relative overflow-hidden rounded-3xl p-4 shadow-lg ring-1 sm:p-5 ${light ? 'bg-gradient-to-br from-white to-slate-50 text-slate-900 ring-slate-200' : 'bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-950 text-white ring-white/10'}`}>
+      <div className={`relative overflow-hidden rounded-3xl p-4 shadow-lg ring-1 backdrop-blur-xl sm:p-5 ${light ? 'bg-gradient-to-br from-white/55 to-white/20 text-slate-900 ring-white/60' : 'bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-950 text-white ring-white/10'}`}>
         {/* Ambient violet glow top-right for the premium prism feel. */}
         <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: '#7c3aed', opacity: light ? 0.1 : 0.3 }} />
         <div className="relative flex items-center justify-between gap-2">
@@ -147,7 +147,7 @@ export default function MobileDashboard() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className={`prima-rise relative block overflow-hidden rounded-2xl border bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm transition active:scale-[.99] dark:from-white/[0.07] dark:to-white/[0.03] dark:backdrop-blur-xl ${pinned.has(p.id) ? 'border-amber-300 ring-2 ring-amber-400/50 dark:border-amber-500/40' : 'border-slate-200 ring-1 ring-black/[0.05] dark:border-white/10 dark:ring-white/[0.04]'}`}
+                className={`prima-rise relative block overflow-hidden rounded-2xl border bg-gradient-to-b from-white/45 to-white/15 p-4 shadow-sm backdrop-blur-xl transition active:scale-[.99] dark:from-white/[0.07] dark:to-white/[0.03] ${pinned.has(p.id) ? 'border-amber-300 ring-2 ring-amber-400/50 dark:border-amber-500/40' : 'border-white/60 ring-1 ring-black/[0.04] dark:border-white/10 dark:ring-white/[0.04]'}`}
                 style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
               >
                 {/* Top sheen — unifies with the quick-action + KPI tiles. */}
@@ -238,7 +238,7 @@ function HeroStat({ light, label, value, frac }: { light: boolean; label: string
 // A KPI tile: a status dot + uppercase label, a big colour-coded value, and a muted sub-line.
 function KpiTile({ label, value, sub, dot, valueCls }: { label: string; value: string; sub?: string; dot: string; valueCls: string }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-white/10 dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/[0.04] dark:backdrop-blur-xl">
+    <div className="relative overflow-hidden rounded-2xl border border-white/60 bg-gradient-to-b from-white/45 to-white/15 p-4 shadow-sm ring-1 ring-black/[0.04] backdrop-blur-xl dark:border-white/10 dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/[0.04]">
       {/* Top sheen — matches the KPI/project tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
       <div className="relative flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">

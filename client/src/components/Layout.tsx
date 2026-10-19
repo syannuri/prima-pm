@@ -96,7 +96,15 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarContext.Provider value={sidebarCtx}>
-    <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-violet-100 dark:bg-slate-950">
+      {/* PROTOTYPE light-glass ambient — a vivid colourful aurora mesh behind the frosted cards (phones, light only). */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 block overflow-hidden dark:hidden md:hidden">
+        <div className="absolute -right-8 -top-12 h-80 w-80 rounded-full bg-violet-500/60 blur-3xl" />
+        <div className="absolute left-[-12%] top-[20%] h-80 w-80 rounded-full bg-sky-500/55 blur-3xl" />
+        <div className="absolute left-1/4 top-[45%] h-80 w-80 rounded-full bg-fuchsia-400/55 blur-3xl" />
+        <div className="absolute -left-8 bottom-2 h-80 w-80 rounded-full bg-indigo-400/55 blur-3xl" />
+        <div className="absolute right-[-6%] bottom-[22%] h-72 w-72 rounded-full bg-cyan-400/50 blur-3xl" />
+      </div>
       {/* Mobile-only "Aurora Glass" ambient — soft violet/cyan blobs behind all content for depth
           (dark phones only; purely decorative, non-interactive). Matches the mobile-v2 design. */}
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden dark:max-md:block">
@@ -118,7 +126,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className={`z-10 flex shrink-0 items-center gap-2 border-b px-4 transition-colors duration-200 ${platform ? 'border-violet-400/20 bg-indigo-950' : 'border-slate-200 bg-white dark:border-black/20 dark:bg-slate-800'}`}
+          className={`z-10 flex shrink-0 items-center gap-2 border-b px-4 backdrop-blur-xl transition-colors duration-200 ${platform ? 'border-violet-400/20 bg-indigo-950' : 'border-white/40 bg-white/50 dark:border-black/20 dark:bg-slate-800 dark:backdrop-blur-none'}`}
           style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
         >
           {/* Phones: initials avatar (account/settings) sits top-left. */}
