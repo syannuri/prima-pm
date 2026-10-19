@@ -55,8 +55,8 @@ export default function CashflowChart({ periods, eacLikely }: { periods: Cashflo
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
           {mode === 'period' ? (
             <>
               <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-sm" style={{ background: PLAN }} />{id ? 'Rencana' : 'Planned'}</span>
@@ -72,7 +72,7 @@ export default function CashflowChart({ periods, eacLikely }: { periods: Cashflo
             </>
           )}
         </div>
-        <div className="flex gap-1">{btn('period', id ? 'Per periode' : 'Per period')}{btn('cumulative', id ? 'Kumulatif' : 'Cumulative')}</div>
+        <div className="flex shrink-0 gap-1">{btn('period', id ? 'Per periode' : 'Per period')}{btn('cumulative', id ? 'Kumulatif' : 'Cumulative')}</div>
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Cash-flow chart">
