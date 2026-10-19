@@ -67,16 +67,16 @@ export default function MobileTabBar() {
     >
       {left.map((t) => <TabItem key={t.label} t={t} />)}
 
-      {/* Raised centre FAB — the Anett AI assistant (prototype's prism ✦), lifted above the bar. */}
-      <div className="relative flex justify-center">
+      {/* Centre FAB — the Anett AI assistant (prototype's prism ✦), seated in the middle of the bar. */}
+      <div className="flex items-center justify-center self-stretch">
         <button
           onClick={onFab}
           aria-label={aiOn ? 'Anett AI Assistant' : (id ? 'Proyek baru' : 'New project')}
           title={aiOn ? 'Anett AI Assistant' : (id ? 'Proyek baru' : 'New project')}
-          className="absolute -top-7 grid h-[58px] w-[58px] place-items-center rounded-[20px] bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-400 text-white shadow-[0_10px_28px_-6px_rgba(99,102,241,0.8)] ring-1 ring-white/30 transition-transform duration-150 ease-out active:scale-90"
+          className="relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-400 text-white shadow-lg shadow-violet-600/40 ring-1 ring-white/30 transition-transform duration-150 ease-out active:scale-90"
         >
-          <span aria-hidden className="pointer-events-none absolute inset-x-2 top-1.5 h-1/2 rounded-[14px] bg-gradient-to-b from-white/45 to-transparent" />
-          <svg viewBox="0 0 24 24" className="relative h-8 w-8 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]" fill="currentColor"><path d={SPARK} /></svg>
+          <span aria-hidden className="pointer-events-none absolute inset-x-1.5 top-1 h-1/2 rounded-[12px] bg-gradient-to-b from-white/45 to-transparent" />
+          <svg viewBox="0 0 24 24" className="relative h-7 w-7 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]" fill="currentColor"><path d={SPARK} /></svg>
         </button>
       </div>
 
