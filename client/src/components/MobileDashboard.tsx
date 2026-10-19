@@ -112,10 +112,10 @@ export default function MobileDashboard() {
       {/* KPI tiles — the portfolio's four headline figures (prototype): schedule & cost indices,
           earned value, and the count of slipped projects. Each carries a status dot + muted sub-line. */}
       <div className="grid grid-cols-2 gap-3">
-        <KpiTile label={id ? 'Portfolio SPI' : 'Portfolio SPI'} value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-400' : 'text-emerald-400'} sub={id ? (spiBehind ? 'jadwal · di bawah 1.0' : 'jadwal · sehat') : (spiBehind ? 'schedule · below 1.0' : 'schedule · healthy')} />
-        <KpiTile label={id ? 'Portfolio CPI' : 'Portfolio CPI'} value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-400' : 'text-emerald-400'} sub={id ? (cpiBad ? 'biaya · di bawah 1.0' : 'biaya · sehat') : (cpiBad ? 'cost · below 1.0' : 'cost · healthy')} />
+        <KpiTile label={id ? 'Portfolio SPI' : 'Portfolio SPI'} value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? (spiBehind ? 'jadwal · di bawah 1.0' : 'jadwal · sehat') : (spiBehind ? 'schedule · below 1.0' : 'schedule · healthy')} />
+        <KpiTile label={id ? 'Portfolio CPI' : 'Portfolio CPI'} value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? (cpiBad ? 'biaya · di bawah 1.0' : 'biaya · sehat') : (cpiBad ? 'cost · below 1.0' : 'cost · healthy')} />
         <KpiTile label={id ? 'Earned value' : 'Earned value'} value={formatIdrShort(t.ev)} dot="#22c55e" valueCls="text-slate-800 dark:text-white" sub={`${id ? 'dari' : 'of'} ${formatIdrShort(t.bac)}`} />
-        <KpiTile label={id ? 'Slipped' : 'Slipped'} value={String(offTrack)} dot={offTrack > 0 ? '#fb7185' : '#64748b'} valueCls={offTrack > 0 ? 'text-rose-400' : 'text-slate-700 dark:text-slate-200'} sub={id ? 'butuh perhatian' : 'need attention'} />
+        <KpiTile label={id ? 'Slipped' : 'Slipped'} value={String(offTrack)} dot={offTrack > 0 ? '#fb7185' : '#64748b'} valueCls={offTrack > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'} sub={id ? 'butuh perhatian' : 'need attention'} />
       </div>
 
       {/* Needs attention — the action queues (each renders nothing when empty) */}

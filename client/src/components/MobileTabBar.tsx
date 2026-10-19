@@ -61,7 +61,7 @@ export default function MobileTabBar() {
 
   return (
     <nav
-      className="m-tabbar fixed inset-x-3 z-30 grid grid-cols-5 items-end rounded-[26px] border border-white/10 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.7)] md:hidden"
+      className="m-tabbar fixed inset-x-3 z-30 grid grid-cols-5 items-end rounded-[26px] border border-slate-200/80 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.25)] dark:border-white/10 dark:shadow-[0_18px_50px_-12px_rgba(0,0,0,0.7)] md:hidden"
       style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       aria-label="Primary"
     >
@@ -91,7 +91,7 @@ function TabItem({ t }: { t: { to: string; label: string; icon: string; iconFill
       to={t.to}
       onClick={() => haptic()}
       aria-current={t.active ? 'page' : undefined}
-      className={`group relative flex select-none flex-col items-center gap-1 py-2.5 transition-colors ${t.active ? 'text-white' : 'text-slate-400'}`}
+      className={`group relative flex select-none flex-col items-center gap-1 py-2.5 transition-colors ${t.active ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
     >
       {/* Soft radial gradient glow behind the active icon (replaces the flat iOS tint). */}
       <span className={`relative grid place-items-center ${t.active ? 'm-tab-glow' : ''}`}>
@@ -116,7 +116,7 @@ function TabItem({ t }: { t: { to: string; label: string; icon: string; iconFill
           <path d={t.active ? t.iconFill : t.icon} fillRule={t.active ? 'evenodd' : undefined} clipRule={t.active ? 'evenodd' : undefined} />
         </svg>
         {t.badge > 0 && (
-          <span className="absolute -right-2 -top-1 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-slate-900">
+          <span className="absolute -right-2 -top-1 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-slate-900">
             {t.badge > 9 ? '9+' : t.badge}
           </span>
         )}

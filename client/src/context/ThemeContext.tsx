@@ -39,7 +39,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mql.removeEventListener?.('change', on);
   }, []);
 
-  const effective: Theme = mobile ? 'dark' : theme; // mobile is forced dark
+  // PROTOTYPE: a localStorage opt-in (`prima_mobile_light=1`) lets phones use light mode so the
+  // light-mode design can be evaluated. Without the flag, phones stay forced-dark as before.
+  const mobileLightPreview = typeof localStorage !== 'undefined' && localStorage.getItem('prima_mobile_light') === '1';
+  const effective: Theme = mobile && !mobileLightPreview ? 'dark' : theme; // mobile is forced dark unless the preview flag is set
   useEffect(() => {
     document.documentElement.classList.toggle('dark', effective === 'dark');
   }, [effective]);
