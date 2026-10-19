@@ -520,7 +520,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
   // Mobile: replace the cramped horizontal tab strip with a single "Sections" trigger that opens a
   // bottom-sheet picker — one tap to any section, and it surfaces EVERY section (the old strip hid
   // several). Hooks above always run, so this conditional return doesn't break the Rules of Hooks.
-  if (isMobile) return <MobileSectionNav groups={groups} activeTab={activeTab} changeCount={changeCount} onSelect={onSelect} />;
+  if (isMobile) return <MobileSectionNav groups={groups} activeTab={activeTab} onSelect={onSelect} />;
 
   return (
     // Freeze the whole tab strip at the top of the scroll area so it stays visible while the
@@ -568,7 +568,7 @@ function GroupedTabs({ tabs, activeTab, changeCount, isMobile, onSelect }: { tab
 // Mobile section nav = a slim sticky trigger (shows the current section) that opens an OFF-CANVAS
 // SIDEBAR drawer sliding in from the left with every section grouped by domain. The menu is hidden by
 // default so project content fills the screen; one tap jumps to any section.
-function MobileSectionNav({ groups, activeTab, changeCount, onSelect }: { groups: { label: string; tabs: Tab[] }[]; activeTab: Tab; changeCount: number; onSelect: (t: Tab) => void }) {
+function MobileSectionNav({ groups, activeTab, onSelect }: { groups: { label: string; tabs: Tab[] }[]; activeTab: Tab; onSelect: (t: Tab) => void }) {
   const [open, setOpen] = useState(false);
   const { lang } = useLang();
   const tabLabel = (t: Tab) => (t === 'Schedule' ? 'Timeline' : t);
@@ -601,7 +601,6 @@ function MobileSectionNav({ groups, activeTab, changeCount, onSelect }: { groups
           </span>
           <span aria-hidden className="text-base">{TAB_ICONS[activeTab]}</span>
           <span className="min-w-0 truncate text-sm font-bold text-slate-800 dark:text-slate-100">{tabLabel(activeTab)}</span>
-          {changeCount > 0 && <span className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">{changeCount}</span>}
           <span className="ml-auto shrink-0 text-xs text-slate-400 dark:text-slate-500">{lang === 'id' ? 'bagian ›' : 'sections ›'}</span>
         </button>
       </div>
@@ -637,7 +636,6 @@ function MobileSectionNav({ groups, activeTab, changeCount, onSelect }: { groups
                     >
                       <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm ${active ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800'}`}>{TAB_ICONS[t]}</span>
                       <span className="min-w-0 truncate">{tabLabel(t)}</span>
-                      {t === 'Audit' && changeCount > 0 && <span className={`ml-auto grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full px-1 text-xs font-semibold ${active ? 'bg-white/25' : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'}`}>{changeCount}</span>}
                     </button>
                   );
                 })}
