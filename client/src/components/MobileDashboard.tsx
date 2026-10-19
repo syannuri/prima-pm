@@ -105,9 +105,9 @@ export default function MobileDashboard() {
   const actionCols = actions.length >= 3 ? 'grid-cols-3' : actions.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Hero — light mode: bright card + flat arc gauge; dark mode: premium speedometer dial. */}
-      <div className={`relative overflow-hidden rounded-3xl p-5 shadow-lg ring-1 ${light ? 'bg-gradient-to-br from-white to-slate-50 text-slate-900 ring-slate-200' : 'bg-gradient-to-br from-slate-900 to-slate-950 text-white ring-white/10'}`}>
+      <div className={`relative overflow-hidden rounded-3xl p-4 shadow-lg ring-1 sm:p-5 ${light ? 'bg-gradient-to-br from-white to-slate-50 text-slate-900 ring-slate-200' : 'bg-gradient-to-br from-slate-900 to-slate-950 text-white ring-white/10'}`}>
         {/* Health-tinted glow so the card still signals RAG at a glance. */}
         <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 h-48 w-48 rounded-full blur-2xl" style={{ backgroundColor: RAG[status].dot, opacity: light ? 0.14 : 0.22 }} />
         <div className="relative flex items-center justify-between">

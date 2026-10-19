@@ -229,7 +229,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <UpgradeWall />
         {/* pb clears the fixed chat bubble (bottom-right, ~80px tall zone) so a table's last-row
             actions are never hidden behind it — see ChatWidget. */}
-        <main className={`flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-6 sm:px-6 md:pb-24 ${platform ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}>
+        <main className={`flex-1 overflow-y-auto overscroll-y-contain px-4 pb-28 pt-3 sm:px-6 sm:pt-6 md:pb-24 ${platform ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}>
           <div className="mx-auto max-w-7xl"><PageTransition>{children}</PageTransition></div>
         </main>
       </div>
