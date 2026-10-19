@@ -76,14 +76,15 @@
     </script>
     <script>
       // Apply theme before first paint to avoid a flash of the wrong mode.
-      // Light is the default: only an explicit 'dark' choice opts in.
+      // Phones are ALWAYS dark; on desktop, light is the default and only an explicit 'dark' opts in.
       (function () {
         try {
-          if (localStorage.getItem('prima_theme_v2') === 'dark') {
+          var mobile = window.matchMedia && window.matchMedia('(max-width: 639px)').matches;
+          if (mobile || localStorage.getItem('prima_theme_v2') === 'dark') {
             document.documentElement.classList.add('dark');
           }
         } catch (e) {
-          /* light default — do nothing */
+          /* desktop light default — do nothing */
         }
       })();
     </script>
