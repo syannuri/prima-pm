@@ -385,6 +385,11 @@ export default function AiAssistant() {
   const currentProjectId = /^\/projects\/([0-9a-f-]{36})/i.exec(location.pathname)?.[1] ?? null;
   const currentTab = new URLSearchParams(location.search).get('tab');
 
+  // Close the panel on navigation — tapping a tab-bar destination (or any route change) should
+  // dismiss Anett rather than leave it covering the new page. Keyed on path+query so an in-place
+  // open on the same route is unaffected; harmless no-op on first mount (already closed).
+  useEffect(() => { setOpen(false); }, [location.pathname, location.search]);
+
   const availQ = useQuery({
     queryKey: ['assistant-available'],
     queryFn: () => api.get<{ aiAvailable: boolean; actionsAvailable: boolean; voiceServer: boolean; autoDistill?: boolean }>(`/assistant/available`),
