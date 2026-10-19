@@ -157,7 +157,7 @@ function ProjectRing({ pct, label }: { pct: number; label: string }) {
 // A glass EVM figure tile (EV/AC/PV/BAC) for the phone Overview.
 function EvmTile({ label, value, valueCls }: { label: string; value: string; valueCls: string }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-white/10 dark:bg-white/[0.07] dark:ring-white/[0.04] dark:backdrop-blur-xl">
+    <div className="lg-card relative overflow-hidden rounded-2xl p-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`mt-1 text-xl font-bold tabular-nums ${valueCls}`}>{value}</div>
     </div>
@@ -443,8 +443,8 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Phones (Mobile v2 prototype): a progress-ring hero with At risk/Baselined chips + EVM tiles,
           leading the page. The desktop gauge/progress panel below is hidden on phones (no dup). */}
       <div className="space-y-3 sm:hidden">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-white to-violet-50 p-5 text-slate-900 shadow-lg ring-1 ring-slate-200 dark:from-slate-900 dark:via-violet-950/40 dark:to-slate-950 dark:text-white dark:ring-white/10">
-          <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: '#7c3aed', opacity: 0.3 }} />
+        <div className="lg-hero relative overflow-hidden rounded-3xl p-5 text-slate-900 dark:text-white">
+          <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: health === 'RED' ? '#ef4444' : health === 'AMBER' ? '#f59e0b' : health === 'GREEN' ? '#22c55e' : '#7c3aed', opacity: 0.22 }} />
           <div className="relative flex items-center justify-between gap-2">
             <HealthChip health={health} id={id} />
             <BaselineChip on={!!e.scheduleBaselinedAt} />

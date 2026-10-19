@@ -96,14 +96,16 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarContext.Provider value={sidebarCtx}>
-    <div className="flex h-screen overflow-hidden bg-violet-100 dark:bg-slate-950">
-      {/* PROTOTYPE light-glass ambient — a vivid colourful aurora mesh behind the frosted cards (phones, light only). */}
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+      {/* PROTOTYPE light-glass v2 ambient — a TOP-WEIGHTED, desaturated aurora: colour is concentrated
+          behind the hero up top and fades to the clean neutral base lower down, so data lists sit on
+          even ground (phones, light only). */}
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 block overflow-hidden dark:hidden md:hidden">
-        <div className="absolute -right-8 -top-12 h-80 w-80 rounded-full bg-violet-500/60 blur-3xl" />
-        <div className="absolute left-[-12%] top-[20%] h-80 w-80 rounded-full bg-sky-500/55 blur-3xl" />
-        <div className="absolute left-1/4 top-[45%] h-80 w-80 rounded-full bg-fuchsia-400/55 blur-3xl" />
-        <div className="absolute -left-8 bottom-2 h-80 w-80 rounded-full bg-indigo-400/55 blur-3xl" />
-        <div className="absolute right-[-6%] bottom-[22%] h-72 w-72 rounded-full bg-cyan-400/50 blur-3xl" />
+        <div className="absolute -right-10 -top-16 h-72 w-72 rounded-full bg-violet-300/55 blur-3xl" />
+        <div className="absolute -left-16 -top-8 h-72 w-72 rounded-full bg-sky-300/50 blur-3xl" />
+        <div className="absolute right-1/4 top-[10%] h-56 w-56 rounded-full bg-fuchsia-200/50 blur-3xl" />
+        {/* fade the lower ~60% to the base so content below the hero reads on neutral ground */}
+        <div className="absolute inset-x-0 top-[34%] bottom-0 bg-gradient-to-b from-transparent to-slate-50" />
       </div>
       {/* Mobile-only "Aurora Glass" ambient — soft violet/cyan blobs behind all content for depth
           (dark phones only; purely decorative, non-interactive). Matches the mobile-v2 design. */}
