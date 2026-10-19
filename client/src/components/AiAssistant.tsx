@@ -866,7 +866,7 @@ export default function AiAssistant() {
           onClick={() => setOpen(true)}
           aria-label={L.launcher}
           title={`Anett AI Assistant (${navigator.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+'}K)`}
-          className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:bottom-24 md:right-6 ${reduce ? '' : 'anett-breathe transition-all duration-300 hover:scale-105 active:scale-90'} ${uiV2 ? 'anett-glow-v2' : ''} ${uiV2 && (ask.isPending || streaming) ? 'anett-glow-active' : ''}`}
+          className={`fixed right-5 z-[60] hidden h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-600/30 ring-1 ring-black/5 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+8.5rem)] md:grid md:bottom-24 md:right-6 ${reduce ? '' : 'anett-breathe transition-all duration-300 hover:scale-105 active:scale-90'} ${uiV2 ? 'anett-glow-v2' : ''} ${uiV2 && (ask.isPending || streaming) ? 'anett-glow-active' : ''}`}
         >
           <AnettIcon className="h-8 w-8 drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]" />
         </button>

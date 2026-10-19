@@ -53,6 +53,14 @@ export default function DashboardPage() {
     if (v === 'cards' || v === 'forecast' || v === 'resources' || v === 'portfolio') setView(v);
     else setView(user?.dashboardDefaultView ?? 'portfolio'); // no ?view → the user's preferred landing view
   }, [searchParams, user?.dashboardDefaultView]);
+  // The mobile tab-bar FAB routes here with ?new=1 when Anett is unavailable (its AI-off fallback) —
+  // open the New Project form and strip the flag so a refresh/back doesn't reopen it.
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setShowForm(true);
+      setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete('new'); return n; }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [clientName, setClientName] = useState('');
