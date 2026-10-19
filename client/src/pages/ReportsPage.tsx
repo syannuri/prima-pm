@@ -502,7 +502,7 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
               <Button variant="ghost" onClick={() => resolveBriefing.mutate({ id: briefing.id, action: 'dismiss' })} disabled={resolveBriefing.isPending}>Dismiss</Button>
             </div>
           </div>
-          {briefing.execSummary && <p className="mt-1.5 text-sm text-slate-700 dark:text-slate-200">{briefing.execSummary}</p>}
+          {briefing.execSummary && <p className="mt-1.5 break-words text-sm text-slate-700 dark:text-slate-200">{briefing.execSummary}</p>}
         </div>
       )}
 
@@ -511,7 +511,7 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
           {aiSummary && (
             <div className="rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2 dark:border-violet-900/50 dark:bg-violet-950/20">
               <div className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">✨ AI summary (draft)</div>
-              <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{aiSummary}</p>
+              <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">{aiSummary}</p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Review &amp; edit before saving — this is an AI draft, not final.</p>
             </div>
           )}
@@ -545,7 +545,7 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
           {COMMENTARY_FIELDS.map((f) => commentary[f.key] && (
             <div key={f.key} className={`rounded-lg border-l-4 px-3 py-2 ${ACCENT_BAR[f.accent]}`}>
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{f.label}</div>
-              <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{commentary[f.key]}</p>
+              <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">{commentary[f.key]}</p>
             </div>
           ))}
           {commentary.authorName && (
