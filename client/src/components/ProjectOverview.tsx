@@ -133,6 +133,60 @@ function Tile({ label, value, tone, hint }: { label: string; value: string; tone
   );
 }
 
+// --- Phone Overview hero (Mobile v2 prototype) ---------------------------------------------------
+
+// Project schedule-progress ring (prism gradient), the phone Overview's hero dial.
+function ProjectRing({ pct, label }: { pct: number; label: string }) {
+  const R = 50, C = 2 * Math.PI * R;
+  const dash = Math.max(0, Math.min(100, pct)) / 100 * C;
+  return (
+    <div className="relative h-36 w-36">
+      <svg viewBox="0 0 120 120" className="h-36 w-36 -rotate-90">
+        <defs><linearGradient id="ov-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#38bdf8" /></linearGradient></defs>
+        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" className="stroke-white/10" />
+        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" strokeLinecap="round" stroke="url(#ov-ring)" strokeDasharray={`${dash} ${C}`} className="transition-[stroke-dasharray] duration-700" />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-4xl font-extrabold tabular-nums leading-none text-transparent">{pct}%</span>
+        <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">{label}</span>
+      </div>
+    </div>
+  );
+}
+
+// A glass EVM figure tile (EV/AC/PV/BAC) for the phone Overview.
+function EvmTile({ label, value, valueCls }: { label: string; value: string; valueCls: string }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-white/10 dark:bg-white/[0.07] dark:ring-white/[0.04] dark:backdrop-blur-xl">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
+      <div className={`mt-1 text-xl font-bold tabular-nums ${valueCls}`}>{value}</div>
+    </div>
+  );
+}
+
+// Health pill (On track / At risk / Off track) with a warning glyph when amber/red.
+function HealthChip({ health, id }: { health: Health; id: boolean }) {
+  const map = { GREEN: { c: '#22c55e', en: 'On track', id: 'Sesuai' }, AMBER: { c: '#f59e0b', en: 'At risk', id: 'Berisiko' }, RED: { c: '#ef4444', en: 'Off track', id: 'Terlambat' }, NO_DATA: { c: '#64748b', en: 'No data', id: 'Tanpa data' } }[health];
+  const warn = health === 'AMBER' || health === 'RED';
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1" style={{ color: map.c, backgroundColor: `${map.c}1f`, borderColor: `${map.c}55` }}>
+      {warn && <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>}
+      {id ? map.id : map.en}
+    </span>
+  );
+}
+
+// Baseline lock pill — green "Baselined" once the schedule baseline is captured, else slate "Draft".
+function BaselineChip({ on }: { on: boolean }) {
+  const c = on ? '#22c55e' : '#64748b';
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1" style={{ color: c, backgroundColor: `${c}1f`, borderColor: `${c}55` }}>
+      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d={on ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7-2.6'} /></svg>
+      {on ? 'Baselined' : 'Draft'}
+    </span>
+  );
+}
+
 export type ScurveVariant = 'progress' | 'cost' | 'combo';
 
 // Render a CLEAN S-curve straight onto a canvas from the data (for the Excel export) — not by
@@ -386,12 +440,34 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     // key figures run full-width along the bottom. `lg:order-*` sets the desktop visual order while
     // the DOM order stays mobile-friendly (order is ignored in the mobile block-flow layout).
     <div className="space-y-3 lg:grid lg:grid-cols-12 lg:gap-3 lg:space-y-0">
+      {/* Phones (Mobile v2 prototype): a progress-ring hero with At risk/Baselined chips + EVM tiles,
+          leading the page. The desktop gauge/progress panel below is hidden on phones (no dup). */}
+      <div className="space-y-3 sm:hidden">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-950 p-5 text-white shadow-lg ring-1 ring-white/10">
+          <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: '#7c3aed', opacity: 0.3 }} />
+          <div className="relative flex items-center justify-between gap-2">
+            <HealthChip health={health} id={id} />
+            <BaselineChip on={!!e.scheduleBaselinedAt} />
+          </div>
+          <div className="relative mt-3 flex justify-center">
+            <ProjectRing pct={pct} label={id ? 'progres' : 'progress'} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <EvmTile label={id ? 'Nilai diperoleh (EV)' : 'Earned value (EV)'} value={formatIdrShort(e.ev)} valueCls="text-emerald-400" />
+          <EvmTile label={id ? 'Biaya aktual (AC)' : 'Actual cost (AC)'} value={formatIdrShort(e.ac)} valueCls={overBudget ? 'text-rose-400' : 'text-slate-800 dark:text-white'} />
+          <EvmTile label={id ? 'Nilai rencana (PV)' : 'Planned value (PV)'} value={formatIdrShort(e.pv)} valueCls="text-slate-800 dark:text-white" />
+          <EvmTile label={id ? 'Anggaran (BAC)' : 'Budget (BAC)'} value={formatIdrShort(e.bac)} valueCls="text-slate-800 dark:text-white" />
+        </div>
+      </div>
+
       {/* Stage A — extract task-progress + issues from pasted notes (renders nothing when AI is off). */}
       <div className="lg:col-span-12 lg:order-first"><ExtractFromNotes projectId={projectId} /></div>
       {/* Stage B — deterministic predictive slip/overrun signals (always on; not gated by AI). */}
       <div className="lg:col-span-12 lg:order-none"><PredictiveCard projectId={projectId} /></div>
+
       {/* Performance — Schedule (SPI) & Cost (CPI) bullet gauges vs the 1.0 target, then progress. */}
-      <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="lg:col-span-4 lg:order-1">
+      <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="hidden sm:block lg:col-span-4 lg:order-1">
         <HealthBulletGauge spi={e.spi} cpi={e.cpi} hasSchedule={e.pv > 0} hasCost={e.ac > 0} id={id} />
 
         {/* In-context nudge (#B): when the project is off-track, offer to ask Anett why (opens the

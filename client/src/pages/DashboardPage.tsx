@@ -23,6 +23,7 @@ const HEALTH_PILL: Record<string, [string, string]> = {
 import { useAuth } from '../context/AuthContext';
 import { useLang, greet, dateLocale } from '../context/LanguageContext';
 import MobileDashboard from '../components/MobileDashboard';
+import MobileProjects from '../components/MobileProjects';
 import Fab from '../components/Fab';
 import PullToRefresh from '../components/PullToRefresh';
 import { useSwipe } from '../hooks/useSwipe';
@@ -53,6 +54,14 @@ export default function DashboardPage() {
     if (v === 'cards' || v === 'forecast' || v === 'resources' || v === 'portfolio') setView(v);
     else setView(user?.dashboardDefaultView ?? 'portfolio'); // no ?view → the user's preferred landing view
   }, [searchParams, user?.dashboardDefaultView]);
+  // The mobile tab-bar FAB routes here with ?new=1 when Anett is unavailable (its AI-off fallback) —
+  // open the New Project form and strip the flag so a refresh/back doesn't reopen it.
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setShowForm(true);
+      setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete('new'); return n; }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [clientName, setClientName] = useState('');
@@ -294,10 +303,9 @@ export default function DashboardPage() {
         </Modal>
       )}
 
-      {/* Mobile-only page title for the Projects (cards) tab — desktop has the view toggle instead. */}
-      {view === 'cards' && <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 sm:hidden">{lang === 'id' ? 'Kartu Proyek' : 'Project Cards'}</h1>}
-
-      {view === 'cards' && (isLoading ? (
+      {/* Projects (cards) tab — phones get the prototype's searchable/filterable list; desktop keeps
+          the multi-column card grid below. */}
+      {view === 'cards' && (isMobile ? <MobileProjects /> : isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Card key={i} className="space-y-3">

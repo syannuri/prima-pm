@@ -4,8 +4,6 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { PortfolioSummary as Summary, PortfolioHealth } from '../api/types';
 import { Card, EmptyState } from './ui';
-import RagGlyph from './RagGlyph';
-import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import MobileDashboardSkeleton from './MobileDashboardSkeleton';
 import { formatIdrShort, formatDateInput } from '../lib/format';
@@ -15,8 +13,6 @@ import PlanningReminders from './PlanningReminders';
 import AwaitingActivation from './AwaitingActivation';
 import AwaitingClosure from './AwaitingClosure';
 import PendingApprovals from './PendingApprovals';
-import HealthGauge from './HealthGauge';
-import HealthArcGauge from './HealthArcGauge';
 import { useTheme } from '../context/ThemeContext';
 
 const RAG: Record<PortfolioHealth, { c: string; dot: string; label: string }> = {
@@ -38,23 +34,14 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
 };
 
 // A phone-tailored portfolio dashboard (PM & PMO): a glanceable, card-first view —
-// gradient health hero, KPI tiles, the "needs attention" queues, and project cards
-// with progress bars. Rendered instead of the desktop stack on < sm screens.
-const ICON = {
-  reports: 'M18 20V10M12 20V4M6 20v-6',
-  resources: 'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM21 21v-2a4 4 0 0 0-3-3.87',
-  plus: 'M12 5v14M5 12h14',
-  clock: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 7v5l3 2',
-};
-
+// a progress-ring health hero with side stats, KPI tiles, the "needs attention" queues, and
+// project cards with progress bars. Rendered instead of the desktop stack on < sm screens.
+// (Reports/Resources shortcuts live in the bottom tab bar now — no on-dashboard quick actions.)
 export default function MobileDashboard() {
-  const { user } = useAuth();
   const { lang } = useLang();
   const { theme } = useTheme();
-  // Light mode gets a bright hero card + a flat arc gauge; dark keeps the premium speedometer.
+  // Phones are dark-only; `light` only matters if this ever renders on a small light-themed canvas.
   const light = theme === 'light';
-  const isPmo = !!user && ['ADMIN', 'PMO'].includes(user.role);
-  const isGuest = user?.role === 'GUEST';
   const [statusDate] = useState(formatDateInput(new Date()));
   const { data, isLoading } = useQuery({
     queryKey: ['portfolio', statusDate],
@@ -71,7 +58,6 @@ export default function MobileDashboard() {
   const t = data.totals;
   const pct = Math.round(t.scheduleProgress * 100);
   const status: PortfolioHealth = t.pv <= 0 ? 'NO_DATA' : t.spi >= 0.95 ? 'GREEN' : t.spi >= 0.85 ? 'AMBER' : 'RED';
-  const cv = t.ev - t.ac;
   const isActive = (s: string) => s === 'IN_PROGRESS';
   const sorted = [...data.projects].sort((a, b) =>
     (Number(pinned.has(b.id)) - Number(pinned.has(a.id)))         // bookmarked first
@@ -87,66 +73,49 @@ export default function MobileDashboard() {
   };
   const projects = sorted.filter((p) => filter === 'all' || (filter === 'active' ? p.status !== 'CLOSED' : p.status === 'CLOSED'));
 
-  // Quick actions — route shortcuts most useful for the role, on the go.
-  // ("New project" lives on the floating action button, not here.)
-  // Masculine "Amethyst" palette: Reports = deep violet→indigo, Resources/Timesheet = dark magenta→purple.
-  const resourcesAction = { label: isGuest ? 'My Resources' : 'Resources', icon: ICON.resources, grad: 'from-fuchsia-700 to-purple-900', glow: 'shadow-purple-800/40', halo: 'bg-fuchsia-600', tint: 'from-fuchsia-700/25 to-purple-800/10', to: '/admin/resources' };
-  const reportsAction = { label: isGuest ? 'My Reports' : 'Reports', icon: ICON.reports, grad: 'from-violet-600 to-indigo-800', glow: 'shadow-indigo-700/40', halo: 'bg-violet-500', tint: 'from-violet-600/25 to-indigo-700/10', to: '/reports' };
-  const actions: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }[] = isGuest
-    ? // A guest works in their own sandbox — the report hub (scoped to their projects) + their
-      // private Resource Pool are the key shortcuts. New project = the FAB.
-      [reportsAction, resourcesAction]
-    : [
-        reportsAction,
-        isPmo
-          ? resourcesAction
-          : { label: 'Timesheet', icon: ICON.clock, grad: 'from-fuchsia-700 to-purple-900', glow: 'shadow-purple-800/40', halo: 'bg-fuchsia-600', tint: 'from-fuchsia-700/25 to-purple-800/10', to: '/my-timesheet' },
-      ];
-  const actionCols = actions.length >= 3 ? 'grid-cols-3' : actions.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
+  // Hero side-stats + KPI figures (prototype): active vs off-track projects, and the "slipped"
+  // count (active projects whose health is AMBER/RED). The two mini-bars read on-track share and
+  // earned share of budget.
+  const active = data.projects.filter((p) => isActive(p.status)).length;
+  const offTrack = data.projects.filter((p) => isActive(p.status) && (p.health === 'RED' || p.health === 'AMBER')).length;
+  const onTrackFrac = active > 0 ? (active - offTrack) / active : 0;
+  const earnedFrac = t.bac > 0 ? t.ev / t.bac : 0;
+  const spiStr = t.pv > 0 ? t.spi.toFixed(2) : '—';
+  const cpiStr = t.ac > 0 ? t.cpi.toFixed(2) : '—';
+  const spiBehind = t.pv > 0 && t.spi < 1;
+  const cpiBad = t.ac > 0 && t.cpi < 1;
+  const id = lang === 'id';
 
   return (
     <div className="space-y-3">
-      {/* Hero — light mode: bright card + flat arc gauge; dark mode: premium speedometer dial. */}
-      <div className={`relative overflow-hidden rounded-3xl p-4 shadow-lg ring-1 sm:p-5 ${light ? 'bg-gradient-to-br from-white to-slate-50 text-slate-900 ring-slate-200' : 'bg-gradient-to-br from-slate-900 to-slate-950 text-white ring-white/10'}`}>
-        {/* Health-tinted glow so the card still signals RAG at a glance. */}
-        <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 h-48 w-48 rounded-full blur-2xl" style={{ backgroundColor: RAG[status].dot, opacity: light ? 0.14 : 0.22 }} />
-        <div className="relative flex items-center justify-between">
+      {/* Hero — a progress-ring health dial with side stats (per the Mobile v2 prototype). */}
+      <div className={`relative overflow-hidden rounded-3xl p-4 shadow-lg ring-1 sm:p-5 ${light ? 'bg-gradient-to-br from-white to-slate-50 text-slate-900 ring-slate-200' : 'bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-950 text-white ring-white/10'}`}>
+        {/* Ambient violet glow top-right for the premium prism feel. */}
+        <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: '#7c3aed', opacity: light ? 0.1 : 0.3 }} />
+        <div className="relative flex items-center justify-between gap-2">
           <div className={`text-[11px] font-semibold uppercase tracking-wide ${light ? 'text-slate-500' : 'text-white/70'}`}>Portfolio health</div>
-          <span className={`text-[11px] font-medium ${light ? 'text-slate-400' : 'text-white/60'}`}>{t.count} projects</span>
+          {/* SPI status pill — amber when behind, emerald when on track. */}
+          <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1" style={{ color: RAG[status].c, backgroundColor: `${RAG[status].c}1f`, borderColor: `${RAG[status].c}55` }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: RAG[status].c }} />
+            SPI {spiStr} · {id ? (spiBehind ? 'tertunda' : 'sesuai') : RAG[status].label}
+          </span>
         </div>
-        <div className="relative mt-1">
-          {light
-            ? <HealthArcGauge spi={t.spi} cpi={t.cpi} pct={pct} status={status} statusLabel={RAG[status].label} />
-            : <HealthGauge spi={t.spi} cpi={t.cpi} pct={pct} status={status} statusLabel={RAG[status].label} />}
-        </div>
-        <div className="relative mt-3 flex flex-wrap justify-center gap-2">
-          {(['GREEN', 'AMBER', 'RED', 'NO_DATA'] as PortfolioHealth[]).map((h) => (data.byHealth[h] ?? 0) > 0 && (
-            <span key={h} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 ${light ? 'bg-slate-100 text-slate-600 ring-slate-200' : 'bg-white/10 ring-white/10 backdrop-blur-sm'}`}>
-              <RagGlyph status={h} size={10} />{RAG[h].label} {data.byHealth[h]}
-            </span>
-          ))}
+        <div className="relative mt-3 flex items-center gap-4">
+          <PortfolioRing pct={pct} light={light} label={id ? 'selesai' : 'complete'} />
+          <div className="min-w-0 flex-1 space-y-3">
+            <HeroStat light={light} label={id ? 'Proyek aktif' : 'Active projects'} value={`${active}${offTrack > 0 ? ` · ${offTrack} off-track` : ''}`} frac={onTrackFrac} />
+            <HeroStat light={light} label="Total BAC" value={formatIdrShort(t.bac)} frac={earnedFrac} />
+          </div>
         </div>
       </div>
 
-      {/* Quick actions */}
-      <div className={`grid gap-2.5 ${actionCols}`}>
-        {actions.map((a) => <QuickAction key={a.label} {...a} />)}
-      </div>
-
-      {/* KPI tiles — colour = meaning: the three plain money figures stay NEUTRAL; only Cost
-          variance (the one KPI with a good/bad reading) is tinted + carries a sign & arrow. Each
-          tile gets a muted sub-line for context so the bare rupiah figure is interpretable. */}
+      {/* KPI tiles — the portfolio's four headline figures (prototype): schedule & cost indices,
+          earned value, and the count of slipped projects. Each carries a status dot + muted sub-line. */}
       <div className="grid grid-cols-2 gap-3">
-        <KpiTile label="Total budget" value={formatIdrShort(t.bac)} sub={`${t.count} ${t.count === 1 ? 'project' : 'projects'}`} />
-        <KpiTile label="Earned value" value={formatIdrShort(t.ev)} sub={`${Math.round((t.bac > 0 ? t.ev / t.bac : 0) * 100)}% of budget earned`} />
-        <KpiTile label="Actual cost" value={formatIdrShort(t.ac)} sub={`${Math.round((t.bac > 0 ? t.ac / t.bac : 0) * 100)}% of budget spent`} />
-        <KpiTile
-          label="Cost variance"
-          value={`${cv >= 0 ? '+' : '−'}${formatIdrShort(Math.abs(cv))}`}
-          tone={cv < 0 ? 'red' : 'green'}
-          arrow={cv >= 0 ? 'up' : 'down'}
-          sub={`CPI ${t.cpi > 0 ? t.cpi.toFixed(2) : '—'} · ${cv < 0 ? 'over budget' : 'under budget'}`}
-        />
+        <KpiTile label={id ? 'Portfolio SPI' : 'Portfolio SPI'} value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-400' : 'text-emerald-400'} sub={id ? (spiBehind ? 'jadwal · di bawah 1.0' : 'jadwal · sehat') : (spiBehind ? 'schedule · below 1.0' : 'schedule · healthy')} />
+        <KpiTile label={id ? 'Portfolio CPI' : 'Portfolio CPI'} value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-400' : 'text-emerald-400'} sub={id ? (cpiBad ? 'biaya · di bawah 1.0' : 'biaya · sehat') : (cpiBad ? 'cost · below 1.0' : 'cost · healthy')} />
+        <KpiTile label={id ? 'Earned value' : 'Earned value'} value={formatIdrShort(t.ev)} dot="#22c55e" valueCls="text-slate-800 dark:text-white" sub={`${id ? 'dari' : 'of'} ${formatIdrShort(t.bac)}`} />
+        <KpiTile label={id ? 'Slipped' : 'Slipped'} value={String(offTrack)} dot={offTrack > 0 ? '#fb7185' : '#64748b'} valueCls={offTrack > 0 ? 'text-rose-400' : 'text-slate-700 dark:text-slate-200'} sub={id ? 'butuh perhatian' : 'need attention'} />
       </div>
 
       {/* Needs attention — the action queues (each renders nothing when empty) */}
@@ -229,48 +198,53 @@ export default function MobileDashboard() {
   );
 }
 
-function QuickAction({ label, icon, grad, glow, halo, tint, to, onClick }: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }) {
-  const cls =
-    'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.05] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-white/10 dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/[0.04] dark:backdrop-blur-xl';
-  const inner = (
-    <>
-      {/* Faint coloured wash over the tile — kept subtle (halved) so the quick-actions don't
-          compete with the brand FAB and the health hero for attention. */}
-      <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br opacity-50 ${tint}`} />
-      {/* Soft coloured halo behind the icon — clipped by the card for an elegant glow. */}
-      <span aria-hidden className={`pointer-events-none absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 -translate-y-6 rounded-full opacity-25 blur-2xl transition-opacity duration-200 group-hover:opacity-45 ${halo}`} />
-      {/* Top sheen on the card for a glossy, premium finish. */}
-      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
-      {/* 3D gradient "app icon": vibrant diagonal gradient, a top gloss highlight for the
-          light-from-above read, a colour-matched elevation shadow, and a white glyph that
-          floats above it via a soft drop-shadow. */}
-      <span className={`relative grid h-12 w-12 place-items-center rounded-[1rem] bg-gradient-to-br text-white shadow-lg ring-1 ring-white/25 transition-transform duration-200 group-active:scale-90 ${grad} ${glow}`}>
-        <span aria-hidden className="pointer-events-none absolute inset-x-1 top-1 h-1/2 rounded-[0.75rem] bg-gradient-to-b from-white/45 to-transparent" />
-        <svg viewBox="0 0 24 24" className="relative h-6 w-6 drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.35)]" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d={icon} /></svg>
-      </span>
-      <span className="relative mt-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-    </>
+// The hero health dial: a gradient progress ring (violet→indigo→cyan) reading schedule % complete,
+// matching the prototype. The big centre figure uses the same gradient as a clipped text fill.
+function PortfolioRing({ pct, light, label }: { pct: number; light: boolean; label: string }) {
+  const R = 50, C = 2 * Math.PI * R;
+  const dash = Math.max(0, Math.min(100, pct)) / 100 * C;
+  return (
+    <div className="relative h-28 w-28 shrink-0">
+      <svg viewBox="0 0 120 120" className="h-28 w-28 -rotate-90">
+        <defs>
+          <linearGradient id="pring-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#38bdf8" />
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="11" className={light ? 'stroke-slate-200' : 'stroke-white/10'} />
+        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="11" strokeLinecap="round" stroke="url(#pring-grad)" strokeDasharray={`${dash} ${C}`} className="transition-[stroke-dasharray] duration-700" />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-3xl font-extrabold tabular-nums leading-none text-transparent">{pct}%</span>
+        <span className={`mt-1 text-[10px] font-semibold uppercase tracking-wider ${light ? 'text-slate-400' : 'text-white/50'}`}>{label}</span>
+      </div>
+    </div>
   );
-  return to
-    ? <Link to={to} onClick={() => haptic()} className={cls}>{inner}</Link>
-    : <button type="button" onClick={() => { haptic(); onClick?.(); }} className={cls}>{inner}</button>;
 }
 
-function KpiTile({ label, value, sub, tone, arrow }: { label: string; value: string; sub?: string; tone?: 'red' | 'green'; arrow?: 'up' | 'down' }) {
-  const valClass = tone === 'red' ? 'text-red-600 dark:text-red-400' : tone === 'green' ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-white';
-  // Only a meaningful (good/bad) KPI gets a coloured wash — the plain money tiles stay neutral.
-  const tint = tone === 'red' ? 'from-red-500/20 to-rose-600/10' : tone === 'green' ? 'from-emerald-500/20 to-green-600/10' : '';
+// A labelled hero side-stat with a gradient mini progress bar (right column of the hero).
+function HeroStat({ light, label, value, frac }: { light: boolean; label: string; value: string; frac: number }) {
+  return (
+    <div>
+      <div className={`text-[11px] font-semibold uppercase tracking-wide ${light ? 'text-slate-400' : 'text-white/55'}`}>{label}</div>
+      <div className={`mt-0.5 text-lg font-bold tabular-nums leading-tight ${light ? 'text-slate-900' : 'text-white'}`}>{value}</div>
+      <div className={`mt-1.5 h-1.5 w-full overflow-hidden rounded-full ${light ? 'bg-slate-200' : 'bg-white/10'}`}>
+        <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-sky-400 transition-[width] duration-700" style={{ width: `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// A KPI tile: a status dot + uppercase label, a big colour-coded value, and a muted sub-line.
+function KpiTile({ label, value, sub, dot, valueCls }: { label: string; value: string; sub?: string; dot: string; valueCls: string }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-white/10 dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/[0.04] dark:backdrop-blur-xl">
-      {tint && <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint}`} />}
-      {/* Top sheen — matches the quick-action tiles so the dashboard reads as one set. */}
+      {/* Top sheen — matches the KPI/project tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
-      <div className="relative text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`relative mt-1 flex items-baseline gap-1 text-xl font-bold tabular-nums ${valClass}`}>
-        {value}
-        {/* Arrow is a non-colour cue for the variance direction (colour-blind safe). */}
-        {arrow && <span aria-hidden className="text-sm">{arrow === 'up' ? '▲' : '▼'}</span>}
+      <div className="relative flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} />{label}
       </div>
+      <div className={`relative mt-1 text-xl font-bold tabular-nums ${valueCls}`}>{value}</div>
       {sub && <div className="relative mt-0.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">{sub}</div>}
     </div>
   );
