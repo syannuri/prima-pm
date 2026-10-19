@@ -38,46 +38,49 @@ export default function MobileTabBar() {
   ];
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-slate-800/90 backdrop-blur-2xl backdrop-saturate-150 md:hidden"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="m-tabbar fixed inset-x-3 z-30 grid grid-cols-3 rounded-[26px] border border-white/10 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.7)] md:hidden"
+      style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       aria-label="Primary"
     >
-      {/* Scrim above the bar: fades scrolling content into it so nothing reads
-          through the frosted glass (iOS-style). Sits just above the nav's top edge. */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-full h-8 bg-gradient-to-t from-slate-100 to-transparent dark:from-slate-950" />
-      <div className="grid grid-cols-3">
-        {tabs.map((t) => (
-          <Link
-            key={t.label}
-            to={t.to}
-            onClick={() => haptic()}
-            aria-current={t.active ? 'page' : undefined}
-            className={`group relative flex select-none flex-col items-center gap-1 pb-1.5 pt-2 transition-colors ${t.active ? 'text-blue-400' : 'text-slate-400'}`}
-          >
-            <span className="relative grid place-items-center">
-              {/* iOS shows the filled glyph when selected; the outline (thin stroke) otherwise.
-                  A tiny press-scale is the only touch feedback — no Material pill behind it. */}
-              <svg
-                viewBox="0 0 24 24"
-                className="h-[26px] w-[26px] transition-transform duration-150 ease-out group-active:scale-90"
-                fill={t.active ? 'currentColor' : 'none'}
-                stroke={t.active ? 'none' : 'currentColor'}
-                strokeWidth={t.active ? undefined : 1.8}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d={t.active ? t.iconFill : t.icon} fillRule={t.active ? 'evenodd' : undefined} clipRule={t.active ? 'evenodd' : undefined} />
-              </svg>
-              {t.badge > 0 && (
-                <span className="absolute -right-2 -top-1 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-slate-900">
-                  {t.badge > 9 ? '9+' : t.badge}
-                </span>
+      {tabs.map((t) => (
+        <Link
+          key={t.label}
+          to={t.to}
+          onClick={() => haptic()}
+          aria-current={t.active ? 'page' : undefined}
+          className={`group relative flex select-none flex-col items-center gap-1 py-2.5 transition-colors ${t.active ? 'text-white' : 'text-slate-400'}`}
+        >
+          {/* Soft radial gradient glow behind the active icon (replaces the flat iOS tint). */}
+          <span className={`relative grid place-items-center ${t.active ? 'm-tab-glow' : ''}`}>
+            {/* Filled glyph when selected; thin outline otherwise. A violet→cyan drop-shadow
+                makes the active icon glow; a tiny press-scale is the touch feedback. */}
+            <svg
+              viewBox="0 0 24 24"
+              className={`relative z-[1] h-[26px] w-[26px] transition-transform duration-150 ease-out group-active:scale-90 ${t.active ? 'drop-shadow-[0_0_10px_rgba(139,92,246,0.9)]' : ''}`}
+              fill={t.active ? 'url(#mtab-grad)' : 'none'}
+              stroke={t.active ? 'none' : 'currentColor'}
+              strokeWidth={t.active ? undefined : 1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              {t.active && (
+                <defs>
+                  <linearGradient id="mtab-grad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#38bdf8" />
+                  </linearGradient>
+                </defs>
               )}
-            </span>
-            <span className={`text-[10px] leading-none transition-transform duration-150 ease-out group-active:scale-95 ${t.active ? 'font-semibold' : 'font-medium'}`}>{t.label}</span>
-          </Link>
-        ))}
-      </div>
+              <path d={t.active ? t.iconFill : t.icon} fillRule={t.active ? 'evenodd' : undefined} clipRule={t.active ? 'evenodd' : undefined} />
+            </svg>
+            {t.badge > 0 && (
+              <span className="absolute -right-2 -top-1 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-slate-900">
+                {t.badge > 9 ? '9+' : t.badge}
+              </span>
+            )}
+          </span>
+          <span className={`text-[10px] leading-none transition-transform duration-150 ease-out group-active:scale-95 ${t.active ? 'font-semibold' : 'font-medium'}`}>{t.label}</span>
+        </Link>
+      ))}
     </nav>
   );
 }

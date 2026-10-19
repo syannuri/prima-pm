@@ -33,7 +33,7 @@ export function SettingsGroup({
         </div>
       )}
       <div
-        className={`rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 ${
+        className={`rounded-2xl border border-slate-200/80 bg-white dark:border-white/10 dark:bg-white/[0.07] dark:backdrop-blur-xl sm:dark:border-slate-800 sm:dark:bg-slate-900 sm:dark:backdrop-blur-none ${
           flush ? 'divide-y divide-slate-100 dark:divide-slate-800/70' : 'p-4 sm:p-5'
         }`}
       >
