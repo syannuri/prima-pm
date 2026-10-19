@@ -67,8 +67,9 @@ export default function NotificationsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 pb-12">
-      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 pb-4 dark:border-slate-800">
-        <div>
+      <header className="flex flex-wrap items-end justify-between gap-3 border-slate-200 dark:border-slate-800 sm:border-b sm:pb-4">
+        {/* Title is redundant on phones (top bar shows "Notifications") → desktop-only. */}
+        <div className="hidden sm:block">
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t.title}</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t.subtitle}</p>
         </div>
