@@ -385,3 +385,53 @@ button, a, [role="button"], [role="switch"], label, select, summary {
   .anett-aurora::before, .anett-glow-v2::after, .anett-orb,
   .anett-header-prism::after, .anett-live-dot { animation: none; }
 }
+
+/* ===== Mobile v2 — "Aurora Glass" design system (phones, dark) =====
+   A cohesive glassmorphism language for the mobile redesign: translucent cards
+   with a hairline gradient rim, a violet→indigo→cyan accent gradient (shared with
+   the Anett prism palette), and a floating frosted tab bar. Applied only in the
+   mobile render branches — desktop and light mode are untouched. */
+:root { --m-grad: linear-gradient(135deg, #a78bfa 0%, #6366f1 45%, #38bdf8 100%); }
+
+/* Frosted translucent surface + a top-left hairline highlight so the card reads as glass. */
+.m-glass {
+  position: relative;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+          backdrop-filter: blur(16px) saturate(1.3);
+}
+.m-glass::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), transparent 42%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+}
+
+/* Accent gradient as a fill or as clipped text. */
+.m-grad { background-image: var(--m-grad); }
+.m-grad-text {
+  background-image: var(--m-grad);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.m-glow-vio { box-shadow: 0 12px 30px -10px rgba(99, 102, 241, 0.75); }
+
+/* Floating frosted bottom tab bar + a soft radial glow behind the active tab's icon. */
+.m-tabbar {
+  background: rgba(14, 19, 38, 0.72);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+          backdrop-filter: blur(22px) saturate(1.4);
+}
+.m-tab-glow::after {
+  content: ''; position: absolute; top: 4px; width: 34px; height: 34px; border-radius: 9999px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.45), transparent 70%); z-index: 0;
+}
+
+/* Ambient aurora blobs behind a mobile screen (purely decorative, non-interactive). */
+.m-aurora { position: relative; isolation: isolate; }
+.m-aurora::before, .m-aurora::after {
+  content: ''; position: fixed; border-radius: 9999px; filter: blur(60px); z-index: -1; pointer-events: none;
+}
+.m-aurora::before { width: 280px; height: 280px; top: -90px; right: -80px; background: radial-gradient(circle, rgba(139, 92, 246, 0.35), transparent 70%); }
+.m-aurora::after  { width: 260px; height: 260px; bottom: 60px; left: -90px; background: radial-gradient(circle, rgba(56, 189, 248, 0.22), transparent 70%); }

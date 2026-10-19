@@ -97,6 +97,12 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <SidebarContext.Provider value={sidebarCtx}>
     <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950">
+      {/* Mobile-only "Aurora Glass" ambient — soft violet/cyan blobs behind all content for depth
+          (dark phones only; purely decorative, non-interactive). Matches the mobile-v2 design. */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden dark:max-md:block">
+        <div className="absolute -right-24 -top-28 h-72 w-72 rounded-full bg-violet-500/25 blur-3xl" />
+        <div className="absolute -left-24 top-1/3 h-72 w-72 rounded-full bg-sky-500/15 blur-3xl" />
+      </div>
       {/* Sidebar — fixed column on md+ (collapsible to an icon rail), slide-over on mobile. */}
       <aside className="hidden md:block">
         <Sidebar collapsed={collapsed} />

@@ -587,43 +587,46 @@ function MobileSectionNav({ groups, activeTab, onSelect }: { groups: { label: st
   return (
     <>
       {/* Slim sticky trigger — the menu lives off-canvas; this bar just shows the current section. */}
-      <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-100 px-4 pb-2.5 pt-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-100 px-4 pb-2.5 pt-6 shadow-sm dark:border-white/5 dark:bg-slate-950/80 dark:backdrop-blur-xl">
         <button
           onClick={() => setOpen(true)}
           aria-haspopup="dialog"
           aria-expanded={open}
-          className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900"
+          className="m-glass flex w-full items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left shadow-sm transition active:scale-[0.99] dark:border-white/10 dark:bg-white/[0.04]"
         >
           <span aria-hidden className="flex shrink-0 flex-col gap-[3px]">
             <span className="block h-0.5 w-4 rounded-full bg-slate-600 dark:bg-slate-300" />
             <span className="block h-0.5 w-4 rounded-full bg-slate-600 dark:bg-slate-300" />
             <span className="block h-0.5 w-4 rounded-full bg-slate-600 dark:bg-slate-300" />
           </span>
-          <span aria-hidden className="text-base">{TAB_ICONS[activeTab]}</span>
+          <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-base dark:bg-white/[0.06]">{TAB_ICONS[activeTab]}</span>
           <span className="min-w-0 truncate text-sm font-bold text-slate-800 dark:text-slate-100">{tabLabel(activeTab)}</span>
-          <span className="ml-auto shrink-0 text-xs text-slate-400 dark:text-slate-500">{lang === 'id' ? 'bagian ›' : 'sections ›'}</span>
+          <span className="ml-auto shrink-0 text-xs font-medium text-slate-400 dark:text-slate-500">{lang === 'id' ? 'bagian ›' : 'sections ›'}</span>
         </button>
       </div>
 
       {/* Off-canvas sidebar. Always mounted so it animates; pointer-events + aria-hidden off when closed. */}
       <div className={`fixed inset-0 z-40 ${open ? '' : 'pointer-events-none'}`} aria-hidden={!open}>
-        <div onClick={() => setOpen(false)} className={`absolute inset-0 bg-slate-900/45 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`} />
+        <div onClick={() => setOpen(false)} className={`absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`} />
         <div
           role="dialog"
           aria-modal="true"
           aria-label={lang === 'id' ? 'Bagian proyek' : 'Project sections'}
-          className={`absolute inset-y-0 left-0 flex w-[290px] max-w-[85%] flex-col bg-white shadow-2xl transition-transform duration-200 dark:bg-slate-900 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+          className={`absolute inset-y-0 left-0 flex w-[300px] max-w-[85%] flex-col border-r border-white/10 bg-white shadow-[30px_0_80px_-20px_rgba(0,0,0,0.8)] transition-transform duration-200 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 ${open ? 'translate-x-0' : '-translate-x-full'}`}
         >
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 dark:border-slate-800">
-            <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100">{lang === 'id' ? 'Bagian proyek' : 'Project sections'}</span>
-            <button onClick={() => setOpen(false)} aria-label={lang === 'id' ? 'Tutup' : 'Close'} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800">✕</button>
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-white/10">
+            <span className="flex items-center gap-2.5 text-sm font-extrabold text-slate-800 dark:text-slate-100">
+              <span aria-hidden className="m-grad grid h-7 w-7 place-items-center rounded-lg text-[13px] text-white shadow-[0_8px_20px_-8px_rgba(99,102,241,0.9)]">◇</span>
+              {lang === 'id' ? 'Bagian proyek' : 'Project sections'}
+            </span>
+            <button onClick={() => setOpen(false)} aria-label={lang === 'id' ? 'Tutup' : 'Close'} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 dark:hover:bg-white/10">✕</button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-6 pt-1">
             {groups.map((g) => (
               <div key={g.label}>
                 {/* Overview is self-evident (single, self-named) → no header; every other group gets one. */}
                 {g.label !== 'Overview' && (
-                  <div className="mb-0.5 mt-3 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{groupLabel(g.label)}</div>
+                  <div className="mb-0.5 mt-3.5 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">{groupLabel(g.label)}</div>
                 )}
                 {g.tabs.map((t) => {
                   const active = activeTab === t;
@@ -632,9 +635,9 @@ function MobileSectionNav({ groups, activeTab, onSelect }: { groups: { label: st
                       key={t}
                       onClick={() => pick(t)}
                       aria-current={active ? 'page' : undefined}
-                      className={`mt-0.5 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold transition active:scale-[0.99] ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'}`}
+                      className={`mt-0.5 flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition active:scale-[0.99] ${active ? 'm-grad text-white shadow-[0_10px_26px_-10px_rgba(99,102,241,0.9)]' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'}`}
                     >
-                      <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm ${active ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800'}`}>{TAB_ICONS[t]}</span>
+                      <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-sm ${active ? 'bg-white/20' : 'bg-slate-100 dark:bg-white/[0.06]'}`}>{TAB_ICONS[t]}</span>
                       <span className="min-w-0 truncate">{tabLabel(t)}</span>
                     </button>
                   );
