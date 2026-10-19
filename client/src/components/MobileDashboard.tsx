@@ -178,7 +178,7 @@ export default function MobileDashboard() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className={`prima-rise relative block overflow-hidden rounded-2xl border bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm transition active:scale-[.99] dark:from-slate-800/80 dark:to-slate-900/90 ${pinned.has(p.id) ? 'border-amber-300 ring-2 ring-amber-400/50 dark:border-amber-500/40' : 'border-slate-200 ring-1 ring-black/[0.05] dark:border-slate-700/60 dark:ring-white/[0.03]'}`}
+                className={`prima-rise relative block overflow-hidden rounded-2xl border bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm transition active:scale-[.99] dark:from-white/[0.07] dark:to-white/[0.03] dark:backdrop-blur-xl ${pinned.has(p.id) ? 'border-amber-300 ring-2 ring-amber-400/50 dark:border-amber-500/40' : 'border-slate-200 ring-1 ring-black/[0.05] dark:border-white/10 dark:ring-white/[0.04]'}`}
                 style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
               >
                 {/* Top sheen — unifies with the quick-action + KPI tiles. */}
@@ -231,7 +231,7 @@ export default function MobileDashboard() {
 
 function QuickAction({ label, icon, grad, glow, halo, tint, to, onClick }: { label: string; icon: string; grad: string; glow: string; halo: string; tint: string; to?: string; onClick?: () => void }) {
   const cls =
-    'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.05] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]';
+    'group relative flex flex-col items-center overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-3.5 shadow-sm ring-1 ring-black/[0.05] transition-all duration-200 active:scale-95 active:shadow-inner dark:border-white/10 dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/[0.04] dark:backdrop-blur-xl';
   const inner = (
     <>
       {/* Faint coloured wash over the tile — kept subtle (halved) so the quick-actions don't
@@ -261,7 +261,7 @@ function KpiTile({ label, value, sub, tone, arrow }: { label: string; value: str
   // Only a meaningful (good/bad) KPI gets a coloured wash — the plain money tiles stay neutral.
   const tint = tone === 'red' ? 'from-red-500/20 to-rose-600/10' : tone === 'green' ? 'from-emerald-500/20 to-green-600/10' : '';
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-slate-700/60 dark:from-slate-800/80 dark:to-slate-900/90 dark:ring-white/[0.03]">
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-white/10 dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/[0.04] dark:backdrop-blur-xl">
       {tint && <span aria-hidden className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint}`} />}
       {/* Top sheen — matches the quick-action tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
