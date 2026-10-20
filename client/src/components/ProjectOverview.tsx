@@ -137,18 +137,23 @@ function Tile({ label, value, tone, hint }: { label: string; value: string; tone
 
 // Project schedule-progress ring (prism gradient), the phone Overview's hero dial.
 function ProjectRing({ pct, label }: { pct: number; label: string }) {
-  const R = 50, C = 2 * Math.PI * R;
+  const R = 52, C = 2 * Math.PI * R;
   const dash = Math.max(0, Math.min(100, pct)) / 100 * C;
   return (
-    <div className="relative h-36 w-36">
-      <svg viewBox="0 0 120 120" className="h-36 w-36 -rotate-90">
+    <div className="relative h-44 w-44">
+      <svg viewBox="0 0 120 120" className="h-44 w-44 -rotate-90">
         <defs><linearGradient id="ov-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#38bdf8" /></linearGradient></defs>
         <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" className="stroke-slate-200 dark:stroke-white/10" />
-        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" strokeLinecap="round" stroke="url(#ov-ring)" strokeDasharray={`${dash} ${C}`} className="transition-[stroke-dasharray] duration-700" />
+        {/* Signature motion: the ring sweeps in on mount (reuses the pmx-sweep keyframe). */}
+        <circle
+          cx="60" cy="60" r={R} fill="none" strokeWidth="10" strokeLinecap="round" stroke="url(#ov-ring)"
+          strokeDasharray={C}
+          style={{ strokeDashoffset: C - dash, ['--pmx-len' as string]: `${C}`, animation: 'pmx-sweep 1.2s cubic-bezier(.2,.7,.2,1) both' }}
+        />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="bg-gradient-to-r from-violet-500 to-sky-500 bg-clip-text text-4xl font-extrabold tabular-nums leading-none text-transparent dark:from-violet-400 dark:to-sky-400">{pct}%</span>
-        <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-white/50">{label}</span>
+        <span className="bg-gradient-to-r from-violet-500 to-sky-500 bg-clip-text text-[3.25rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent dark:from-violet-400 dark:to-sky-400">{pct}%</span>
+        <span className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-white/50">{label}</span>
       </div>
     </div>
   );
@@ -442,15 +447,19 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
     <div className="space-y-3 lg:grid lg:grid-cols-12 lg:gap-3 lg:space-y-0">
       {/* Phones (Mobile v2 prototype): a progress-ring hero with At risk/Baselined chips + EVM tiles,
           leading the page. The desktop gauge/progress panel below is hidden on phones (no dup). */}
-      <div className="space-y-3 sm:hidden">
+      <div className="space-y-4 sm:hidden">
         <div className="lg-hero relative overflow-hidden rounded-3xl p-5 text-slate-900 dark:text-white">
-          <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: health === 'RED' ? '#ef4444' : health === 'AMBER' ? '#f59e0b' : health === 'GREEN' ? '#22c55e' : '#7c3aed', opacity: 0.22 }} />
+          {/* Adaptive health tint — top-weighted wash of the project RAG colour. */}
+          <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: health === 'RED' ? '#ef4444' : health === 'AMBER' ? '#f59e0b' : health === 'GREEN' ? '#22c55e' : '#7c3aed', opacity: 0.2 }} />
           <div className="relative flex items-center justify-between gap-2">
             <HealthChip health={health} id={id} />
             <BaselineChip on={!!e.scheduleBaselinedAt} />
           </div>
-          <div className="relative mt-3 flex justify-center">
+          <div className="relative mt-2 flex flex-col items-center">
             <ProjectRing pct={pct} label={id ? 'progres' : 'progress'} />
+            <div className="mt-3 text-center text-[13px] text-slate-500 dark:text-white/70">
+              {id ? 'Jadwal' : 'Schedule'} SPI {e.pv > 0 ? e.spi.toFixed(2) : '—'} · {id ? 'Biaya' : 'Cost'} CPI {e.ac > 0 ? e.cpi.toFixed(2) : '—'}
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
