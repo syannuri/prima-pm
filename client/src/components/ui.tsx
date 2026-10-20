@@ -9,10 +9,11 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   // (matches the dashboard tiles for one consistent language), denser padding on phones. The sheen
   // is a rounded ::before so we DON'T need overflow-hidden — that would clip dropdowns/popovers
   // rendered inside cards. It sits behind content (::before paints under the element's children).
-  // Mobile-v2 "Dark Premium + Glass": phones (always dark, < 640px) get a translucent glass surface
-  // over the Aurora ambient background; desktop dark reverts to the solid slate-900 card via sm:.
+  // Mobile-v2 "Dark Premium + Glass": phones (< 640px) get a translucent glass surface over the
+  // Aurora ambient — dark phones a dark glass, light phones a legibility-first white/.84 glass
+  // (matches the .lg-card tier). Desktop (sm:) reverts to the solid card in both themes.
   return (
-    <div className={`relative rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_6px_16px_-6px_rgba(15,23,42,0.08)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-14 before:rounded-t-2xl before:bg-gradient-to-b before:from-slate-50/80 before:to-transparent dark:border-white/10 dark:bg-white/[0.07] dark:shadow-lg dark:shadow-black/20 dark:backdrop-blur-xl dark:before:from-white/[0.03] sm:p-5 sm:dark:border-slate-700 sm:dark:bg-slate-900 sm:dark:backdrop-blur-none ${className}`}>
+    <div className={`relative rounded-2xl border border-white/60 bg-white/[0.84] p-4 backdrop-blur-md shadow-[0_1px_3px_rgba(15,23,42,0.04),0_6px_16px_-6px_rgba(15,23,42,0.08)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-14 before:rounded-t-2xl before:bg-gradient-to-b before:from-slate-50/80 before:to-transparent dark:border-white/10 dark:bg-white/[0.07] dark:shadow-lg dark:shadow-black/20 dark:backdrop-blur-xl dark:before:from-white/[0.03] sm:border-slate-200/80 sm:bg-white sm:p-5 sm:backdrop-blur-none sm:dark:border-slate-700 sm:dark:bg-slate-900 sm:dark:backdrop-blur-none ${className}`}>
       {children}
     </div>
   );
