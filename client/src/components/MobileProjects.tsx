@@ -70,8 +70,18 @@ export default function MobileProjects() {
           onChange={(e) => setQ(e.target.value)}
           placeholder={id ? 'Cari proyek, kode, PM…' : 'Search projects, code, PM…'}
           aria-label={id ? 'Cari proyek' : 'Search projects'}
-          className="lg-card w-full rounded-2xl py-3 pl-10 pr-4 text-sm text-slate-800 outline-none ring-brand-500/40 transition placeholder:text-slate-400 focus:ring-2 dark:text-white dark:placeholder:text-slate-500"
+          className="lg-card w-full rounded-2xl py-3 pl-10 pr-11 text-sm text-slate-800 outline-none ring-brand-500/40 transition placeholder:text-slate-400 focus:ring-2 dark:text-white dark:placeholder:text-slate-500"
         />
+        {q && (
+          <button
+            type="button"
+            onClick={() => { haptic(); setQ(''); }}
+            aria-label={id ? 'Hapus pencarian' : 'Clear search'}
+            className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-slate-400 transition hover:bg-black/5 hover:text-slate-600 active:scale-90 dark:hover:bg-white/10 dark:hover:text-slate-200"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        )}
       </div>
 
       {/* Filter chips — horizontally scrollable, active chip gets the prism gradient. */}

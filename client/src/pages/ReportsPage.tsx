@@ -472,10 +472,10 @@ function CommentarySection({ commentary, projectId, period, canEdit, aiAvailable
 
   return (
     <Card>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <SectionHead title="PM commentary" sub="Narrative status — the story behind the numbers" />
         {canEdit && !editing && (
-          <div className="flex shrink-0 gap-2">
+          <div className="flex flex-wrap gap-2 sm:shrink-0">
             {aiAvailable && (
               <Button variant="secondary" onClick={() => aiDraft.mutate()} disabled={aiDraft.isPending}>
                 {aiDraft.isPending ? 'Drafting…' : '✨ Draft with AI'}

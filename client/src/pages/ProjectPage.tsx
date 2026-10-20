@@ -612,7 +612,7 @@ function MobileSectionNav({ groups, activeTab, onSelect }: { groups: { label: st
           role="dialog"
           aria-modal="true"
           aria-label={lang === 'id' ? 'Bagian proyek' : 'Project sections'}
-          className={`absolute inset-y-0 left-0 flex w-[300px] max-w-[85%] flex-col border-r border-white/10 bg-white shadow-[30px_0_80px_-20px_rgba(0,0,0,0.8)] transition-transform duration-200 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+          className={`absolute inset-y-0 left-0 flex w-[300px] max-w-[85%] flex-col border-r border-white/10 bg-white transition-transform duration-200 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 ${open ? 'translate-x-0 shadow-[30px_0_80px_-20px_rgba(0,0,0,0.8)]' : '-translate-x-full'}`}
         >
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-white/10">
             <span className="flex items-center gap-2.5 text-sm font-extrabold text-slate-800 dark:text-slate-100">
