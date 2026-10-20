@@ -140,19 +140,19 @@ function ProjectRing({ pct, label }: { pct: number; label: string }) {
   const R = 52, C = 2 * Math.PI * R;
   const dash = Math.max(0, Math.min(100, pct)) / 100 * C;
   return (
-    <div className="relative h-44 w-44">
-      <svg viewBox="0 0 120 120" className="h-44 w-44 -rotate-90">
-        <defs><linearGradient id="ov-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#38bdf8" /></linearGradient></defs>
-        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" className="stroke-slate-200 dark:stroke-white/10" />
+    <div className="relative h-52 w-52">
+      <svg viewBox="0 0 120 120" className="h-52 w-52 -rotate-90">
+        <defs><linearGradient id="ov-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#e879f9" /><stop offset="1" stopColor="#f472b6" /></linearGradient></defs>
+        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="11" className="stroke-slate-200 dark:stroke-white/10" />
         {/* Signature motion: the ring sweeps in on mount (reuses the pmx-sweep keyframe). */}
         <circle
-          cx="60" cy="60" r={R} fill="none" strokeWidth="10" strokeLinecap="round" stroke="url(#ov-ring)"
+          cx="60" cy="60" r={R} fill="none" strokeWidth="11" strokeLinecap="round" stroke="url(#ov-ring)"
           strokeDasharray={C}
           style={{ strokeDashoffset: C - dash, ['--pmx-len' as string]: `${C}`, animation: 'pmx-sweep 1.2s cubic-bezier(.2,.7,.2,1) both' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="bg-gradient-to-r from-violet-500 to-sky-500 bg-clip-text text-[3.25rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent dark:from-violet-400 dark:to-sky-400">{pct}%</span>
+        <span className="bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500 bg-clip-text text-[4rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent dark:from-violet-400 dark:via-fuchsia-400 dark:to-pink-400">{pct}%</span>
         <span className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-white/50">{label}</span>
       </div>
     </div>
@@ -160,9 +160,9 @@ function ProjectRing({ pct, label }: { pct: number; label: string }) {
 }
 
 // A glass EVM figure tile (EV/AC/PV/BAC) for the phone Overview.
-function EvmTile({ label, value, valueCls }: { label: string; value: string; valueCls: string }) {
+function EvmTile({ label, value, valueCls, delay = 0 }: { label: string; value: string; valueCls: string; delay?: number }) {
   return (
-    <div className="lg-card relative overflow-hidden rounded-2xl p-4">
+    <div className="lg-card prima-rise relative overflow-hidden rounded-2xl p-4" style={{ animationDelay: `${delay}ms` }}>
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`mt-1 text-xl font-bold tabular-nums ${valueCls}`}>{value}</div>
     </div>
@@ -448,7 +448,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Phones (Mobile v2 prototype): a progress-ring hero with At risk/Baselined chips + EVM tiles,
           leading the page. The desktop gauge/progress panel below is hidden on phones (no dup). */}
       <div className="space-y-4 sm:hidden">
-        <div className="lg-hero relative overflow-hidden rounded-3xl p-5 text-slate-900 dark:text-white">
+        <div className="lg-hero prima-rise relative overflow-hidden rounded-3xl p-6 text-slate-900 dark:text-white">
           {/* Adaptive health tint — top-weighted wash of the project RAG colour. */}
           <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: health === 'RED' ? '#ef4444' : health === 'AMBER' ? '#f59e0b' : health === 'GREEN' ? '#22c55e' : '#7c3aed', opacity: 0.2 }} />
           <div className="relative flex items-center justify-between gap-2">
@@ -463,10 +463,10 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <EvmTile label={id ? 'Nilai diperoleh (EV)' : 'Earned value (EV)'} value={formatIdrShort(e.ev)} valueCls="text-emerald-600 dark:text-emerald-400" />
-          <EvmTile label={id ? 'Biaya aktual (AC)' : 'Actual cost (AC)'} value={formatIdrShort(e.ac)} valueCls={overBudget ? 'text-rose-400' : 'text-slate-800 dark:text-white'} />
-          <EvmTile label={id ? 'Nilai rencana (PV)' : 'Planned value (PV)'} value={formatIdrShort(e.pv)} valueCls="text-slate-800 dark:text-white" />
-          <EvmTile label={id ? 'Anggaran (BAC)' : 'Budget (BAC)'} value={formatIdrShort(e.bac)} valueCls="text-slate-800 dark:text-white" />
+          <EvmTile delay={0} label={id ? 'Nilai diperoleh (EV)' : 'Earned value (EV)'} value={formatIdrShort(e.ev)} valueCls="text-emerald-600 dark:text-emerald-400" />
+          <EvmTile delay={70} label={id ? 'Biaya aktual (AC)' : 'Actual cost (AC)'} value={formatIdrShort(e.ac)} valueCls={overBudget ? 'text-rose-400' : 'text-slate-800 dark:text-white'} />
+          <EvmTile delay={140} label={id ? 'Nilai rencana (PV)' : 'Planned value (PV)'} value={formatIdrShort(e.pv)} valueCls="text-slate-800 dark:text-white" />
+          <EvmTile delay={210} label={id ? 'Anggaran (BAC)' : 'Budget (BAC)'} value={formatIdrShort(e.bac)} valueCls="text-slate-800 dark:text-white" />
         </div>
       </div>
 
