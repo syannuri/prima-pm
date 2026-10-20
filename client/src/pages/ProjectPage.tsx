@@ -587,7 +587,7 @@ function MobileSectionNav({ groups, activeTab, onSelect }: { groups: { label: st
   return (
     <>
       {/* Slim sticky trigger — the menu lives off-canvas; this bar just shows the current section. */}
-      <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-100 px-4 pb-2.5 pt-6 shadow-sm dark:border-white/5 dark:bg-slate-950/80 dark:backdrop-blur-xl">
+      <div className="sticky -top-6 z-[31] -mx-4 border-b border-slate-200 bg-slate-100 px-4 pb-2.5 pt-6 dark:border-white/5 dark:bg-slate-950/80 dark:backdrop-blur-xl">
         <button
           onClick={() => setOpen(true)}
           aria-haspopup="dialog"
