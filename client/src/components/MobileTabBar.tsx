@@ -73,7 +73,7 @@ export default function MobileTabBar() {
           onClick={onFab}
           aria-label={aiOn ? 'Anett AI Assistant' : (id ? 'Proyek baru' : 'New project')}
           title={aiOn ? 'Anett AI Assistant' : (id ? 'Proyek baru' : 'New project')}
-          className="relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-400 text-white shadow-lg shadow-violet-600/40 ring-1 ring-white/30 transition-transform duration-150 ease-out active:scale-90"
+          className="anett-breathe relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-400 text-white shadow-lg shadow-violet-600/40 ring-1 ring-white/30 transition-transform duration-150 ease-out active:scale-90"
         >
           <span aria-hidden className="pointer-events-none absolute inset-x-1.5 top-1 h-1/2 rounded-[12px] bg-gradient-to-b from-white/45 to-transparent" />
           <svg viewBox="0 0 24 24" className="relative h-7 w-7 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]" fill="currentColor"><path d={SPARK} /></svg>
