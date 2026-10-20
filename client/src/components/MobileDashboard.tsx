@@ -89,9 +89,10 @@ export default function MobileDashboard() {
   return (
     <div className="space-y-3">
       {/* Hero — a progress-ring health dial with side stats (per the Mobile v2 prototype). */}
-      <div className={`relative overflow-hidden rounded-3xl p-4 shadow-lg ring-1 sm:p-5 ${light ? 'bg-gradient-to-br from-white to-slate-50 text-slate-900 ring-slate-200' : 'bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-950 text-white ring-white/10'}`}>
-        {/* Ambient violet glow top-right for the premium prism feel. */}
-        <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: '#7c3aed', opacity: light ? 0.1 : 0.3 }} />
+      <div className={`lg-hero relative overflow-hidden rounded-3xl p-4 sm:p-5 ${light ? 'text-slate-900' : 'text-white'}`}>
+        {/* Adaptive health tint — the hero glass picks up a wash of the portfolio RAG colour, so the
+            surface itself signals health (glass doing information design, not just decoration). */}
+        <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: RAG[status].c, opacity: light ? 0.16 : 0.3 }} />
         <div className="relative flex items-center justify-between gap-2">
           <div className={`text-[11px] font-semibold uppercase tracking-wide ${light ? 'text-slate-500' : 'text-white/70'}`}>Portfolio health</div>
           {/* SPI status pill — amber when behind, emerald when on track. */}
@@ -112,10 +113,10 @@ export default function MobileDashboard() {
       {/* KPI tiles — the portfolio's four headline figures (prototype): schedule & cost indices,
           earned value, and the count of slipped projects. Each carries a status dot + muted sub-line. */}
       <div className="grid grid-cols-2 gap-3">
-        <KpiTile label={id ? 'Portfolio SPI' : 'Portfolio SPI'} value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-400' : 'text-emerald-400'} sub={id ? (spiBehind ? 'jadwal · di bawah 1.0' : 'jadwal · sehat') : (spiBehind ? 'schedule · below 1.0' : 'schedule · healthy')} />
-        <KpiTile label={id ? 'Portfolio CPI' : 'Portfolio CPI'} value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-400' : 'text-emerald-400'} sub={id ? (cpiBad ? 'biaya · di bawah 1.0' : 'biaya · sehat') : (cpiBad ? 'cost · below 1.0' : 'cost · healthy')} />
+        <KpiTile label={id ? 'Portfolio SPI' : 'Portfolio SPI'} value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? (spiBehind ? 'jadwal · di bawah 1.0' : 'jadwal · sehat') : (spiBehind ? 'schedule · below 1.0' : 'schedule · healthy')} />
+        <KpiTile label={id ? 'Portfolio CPI' : 'Portfolio CPI'} value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? (cpiBad ? 'biaya · di bawah 1.0' : 'biaya · sehat') : (cpiBad ? 'cost · below 1.0' : 'cost · healthy')} />
         <KpiTile label={id ? 'Earned value' : 'Earned value'} value={formatIdrShort(t.ev)} dot="#22c55e" valueCls="text-slate-800 dark:text-white" sub={`${id ? 'dari' : 'of'} ${formatIdrShort(t.bac)}`} />
-        <KpiTile label={id ? 'Slipped' : 'Slipped'} value={String(offTrack)} dot={offTrack > 0 ? '#fb7185' : '#64748b'} valueCls={offTrack > 0 ? 'text-rose-400' : 'text-slate-700 dark:text-slate-200'} sub={id ? 'butuh perhatian' : 'need attention'} />
+        <KpiTile label={id ? 'Slipped' : 'Slipped'} value={String(offTrack)} dot={offTrack > 0 ? '#fb7185' : '#64748b'} valueCls={offTrack > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'} sub={id ? 'butuh perhatian' : 'need attention'} />
       </div>
 
       {/* Needs attention — the action queues (each renders nothing when empty) */}
@@ -147,7 +148,7 @@ export default function MobileDashboard() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className={`prima-rise relative block overflow-hidden rounded-2xl border bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm transition active:scale-[.99] dark:from-white/[0.07] dark:to-white/[0.03] dark:backdrop-blur-xl ${pinned.has(p.id) ? 'border-amber-300 ring-2 ring-amber-400/50 dark:border-amber-500/40' : 'border-slate-200 ring-1 ring-black/[0.05] dark:border-white/10 dark:ring-white/[0.04]'}`}
+                className={`lg-card prima-rise relative block overflow-hidden rounded-2xl p-4 transition active:scale-[.99] ${pinned.has(p.id) ? 'ring-2 ring-amber-400/60 !border-amber-300' : ''}`}
                 style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
               >
                 {/* Top sheen — unifies with the quick-action + KPI tiles. */}
@@ -238,7 +239,7 @@ function HeroStat({ light, label, value, frac }: { light: boolean; label: string
 // A KPI tile: a status dot + uppercase label, a big colour-coded value, and a muted sub-line.
 function KpiTile({ label, value, sub, dot, valueCls }: { label: string; value: string; sub?: string; dot: string; valueCls: string }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-white/10 dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/[0.04] dark:backdrop-blur-xl">
+    <div className="lg-card relative overflow-hidden rounded-2xl p-4">
       {/* Top sheen — matches the KPI/project tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
       <div className="relative flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">

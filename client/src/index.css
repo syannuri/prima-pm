@@ -419,10 +419,11 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 
 /* Floating frosted bottom tab bar + a soft radial glow behind the active tab's icon. */
 .m-tabbar {
-  background: rgba(14, 19, 38, 0.72);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
-          backdrop-filter: blur(22px) saturate(1.4);
+  background: rgba(255, 255, 255, 0.58);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+          backdrop-filter: blur(24px) saturate(1.6);
 }
+.dark .m-tabbar { background: rgba(14, 19, 38, 0.72); }
 .m-tab-glow::after {
   content: ''; position: absolute; top: 4px; width: 34px; height: 34px; border-radius: 9999px;
   background: radial-gradient(circle, rgba(139, 92, 246, 0.45), transparent 70%); z-index: 0;
@@ -435,3 +436,43 @@ button, a, [role="button"], [role="switch"], label, select, summary {
 }
 .m-aurora::before { width: 280px; height: 280px; top: -90px; right: -80px; background: radial-gradient(circle, rgba(139, 92, 246, 0.35), transparent 70%); }
 .m-aurora::after  { width: 260px; height: 260px; bottom: 60px; left: -90px; background: radial-gradient(circle, rgba(56, 189, 248, 0.22), transparent 70%); }
+
+/* ============ Light-glass v2 — tiered frosted surfaces (mobile prototype) ============
+   Tiered depth: CHROME floats most (nav/header), HERO is the translucent showcase, and
+   data CARDS stay legibility-first (mostly opaque) so numbers never fight the backdrop.
+   Each tier carries a specular top edge + a violet-tinted lift shadow (light physics). */
+:root {
+  --lg-border: rgba(255, 255, 255, 0.55);
+  --lg-edge: inset 0 1px 0 rgba(255, 255, 255, 0.75);   /* specular highlight along the top rim */
+  --lg-lift: 0 10px 30px -12px rgba(76, 29, 149, 0.22); /* tinted elevation shadow, not grey */
+}
+.lg-chrome {
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(26px) saturate(1.5);
+          backdrop-filter: blur(26px) saturate(1.5);
+  border: 1px solid var(--lg-border);
+  box-shadow: var(--lg-edge);
+}
+.lg-hero {
+  background: linear-gradient(158deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.30));
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+          backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid var(--lg-border);
+  box-shadow: var(--lg-edge), var(--lg-lift);
+}
+.lg-card {
+  background: rgba(255, 255, 255, 0.84);   /* legibility-first: mostly opaque */
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+          backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--lg-edge), 0 6px 18px -10px rgba(76, 29, 149, 0.18);
+}
+/* Dark mode keeps the existing dark-glass look (these classes own both themes). */
+.dark .lg-chrome { background: rgba(14, 19, 38, 0.72); border-color: rgba(255, 255, 255, 0.10); box-shadow: none; }
+.dark .lg-hero   { background: linear-gradient(135deg, #0f172a, rgba(76, 29, 149, 0.35), #020617); border-color: rgba(255, 255, 255, 0.10); box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6); }
+.dark .lg-card   { background: rgba(255, 255, 255, 0.055); border-color: rgba(255, 255, 255, 0.10); box-shadow: none; }
+/* Accessibility: honour "Reduce Transparency" — drop the blur and go solid. */
+@media (prefers-reduced-transparency: reduce) {
+  .lg-chrome, .lg-hero, .lg-card { -webkit-backdrop-filter: none; backdrop-filter: none; background: #ffffff; }
+  .dark .lg-chrome, .dark .lg-hero, .dark .lg-card { background: #0b1020; }
+}

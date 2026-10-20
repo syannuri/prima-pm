@@ -143,12 +143,12 @@ function ProjectRing({ pct, label }: { pct: number; label: string }) {
     <div className="relative h-36 w-36">
       <svg viewBox="0 0 120 120" className="h-36 w-36 -rotate-90">
         <defs><linearGradient id="ov-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#38bdf8" /></linearGradient></defs>
-        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" className="stroke-white/10" />
+        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" className="stroke-slate-200 dark:stroke-white/10" />
         <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" strokeLinecap="round" stroke="url(#ov-ring)" strokeDasharray={`${dash} ${C}`} className="transition-[stroke-dasharray] duration-700" />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-4xl font-extrabold tabular-nums leading-none text-transparent">{pct}%</span>
-        <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">{label}</span>
+        <span className="bg-gradient-to-r from-violet-500 to-sky-500 bg-clip-text text-4xl font-extrabold tabular-nums leading-none text-transparent dark:from-violet-400 dark:to-sky-400">{pct}%</span>
+        <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-white/50">{label}</span>
       </div>
     </div>
   );
@@ -157,7 +157,7 @@ function ProjectRing({ pct, label }: { pct: number; label: string }) {
 // A glass EVM figure tile (EV/AC/PV/BAC) for the phone Overview.
 function EvmTile({ label, value, valueCls }: { label: string; value: string; valueCls: string }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ring-black/[0.05] dark:border-white/10 dark:bg-white/[0.07] dark:ring-white/[0.04] dark:backdrop-blur-xl">
+    <div className="lg-card relative overflow-hidden rounded-2xl p-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`mt-1 text-xl font-bold tabular-nums ${valueCls}`}>{value}</div>
     </div>
@@ -443,8 +443,8 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Phones (Mobile v2 prototype): a progress-ring hero with At risk/Baselined chips + EVM tiles,
           leading the page. The desktop gauge/progress panel below is hidden on phones (no dup). */}
       <div className="space-y-3 sm:hidden">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-950 p-5 text-white shadow-lg ring-1 ring-white/10">
-          <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: '#7c3aed', opacity: 0.3 }} />
+        <div className="lg-hero relative overflow-hidden rounded-3xl p-5 text-slate-900 dark:text-white">
+          <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: health === 'RED' ? '#ef4444' : health === 'AMBER' ? '#f59e0b' : health === 'GREEN' ? '#22c55e' : '#7c3aed', opacity: 0.22 }} />
           <div className="relative flex items-center justify-between gap-2">
             <HealthChip health={health} id={id} />
             <BaselineChip on={!!e.scheduleBaselinedAt} />
@@ -454,7 +454,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <EvmTile label={id ? 'Nilai diperoleh (EV)' : 'Earned value (EV)'} value={formatIdrShort(e.ev)} valueCls="text-emerald-400" />
+          <EvmTile label={id ? 'Nilai diperoleh (EV)' : 'Earned value (EV)'} value={formatIdrShort(e.ev)} valueCls="text-emerald-600 dark:text-emerald-400" />
           <EvmTile label={id ? 'Biaya aktual (AC)' : 'Actual cost (AC)'} value={formatIdrShort(e.ac)} valueCls={overBudget ? 'text-rose-400' : 'text-slate-800 dark:text-white'} />
           <EvmTile label={id ? 'Nilai rencana (PV)' : 'Planned value (PV)'} value={formatIdrShort(e.pv)} valueCls="text-slate-800 dark:text-white" />
           <EvmTile label={id ? 'Anggaran (BAC)' : 'Budget (BAC)'} value={formatIdrShort(e.bac)} valueCls="text-slate-800 dark:text-white" />

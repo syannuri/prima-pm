@@ -70,7 +70,7 @@ export default function MobileProjects() {
           onChange={(e) => setQ(e.target.value)}
           placeholder={id ? 'Cari proyek, kode, PM…' : 'Search projects, code, PM…'}
           aria-label={id ? 'Cari proyek' : 'Search projects'}
-          className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-800 shadow-sm outline-none ring-brand-500/40 transition placeholder:text-slate-400 focus:ring-2 dark:border-white/10 dark:bg-white/[0.07] dark:text-white dark:backdrop-blur-xl dark:placeholder:text-slate-500"
+          className="lg-card w-full rounded-2xl py-3 pl-10 pr-4 text-sm text-slate-800 outline-none ring-brand-500/40 transition placeholder:text-slate-400 focus:ring-2 dark:text-white dark:placeholder:text-slate-500"
         />
       </div>
 
@@ -84,7 +84,7 @@ export default function MobileProjects() {
               onClick={() => { haptic(); setFilter(c.key); }}
               className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition ${on
                 ? 'bg-gradient-to-r from-violet-500 to-sky-500 text-white shadow-md shadow-violet-600/30'
-                : 'border border-slate-200 bg-white text-slate-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300 dark:backdrop-blur-xl'}`}
+                : 'lg-chrome text-slate-600 dark:text-slate-300'}`}
             >
               {c.label} <span className="tabular-nums opacity-70">· {counts[c.key]}</span>
             </button>
@@ -105,7 +105,7 @@ export default function MobileProjects() {
                 <Link
                   key={p.id}
                   to={`/projects/${p.id}`}
-                  className="prima-rise relative block overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-4 pl-5 shadow-sm ring-1 ring-black/[0.05] transition active:scale-[.99] dark:border-white/10 dark:from-white/[0.07] dark:to-white/[0.03] dark:ring-white/[0.04] dark:backdrop-blur-xl"
+                  className="lg-card prima-rise relative block overflow-hidden rounded-2xl p-4 pl-5 transition active:scale-[.99]"
                   style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
                 >
                   {/* health colour spine */}
