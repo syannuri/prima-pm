@@ -85,7 +85,7 @@ export default function MobileDashboard() {
   return (
     <div className="space-y-4">
       {/* Hero — ONE dominant element: a big centred health ring over adaptive-tint glass (Aurora Pro). */}
-      <div className={`lg-hero relative overflow-hidden rounded-3xl p-5 ${light ? 'text-slate-900' : 'text-white'}`}>
+      <div className={`lg-hero prima-rise relative overflow-hidden rounded-3xl p-6 ${light ? 'text-slate-900' : 'text-white'}`}>
         {/* Adaptive health tint — a top-weighted wash of the portfolio RAG colour, so the surface
             itself signals health (glass doing information design, not just decoration). */}
         <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: RAG[status].c, opacity: light ? 0.14 : 0.28 }} />
@@ -109,9 +109,9 @@ export default function MobileDashboard() {
 
       {/* KPI strip — the secondary tier: three headline indices, flatter + smaller than the hero. */}
       <div className="grid grid-cols-3 gap-2.5">
-        <KpiTile label="SPI" value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? 'jadwal' : 'schedule'} />
-        <KpiTile label="CPI" value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? 'biaya' : 'cost'} />
-        <KpiTile label={id ? 'Earned' : 'Earned'} value={formatIdrShort(t.ev)} dot="#22c55e" valueCls="text-slate-800 dark:text-white" sub={`${id ? 'dari' : 'of'} ${formatIdrShort(t.bac)}`} />
+        <KpiTile delay={0} label="SPI" value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? 'jadwal' : 'schedule'} />
+        <KpiTile delay={70} label="CPI" value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? 'biaya' : 'cost'} />
+        <KpiTile delay={140} label={id ? 'Earned' : 'Earned'} value={formatIdrShort(t.ev)} dot="#22c55e" valueCls="text-slate-800 dark:text-white" sub={`${id ? 'dari' : 'of'} ${formatIdrShort(t.bac)}`} />
       </div>
 
       {/* Needs attention — the action queues (each renders nothing when empty) */}
@@ -202,23 +202,23 @@ function PortfolioRing({ pct, light, label }: { pct: number; light: boolean; lab
   const R = 52, C = 2 * Math.PI * R;
   const dash = Math.max(0, Math.min(100, pct)) / 100 * C;
   return (
-    <div className="relative h-44 w-44 shrink-0">
-      <svg viewBox="0 0 120 120" className="h-44 w-44 -rotate-90">
+    <div className="relative h-52 w-52 shrink-0">
+      <svg viewBox="0 0 120 120" className="h-52 w-52 -rotate-90">
         <defs>
           <linearGradient id="pring-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#38bdf8" />
+            <stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#e879f9" /><stop offset="1" stopColor="#f472b6" />
           </linearGradient>
         </defs>
-        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="10" className={light ? 'stroke-slate-200' : 'stroke-white/10'} />
+        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="11" className={light ? 'stroke-slate-200' : 'stroke-white/10'} />
         {/* Signature motion: the ring sweeps in on mount (reuses the pmx-sweep keyframe). */}
         <circle
-          cx="60" cy="60" r={R} fill="none" strokeWidth="10" strokeLinecap="round" stroke="url(#pring-grad)"
+          cx="60" cy="60" r={R} fill="none" strokeWidth="11" strokeLinecap="round" stroke="url(#pring-grad)"
           strokeDasharray={C}
           style={{ strokeDashoffset: C - dash, ['--pmx-len' as string]: `${C}`, animation: 'pmx-sweep 1.2s cubic-bezier(.2,.7,.2,1) both' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-[3.25rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent">{pct}%</span>
+        <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-[4rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent">{pct}%</span>
         <span className={`mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${light ? 'text-slate-400' : 'text-white/50'}`}>{label}</span>
       </div>
     </div>
@@ -226,9 +226,9 @@ function PortfolioRing({ pct, light, label }: { pct: number; light: boolean; lab
 }
 
 // A KPI tile: a status dot + uppercase label, a big colour-coded value, and a muted sub-line.
-function KpiTile({ label, value, sub, dot, valueCls }: { label: string; value: string; sub?: string; dot: string; valueCls: string }) {
+function KpiTile({ label, value, sub, dot, valueCls, delay = 0 }: { label: string; value: string; sub?: string; dot: string; valueCls: string; delay?: number }) {
   return (
-    <div className="lg-card relative overflow-hidden rounded-2xl p-3.5">
+    <div className="lg-card prima-rise relative overflow-hidden rounded-2xl p-3.5" style={{ animationDelay: `${delay}ms` }}>
       {/* Top sheen — matches the KPI/project tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
       <div className="relative flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
