@@ -142,7 +142,7 @@ function ProjectRing({ pct, label }: { pct: number; label: string }) {
   return (
     <div className="relative h-52 w-52">
       <svg viewBox="0 0 120 120" className="h-52 w-52 -rotate-90">
-        <defs><linearGradient id="ov-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#e879f9" /><stop offset="1" stopColor="#f472b6" /></linearGradient></defs>
+        <defs><linearGradient id="ov-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#60a5fa" /></linearGradient></defs>
         <circle cx="60" cy="60" r={R} fill="none" strokeWidth="11" className="stroke-slate-200 dark:stroke-white/10" />
         {/* Signature motion: the ring sweeps in on mount (reuses the pmx-sweep keyframe). */}
         <circle
@@ -152,7 +152,7 @@ function ProjectRing({ pct, label }: { pct: number; label: string }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500 bg-clip-text text-[4rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent dark:from-violet-400 dark:via-fuchsia-400 dark:to-pink-400">{pct}%</span>
+        <span className="bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 bg-clip-text text-[4rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent dark:from-violet-400 dark:via-indigo-400 dark:to-blue-400">{pct}%</span>
         <span className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-white/50">{label}</span>
       </div>
     </div>
