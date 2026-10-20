@@ -206,7 +206,7 @@ function PortfolioRing({ pct, light, label }: { pct: number; light: boolean; lab
       <svg viewBox="0 0 120 120" className="h-52 w-52 -rotate-90">
         <defs>
           <linearGradient id="pring-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#e879f9" /><stop offset="1" stopColor="#f472b6" />
+            <stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#60a5fa" />
           </linearGradient>
         </defs>
         <circle cx="60" cy="60" r={R} fill="none" strokeWidth="11" className={light ? 'stroke-slate-200' : 'stroke-white/10'} />
@@ -218,7 +218,7 @@ function PortfolioRing({ pct, light, label }: { pct: number; light: boolean; lab
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-[4rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent">{pct}%</span>
+        <span className="bg-gradient-to-r from-violet-400 via-indigo-400 to-blue-400 bg-clip-text text-[4rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent">{pct}%</span>
         <span className={`mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${light ? 'text-slate-400' : 'text-white/50'}`}>{label}</span>
       </div>
     </div>
