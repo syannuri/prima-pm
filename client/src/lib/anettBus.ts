@@ -5,6 +5,7 @@
 
 type Listener = (prompt?: string) => void;
 let listener: Listener | null = null;
+let toggler: (() => void) | null = null;
 
 // AiAssistant registers here on mount; pass null on unmount.
 export function onOpenAnett(fn: Listener | null): void {
@@ -15,6 +16,16 @@ export function onOpenAnett(fn: Listener | null): void {
 // (AI disabled) — the caller's nudge simply shouldn't render in that case.
 export function openAnett(prompt?: string): void {
   listener?.(prompt);
+}
+
+// AiAssistant also registers a toggle, so a launcher (e.g. the mobile FAB) can both open AND
+// minimise Anett with repeated taps. Nudges keep the always-open openAnett() semantics.
+export function onToggleAnett(fn: (() => void) | null): void {
+  toggler = fn;
+}
+
+export function toggleAnett(): void {
+  toggler?.();
 }
 
 export function anettAvailable(): boolean {
