@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useNotificationCount } from '../hooks/useNotificationCount';
 import { haptic } from '../lib/haptics';
-import { openAnett } from '../lib/anettBus';
+import { toggleAnett } from '../lib/anettBus';
 import { api } from '../api/client';
 
 // SF-Symbol-style icon pairs: a thin outline for the unselected state and a solid glyph for
@@ -57,7 +57,7 @@ export default function MobileTabBar() {
   const left = tabs.slice(0, 2);
   const right = tabs.slice(2);
 
-  const onFab = () => { haptic(); if (aiOn) openAnett(); else navigate('/?new=1'); };
+  const onFab = () => { haptic(); if (aiOn) toggleAnett(); else navigate('/?new=1'); };
 
   return (
     <nav

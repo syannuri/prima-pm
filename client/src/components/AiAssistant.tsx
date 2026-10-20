@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, API_BASE, streamHeaders } from '../api/client';
 import { Markdown } from '../lib/markdown';
 import AnettChartCard from './AnettChartCard';
-import { onOpenAnett } from '../lib/anettBus';
+import { onOpenAnett, onToggleAnett } from '../lib/anettBus';
 import { toCsv, downloadCsv } from '../lib/csv';
 import { useLang } from '../context/LanguageContext';
 import { selectChips, resolveFollowups, citedLinks } from '../lib/anettChips';
@@ -595,7 +595,9 @@ export default function AiAssistant() {
       setOpen(true);
       if (prompt) setTimeout(() => sendRef.current(prompt), 80); // let the panel open first
     });
-    return () => onOpenAnett(null);
+    // A launcher (mobile FAB) can toggle — second tap minimises Anett.
+    onToggleAnett(() => setOpen((o) => !o));
+    return () => { onOpenAnett(null); onToggleAnett(null); };
   }, []);
 
   // Load & track available TTS voices (getVoices is async — populated on 'voiceschanged').
