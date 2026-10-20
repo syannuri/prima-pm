@@ -188,13 +188,12 @@ const LANGS: { value: Lang; label: string }[] = [
 ];
 
 function AppearanceCard() {
-  const { theme, toggle, locked } = useTheme();
+  const { theme, toggle } = useTheme();
   const { lang, setLang } = useLang();
   const dark = theme === 'dark';
   return (
     <SettingsGroup title={lang === 'id' ? 'Tampilan' : 'Appearance'} flush>
-      {/* Dark-mode toggle is desktop-only — phones are always dark (locked). */}
-      {!locked && (
+      {/* Dark-mode toggle — now available on phones too (per-device preference). */}
       <SettingsRow
         title={lang === 'id' ? 'Mode gelap' : 'Dark mode'}
         sub={
@@ -205,7 +204,6 @@ function AppearanceCard() {
       >
         <Toggle checked={dark} onChange={() => toggle()} label={lang === 'id' ? 'Alihkan mode gelap' : 'Toggle dark mode'} />
       </SettingsRow>
-      )}
       <SettingsRow
         title={lang === 'id' ? 'Bahasa' : 'Language'}
         sub={lang === 'id' ? 'Sapaan & tanggal. Terdeteksi otomatis dari peramban Anda.' : 'Greeting & dates. Auto-detected from your browser.'}

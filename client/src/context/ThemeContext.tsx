@@ -4,29 +4,37 @@ type Theme = 'light' | 'dark';
 // v2: light is the default on DESKTOP. Bumped from 'prima_theme' because the old provider
 // auto-persisted the (then dark) default on every visit, so stored values were unreliable noise.
 const KEY = 'prima_theme_v2';
-// PHONES ARE ALWAYS DARK (product decision) — light mode is a desktop-only option. Mirrors the
-// inline boot script in index.html so there's no first-paint flash.
+// Phones default to DARK but can opt in to light via a per-device preference (set from the
+// Appearance toggle). Separate from the desktop key so the two never clobber each other.
+// Mirrors the inline boot script in index.html so there's no first-paint flash.
+const KEY_M = 'prima_mobile_theme';
 const MOBILE_Q = '(max-width: 639px)';
 function isMobileViewport(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(MOBILE_Q).matches;
 }
 
 interface ThemeState {
-  theme: Theme;    // the EFFECTIVE theme (always 'dark' on mobile)
+  theme: Theme;    // the EFFECTIVE theme (desktop preference, or the mobile preference on phones)
   toggle: () => void;
-  locked: boolean; // true on mobile → theme is forced dark; the toggle is a no-op / hidden
+  locked: boolean; // kept for API stability; false now that phones are toggleable
 }
 const ThemeContext = createContext<ThemeState | undefined>(undefined);
 
-// The user's stored DESKTOP preference (ignored on mobile, which is always dark).
+// The user's stored DESKTOP preference (phones use storedMobileTheme instead).
 function storedTheme(): Theme {
   if (typeof localStorage !== 'undefined' && localStorage.getItem(KEY) === 'dark') return 'dark';
   if (typeof document !== 'undefined' && document.documentElement.classList.contains('dark') && !isMobileViewport()) return 'dark';
   return 'light';
 }
 
+// The per-device MOBILE preference — defaults to dark (phones stay dark unless opted in).
+function storedMobileTheme(): Theme {
+  return typeof localStorage !== 'undefined' && localStorage.getItem(KEY_M) === 'light' ? 'light' : 'dark';
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(storedTheme); // desktop preference
+  const [theme, setTheme] = useState<Theme>(storedTheme);             // desktop preference
+  const [mobileTheme, setMobileTheme] = useState<Theme>(storedMobileTheme); // per-device phone preference
   const [mobile, setMobile] = useState<boolean>(isMobileViewport);
 
   // Track viewport so a desktop↔mobile resize re-applies the right theme live.
@@ -39,23 +47,28 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mql.removeEventListener?.('change', on);
   }, []);
 
-  // PROTOTYPE: a localStorage opt-in (`prima_mobile_light=1`) lets phones use light mode so the
-  // light-mode design can be evaluated. Without the flag, phones stay forced-dark as before.
-  const mobileLightPreview = typeof localStorage !== 'undefined' && localStorage.getItem('prima_mobile_light') === '1';
-  const effective: Theme = mobile && !mobileLightPreview ? 'dark' : theme; // mobile is forced dark unless the preview flag is set
+  // Phones follow their own per-device preference (default dark); desktop follows `theme`.
+  const effective: Theme = mobile ? mobileTheme : theme;
   useEffect(() => {
     document.documentElement.classList.toggle('dark', effective === 'dark');
   }, [effective]);
 
   const toggle = () => {
-    if (mobile) return; // light mode is desktop-only
+    if (mobile) {
+      setMobileTheme((t) => {
+        const next: Theme = t === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem(KEY_M, next); } catch { /* ignore */ }
+        return next;
+      });
+      return;
+    }
     setTheme((t) => {
       const next: Theme = t === 'dark' ? 'light' : 'dark';
       try { localStorage.setItem(KEY, next); } catch { /* ignore */ }
       return next;
     });
   };
-  return <ThemeContext.Provider value={{ theme: effective, toggle, locked: mobile }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ theme: effective, toggle, locked: false }}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
