@@ -128,7 +128,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className={`z-10 flex shrink-0 items-center gap-2 border-b px-4 backdrop-blur-xl transition-colors duration-200 ${platform ? 'border-violet-400/20 bg-indigo-950' : 'border-white/40 bg-white/50 dark:border-black/20 dark:bg-slate-800 dark:backdrop-blur-none sm:border-black/20 sm:bg-slate-800 sm:backdrop-blur-none'}`}
+          className={`z-10 flex shrink-0 items-center gap-2 border-b px-4 transition-colors duration-200 ${platform ? 'border-violet-400/20 bg-indigo-950 backdrop-blur-xl' : 'border-white/50 bg-white/55 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_0_rgba(15,23,42,0.06),0_10px_24px_-20px_rgba(15,23,42,0.3)] dark:border-black/20 dark:bg-slate-800 dark:backdrop-blur-none dark:backdrop-saturate-100 dark:shadow-none sm:border-black/20 sm:bg-slate-800 sm:backdrop-blur-none sm:backdrop-saturate-100 sm:shadow-none'}`}
           style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
         >
           {/* Phones: initials avatar (account/settings) sits top-left. */}
