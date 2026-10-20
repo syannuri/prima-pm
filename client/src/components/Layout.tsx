@@ -96,7 +96,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarContext.Provider value={sidebarCtx}>
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 sm:bg-slate-100">
       {/* PROTOTYPE light-glass v2 ambient — a TOP-WEIGHTED, desaturated aurora: colour is concentrated
           behind the hero up top and fades to the clean neutral base lower down, so data lists sit on
           even ground (phones, light only). */}
@@ -128,7 +128,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className={`z-10 flex shrink-0 items-center gap-2 border-b px-4 backdrop-blur-xl transition-colors duration-200 ${platform ? 'border-violet-400/20 bg-indigo-950' : 'border-white/40 bg-white/50 dark:border-black/20 dark:bg-slate-800 dark:backdrop-blur-none'}`}
+          className={`z-10 flex shrink-0 items-center gap-2 border-b px-4 backdrop-blur-xl transition-colors duration-200 ${platform ? 'border-violet-400/20 bg-indigo-950' : 'border-white/40 bg-white/50 dark:border-black/20 dark:bg-slate-800 dark:backdrop-blur-none sm:border-black/20 sm:bg-slate-800 sm:backdrop-blur-none'}`}
           style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
         >
           {/* Phones: initials avatar (account/settings) sits top-left. */}
@@ -156,7 +156,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={() => navigate(-1)}
               aria-label="Back"
               title="Back"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white sm:text-slate-300 sm:hover:bg-white/10 sm:hover:text-white"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -171,7 +171,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             onClick={toggle}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label="Toggle sidebar"
-            className="hidden h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white md:grid"
+            className="hidden h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white md:grid"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="16" rx="2" />
