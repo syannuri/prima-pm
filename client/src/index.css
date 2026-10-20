@@ -318,6 +318,7 @@ button, a, [role="button"], [role="switch"], label, select, summary {
   0%, 100% { box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.30), 0 0 0 0 rgba(139, 92, 246, 0.35); }
   50%      { box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.30), 0 0 0 9px rgba(139, 92, 246, 0); }
 }
+@media (prefers-reduced-motion: reduce) { .anett-breathe { animation: none; } }
 
 /* ── Anett UI v2 "Prism Copilot" — opt-in via the ⋮ menu (anett-ui-v2); dormant otherwise ── */
 /* Frosted-glass panel. */

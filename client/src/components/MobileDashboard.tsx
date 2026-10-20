@@ -73,13 +73,9 @@ export default function MobileDashboard() {
   };
   const projects = sorted.filter((p) => filter === 'all' || (filter === 'active' ? p.status !== 'CLOSED' : p.status === 'CLOSED'));
 
-  // Hero side-stats + KPI figures (prototype): active vs off-track projects, and the "slipped"
-  // count (active projects whose health is AMBER/RED). The two mini-bars read on-track share and
-  // earned share of budget.
+  // Hero + KPI figures: active projects and the count needing attention (active & AMBER/RED).
   const active = data.projects.filter((p) => isActive(p.status)).length;
   const offTrack = data.projects.filter((p) => isActive(p.status) && (p.health === 'RED' || p.health === 'AMBER')).length;
-  const onTrackFrac = active > 0 ? (active - offTrack) / active : 0;
-  const earnedFrac = t.bac > 0 ? t.ev / t.bac : 0;
   const spiStr = t.pv > 0 ? t.spi.toFixed(2) : '—';
   const cpiStr = t.ac > 0 ? t.cpi.toFixed(2) : '—';
   const spiBehind = t.pv > 0 && t.spi < 1;
@@ -87,36 +83,35 @@ export default function MobileDashboard() {
   const id = lang === 'id';
 
   return (
-    <div className="space-y-3">
-      {/* Hero — a progress-ring health dial with side stats (per the Mobile v2 prototype). */}
-      <div className={`lg-hero relative overflow-hidden rounded-3xl p-4 sm:p-5 ${light ? 'text-slate-900' : 'text-white'}`}>
-        {/* Adaptive health tint — the hero glass picks up a wash of the portfolio RAG colour, so the
-            surface itself signals health (glass doing information design, not just decoration). */}
-        <div aria-hidden className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: RAG[status].c, opacity: light ? 0.16 : 0.3 }} />
+    <div className="space-y-4">
+      {/* Hero — ONE dominant element: a big centred health ring over adaptive-tint glass (Aurora Pro). */}
+      <div className={`lg-hero prima-rise relative overflow-hidden rounded-3xl p-6 ${light ? 'text-slate-900' : 'text-white'}`}>
+        {/* Adaptive health tint — a top-weighted wash of the portfolio RAG colour, so the surface
+            itself signals health (glass doing information design, not just decoration). */}
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: RAG[status].c, opacity: light ? 0.14 : 0.28 }} />
+        {/* Top row: health pill (left) + section label (right) — SPI itself now lives in the KPI strip. */}
         <div className="relative flex items-center justify-between gap-2">
-          <div className={`text-[11px] font-semibold uppercase tracking-wide ${light ? 'text-slate-500' : 'text-white/70'}`}>Portfolio health</div>
-          {/* SPI status pill — amber when behind, emerald when on track. */}
           <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1" style={{ color: RAG[status].c, backgroundColor: `${RAG[status].c}1f`, borderColor: `${RAG[status].c}55` }}>
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: RAG[status].c }} />
-            SPI {spiStr} · {id ? (spiBehind ? 'tertunda' : 'sesuai') : RAG[status].label}
+            {id ? (spiBehind ? 'Tertunda' : 'Sesuai jadwal') : RAG[status].label}
           </span>
+          <span className={`text-[11px] font-semibold uppercase tracking-wider ${light ? 'text-slate-400' : 'text-white/55'}`}>{id ? 'Portofolio' : 'Portfolio'}</span>
         </div>
-        <div className="relative mt-3 flex items-center gap-4">
-          <PortfolioRing pct={pct} light={light} label={id ? 'selesai' : 'complete'} />
-          <div className="min-w-0 flex-1 space-y-3">
-            <HeroStat light={light} label={id ? 'Proyek aktif' : 'Active projects'} value={`${active}${offTrack > 0 ? ` · ${offTrack} off-track` : ''}`} frac={onTrackFrac} />
-            <HeroStat light={light} label="Total BAC" value={formatIdrShort(t.bac)} frac={earnedFrac} />
+        <div className="relative mt-2 flex flex-col items-center">
+          <PortfolioRing pct={pct} light={light} label={id ? 'kesehatan' : 'portfolio health'} />
+          <div className={`mt-3 text-center text-[13px] ${light ? 'text-slate-500' : 'text-white/70'}`}>
+            {id
+              ? `${active} proyek aktif${offTrack > 0 ? ` · ${offTrack} butuh perhatian` : ' · semua sesuai'}`
+              : `${active} active project${active === 1 ? '' : 's'}${offTrack > 0 ? ` · ${offTrack} need attention` : ' · all on track'}`}
           </div>
         </div>
       </div>
 
-      {/* KPI tiles — the portfolio's four headline figures (prototype): schedule & cost indices,
-          earned value, and the count of slipped projects. Each carries a status dot + muted sub-line. */}
-      <div className="grid grid-cols-2 gap-3">
-        <KpiTile label={id ? 'Portfolio SPI' : 'Portfolio SPI'} value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? (spiBehind ? 'jadwal · di bawah 1.0' : 'jadwal · sehat') : (spiBehind ? 'schedule · below 1.0' : 'schedule · healthy')} />
-        <KpiTile label={id ? 'Portfolio CPI' : 'Portfolio CPI'} value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? (cpiBad ? 'biaya · di bawah 1.0' : 'biaya · sehat') : (cpiBad ? 'cost · below 1.0' : 'cost · healthy')} />
-        <KpiTile label={id ? 'Earned value' : 'Earned value'} value={formatIdrShort(t.ev)} dot="#22c55e" valueCls="text-slate-800 dark:text-white" sub={`${id ? 'dari' : 'of'} ${formatIdrShort(t.bac)}`} />
-        <KpiTile label={id ? 'Slipped' : 'Slipped'} value={String(offTrack)} dot={offTrack > 0 ? '#fb7185' : '#64748b'} valueCls={offTrack > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'} sub={id ? 'butuh perhatian' : 'need attention'} />
+      {/* KPI strip — the secondary tier: three headline indices, flatter + smaller than the hero. */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <KpiTile delay={0} label="SPI" value={spiStr} dot={spiBehind ? '#f59e0b' : '#22c55e'} valueCls={spiBehind ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? 'jadwal' : 'schedule'} />
+        <KpiTile delay={70} label="CPI" value={cpiStr} dot={cpiBad ? '#fb7185' : '#22c55e'} valueCls={cpiBad ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} sub={id ? 'biaya' : 'cost'} />
+        <KpiTile delay={140} label={id ? 'Earned' : 'Earned'} value={formatIdrShort(t.ev)} dot="#22c55e" valueCls="text-slate-800 dark:text-white" sub={`${id ? 'dari' : 'of'} ${formatIdrShort(t.bac)}`} />
       </div>
 
       {/* Needs attention — the action queues (each renders nothing when empty) */}
@@ -148,11 +143,13 @@ export default function MobileDashboard() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className={`lg-card prima-rise relative block overflow-hidden rounded-2xl p-4 transition active:scale-[.99] ${pinned.has(p.id) ? 'ring-2 ring-amber-400/60 !border-amber-300' : ''}`}
+                className={`lg-card prima-rise relative block overflow-hidden rounded-2xl p-4 pl-5 transition active:scale-[.99] ${pinned.has(p.id) ? 'ring-2 ring-amber-400/60 !border-amber-300' : ''}`}
                 style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
               >
                 {/* Top sheen — unifies with the quick-action + KPI tiles. */}
                 <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
+                {/* Health spine — carries the hero's RAG language down into the list. */}
+                <span aria-hidden className="pointer-events-none absolute bottom-0 left-0 top-0 w-1.5" style={{ backgroundColor: isActive(p.status) ? rag.dot : '#94a3b8' }} />
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-slate-800 dark:text-slate-100">{p.name}</div>
@@ -202,51 +199,43 @@ export default function MobileDashboard() {
 // The hero health dial: a gradient progress ring (violet→indigo→cyan) reading schedule % complete,
 // matching the prototype. The big centre figure uses the same gradient as a clipped text fill.
 function PortfolioRing({ pct, light, label }: { pct: number; light: boolean; label: string }) {
-  const R = 50, C = 2 * Math.PI * R;
+  const R = 52, C = 2 * Math.PI * R;
   const dash = Math.max(0, Math.min(100, pct)) / 100 * C;
   return (
-    <div className="relative h-28 w-28 shrink-0">
-      <svg viewBox="0 0 120 120" className="h-28 w-28 -rotate-90">
+    <div className="relative h-52 w-52 shrink-0">
+      <svg viewBox="0 0 120 120" className="h-52 w-52 -rotate-90">
         <defs>
           <linearGradient id="pring-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#38bdf8" />
+            <stop offset="0" stopColor="#a78bfa" /><stop offset="0.5" stopColor="#818cf8" /><stop offset="1" stopColor="#60a5fa" />
           </linearGradient>
         </defs>
         <circle cx="60" cy="60" r={R} fill="none" strokeWidth="11" className={light ? 'stroke-slate-200' : 'stroke-white/10'} />
-        <circle cx="60" cy="60" r={R} fill="none" strokeWidth="11" strokeLinecap="round" stroke="url(#pring-grad)" strokeDasharray={`${dash} ${C}`} className="transition-[stroke-dasharray] duration-700" />
+        {/* Signature motion: the ring sweeps in on mount (reuses the pmx-sweep keyframe). */}
+        <circle
+          cx="60" cy="60" r={R} fill="none" strokeWidth="11" strokeLinecap="round" stroke="url(#pring-grad)"
+          strokeDasharray={C}
+          style={{ strokeDashoffset: C - dash, ['--pmx-len' as string]: `${C}`, animation: 'pmx-sweep 1.2s cubic-bezier(.2,.7,.2,1) both' }}
+        />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-3xl font-extrabold tabular-nums leading-none text-transparent">{pct}%</span>
-        <span className={`mt-1 text-[10px] font-semibold uppercase tracking-wider ${light ? 'text-slate-400' : 'text-white/50'}`}>{label}</span>
-      </div>
-    </div>
-  );
-}
-
-// A labelled hero side-stat with a gradient mini progress bar (right column of the hero).
-function HeroStat({ light, label, value, frac }: { light: boolean; label: string; value: string; frac: number }) {
-  return (
-    <div>
-      <div className={`text-[11px] font-semibold uppercase tracking-wide ${light ? 'text-slate-400' : 'text-white/55'}`}>{label}</div>
-      <div className={`mt-0.5 text-lg font-bold tabular-nums leading-tight ${light ? 'text-slate-900' : 'text-white'}`}>{value}</div>
-      <div className={`mt-1.5 h-1.5 w-full overflow-hidden rounded-full ${light ? 'bg-slate-200' : 'bg-white/10'}`}>
-        <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-sky-400 transition-[width] duration-700" style={{ width: `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%` }} />
+        <span className="bg-gradient-to-r from-violet-400 via-indigo-400 to-blue-400 bg-clip-text text-[4rem] font-extrabold tabular-nums leading-none tracking-tight text-transparent">{pct}%</span>
+        <span className={`mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${light ? 'text-slate-400' : 'text-white/50'}`}>{label}</span>
       </div>
     </div>
   );
 }
 
 // A KPI tile: a status dot + uppercase label, a big colour-coded value, and a muted sub-line.
-function KpiTile({ label, value, sub, dot, valueCls }: { label: string; value: string; sub?: string; dot: string; valueCls: string }) {
+function KpiTile({ label, value, sub, dot, valueCls, delay = 0 }: { label: string; value: string; sub?: string; dot: string; valueCls: string; delay?: number }) {
   return (
-    <div className="lg-card relative overflow-hidden rounded-2xl p-4">
+    <div className="lg-card prima-rise relative overflow-hidden rounded-2xl p-3.5" style={{ animationDelay: `${delay}ms` }}>
       {/* Top sheen — matches the KPI/project tiles so the dashboard reads as one set. */}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10" />
       <div className="relative flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} />{label}
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} /><span className="truncate">{label}</span>
       </div>
-      <div className={`relative mt-1 text-xl font-bold tabular-nums ${valueCls}`}>{value}</div>
-      {sub && <div className="relative mt-0.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">{sub}</div>}
+      <div className={`relative mt-1 truncate text-base font-bold tabular-nums ${valueCls}`}>{value}</div>
+      {sub && <div className="relative mt-0.5 truncate text-[11px] font-medium text-slate-400 dark:text-slate-500">{sub}</div>}
     </div>
   );
 }
