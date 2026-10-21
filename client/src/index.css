@@ -221,6 +221,14 @@ body.has-install-banner .fab {
   bottom: calc(9rem + env(safe-area-inset-bottom));
 }
 
+/* Hide the chat launcher while any dialog/bottom-sheet is open — it sits at z-[60],
+   above the modal (z-50), so it would otherwise float over the sheet's content. */
+body.modal-open .chat-launcher {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(150%);
+}
+
 /* Page transition — a subtle fade-in replayed on each route/view change.
    Opacity-only so it never creates a containing block for fixed children
    (the FAB lives inside the routed content). */

@@ -316,9 +316,17 @@ export function Modal({
     document.addEventListener('keydown', onKey, true);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Mark the body while ANY dialog is open (nesting-safe counter) so floating overlays that
+    // normally sit above everything — e.g. the chat launcher (z-[60]) — step out of the way.
+    const n = (Number(document.body.dataset.modalCount) || 0) + 1;
+    document.body.dataset.modalCount = String(n);
+    document.body.classList.add('modal-open');
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.body.style.overflow = prevOverflow;
+      const left = Math.max(0, (Number(document.body.dataset.modalCount) || 1) - 1);
+      if (left > 0) document.body.dataset.modalCount = String(left);
+      else { delete document.body.dataset.modalCount; document.body.classList.remove('modal-open'); }
       prevFocused?.focus?.();
     };
   }, []);
