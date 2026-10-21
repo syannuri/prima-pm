@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';
 import type { AutoMoveRow, AutoScheduleResult, CpmResult, DependencyType, GanttNode, ResourceItem, TaskDependency, WbsTemplateInfo } from '../../api/types';
-import { Badge, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Select, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import ImportTasksModal from '../../components/ImportTasksModal';
 import WeightEditorModal from '../../components/WeightEditorModal';
@@ -573,6 +573,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   const [importOpen, setImportOpen] = useState(false);
   const [weightsOpen, setWeightsOpen] = useState(false);
   const [stepsFor, setStepsFor] = useState<GanttNode | null>(null);
+  // Compact (phone) tap-to-open task detail sheet — surfaces the data columns hidden in the
+  // compact mini-Gantt (owner / dates / duration / budget / weight / % / variance).
+  const [detailNode, setDetailNode] = useState<GanttNode | null>(null);
   // Visual Gantt export (server-rendered PDF / Excel — the full timeline, horizontal view).
   const [ganttExporting, setGanttExporting] = useState<'pdf' | 'excel' | null>(null);
   const exportGantt = async (kind: 'pdf' | 'excel') => {
@@ -619,7 +622,17 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   // pane. `frozen*` = the sticky classes only when wide; `frozenLeft()` drops the left offset on
   // narrow so the row-level header sticky doesn't re-freeze the columns horizontally.
   const isNarrow = useIsMobile();
-  const stickyCol = !isNarrow;
+  // Phone "compact mini-Gantt": keep the Task name frozen-left, drop the ✓/WBS columns + all
+  // middle data columns, and fit the timeline into the remaining width so the schedule reads in one
+  // glance with (near) no horizontal scroll. (Phase 3 adds a "Full timeline" toggle that clears
+  // `compact` → the wide, scrollable Gantt comes back on phones on demand.)
+  const compact = isNarrow;
+  const stickyCol = !isNarrow || compact; // pin the name column even on phones (compact view)
+  // Frozen-pane offsets: ✓=40px + WBS=48px precede Task (→ 88) on desktop; both are dropped on
+  // compact so Task pins flush-left at 0.
+  const cbW = compact ? 0 : 40;
+  const wbsW = compact ? 0 : 48;
+  const taskLeft = cbW + wbsW;
   const frozenTh = stickyCol ? FROZEN_TH : 'bg-slate-200 dark:bg-slate-800';
   const frozenTd = stickyCol ? FROZEN_TD : '';
   const frozenEdge = stickyCol ? FROZEN_EDGE : '';
@@ -789,6 +802,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   const [zoom, setZoom] = useState(1);
   const [fitW, setFitW] = useState<number | null>(null);
   const [overflowX, setOverflowX] = useState(false);
+  // Compact (phone) always fits the span to the lane width; desktop uses the saved scale.
+  const effScaleOpt: ScaleOpt = compact ? 'width' : scale;
   const axisRef = useRef<{ width: number; effScale: Scale } | null>(null);
   const preserveRef = useRef<number | null>(null); // timeline-centre fraction to restore across a zoom
   const fitFracRef = useRef<number | null>(null); // left-edge fraction to scroll to after a fit-to-selection
@@ -827,10 +842,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
     // month view still reveals week/day gridlines.
     const autoScale: Scale = spanDays <= 45 ? 'day' : spanDays <= 400 ? 'week' : 'month';
     let pxPerDay: number;
-    if (scale === 'width') pxPerDay = (fitW ?? 900) / spanDays;
-    else pxPerDay = PX_PER_DAY[scale === 'fit' ? autoScale : scale] * zoom;
-    let width = Math.max(300, Math.round(spanDays * pxPerDay));
-    if (scale !== 'width') width = Math.min(11000, width); // 'width' is already ≤ viewport
+    if (effScaleOpt === 'width') pxPerDay = (fitW ?? 900) / spanDays;
+    else pxPerDay = PX_PER_DAY[effScaleOpt === 'fit' ? autoScale : effScaleOpt] * zoom;
+    let width = Math.max(compact ? 160 : 300, Math.round(spanDays * pxPerDay));
+    if (effScaleOpt !== 'width') width = Math.min(11000, width); // 'width' is already ≤ viewport
     const effScale: Scale = pxPerDay >= 13 ? 'day' : pxPerDay >= 3.2 ? 'week' : 'month';
     const pct = (t: number) => Math.max(0, ((t - min) / span) * 100);
 
@@ -861,7 +876,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
     const todayPct = now >= min && now <= max ? pct(now) : null;
     const minBarPct = (6 / width) * 100; // keep tiny tasks/milestones visible at any scale
     return { min, span, width, ticks, weekends, todayPct, minBarPct, effScale };
-  }, [visibleRows, rolled, scale, zoom, fitW]);
+  }, [visibleRows, rolled, effScaleOpt, zoom, fitW, compact]);
   // Mirror the live axis into a ref so the (once-bound) wheel/zoom handlers never read a stale copy.
   axisRef.current = axis ? { width: axis.width, effScale: axis.effScale } : null;
 
@@ -1002,6 +1017,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   // the timeline column; `showDates` = ANY date group visible (drives the 2-row grouped header).
   const showGantt = show('timeline');
   const showDates = show('planDates') || show('actualDates');
+  // Compact (phone) collapses the grid to just Task + timeline: force every middle data column
+  // hidden, the date sub-header off, and the timeline on (even if the user hid it on desktop).
+  const effOrderedCols = compact ? [] : orderedCols;
+  const effShowDates = compact ? false : showDates;
+  const effShowGantt = compact ? true : showGantt;
   // Row density (comfortable/compact) — drives the row vertical padding.
   const [density, setDensity] = useState<Density>(() => readWbsPrefs().density ?? 'comfortable');
   // Isolate the critical path (dim non-critical bars) + show the timeline legend. Presentation only.
@@ -1121,7 +1141,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
       if (!s) return;
       if (t) {
         const left = t.getBoundingClientRect().left - s.getBoundingClientRect().left + s.scrollLeft;
-        setFitW(Math.max(300, s.clientWidth - left - 6));
+        setFitW(Math.max(compact ? 160 : 300, s.clientWidth - left - 6));
       }
       setOverflowX(s.scrollWidth > s.clientWidth + 2);
     };
@@ -1130,7 +1150,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
     ro.observe(sc);
     window.addEventListener('resize', measure);
     return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
-  }, [rows.length, fullscreen, hiddenCols]);
+  }, [rows.length, fullscreen, hiddenCols, compact]);
   // Refresh the overflow flag when the width changes via zoom/scale (no container resize fires).
   useEffect(() => {
     const sc = scrollRef.current;
@@ -1263,7 +1283,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   // Visible column count for DraftRow / empty-state colSpans: ✓ + WBS + Task (3, always) + each
   // visible single column + 2 per visible date group + the timeline.
   const SINGLE_COLS: ColKey[] = ['owner', 'dur', 'budget', 'weight', 'pct', 'status', 'var'];
-  const colCount = 3 + SINGLE_COLS.filter(show).length + (show('planDates') ? 2 : 0) + (show('actualDates') ? 2 : 0) + (showGantt ? 1 : 0);
+  // Compact drops the ✓ + WBS cells (→ 1 lead col = Task) and all middle columns; desktop keeps
+  // all three lead cols + the visible middle/date columns.
+  const colCount = (compact ? 1 : 3)
+    + (compact ? 0 : SINGLE_COLS.filter(show).length + (show('planDates') ? 2 : 0) + (show('actualDates') ? 2 : 0))
+    + (effShowGantt ? 1 : 0);
   // Resource pool for the inline owner picker + add-subtask draft (editors only).
   const resourcesQ = useQuery({ queryKey: ['resources'], queryFn: () => api.get<{ resources: ResourceItem[] }>('/resources'), enabled: canEdit });
   const resources = resourcesQ.data?.resources ?? [];
@@ -1731,6 +1755,68 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
         }}
       />
     )}
+      {/* Compact (phone) task detail sheet — the data columns the compact mini-Gantt hides, in a
+          slide-up bottom sheet (reuses the shared Modal, which is a sheet on phones). Values mirror
+          the desktop row cells exactly. */}
+      {detailNode && (() => {
+        const n = detailNode;
+        const r = rolled.get(n.id);
+        if (!r) return null;
+        const st = statusOf(r.pct);
+        const overdue = r.pct < 100 && Math.floor(r.end / day) < Math.floor(Date.now() / day);
+        const finishMs = r.pct >= 100 && !r.isParent && n.actualFinish ? +new Date(n.actualFinish) : r.end;
+        const varDays = r.baseEnd != null ? Math.floor(finishMs / day) - Math.floor(r.baseEnd / day) : null;
+        const varIsActual = r.pct >= 100 && !r.isParent && !!n.actualFinish;
+        const owners = orderedOwners(n);
+        const isCritical = criticalIds.has(n.id);
+        const DRow = ({ label, children }: { label: string; children: ReactNode }) => (
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 py-2 last:border-b-0 dark:border-slate-800">
+            <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</span>
+            <span className="text-right text-sm text-slate-700 dark:text-slate-200">{children}</span>
+          </div>
+        );
+        const dash = <span className="text-slate-300 dark:text-slate-600">—</span>;
+        return (
+          <Modal onClose={() => setDetailNode(null)} title={n.name} size="sm" container={modalContainer}>
+            <div className="-mt-2">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge color={overdue ? 'red' : st.color}>{overdue ? 'Overdue' : st.label}</Badge>
+                {isCritical && <Badge color="red">▲ Critical path</Badge>}
+                {n.isMilestone && <Badge color="violet">◆ Milestone</Badge>}
+                {r.isParent && <Badge color="slate">Summary</Badge>}
+              </div>
+              {/* Progress */}
+              <div className="mb-3">
+                <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>Progress</span><span className="tabular-nums font-semibold text-slate-700 dark:text-slate-200">{r.pct}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div className={`h-full rounded-full ${overdue ? 'bg-red-500' : 'bg-brand-500'}`} style={{ width: `${Math.max(0, Math.min(100, r.pct))}%` }} />
+                </div>
+              </div>
+              <DRow label="Owner">{owners.length ? owners.map((o) => o.name).join(', ') : dash}</DRow>
+              <DRow label="Plan">{formatDate(new Date(r.start))} – {formatDate(new Date(r.end))}</DRow>
+              <DRow label="Actual">{r.actualStart != null ? <>{formatDate(new Date(r.actualStart))} – {r.actualFinish != null ? formatDate(new Date(r.actualFinish)) : <span className="text-slate-400">in progress</span>}</> : dash}</DRow>
+              <DRow label="Duration"><span className="tabular-nums">{r.dur}d</span></DRow>
+              <DRow label="Budget">{r.budget > 0 ? <span className="tabular-nums">{formatIdrShort(r.budget)}</span> : dash}</DRow>
+              <DRow label="Weight"><span className="tabular-nums">{n.weight != null ? n.weight : 'auto'}</span>{r.wt > 0 && <span className="ml-1 text-xs text-slate-400">({n.effectiveWeightPct}% of project)</span>}</DRow>
+              <DRow label="Variance">{varDays == null ? dash : (
+                <span className={varDays > 0 ? 'font-medium text-red-600 dark:text-red-400' : varDays < 0 ? 'font-medium text-green-600 dark:text-green-400' : 'text-slate-500'}>
+                  {varDays > 0 ? `+${varDays}d late` : varDays < 0 ? `${Math.abs(varDays)}d early` : 'on time'}{varIsActual && ' ✓'}
+                </span>
+              )}</DRow>
+              {canEdit && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {!r.isParent && r.pct < 100 && n.stepCount === 0 && (
+                    <Button onClick={() => { progress.mutate({ id: n.id, pct: 100 }); setDetailNode(null); }}>Mark complete</Button>
+                  )}
+                  <Button variant="secondary" onClick={() => { setDetailNode(null); openRowMenu(n, Math.max(8, window.innerWidth / 2 - 90), Math.min(window.innerHeight / 2, window.innerHeight - 320)); }}>More actions…</Button>
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
       {/* iOS (and any platform where orientation-lock isn't available) can't auto-rotate — nudge
           the user to turn the device so the timeline gets the full landscape width. */}
       {fullscreen && isTouch && portrait && (
@@ -1990,7 +2076,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
             // First task: an inline draft row (same monday.com-style editor as add-subtask) — no popup.
             <table className="w-full text-sm"><tbody>
               <DraftRow
-                draft={draft} depth={0} colCount={4} resources={resources} saving={createSub.isPending} topLevel
+                draft={draft} depth={0} colCount={4} compact={compact} resources={resources} saving={createSub.isPending} topLevel
                 onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
                 onCancel={() => setDraft(null)}
                 onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: 0 }); }}
@@ -2161,7 +2247,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                   appear only in the "Show dates" spreadsheet view; the spanning cells span 2 rows
                   then (rowSpan=hrs), 1 otherwise. */}
               <tr className="text-center text-xs font-bold uppercase tracking-wide text-slate-800 dark:text-slate-100 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:px-2 [&>th]:border-slate-300 [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700 [&>th:last-child]:border-r-0">
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b-4 border-b-rose-400 text-center align-bottom ${frozenTh}`} title={selectMode ? 'Select all' : 'Mark task / subtask complete'}>
+                {!compact && (
+                <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b-4 border-b-rose-400 text-center align-bottom ${frozenTh}`} title={selectMode ? 'Select all' : 'Mark task / subtask complete'}>
                   {selectMode ? (
                     <input
                       type="checkbox" aria-label="Select all tasks"
@@ -2171,13 +2258,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                     />
                   ) : <span className="text-slate-300 dark:text-slate-600">✓</span>}
                 </th>
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b-4 border-b-rose-400 align-bottom ${frozenTh}`}>WBS</th>
-                <th rowSpan={showDates ? 2 : 1} style={frozenLeft(88, colStyle('task'))} className={`relative ${colWidths.task ? '' : 'min-w-[14rem]'} border-b-4 border-b-rose-400 text-center align-bottom ${frozenTh} ${frozenEdge}`}>Task<ColGrip col="task" /></th>
-                {/* Data columns — reorderable (drag a header, or ⚙ Options → Columns); each hideable via right-click. */}
-                {orderedCols.map(headTop)}
+                )}
+                {!compact && <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b-4 border-b-rose-400 align-bottom ${frozenTh}`}>WBS</th>}
+                <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(taskLeft, compact ? {} : colStyle('task'))} className={`relative ${compact ? 'min-w-[7.5rem] max-w-[45vw]' : colWidths.task ? '' : 'min-w-[14rem]'} border-b-4 border-b-rose-400 text-center align-bottom ${frozenTh} ${frozenEdge}`}>Task<ColGrip col="task" /></th>
+                {/* Data columns — reorderable (drag a header, or ⚙ Options → Columns); each hideable via right-click. Hidden entirely on compact (phone). */}
+                {effOrderedCols.map(headTop)}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
-                {showGantt && (
-                  <th ref={timelineRef} rowSpan={showDates ? 2 : 1} onContextMenu={(e) => openColMenu('timeline', 'Timeline (Gantt)', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Timeline — right-click to hide">
+                {effShowGantt && (
+                  <th ref={timelineRef} rowSpan={effShowDates ? 2 : 1} onContextMenu={(e) => openColMenu('timeline', 'Timeline (Gantt)', e)} className="cursor-context-menu border-b border-slate-200 align-bottom dark:border-slate-800" title="Timeline — right-click to hide">
                     <div className="relative h-4" style={{ width: axis?.width }}>
                       {axis?.ticks.map((t) => (
                         <span key={t.key} className={`absolute -top-1 whitespace-nowrap normal-case ${t.major ? 'rounded bg-slate-300 px-1 py-px text-[10px] font-bold text-slate-800 dark:bg-slate-700 dark:text-slate-100' : 'top-0 text-[9px] font-medium text-slate-400 dark:text-slate-500'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
@@ -2190,7 +2278,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                 )}
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each VISIBLE date group. */}
-              {showDates && (
+              {effShowDates && (
                 <tr className="text-center text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:px-2 [&>th]:text-center [&>th]:font-bold [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700">
                   {orderedDateGroups.map(headSub)}
                 </tr>
@@ -2388,7 +2476,14 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                       e.preventDefault();
                       openRowMenu(node, e.clientX, e.clientY);
                     }}
-                    className={`group [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:px-2 [&>td]:text-center [&>td]:transition-colors ${depth === 0 && rowIdx > 0 ? '[&>td]:!border-t-2 [&>td]:!border-t-slate-300 dark:[&>td]:!border-t-slate-700' : ''} ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
+                    onClick={compact ? (e) => {
+                      // Compact (phone): tap a row to open its detail sheet. Let buttons / inline
+                      // editors / the collapse chevron handle their own taps first.
+                      if ((e.target as HTMLElement).closest('button,input,select,textarea,a')) return;
+                      setDetailNode(node);
+                    } : undefined}
+                    className={`group ${compact ? 'cursor-pointer' : ''} [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:px-2 [&>td]:text-center [&>td]:transition-colors ${depth === 0 && rowIdx > 0 ? '[&>td]:!border-t-2 [&>td]:!border-t-slate-300 dark:[&>td]:!border-t-slate-700' : ''} ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
+                    {!compact && (
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
                       <div className="flex justify-center">
                         {selectMode ? (
@@ -2398,8 +2493,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                         )}
                       </div>
                     </td>
-                    <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-600 dark:text-slate-300 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>
-                    <td style={frozenLeft(88)} className={`!text-left ${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
+                    )}
+                    {!compact && <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-600 dark:text-slate-300 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>}
+                    <td style={frozenLeft(taskLeft)} className={`!text-left ${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         {hasKids && (
                           <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
@@ -2412,10 +2508,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                           </button>
                         )}
                         {node.isMilestone && <span className="text-brand-600" title="Milestone">◆</span>}
-                        <InlineName value={node.name} editable={canPlan} done={r.pct >= 100} depthZero={depth === 0} onSave={(name) => patchTask.mutate({ node, patch: { name } })} />
+                        <InlineName value={node.name} editable={canPlan && !compact} done={r.pct >= 100} depthZero={depth === 0} onSave={(name) => patchTask.mutate({ node, patch: { name } })} />
                         {/* Compact view: surface each phase's weighted share here since the Weight column
                             is hidden. Parents only, and only when weighting is actually in effect. */}
-                        {isWeighted && !showDates && hasKids && (
+                        {isWeighted && !effShowDates && hasKids && (
                           <span title={`Weighted share of the project %${weightsBaselined ? ' (baseline)' : ''}`} className="shrink-0 rounded bg-brand-50 px-1 text-[10px] font-medium tabular-nums text-brand-600 dark:bg-brand-900/20 dark:text-brand-300">
                             ⚖ {node.effectiveWeightPct}%
                           </span>
@@ -2440,9 +2536,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                           className={`absolute -bottom-2.5 z-30 grid h-5 w-5 place-items-center text-lg font-bold leading-none text-slate-600 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 ${isTouch ? '' : 'opacity-0 focus:opacity-100 group-hover:opacity-100'}`}>+</button>
                       )}
                     </td>
-                    {/* Reorderable middle columns — order driven by `orderedCols` (see `cell`). */}
-                    {orderedCols.map(cell)}
-                    {showGantt && (
+                    {/* Reorderable middle columns — order driven by `orderedCols` (see `cell`). Hidden on compact (phone). */}
+                    {effOrderedCols.map(cell)}
+                    {effShowGantt && (
                     <td>
                       <div
                         ref={(el) => { if (el) barRefs.current.set(node.id, el); else barRefs.current.delete(node.id); }}
@@ -2621,7 +2717,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                   {/* Subtask draft (right-click → Add subtask): renders as this node's first child. */}
                   {draft?.parentId === node.id && !draft.afterId && (
                     <DraftRow
-                      draft={draft} depth={depth + 1} colCount={colCount} resources={resources} saving={createSub.isPending}
+                      draft={draft} depth={depth + 1} colCount={colCount} compact={compact} resources={resources} saving={createSub.isPending}
                       onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
                       onCancel={() => setDraft(null)}
                       onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: node.children.length }); }}
@@ -2630,7 +2726,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                   {/* Inline "+" insert: renders right AFTER this row, as a same-level sibling. */}
                   {draft?.afterId === node.id && (
                     <DraftRow
-                      draft={draft} depth={depth} colCount={colCount} resources={resources} saving={createSub.isPending} topLevel={draft.parentId === null}
+                      draft={draft} depth={depth} colCount={colCount} compact={compact} resources={resources} saving={createSub.isPending} topLevel={draft.parentId === null}
                       onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
                       onCancel={() => setDraft(null)}
                       onSave={() => { if (draft.name.trim()) createSub.mutate({ ...draft, sortOrder: (node.sortOrder ?? 0) + 1 }); }}
@@ -2876,9 +2972,9 @@ function DictionaryView({ node }: { node: GanttNode }) {
 // Inline add-task / add-subtask row (monday.com style) — editable name / owner / plan dates
 // in-column; Enter saves & keeps the row open for the next sibling, Esc cancels. The Save/Cancel
 // buttons sit RIGHT NEXT TO the name (in the Task cell) so the confirm action is where the eye is.
-function DraftRow({ draft, depth, colCount, resources, saving, topLevel, onChange, onCancel, onSave }: {
+function DraftRow({ draft, depth, colCount, compact, resources, saving, topLevel, onChange, onCancel, onSave }: {
   draft: { name: string; picResourceId: string; planStart: string; planEnd: string };
-  depth: number; colCount: number; resources: ResourceItem[]; saving: boolean;
+  depth: number; colCount: number; compact?: boolean; resources: ResourceItem[]; saving: boolean;
   topLevel?: boolean; // a new top-level task (via "+ Add Task") vs a subtask (via "+ Sub")
   onChange: (patch: Partial<{ name: string; picResourceId: string; planStart: string; planEnd: string }>) => void;
   onCancel: () => void; onSave: () => void;
@@ -2887,8 +2983,9 @@ function DraftRow({ draft, depth, colCount, resources, saving, topLevel, onChang
   const kind = topLevel ? 'Task' : 'Subtask';
   return (
     <tr className="bg-brand-50/40 dark:bg-brand-900/10 [&>td]:border-b [&>td]:border-slate-100 [&>td]:dark:border-slate-800 [&>td]:py-1.5 [&>td]:pr-3">
-      <td className="text-center text-brand-500">＋</td>
-      <td className="font-mono text-[10px] uppercase text-brand-500">new</td>
+      {/* ✓ + WBS lead cells are dropped on compact (phone) to match the collapsed grid. */}
+      {!compact && <td className="text-center text-brand-500">＋</td>}
+      {!compact && <td className="font-mono text-[10px] uppercase text-brand-500">new</td>}
       <td>
         <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
           <input autoFocus value={draft.name} placeholder={`${kind} name…`} aria-label={`${kind} name`}
@@ -2904,7 +3001,7 @@ function DraftRow({ draft, depth, colCount, resources, saving, topLevel, onChang
       </td>
       {/* Owner + plan dates live inline in ONE trailing cell, so the draft row stays correct no matter
           which data columns are currently hidden (they'd otherwise misalign under the wrong headers). */}
-      <td colSpan={Math.max(1, colCount - 3)} className="whitespace-nowrap text-left text-[11px] text-slate-400 dark:text-slate-500">
+      <td colSpan={Math.max(1, colCount - (compact ? 1 : 3))} className="whitespace-nowrap text-left text-[11px] text-slate-400 dark:text-slate-500">
         <span className="mr-2 inline-flex flex-wrap items-center gap-1 align-middle">
           <select value={draft.picResourceId} onChange={(e) => onChange({ picResourceId: e.target.value })} className={`${inp} max-w-[9rem]`} aria-label={`${kind} owner`}>
             <option value="">— owner —</option>

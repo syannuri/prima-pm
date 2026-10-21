@@ -38,7 +38,9 @@ export default function ChatWidget() {
     <button
       onClick={() => { haptic(); setOpen(true); }}
       aria-label={`Chat${unread > 0 ? ` — ${unread} unread` : ''}`}
-      className={`fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-[#0073ea] text-white shadow-lg shadow-[#0073ea]/30 ring-1 ring-black/5 transition-all duration-300 active:scale-90 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+4rem)] md:bottom-6 md:right-6 ${scrolledAway ? 'pointer-events-none translate-y-[150%] opacity-0' : ''}`}
+      // `chat-launcher` marker lets an open dialog hide this bubble (see index.css) so it never
+      // floats over a modal / bottom-sheet.
+      className={`chat-launcher fixed right-5 z-[60] grid h-14 w-14 place-items-center rounded-full bg-[#0073ea] text-white shadow-lg shadow-[#0073ea]/30 ring-1 ring-black/5 transition-all duration-300 active:scale-90 bottom-[calc(4.75rem+env(safe-area-inset-bottom)+4rem)] md:bottom-6 md:right-6 ${scrolledAway ? 'pointer-events-none translate-y-[150%] opacity-0' : ''}`}
     >
       <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={CHAT_ICON} /></svg>
       {unread > 0 && (
