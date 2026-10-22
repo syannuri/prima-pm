@@ -265,10 +265,26 @@ export async function createNotification(input: { userId: string; type: string; 
   }
 }
 
+// A Notification carries a bare `projectId` scalar (no FK relation), so a soft-deleted project's
+// notifications would otherwise linger in the bell + history as clickable dead deep-links. We delete
+// them at soft-delete time (see softDeleteProject), but this read-time guard also hides any orphans
+// left by PAST deletions (and any future gap). Returns a where-fragment excluding notifications that
+// point at a now-deleted project; project rows are tenant-scoped by the Prisma extension, matching
+// the notification scope. Non-project notifications (projectId null) are always kept.
+async function excludeDeletedProjectFilter(): Promise<Prisma.NotificationWhereInput> {
+  const deleted = await prisma.project.findMany({ where: { deletedAt: { not: null } }, select: { id: true } });
+  if (deleted.length === 0) return {};
+  return { OR: [{ projectId: null }, { projectId: { notIn: deleted.map((p) => p.id) } }] };
+}
+
 // The inbox shows only items NOT yet followed up (readAt = the "followed up / done" marker, set
 // per-item via the ✓ button). A handled item never comes back.
 export async function getInbox(userId: string, limit = 20) {
-  const items = await prisma.notification.findMany({ where: { userId, readAt: null }, orderBy: { createdAt: 'desc' }, take: Math.min(limit, 50) });
+  const items = await prisma.notification.findMany({
+    where: { userId, readAt: null, AND: [await excludeDeletedProjectFilter()] },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(limit, 50),
+  });
   return { items, unread: items.length };
 }
 
@@ -306,7 +322,8 @@ function categoryFilter(category?: string): Prisma.NotificationWhereInput {
 export async function getNotificationHistory(userId: string, opts: { cursor?: string | null; limit?: number; category?: string } = {}) {
   const limit = Math.min(opts.limit ?? 25, 50);
   const rows = await prisma.notification.findMany({
-    where: { userId, ...categoryFilter(opts.category) },
+    // AND-combine so a category filter that is itself an OR (e.g. 'account') isn't overwritten.
+    where: { userId, AND: [categoryFilter(opts.category), await excludeDeletedProjectFilter()] },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
