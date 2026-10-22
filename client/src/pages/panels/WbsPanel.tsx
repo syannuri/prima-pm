@@ -1705,6 +1705,109 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
     : null;
   const isolateCritical = highlightCritical && criticalIds.size > 0;
 
+  // ─── Phone-only "simple schedule" (Variant B) ─────────────────────────────────────────────
+  // A calm, one-glance phone view that stands in for the dense swipe-table: an overall-progress
+  // hero (the SAME weighted % + EVM health as the dashboard), a stacked mini-Gantt thumbnail of
+  // the MAIN tasks on one shared lane, then a progress-first list. Tapping a task opens the shared
+  // detail sheet (`detailNode`). Only the top-level tasks show — drill-down is the detail sheet.
+  const renderSimpleSchedule = () => {
+    const phases = ganttQ.data?.tree ?? [];
+    const pr = (n: GanttNode): { start: number; end: number; pct: number } => {
+      const r = rolled.get(n.id);
+      return r ? { start: r.start, end: r.end, pct: r.pct } : { start: +new Date(n.planStart), end: +new Date(n.planEnd), pct: n.progressPct };
+    };
+    const min = Math.min(...phases.map((n) => pr(n).start));
+    const max = Math.max(...phases.map((n) => pr(n).end));
+    const span = Math.max(1, max - min);
+    const todayPct = Math.max(0, Math.min(100, ((Date.now() - min) / span) * 100));
+    const health = evmQ.data?.health ?? 'NO_DATA';
+    const pill = HEALTH_PILL[health] ?? HEALTH_PILL.NO_DATA;
+    const lateCount = phases.filter((n) => { const r = pr(n); return r.pct < 100 && Math.floor(r.end / day) < Math.floor(Date.now() / day); }).length;
+    const clamped = Math.max(0, Math.min(100, overallPct));
+    const R = 34, C = 2 * Math.PI * R;
+    const ringColor = health === 'RED' ? '#f43f5e' : health === 'AMBER' ? '#f59e0b' : health === 'GREEN' ? '#10b981' : '#94a3b8';
+    return (
+      <div className="space-y-3">
+        {/* Overall-progress hero — one dominant ring + health + the headline figures */}
+        <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="relative h-20 w-20 shrink-0">
+            <svg viewBox="0 0 80 80" className="h-20 w-20 -rotate-90">
+              <circle cx="40" cy="40" r={R} fill="none" strokeWidth="8" className="stroke-slate-100 dark:stroke-slate-800" />
+              <circle cx="40" cy="40" r={R} fill="none" strokeWidth="8" strokeLinecap="round" stroke={ringColor}
+                strokeDasharray={C} strokeDashoffset={C * (1 - clamped / 100)} className="transition-[stroke-dashoffset] duration-700" />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-xl font-bold tabular-nums text-slate-800 dark:text-slate-100">{evmQ.isLoading ? '…' : `${Math.round(clamped)}%`}</span>
+              <span className="text-[9px] font-medium uppercase tracking-wider text-slate-400">done</span>
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${pill.box}`}>
+              <span className={`h-2 w-2 rounded-full ${pill.dot}`} aria-hidden />{HEALTH_SHORT[health] ?? ''}
+            </div>
+            <div className="mt-2.5 flex gap-4 text-[11px] text-slate-500 dark:text-slate-400">
+              <div>Finish<b className="mt-0.5 block text-sm font-semibold text-slate-800 dark:text-slate-100">{formatDate(new Date(max))}</b></div>
+              <div>Main tasks<b className="mt-0.5 block text-sm font-semibold text-slate-800 dark:text-slate-100">{phases.length}</b></div>
+              {lateCount > 0 && <div>Late<b className="mt-0.5 block text-sm font-semibold text-rose-600 dark:text-rose-400">{lateCount}</b></div>}
+            </div>
+          </div>
+        </div>
+        {/* Mini-Gantt thumbnail — every main task on one shared lane, with a Today marker */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-2.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span>Timeline</span><span className="normal-case tracking-normal">{formatDate(new Date(min))} – {formatDate(new Date(max))}</span>
+          </div>
+          <div className="relative">
+            {phases.map((n) => {
+              const r = pr(n);
+              const overdue = r.pct < 100 && Math.floor(r.end / day) < Math.floor(Date.now() / day);
+              const bar = BAR[overdue ? 'red' : statusOf(r.pct).color] ?? BAR.slate;
+              const left = ((r.start - min) / span) * 100;
+              const width = Math.max(2, ((r.end - r.start) / span) * 100);
+              return (
+                <div key={n.id} className="relative mb-1.5 h-2 last:mb-0">
+                  <div className={`absolute h-2 rounded-full ${bar.track}`} style={{ left: `${left}%`, width: `${width}%` }}>
+                    <div className={`h-full rounded-full ${bar.fill} ${SHEEN}`} style={{ width: `${Math.max(0, Math.min(100, r.pct))}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+            <div aria-hidden className="pointer-events-none absolute -top-1 bottom-0 w-px bg-brand-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]" style={{ left: `${todayPct}%` }} />
+          </div>
+        </div>
+        {/* Main-task list — progress first; tap a row for the full detail sheet */}
+        <div className="space-y-2">
+          <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Main tasks</div>
+          {phases.map((n, i) => {
+            const r = pr(n);
+            const overdue = r.pct < 100 && Math.floor(r.end / day) < Math.floor(Date.now() / day);
+            const col = overdue ? 'red' : statusOf(r.pct).color;
+            const bar = BAR[col] ?? BAR.slate;
+            const rail = col === 'green' ? 'bg-emerald-500' : col === 'amber' ? 'bg-amber-500' : col === 'red' ? 'bg-rose-500' : 'bg-slate-400';
+            const pctText = col === 'green' ? 'text-emerald-600 dark:text-emerald-400' : col === 'amber' ? 'text-amber-600 dark:text-amber-400' : col === 'red' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400';
+            return (
+              <button key={n.id} type="button" onClick={() => setDetailNode(n)} data-task-row={n.id}
+                className={`relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border bg-white px-3.5 py-3 text-left transition active:scale-[0.99] dark:bg-slate-900 ${flashId === n.id ? 'border-brand-400 ring-2 ring-brand-400/40 dark:border-brand-500' : 'border-slate-200 dark:border-slate-800'}`}>
+                <span className={`absolute inset-y-0 left-0 w-1 ${rail}`} aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0 text-[10px] font-semibold tabular-nums text-slate-400">{i + 1}</span>
+                    <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{n.name}</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div className={`h-full rounded-full ${bar.fill}`} style={{ width: `${Math.max(0, Math.min(100, r.pct))}%` }} />
+                  </div>
+                </div>
+                <span className={`shrink-0 text-sm font-bold tabular-nums ${pctText}`}>{r.pct}%</span>
+                <span className="shrink-0 text-slate-300 dark:text-slate-600" aria-hidden>›</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div ref={fsRef} className={fullscreen ? 'fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-50 p-1 dark:bg-slate-950 sm:p-2' : ''}>
     {/* In full view the card is a flex column: header stays put, the timeline gets ALL remaining
@@ -2020,7 +2123,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
             ⚖ Weighted{weightsBaselined ? ' · baseline' : ''}
           </button>
         )}
-        {!fullscreen && rows.length > 0 && <ProgressBadge pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
+        {!fullscreen && !compact && rows.length > 0 && <ProgressBadge pct={overallPct} health={evmQ.data?.health} loading={evmQ.isLoading} />}
         </div>
       </div>
 
@@ -2104,6 +2207,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
             </>
           )}
         </div>
+      ) : compact ? (
+        renderSimpleSchedule()
       ) : (
         <>
         {/* Non-fullscreen shows the slip summary inline in the header row (above); in fullscreen the
