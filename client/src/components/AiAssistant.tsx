@@ -13,7 +13,7 @@ interface ProposedRef { actionType: string; projectCode: string; routed: boolean
 interface NavRef { label: string; path: string }
 interface MemoryRef { scope: 'USER' | 'TENANT'; content: string }
 interface QueryTable { entity: string; columns: { key: string; label: string }[]; rows: Record<string, string | number | boolean | null>[]; total: number; limit: number }
-interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; error?: boolean }
+interface Turn { role: 'user' | 'assistant'; content: string; proposals?: ProposedRef[]; navigate?: NavRef[]; memories?: MemoryRef[]; tables?: QueryTable[]; steps?: string[]; error?: boolean }
 interface Briefing { approvalsWaiting: number; overdueTasks: number; projectsWithOverdue: { code: string; name: string; count: number }[] }
 interface ApprovalItem { id: string; actionLabel: string; stepName: string; project: { code: string; name: string } | null }
 
@@ -43,6 +43,7 @@ interface AnettStrings {
   chips: (proj: boolean, propose: boolean) => string[];
   followups: (proj: boolean) => string[];
   tryAsking: string; kbdHint: string;
+  reasoning: (n: number) => string; tableSource: string;
 }
 
 const STRINGS: Record<'id' | 'en', AnettStrings> = {
@@ -71,6 +72,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
       ? ['Forecast & EAC proyek ini?', 'Ada change request tertunda?', 'Apa langkah berikutnya?']
       : ['Apa yang menunggu persetujuan saya?', 'Ringkas portofolio saya', 'Proyek mana paling berisiko?'],
     tryAsking: 'Coba tanyakan', kbdHint: 'Enter kirim · Shift+Enter baris baru',
+    reasoning: (n) => `Proses berpikir (${n} langkah)`, tableSource: 'Dari data proyek Anda',
   },
   en: {
     launcher: 'Ask Anett AI Assistant', subtitlePropose: 'Reads project data & proposes actions', subtitleRead: 'Reads project data',
@@ -97,6 +99,7 @@ const STRINGS: Record<'id' | 'en', AnettStrings> = {
       ? ["This project’s forecast & EAC?", 'Any pending change requests?', "What's the next step?"]
       : ['What is waiting for my approval?', 'Summarize my portfolio', 'Which project is riskiest?'],
     tryAsking: 'Try asking', kbdHint: 'Enter to send · Shift+Enter for newline',
+    reasoning: (n) => `Reasoning (${n} step${n === 1 ? '' : 's'})`, tableSource: 'From your project data',
   },
 };
 
@@ -506,6 +509,7 @@ export default function AiAssistant() {
   // mutation if streaming isn't available (old server, proxy that buffers, or a network hiccup).
   const runAskStream = async (history: Turn[]) => {
     setStreaming(true); setStreamSteps([]);
+    const steps: string[] = []; // mirror of streamSteps, captured so the landed answer keeps its reasoning
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let started = false; // did we receive any well-formed event? (else fall back)
     try {
@@ -534,10 +538,11 @@ export default function AiAssistant() {
           try { ev = JSON.parse(line.slice(6)); } catch { continue; }
           started = true;
           if (ev.type === 'step' && ev.label) {
+            steps.push(ev.label);
             setStreamSteps((s) => [...s, ev.label!]);
           } else if (ev.type === 'answer') {
             if (!reduce && ev.answer) { setStreamIdx(turnsRef.current.length); setStreamLen(0); }
-            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined }]);
+            setTurns((t) => [...t, { role: 'assistant', content: ev.answer ?? '', proposals: ev.proposals?.length ? ev.proposals : undefined, navigate: ev.navigate?.length ? ev.navigate : undefined, memories: ev.memories?.length ? ev.memories : undefined, tables: ev.tables?.length ? ev.tables : undefined, steps: steps.length ? [...steps] : undefined }]);
           } else if (ev.type === 'error') {
             setTurns((t) => [...t, { role: 'assistant', content: ev.message || L.errorGeneric, error: true }]);
           }
@@ -826,6 +831,19 @@ export default function AiAssistant() {
                     )}
                   </div>
                 </div>
+                {/* 🧠 How Anett got here — the reasoning steps it streamed while composing, kept collapsible */}
+                {i !== streamIdx && t.role === 'assistant' && !t.error && t.steps && t.steps.length > 0 && (
+                  <details className="ml-10 mt-1.5 text-xs">
+                    <summary className="inline-flex cursor-pointer select-none list-none items-center gap-1 text-slate-400 transition hover:text-violet-600 dark:text-slate-500 dark:hover:text-violet-300 [&::-webkit-details-marker]:hidden">
+                      🧠 {L.reasoning(t.steps.length)}
+                    </summary>
+                    <div className="mt-1 space-y-1 border-l-2 border-slate-200 pl-2.5 dark:border-slate-700">
+                      {t.steps.map((s, k) => (
+                        <div key={k} className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><span className="text-emerald-500">✓</span> {s}</div>
+                      ))}
+                    </div>
+                  </details>
+                )}
                 {/* Stage C — inline card when Anett staged action proposals this turn (after the typewriter finishes) */}
                 {i !== streamIdx && t.proposals && t.proposals.length > 0 && (
                   <div className="ml-10 mt-1.5 rounded-xl border border-violet-200 bg-violet-50/70 p-2.5 text-xs dark:border-violet-800/60 dark:bg-violet-900/20">
@@ -876,7 +894,7 @@ export default function AiAssistant() {
                       </table>
                     </div>
                     <div className="flex items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
-                      <span>{L.rowsShown(tbl.rows.length, tbl.total)}</span>
+                      <span>{L.tableSource} · {L.rowsShown(tbl.rows.length, tbl.total)}</span>
                       <button onClick={() => exportTable(tbl)} className="font-medium text-violet-600 hover:underline dark:text-violet-300">⬇ {L.exportCsv}</button>
                     </div>
                   </div>
