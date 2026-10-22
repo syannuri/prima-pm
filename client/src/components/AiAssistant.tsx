@@ -145,11 +145,23 @@ function AnettIcon({ className }: { className: string }) {
   );
 }
 
-// A gradient amethyst avatar disc — Anett's face, reused by launcher, header and message rows.
+// A gradient amethyst avatar disc — Anett's face, reused by launcher and header.
 function AnettAvatar({ className = 'h-8 w-8', icon = 'h-5 w-5', thinking = false }: { className?: string; icon?: string; thinking?: boolean }) {
   return (
     <span className={`relative grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-sm ${thinking ? 'anett-halo anett-thinking' : ''} ${className}`}>
       <AnettIcon className={icon} />
+    </span>
+  );
+}
+
+// Hollow variant of the mark — a thin amethyst gradient RING with the spark glyph inside (panel-filled
+// centre). The quiet gutter mark beside each answer; lighter than the solid disc, so answers read calm.
+function AnettRing({ className = 'h-8 w-8', icon = 'h-4 w-4', thinking = false }: { className?: string; icon?: string; thinking?: boolean }) {
+  return (
+    <span className={`relative grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 p-[1.5px] ${thinking ? 'anett-halo anett-thinking' : ''} ${className}`}>
+      <span className="grid h-full w-full place-items-center rounded-full bg-white dark:bg-slate-900">
+        <AnettIcon className={`${icon} text-violet-600 dark:text-violet-300`} />
+      </span>
     </span>
   );
 }
@@ -1000,9 +1012,8 @@ export default function AiAssistant() {
           <div ref={scrollRef} aria-live="polite" onScroll={updateScrollEdges} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
             {turns.length === 0 && (
               <div className="space-y-4 px-1 pt-2">
-                {/* Gemini-style welcome — a spark + a large gradient greeting, no bubble. */}
+                {/* Gemini-style welcome — a large gradient greeting, no logo/bubble. */}
                 <div>
-                  <AnettAvatar className="mb-3 h-11 w-11" icon="h-7 w-7" />
                   <div className="text-[22px] font-semibold leading-snug tracking-tight text-slate-800 dark:text-slate-100">
                     {L.greetPre}<span className="bg-gradient-to-r from-violet-600 to-fuchsia-500 bg-clip-text text-transparent">Anett</span>
                   </div>
@@ -1044,8 +1055,8 @@ export default function AiAssistant() {
             {turns.map((t, i) => (
               <div key={i}>
                 <div className={`flex gap-2.5 ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  {/* Assistant answers carry the spark gutter; user turns sit as a quiet pill, right-aligned. */}
-                  {t.role === 'assistant' && <AnettAvatar className="mt-0.5 h-8 w-8" />}
+                  {/* Assistant answers carry the ring mark; user turns sit as a quiet pill, right-aligned. */}
+                  {t.role === 'assistant' && <AnettRing className="mt-0.5 h-8 w-8" />}
                   <div className={
                     t.role === 'user'
                       // Gemini-style: your message is a subtle neutral pill (not a loud brand bubble).
@@ -1239,7 +1250,7 @@ export default function AiAssistant() {
             {/* Thinking — live reasoning steps stream in (✓ done), with an active "composing" line */}
             {busy && (
               <div className="flex justify-start gap-2.5">
-                <AnettAvatar thinking className="mt-0.5 h-8 w-8" />
+                <AnettRing thinking className="mt-0.5 h-8 w-8" />
                 <div className="min-w-0 flex-1 pt-0.5">
                   {streamText ? (
                     // Real token stream: show the answer building live, full-width with the gradient cursor.
