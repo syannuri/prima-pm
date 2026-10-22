@@ -1929,8 +1929,10 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
       )}
       <div className={`flex flex-wrap items-center gap-2 ${fullscreen ? 'justify-between mb-2' : 'mb-1'}`}>
         {/* The Schedule view switcher (Gantt · Critical Path · Resources) is injected here so it
-            shares the Gantt toolbar row instead of taking a row of its own above the panel. */}
-        {toolbarLead}
+            shares the Gantt toolbar row instead of taking a row of its own above the panel. Hidden on
+            the phone "simple schedule" (compact): that view is Gantt-only by design, so the switcher
+            just added header clutter — CPM/Resources stay reachable on tablet/desktop. */}
+        {!compact && toolbarLead}
         {/* Slip summary on the left (non-fullscreen) — shares the row with the right-aligned
             controls so the table rises directly beneath the buttons instead of a row lower. */}
         {!fullscreen && slipBanner}
