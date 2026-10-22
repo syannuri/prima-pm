@@ -11,6 +11,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useProjectWrite } from '../../lib/useProjectWrite';
 import ImportCostModal from '../../components/ImportCostModal';
 import { formatDateInput, formatIdr, formatIdrShort, formatNum } from '../../lib/format';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 // Sentinel description of the auto-derived "labour from timesheet" AC entry (mirrors the server).
 const LABOUR_AC_DESC = 'Labour actual (from timesheet)';
@@ -102,6 +103,10 @@ function AccordionHeader({ title, count, total, open, onToggle, icon, accent, sp
 
 export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey }: { projectId: string; onNavigateTab?: (tab: string) => void; focusId?: string | null; focusKey?: number }) {
   const qc = useQueryClient();
+  const isMobile = useIsMobile();
+  // Phone-only "simple cost" (Variant A): overview-first — the dense per-line tables collapse to a
+  // budget-by-category breakdown + a forecast strip, with full line editing behind this toggle.
+  const [showManage, setShowManage] = useState(false);
   const [open, setOpen] = useState({ direct: true, indirect: false, actual: false });
   const toggle = (k: 'direct' | 'indirect' | 'actual') => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const base = `/projects/${projectId}/cost`;
@@ -119,6 +124,12 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
   const { data, isLoading } = useQuery({
     queryKey: ['cost', projectId],
     queryFn: () => api.get<CostSummary>(base),
+  });
+  // CPI for the phone Forecast strip (EAC). Shares CostSummaryPanel's exact query key → one fetch.
+  const scheduleBase = `/projects/${projectId}/schedule`;
+  const { data: evm } = useQuery({
+    queryKey: ['evm', scheduleBase, '', formatDateInput(new Date())],
+    queryFn: () => api.get<Evm>(`${scheduleBase}/evm?statusDate=${formatDateInput(new Date())}`),
   });
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['cost', projectId] });
@@ -169,12 +180,38 @@ export default function CostPanel({ projectId, onNavigateTab, focusId, focusKey 
         <div data-cost-focus="baseline" className={`rounded-xl transition-all ${flash === 'baseline' ? 'ring-2 ring-amber-400' : ''}`}><CharterVariance charter={data.highLevelCharterCost} bac={Number(b.costBaseline)} /></div>
       )}
 
-      {/* Cost lines as collapsible accordion sections (header + total always visible). */}
-      <DirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} onBookAc={bookToLine} onNavigateTab={onNavigateTab} flashId={flash} />
-      <IndirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} onBookAc={bookToLine} flashId={flash} />
-      <div ref={actualRef}>
-        <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.actual} onToggle={() => toggle('actual')} target={acTarget} setTarget={setAcTarget} />
-      </div>
+      {isMobile ? (
+        <>
+          {/* Phone "simple cost": forecast strip + budget-by-category overview, then the spend log;
+              full per-line editing tucked behind a toggle so the default read stays calm. */}
+          <ForecastStrip bac={Number(b?.costBaseline ?? 0)} cpi={evm?.cpi ?? null} />
+          <BudgetByCategory data={data!} />
+          <div ref={actualRef}>
+            <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.actual} onToggle={() => toggle('actual')} target={acTarget} setTarget={setAcTarget} />
+          </div>
+          <button
+            type="button" onClick={() => setShowManage((v) => !v)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 transition hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-700 dark:hover:text-brand-300"
+          >
+            <span aria-hidden>{showManage ? '▾' : '▸'}</span>{showManage ? 'Hide budget lines' : 'Manage budget lines'}
+          </button>
+          {showManage && (
+            <>
+              <DirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} onBookAc={bookToLine} onNavigateTab={onNavigateTab} flashId={flash} />
+              <IndirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} onBookAc={bookToLine} flashId={flash} />
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Cost lines as collapsible accordion sections (header + total always visible). */}
+          <DirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.direct} onToggle={() => toggle('direct')} onBookAc={bookToLine} onNavigateTab={onNavigateTab} flashId={flash} />
+          <IndirectCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.indirect} onToggle={() => toggle('indirect')} onBookAc={bookToLine} flashId={flash} />
+          <div ref={actualRef}>
+            <ActualCosts data={data!} base={base} projectId={projectId} onChange={invalidate} open={open.actual} onToggle={() => toggle('actual')} target={acTarget} setTarget={setAcTarget} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -451,6 +488,92 @@ function CharterVariance({ charter, bac }: { charter: number; bac: number }) {
         </span>
       </span>
     </Card>
+  );
+}
+
+// ─── Phone-only "simple cost" pieces (Variant A) ───────────────────────────────────────────────
+// Budget-by-category overview: one calm row per direct family (+ Indirect) with a spent-of-budget
+// bar. Replaces the dense per-line tables as the DEFAULT mobile read; full line editing stays one
+// tap away behind "Manage budget lines". Figures mirror the line-level rollup exactly.
+function BudgetByCategory({ data }: { data: CostSummary }) {
+  const grouped: Record<string, DirectCost[]> = {};
+  for (const d of data.directCosts) (grouped[familyOf(d.type)] ??= []).push(d);
+  const amt = (d: DirectCost) => Number((d.type === 'MANPOWER' ? d.manpowerCost : d.amount) ?? 0);
+  type Row = { key: string; icon: string; label: string; budget: number; spent: number; remaining: number };
+  const rows: Row[] = DIRECT_FAMILIES.map((f) => {
+    const lines = grouped[f.key] ?? [];
+    return {
+      key: f.key, icon: f.icon, label: f.label,
+      budget: lines.reduce((s, d) => s + amt(d), 0),
+      spent: lines.reduce((s, d) => s + d.actualToDate, 0),
+      remaining: lines.reduce((s, d) => s + d.remaining, 0),
+    };
+  }).filter((r) => r.budget > 0 || r.spent > 0);
+  if (data.indirectCosts.length) {
+    rows.push({
+      key: 'INDIRECT', icon: '🧾', label: 'Indirect',
+      budget: data.indirectCosts.reduce((s, i) => s + Number(i.amount ?? 0), 0),
+      spent: data.indirectCosts.reduce((s, i) => s + i.actualToDate, 0),
+      remaining: data.indirectCosts.reduce((s, i) => s + i.remaining, 0),
+    });
+  }
+  if (!rows.length) return null;
+  return (
+    <Card className="!p-3.5">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Budget by category</p>
+        <span className="text-[10px] text-slate-400 dark:text-slate-500">spent / budget</span>
+      </div>
+      <div className="space-y-3">
+        {rows.map((r) => {
+          const pct = r.budget > 0 ? Math.round((r.spent / r.budget) * 100) : (r.spent > 0 ? 100 : 0);
+          const over = r.remaining < 0;
+          const hot = over || pct >= 90;
+          const warm = !hot && pct >= 70;
+          const fill = hot ? 'from-rose-500 to-red-600' : warm ? 'from-amber-400 to-amber-500' : 'from-emerald-500 to-emerald-600';
+          const pctCol = hot ? 'text-rose-600 dark:text-rose-400' : warm ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
+          return (
+            <div key={r.key} className="flex items-center gap-3">
+              <span className="w-6 shrink-0 text-center text-lg leading-none" aria-hidden>{r.icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{r.label}</span>
+                  <span className={`shrink-0 text-xs font-bold tabular-nums ${pctCol}`}>{pct}%</span>
+                </div>
+                <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                  <span className="tabular-nums">{formatIdrShort(r.spent)} of {formatIdrShort(r.budget)}</span>
+                  <span className={`tabular-nums ${over ? 'font-semibold text-rose-600 dark:text-rose-400' : ''}`}>{formatIdrShort(r.remaining)} left</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div className={`h-full rounded-full bg-gradient-to-r ${fill}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// Forecast mini-strip — EAC (= BAC / CPI) + VAC (= BAC − EAC): the "are we heading over?" signal the
+// hero's CPI chip implies but doesn't quantify. Hidden until there's spend (a CPI to divide by).
+function ForecastStrip({ bac, cpi }: { bac: number; cpi: number | null }) {
+  if (!cpi || cpi <= 0 || bac <= 0) return null;
+  const eac = Math.round(bac / cpi);
+  const vac = bac - eac;
+  const over = vac < 0;
+  return (
+    <div className="grid grid-cols-2 gap-2.5">
+      <Card className="!p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Forecast (EAC)</p>
+        <p className={`mt-1 text-base font-bold tabular-nums ${over ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>{formatIdrShort(eac)}</p>
+      </Card>
+      <Card className="!p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Variance (VAC)</p>
+        <p className={`mt-1 text-base font-bold tabular-nums ${over ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{over ? '−' : '+'}{formatIdrShort(Math.abs(vac))}</p>
+      </Card>
+    </div>
   );
 }
 
