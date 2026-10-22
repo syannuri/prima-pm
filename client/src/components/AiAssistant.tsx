@@ -164,6 +164,15 @@ function MicIcon({ className }: { className: string }) {
   );
 }
 
+// Send glyph — a clean upward paper-plane (Gemini-style), fills the round gradient send chip.
+function SendIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M3.4 20.4 21 12 3.4 3.6 3 10l12 2-12 2 .4 6.4Z" />
+    </svg>
+  );
+}
+
 // Speaker glyph (filled, same visual language as MicIcon) — muted variant crosses out the waves.
 function SpeakerIcon({ className, muted = false }: { className: string; muted?: boolean }) {
   return (
@@ -546,13 +555,19 @@ export default function AiAssistant() {
     return () => cancelAnimationFrame(id);
   }, [open, shown, turns, ask.isPending, streaming, streamSteps.length, streamLen, streamText, streamReasoning, reduce]);
 
-  // Typewriter: advance the revealed slice a few chars per frame until the full answer is shown.
+  // Elegant reveal (Gemini-style): advance the revealed slice to the next WORD boundary each tick,
+  // so words appear whole and rise into place (see .anett-word) rather than ticking char-by-char.
   useEffect(() => {
     if (streamIdx === null) return;
     const full = turns[streamIdx]?.content ?? '';
     if (streamLen >= full.length) { setStreamIdx(null); return; }
-    const step = Math.max(2, Math.ceil(full.length / 140)); // scale so long answers still finish in ~2s
-    const id = setTimeout(() => setStreamLen((n) => Math.min(full.length, n + step)), 16);
+    const step = Math.max(6, Math.ceil(full.length / 90)); // scale so long answers still finish in ~2s
+    const id = setTimeout(() => setStreamLen((n) => {
+      let next = Math.min(full.length, n + step);
+      // snap forward to the end of the current word so a word never appears half-revealed
+      while (next < full.length && !/\s/.test(full[next])) next++;
+      return next;
+    }), 38);
     return () => clearTimeout(id);
   }, [streamIdx, streamLen, turns]);
 
@@ -888,28 +903,28 @@ export default function AiAssistant() {
             : `right-4 origin-bottom-right rounded-2xl bottom-[calc(4.75rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 md:right-6 ${expanded ? 'w-[min(94vw,34rem)]' : 'w-[min(92vw,25rem)]'} ${shown || reduce ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-95 opacity-0'}`}`}
           style={docked ? { height: '100dvh', maxHeight: '100dvh' } : { maxHeight: expanded ? 'min(90vh, 52rem)' : 'min(72vh, 34rem)', minHeight: expanded ? 'min(85vh, 46rem)' : undefined }}
         >
-          {/* Header — gradient identity band with avatar + status */}
-          {/* Dark "Deep Amethyst" header — always-on prismatix aurora + animated prism underline. Dark in
-              both themes (a cockpit app-bar), so its controls use light-on-dark variants throughout. */}
-          <div className="anett-aurora anett-header-prism relative flex items-center gap-2.5 border-b border-white/10 bg-gradient-to-r from-violet-950 via-violet-900 to-fuchsia-900 px-3 py-2.5">
-            <AnettAvatar className="h-9 w-9 anett-breathe" icon="h-6 w-6" />
+          {/* Header — minimal, Gemini-light. A quiet surface bar (no heavy gradient band): just the
+              spark avatar, name + live status, and muted-slate controls. Reads calm and modern; the
+              amethyst identity lives in the spark mark + answers, not a shouty app-bar. */}
+          <div className="relative flex items-center gap-2.5 border-b border-slate-200 bg-white/95 px-3.5 py-2.5 dark:border-slate-800 dark:bg-slate-900/95">
+            <AnettAvatar className="h-8 w-8 anett-breathe" icon="h-5 w-5" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="truncate text-sm font-semibold text-white">Anett AI Assistant</span>
-                <kbd className="hidden shrink-0 rounded border border-white/20 bg-white/10 px-1.5 py-px text-[10px] font-medium text-white/70 md:inline-block">⌘K</kbd>
+                <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">Anett</span>
+                <kbd className="hidden shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-medium text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500 md:inline-block">⌘K</kbd>
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-violet-200/80">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
                 <span className="anett-live-dot inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> {canPropose ? L.subtitlePropose : L.subtitleRead}
               </div>
             </div>
-            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? L.shrink : L.enlarge} title={expanded ? L.shrink : L.enlarge} className="hidden h-7 w-7 place-items-center rounded-lg text-white/70 hover:bg-white/15 hover:text-white md:grid">
+            <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? L.shrink : L.enlarge} title={expanded ? L.shrink : L.enlarge} className="hidden h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200 md:grid">
               <ResizeIcon expanded={expanded} />
             </button>
             {/* ⋮ overflow menu — New Chat + voice toggles (kept out of the header row) */}
             {/* Always render the ⋮ menu — it always offers at least the "New look" toggle. */}
             {true && (
               <div className="relative">
-                <button onClick={() => setMenuOpen((v) => !v)} aria-label={L.menuAria} title={L.menuAria} aria-haspopup="menu" aria-expanded={menuOpen} className="grid h-7 w-7 place-items-center rounded-lg text-white/70 hover:bg-white/15 hover:text-white">
+                <button onClick={() => setMenuOpen((v) => !v)} aria-label={L.menuAria} title={L.menuAria} aria-haspopup="menu" aria-expanded={menuOpen} className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200">
                   <KebabIcon className="h-5 w-5" />
                 </button>
                 {menuOpen && (
@@ -944,7 +959,7 @@ export default function AiAssistant() {
                 )}
               </div>
             )}
-            <button onClick={() => setOpen(false)} aria-label={L.close} className="grid h-7 w-7 place-items-center rounded-lg text-white/60 hover:bg-white/15 hover:text-white">✕</button>
+            <button onClick={() => setOpen(false)} aria-label={L.close} className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200">✕</button>
           </div>
 
           {/* Voice picker — pick the natural voice for spoken answers (shown when the speaker is on) */}
@@ -984,17 +999,21 @@ export default function AiAssistant() {
           <div className="relative flex min-h-0 flex-1 flex-col">
           <div ref={scrollRef} aria-live="polite" onScroll={updateScrollEdges} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
             {turns.length === 0 && (
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <AnettAvatar />
-                  <div className="rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                    {L.greetPre}<span className="font-semibold text-violet-600 dark:text-violet-300">Anett</span>{L.greetPost}{canPropose ? L.greetPropose : ''}.
+              <div className="space-y-4 px-1 pt-2">
+                {/* Gemini-style welcome — a spark + a large gradient greeting, no bubble. */}
+                <div>
+                  <AnettAvatar className="mb-3 h-11 w-11" icon="h-7 w-7" />
+                  <div className="text-[22px] font-semibold leading-snug tracking-tight text-slate-800 dark:text-slate-100">
+                    {L.greetPre}<span className="bg-gradient-to-r from-violet-600 to-fuchsia-500 bg-clip-text text-transparent">Anett</span>
+                  </div>
+                  <div className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+                    {L.greetPost.replace(/^\.\s*/, '')}{canPropose ? L.greetPropose : ''}.
                   </div>
                 </div>
 
                 {/* Proactive briefing — overdue tasks needing attention (approvals live in the banner above) */}
                 {briefingQ.data && briefingQ.data.projectsWithOverdue.length > 0 && (
-                  <div className="ml-10 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 text-xs dark:border-amber-900/50 dark:bg-amber-900/15">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 text-xs dark:border-amber-900/50 dark:bg-amber-900/15">
                     <div className="mb-1 font-semibold text-amber-800 dark:text-amber-200">{L.needAttention}</div>
                     <div className="flex flex-wrap gap-1.5">
                       {briefingQ.data.projectsWithOverdue.map((p) => (
@@ -1006,15 +1025,16 @@ export default function AiAssistant() {
                   </div>
                 )}
 
-                <div className="ml-10 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{L.tryAsking}</div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{L.tryAsking}</div>
+                <div className="flex flex-col gap-2">
                   {chips.map((c) => (
                     <button
                       key={c}
                       onClick={() => sendText(c)}
-                      className="rounded-full border border-violet-200 bg-violet-50/60 px-3 py-1.5 text-left text-xs text-violet-700 transition hover:bg-violet-100 dark:border-violet-800/60 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/40"
+                      className="group flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-left text-sm text-slate-700 transition hover:border-violet-300 hover:bg-white dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-200 dark:hover:border-violet-700/60 dark:hover:bg-slate-800"
                     >
-                      {c}
+                      <span className="flex-1">{c}</span>
+                      <span aria-hidden className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-500 dark:text-slate-600">→</span>
                     </button>
                   ))}
                 </div>
@@ -1023,18 +1043,18 @@ export default function AiAssistant() {
 
             {turns.map((t, i) => (
               <div key={i}>
-                <div className={`flex gap-2 ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  {t.role === 'assistant' && <AnettAvatar />}
-                  <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm ${
+                <div className={`flex gap-2.5 ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {/* Assistant answers carry the spark gutter; user turns sit as a quiet pill, right-aligned. */}
+                  {t.role === 'assistant' && <AnettAvatar className="mt-0.5 h-8 w-8" />}
+                  <div className={
                     t.role === 'user'
-                      ? 'whitespace-pre-wrap rounded-tr-sm bg-violet-600 text-white'
+                      // Gemini-style: your message is a subtle neutral pill (not a loud brand bubble).
+                      ? 'max-w-[82%] whitespace-pre-wrap rounded-2xl rounded-tr-md bg-slate-100 px-3.5 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-100'
                       : t.error
-                        ? 'rounded-tl-sm border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200'
-                        : uiV2
-                          // #4 depth: Anett's bubble floats — top-lighter gradient + soft shadow + a hairline top-rim ring.
-                          ? 'rounded-tl-sm bg-gradient-to-b from-white to-slate-100 text-slate-700 shadow-md shadow-slate-900/[0.06] ring-1 ring-black/[0.04] dark:from-slate-700/70 dark:to-slate-800 dark:text-slate-200 dark:shadow-black/40 dark:ring-white/[0.06]'
-                          : 'rounded-tl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
-                  }`}>
+                        ? 'max-w-[82%] rounded-2xl rounded-tl-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200'
+                        // De-bubbled: the answer reads full-width as prose, no background — like a Gemini reply.
+                        : 'min-w-0 flex-1 pt-0.5 text-sm leading-relaxed text-slate-700 dark:text-slate-200'
+                  }>
                     {t.role === 'assistant' && !t.error ? (
                       <div className={i === streamIdx ? 'anett-streaming' : undefined}>
                         <Markdown text={stripCharts(i === streamIdx ? t.content.slice(0, streamLen) : t.content)} className="text-sm" renderCitation={renderCitation} />
@@ -1218,12 +1238,12 @@ export default function AiAssistant() {
 
             {/* Thinking — live reasoning steps stream in (✓ done), with an active "composing" line */}
             {busy && (
-              <div className="flex justify-start gap-2">
-                <AnettAvatar thinking />
-                <div className="min-w-0 rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2.5 dark:bg-slate-800">
+              <div className="flex justify-start gap-2.5">
+                <AnettAvatar thinking className="mt-0.5 h-8 w-8" />
+                <div className="min-w-0 flex-1 pt-0.5">
                   {streamText ? (
-                    // Real token stream: show the answer building live, with a blinking caret.
-                    <div className="text-sm whitespace-pre-wrap break-words text-slate-800 dark:text-slate-100 anett-streaming">{streamText}</div>
+                    // Real token stream: show the answer building live, full-width with the gradient cursor.
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap break-words text-slate-800 dark:text-slate-100 anett-streaming">{streamText}</div>
                   ) : streamReasoning ? (
                     // Anett's live reasoning summary (#D), shown before the answer begins.
                     uiV2 ? (
@@ -1275,9 +1295,11 @@ export default function AiAssistant() {
                 </span>
               </div>
             )}
-            <div className="flex items-end gap-2">
+            {/* Gemini-style composer — one rounded pill holding the field + voice + send, with a soft
+                amethyst focus ring. The send button is a round gradient chip. */}
+            <div className="flex items-end gap-1 rounded-[1.6rem] border border-slate-300 bg-white px-2 py-1.5 shadow-sm transition focus-within:border-violet-400 focus-within:ring-4 focus-within:ring-violet-500/15 dark:border-slate-700 dark:bg-slate-800">
               {listening ? (
-                <div className="flex min-h-[2.25rem] flex-1 items-center overflow-hidden rounded-lg border border-rose-300 bg-rose-50/40 dark:border-rose-800/60 dark:bg-rose-900/10">
+                <div className="flex min-h-[2.25rem] flex-1 items-center overflow-hidden rounded-full bg-rose-50/40 dark:bg-rose-900/10">
                   {micStream ? <VoiceListeningBar stream={micStream} /> : <span className={`flex-1 px-3 text-sm text-rose-600 dark:text-rose-400 ${reduce ? '' : 'animate-pulse'}`}>{L.listening}</span>}
                 </div>
               ) : (
@@ -1288,18 +1310,18 @@ export default function AiAssistant() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(input); } }}
                   placeholder={L.inputPlaceholder}
-                  className={`min-h-[2.25rem] flex-1 resize-none overflow-y-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 ${uiV2 ? 'anett-input-well' : ''}`}
+                  className="min-h-[2.25rem] flex-1 resize-none overflow-y-auto border-0 bg-transparent px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
               )}
               {sttAvailable && (
-                <button onClick={() => (listening ? stopListening() : startListening())} disabled={busy && !listening} aria-label={listening ? L.voiceStop : L.voiceStart} title={listening ? L.voiceStop : L.voiceStart} className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition disabled:opacity-40 ${listening ? `bg-rose-500 text-white ${reduce ? '' : 'animate-pulse'}` : 'text-slate-500 hover:bg-slate-100 hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800'}`}><MicIcon className="h-5 w-5" /></button>
+                <button onClick={() => (listening ? stopListening() : startListening())} disabled={busy && !listening} aria-label={listening ? L.voiceStop : L.voiceStart} title={listening ? L.voiceStop : L.voiceStart} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:opacity-40 ${listening ? `bg-rose-500 text-white ${reduce ? '' : 'animate-pulse'}` : 'text-slate-400 hover:bg-slate-100 hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-700'}`}><MicIcon className="h-5 w-5" /></button>
               )}
               {busy ? (
-                <button onClick={() => abortRef.current?.abort()} title={lang === 'en' ? 'Stop' : 'Hentikan'} aria-label={lang === 'en' ? 'Stop' : 'Hentikan'} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-600">
+                <button onClick={() => abortRef.current?.abort()} title={lang === 'en' ? 'Stop' : 'Hentikan'} aria-label={lang === 'en' ? 'Stop' : 'Hentikan'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-rose-500 text-white transition hover:bg-rose-600">
                   <span className="h-3 w-3 rounded-[2px] bg-white" />
                 </button>
               ) : (
-                <button onClick={() => sendText(input)} disabled={!input.trim()} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white transition disabled:opacity-40" aria-label={L.send}>➤</button>
+                <button onClick={() => sendText(input)} disabled={!input.trim()} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-sm shadow-violet-600/25 transition hover:brightness-105 disabled:opacity-40 disabled:shadow-none" aria-label={L.send}><SendIcon className="h-[18px] w-[18px]" /></button>
               )}
             </div>
             {voiceError ? (

@@ -274,25 +274,37 @@ button, a, [role="button"], [role="switch"], label, select, summary {
   touch-action: manipulation;
 }
 
-/* Anett typewriter — a blinking caret at the end of the message currently being revealed.
-   Attached to the last rendered block so it sits inline with the final word (see AiAssistant). */
+/* Anett typing cursor — an elegant amethyst gradient pill at the end of the block currently being
+   revealed (word-by-word, Gemini-style). Attached to the last rendered block so it rides the final
+   word (see AiAssistant). Softer than a hard caret: it breathes rather than hard-blinks. */
 .anett-streaming > :last-child::after {
   content: '';
   display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 3px;
+  border-radius: 9999px;
   vertical-align: text-bottom;
-  background: currentColor;
-  opacity: 0.7;
-  animation: anett-caret 1s steps(1) infinite;
+  background: linear-gradient(180deg, #7c3aed, #d946ef);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.55);
+  animation: anett-caret 1.15s ease-in-out infinite;
 }
 @keyframes anett-caret {
-  0%, 50% { opacity: 0.7; }
-  50.01%, 100% { opacity: 0; }
+  0%, 100% { opacity: 1; transform: scaleY(1); }
+  50% { opacity: 0.35; transform: scaleY(0.82); }
+}
+/* Each freshly revealed word eases in — a neat rise + unblur cascade (word-boundary reveal). */
+.anett-word {
+  display: inline-block;
+  animation: anett-word-rise 0.42s cubic-bezier(0.2, 0.65, 0.3, 1) both;
+}
+@keyframes anett-word-rise {
+  from { opacity: 0; transform: translateY(0.3em); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .anett-streaming > :last-child::after { animation: none; }
+  .anett-word { animation: none; }
 }
 
 /* Anett "thinking" — a rotating conic ring haloing the avatar while Anett reasons. */
