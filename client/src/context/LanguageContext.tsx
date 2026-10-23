@@ -26,7 +26,9 @@ const LanguageContext = createContext<LangState | undefined>(undefined);
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>(detectLang);
   useEffect(() => {
-    localStorage.setItem(KEY, lang);
+    // Guard the write like detectLang() guards the read: localStorage can be absent or throw
+    // (SSR/prerender, jsdom under Node ≥24's own global, Safari private mode). Never let it break render.
+    try { localStorage.setItem(KEY, lang); } catch { /* storage unavailable — ignore */ }
     // Keep the document language in sync so screen readers / crawlers see the
     // right locale (the static index.html only ever declares `lang="en"`).
     document.documentElement.lang = lang;
