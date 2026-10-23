@@ -32,9 +32,7 @@ import PortfolioForecast from '../components/PortfolioForecast';
 import AssignmentBanner from '../components/AssignmentBanner';
 import ResourceCapacity from '../components/ResourceCapacity';
 // Customizable desktop portfolio widgets (show/hide + reorder) — rendered from the user's saved layout.
-import CustomizeDashboardModal from '../components/CustomizeDashboardModal';
-import { WIDGET_BY_KEY, resolveEnabledWidgets } from '../components/dashboardWidgets';
-import ProgramsPanel from '../components/ProgramsPanel';
+import PortfolioBento from '../components/PortfolioBento';
 
 const STATUS_COLOR = PROJECT_STATUS_BADGE;
 
@@ -44,7 +42,6 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { lang } = useLang();
   const [showForm, setShowForm] = useState(false);
-  const [showCustomize, setShowCustomize] = useState(false);
   // Seed from the user's saved default landing view; an explicit ?view param always wins.
   const [view, setView] = useState<'portfolio' | 'forecast' | 'resources' | 'cards'>(user?.dashboardDefaultView ?? 'portfolio');
   // The mobile "Projects" tab deep-links to ?view=cards; keep the view in sync with the URL.
@@ -173,8 +170,11 @@ export default function DashboardPage() {
           mobile dashboard hero + quick actions + bottom tab bar handle greeting and navigation. */}
       <div className="hidden flex-wrap items-center justify-between gap-3 sm:flex">
         <div className="hidden sm:block">
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{greeting}, {firstName}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
+          <p className="dash-eyebrow bg-gradient-to-r from-brand-500 to-indigo-500 bg-clip-text text-transparent dark:from-brand-300 dark:to-indigo-300">
+            {isPmo ? t('Pusat kendali portfolio', 'Portfolio command center') : t('Ruang kerja proyek', 'Project workspace')}
+          </p>
+          <h1 className="dash-display text-[26px] font-bold leading-tight text-slate-900 dark:text-white">{greeting}, {firstName}</h1>
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div data-tour="portfolio-views" className="flex max-w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5 text-sm">
@@ -203,9 +203,6 @@ export default function DashboardPage() {
               Project Cards
             </button>
           </div>
-          {view === 'portfolio' && (
-            <Button variant="secondary" onClick={() => setShowCustomize(true)}>{lang === 'id' ? 'Sesuaikan' : 'Customize'}</Button>
-          )}
           {canCreate && <Button data-tour="new-project" onClick={() => setShowForm((s) => !s)}>+ New Project</Button>}
         </div>
       </div>
@@ -217,15 +214,10 @@ export default function DashboardPage() {
           <MobileDashboard />
         </PullToRefresh>
       ) : (
-        <>
-          {/* Desktop portfolio widgets, in the user's saved order (hidden ones omitted). Each widget
-              self-hides when it has nothing to show, so the layout stays tidy regardless. */}
-          {resolveEnabledWidgets(user?.dashboardLayout).map((key) => {
-            const W = WIDGET_BY_KEY[key]?.Component;
-            return W ? <W key={key} /> : null;
-          })}
-          <ProgramsPanel />
-        </>
+        /* Desktop portfolio landing = the bold "command center" bento (replaces the old widget
+           stack). It reads the same live endpoints; the detailed donuts + EVM table still live in
+           Reports and the Project Cards view. */
+        <PortfolioBento />
       ))}
       {view === 'forecast' && <PortfolioForecast />}
       {view === 'resources' && <ResourceCapacity />}
@@ -235,7 +227,6 @@ export default function DashboardPage() {
         <Fab label={lang === 'id' ? 'Proyek baru' : 'New Project'} onClick={() => setShowForm(true)} />
       )}
 
-      {showCustomize && <CustomizeDashboardModal onClose={() => setShowCustomize(false)} />}
 
       {showForm && (
         <Modal onClose={() => setShowForm(false)} title="New Project" size="lg">

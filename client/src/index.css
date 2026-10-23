@@ -496,3 +496,74 @@ button, a, [role="button"], [role="switch"], label, select, summary {
   .lg-chrome, .lg-hero, .lg-card { -webkit-backdrop-filter: none; backdrop-filter: none; background: #ffffff; }
   .dark .lg-chrome, .dark .lg-hero, .dark .lg-card { background: #0b1020; }
 }
+
+/* Small-caps section/kicker label + big tabular display number. Pure typographic helpers (no
+   colour/surface), used by the dashboard header and the portfolio bento. */
+.dash-eyebrow { letter-spacing: 0.14em; text-transform: uppercase; font-size: 10.5px; font-weight: 700; }
+.dash-display { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: -0.012em; }
+
+/* ===== Portfolio "Command Center" BENTO — the desktop portfolio landing (bold re-imagine).
+   Dark-first; light gets a lighter frosted treatment. All scoped under .pbento. ===== */
+.pbento { position: relative; isolation: isolate; }
+/* Vivid mesh field + faint grid behind the whole bento. Soft in light, saturated in dark. */
+.pbento::before {
+  content: ""; position: absolute; inset: -40px -24px auto -24px; height: 620px; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(44rem 30rem at 0% -6%, rgba(124, 58, 237, 0.14), transparent 56%),
+    radial-gradient(46rem 32rem at 100% -2%, rgba(37, 99, 235, 0.12), transparent 55%),
+    radial-gradient(40rem 36rem at 55% 10%, rgba(6, 182, 212, 0.08), transparent 60%);
+}
+html.dark .pbento::before {
+  background:
+    radial-gradient(44rem 30rem at 0% -6%, rgba(124, 58, 237, 0.34), transparent 56%),
+    radial-gradient(46rem 32rem at 100% -2%, rgba(37, 99, 235, 0.30), transparent 55%),
+    radial-gradient(40rem 36rem at 55% 10%, rgba(6, 182, 212, 0.18), transparent 60%);
+}
+.pbento::after {
+  content: ""; position: absolute; inset: -40px -24px auto -24px; height: 620px; z-index: -1; pointer-events: none; opacity: .5;
+  background-image: linear-gradient(rgba(79, 70, 229, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(79, 70, 229, .05) 1px, transparent 1px);
+  background-size: 44px 44px; -webkit-mask-image: radial-gradient(70% 70% at 50% 24%, #000, transparent); mask-image: radial-gradient(70% 70% at 50% 24%, #000, transparent);
+}
+html.dark .pbento::after { background-image: linear-gradient(rgba(255, 255, 255, .03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .03) 1px, transparent 1px); }
+@media (prefers-reduced-transparency: reduce) { .pbento::before, .pbento::after { display: none; } }
+
+/* The signature gradient hero tile — a saturated violet→blue block in both themes. */
+.pbento-hero { position: relative; overflow: hidden; border-radius: 1.6rem; }
+.pbento-hero {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(167, 139, 250, .7), transparent 55%),
+    radial-gradient(120% 140% at 100% 100%, rgba(59, 130, 246, .85), transparent 58%),
+    linear-gradient(135deg, #6d28d9, #4f46e5 55%, #2563eb);
+  border: 1px solid rgba(255, 255, 255, .3);
+  box-shadow: 0 30px 70px -28px rgba(79, 70, 229, .6), 0 0 0 1px rgba(124, 58, 237, .2);
+}
+html.dark .pbento-hero {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(124, 58, 237, .55), transparent 55%),
+    radial-gradient(120% 140% at 100% 100%, rgba(37, 99, 235, .55), transparent 55%),
+    linear-gradient(135deg, #1b1250, #0b1030 60%, #061024);
+  border: 1px solid rgba(148, 163, 255, .22);
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, .1), 0 40px 110px -40px rgba(76, 29, 149, .8);
+}
+.pbento-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 50% at 82% 8%, rgba(255, 255, 255, .22), transparent 60%); }
+
+/* Glass bento tile. */
+.pbento-card {
+  position: relative; border-radius: 1.5rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .94), rgba(255, 255, 255, .82));
+  border: 1px solid rgba(203, 213, 225, .85);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 22px 50px -26px rgba(30, 41, 59, .3), 0 2px 8px -4px rgba(30, 41, 59, .1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1); backdrop-filter: blur(14px) saturate(1.1);
+}
+html.dark .pbento-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
+  border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .07) inset, 0 30px 80px -34px rgba(0, 0, 0, .85);
+}
+.pbento-tile { transition: transform .25s cubic-bezier(.22, 1, .36, 1), border-color .25s, box-shadow .25s; }
+@media (hover: hover) {
+  .pbento-tile:hover { transform: translateY(-4px); border-color: rgba(124, 58, 237, .5); box-shadow: 0 30px 55px -26px rgba(30, 41, 59, .38); }
+  html.dark .pbento-tile:hover { border-color: rgba(167, 139, 250, .5); box-shadow: 0 40px 90px -36px rgba(0, 0, 0, .9), 0 0 40px -16px rgba(124, 58, 237, .5); }
+}
+.pbento-spine { position: relative; }
+.pbento-spine::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 9999px; background: var(--spine, #94a3b8); }
