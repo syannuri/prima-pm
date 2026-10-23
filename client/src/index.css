@@ -530,13 +530,17 @@ html.dark .pbento::after { background-image: linear-gradient(rgba(255, 255, 255,
 /* The signature gradient hero tile — a saturated violet→blue block in both themes. */
 .pbento-hero { position: relative; overflow: hidden; border-radius: 1.6rem; }
 .pbento-hero {
+  /* Light: softer, airier gradient (less saturated than the first pass) so the block feels
+     premium rather than heavy on a light page. White text stays legible over the mid tones. */
   background:
-    radial-gradient(120% 140% at 0% 0%, rgba(167, 139, 250, .7), transparent 55%),
-    radial-gradient(120% 140% at 100% 100%, rgba(59, 130, 246, .85), transparent 58%),
-    linear-gradient(135deg, #6d28d9, #4f46e5 55%, #2563eb);
-  border: 1px solid rgba(255, 255, 255, .3);
-  box-shadow: 0 30px 70px -28px rgba(79, 70, 229, .6), 0 0 0 1px rgba(124, 58, 237, .2);
+    radial-gradient(130% 150% at 0% 0%, rgba(196, 181, 253, .55), transparent 58%),
+    radial-gradient(130% 150% at 100% 100%, rgba(125, 180, 255, .55), transparent 60%),
+    linear-gradient(135deg, #8b7fe0, #6d78ec 55%, #5b8df0);
+  border: 1px solid rgba(255, 255, 255, .35);
+  box-shadow: 0 26px 60px -30px rgba(99, 102, 241, .5), 0 0 0 1px rgba(124, 58, 237, .14);
 }
+/* Larger, softer white inner glow in light to lift the block without heavy contrast. */
+.pbento-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(70% 60% at 78% 6%, rgba(255, 255, 255, .34), transparent 62%); }
 html.dark .pbento-hero {
   background:
     radial-gradient(120% 140% at 0% 0%, rgba(124, 58, 237, .55), transparent 55%),
@@ -545,7 +549,13 @@ html.dark .pbento-hero {
   border: 1px solid rgba(148, 163, 255, .22);
   box-shadow: 0 0 0 1px rgba(124, 58, 237, .1), 0 40px 110px -40px rgba(76, 29, 149, .8);
 }
-.pbento-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 50% at 82% 8%, rgba(255, 255, 255, .22), transparent 60%); }
+/* Dark keeps a subtler corner sheen (the dark base is already low-contrast). */
+html.dark .pbento-hero::after { background: radial-gradient(60% 50% at 82% 8%, rgba(255, 255, 255, .16), transparent 60%); }
+
+/* Hero gauge ring — animated sweep + glow so it reads as a live focal element. */
+@keyframes pbento-ring { from { stroke-dashoffset: 427.3; } }
+.pbento-ring { animation: pbento-ring 1.3s cubic-bezier(.22, 1, .36, 1) .25s both; }
+@media (prefers-reduced-motion: reduce) { .pbento-ring { animation: none; } }
 
 /* Glass bento tile. */
 .pbento-card {

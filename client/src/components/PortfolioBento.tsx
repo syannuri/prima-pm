@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { PortfolioSummary, PortfolioHealth, PortfolioEvmTrend } from '../api/types';
+import type { PortfolioSummary, PortfolioHealth, PortfolioEvmTrend, PortfolioRaid } from '../api/types';
 import { formatIdrShort, formatDate } from '../lib/format';
 import { useLang } from '../context/LanguageContext';
 
@@ -42,6 +42,7 @@ export default function PortfolioBento() {
   const { data: summary } = useQuery({ queryKey: ['portfolio-summary'], queryFn: () => api.get<PortfolioSummary>('/portfolio/summary') });
   const { data: attn } = useQuery({ queryKey: ['portfolio-attention'], queryFn: () => api.get<AttentionResponse>('/portfolio/attention'), refetchInterval: 5 * 60_000 });
   const { data: trend } = useQuery({ queryKey: ['portfolio-evm-trend'], queryFn: () => api.get<PortfolioEvmTrend>('/portfolio/evm/trend') });
+  const { data: raid } = useQuery({ queryKey: ['portfolio-raid'], queryFn: () => api.get<PortfolioRaid>('/portfolio/raid') });
 
   if (!summary) return null;
   const t = summary.totals;
@@ -80,37 +81,42 @@ export default function PortfolioBento() {
   const projects = [...summary.projects]
     .filter((p) => p.status === 'IN_PROGRESS')
     .sort((a, b) => b.scheduleProgress - a.scheduleProgress)
-    .slice(0, 3);
+    .slice(0, 6);
   const projChip = (h: string) => (h === 'RED' ? 'bg-rose-500/20 text-rose-300' : h === 'AMBER' ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300');
   const projBar = (h: string) => (h === 'RED' ? 'from-rose-400 to-pink-400' : h === 'AMBER' ? 'from-amber-400 to-orange-400' : 'from-emerald-400 to-teal-400');
 
   return (
     <div className="pbento grid grid-cols-12 gap-4">
 
-      {/* HERO — gradient command tile */}
+      {/* HERO — gradient command tile. The ring is the live focal gauge (big % centred, animated
+          glowing arc); the left column carries context + the inline KPI stats. */}
       <div className="pbento-hero col-span-12 p-7 lg:col-span-8 lg:row-span-2">
         <div className="relative z-10 flex h-full flex-col">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-6">
+            <div className="max-w-md">
               <span className="dash-eyebrow text-violet-100/90">{id ? 'Kesehatan portfolio' : 'Portfolio health'}</span>
-              <div className="mt-3 flex items-end gap-4">
-                <div className="dash-display text-[72px] font-extrabold leading-[.8] text-white drop-shadow-[0_6px_24px_rgba(0,0,0,.25)]">{pct}<span className="text-4xl text-white/70">%</span></div>
-                <span className={`mb-3 rounded-full px-3 py-1 text-xs font-bold ring-1 ${STAT[status].chip}`}>● {STAT[status].label}</span>
+              <div className="mt-2.5">
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${STAT[status].chip}`}>● {STAT[status].label}</span>
               </div>
-              <p className="mt-3 max-w-md text-[13px] text-white/80">
+              <p className="mt-3 text-[13px] leading-relaxed text-white/80">
                 {id
-                  ? `Agregat kemajuan atas ${t.count} proyek · status ${formatDate(summary.statusDate)}.`
-                  : `Aggregate completion across ${t.count} projects · status ${formatDate(summary.statusDate)}.`}
+                  ? `Agregat kemajuan atas ${t.count} proyek · status ${formatDate(summary.statusDate)}. SPI ${t.spi.toFixed(2)}, CPI ${t.cpi.toFixed(2)}.`
+                  : `Aggregate completion across ${t.count} projects · status ${formatDate(summary.statusDate)}. SPI ${t.spi.toFixed(2)}, CPI ${t.cpi.toFixed(2)}.`}
               </p>
             </div>
-            {/* ring */}
-            <div className="relative hidden h-[150px] w-[150px] shrink-0 sm:block">
+            {/* big gauge ring with the % at its centre */}
+            <div className="relative hidden h-[180px] w-[180px] shrink-0 sm:block">
               <svg viewBox="0 0 170 170" className="h-full w-full -rotate-90">
                 <defs><linearGradient id="pb-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffffff" /><stop offset=".5" stopColor="#c4b5fd" /><stop offset="1" stopColor="#67e8f9" /></linearGradient></defs>
-                <circle cx="85" cy="85" r="68" fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="12" />
-                <circle cx="85" cy="85" r="68" fill="none" stroke="url(#pb-ring)" strokeWidth="12" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={ringOffset} style={{ transition: 'stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)', filter: 'drop-shadow(0 0 10px rgba(255,255,255,.5))' }} />
+                <circle cx="85" cy="85" r="68" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="14" />
+                <circle className="pbento-ring" cx="85" cy="85" r="68" fill="none" stroke="url(#pb-ring)" strokeWidth="14" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={ringOffset} style={{ filter: 'drop-shadow(0 0 12px rgba(167,139,250,.65))' }} />
               </svg>
-              <div className="absolute inset-0 grid place-items-center text-[11px] font-semibold uppercase tracking-wide text-white/70">{id ? 'selesai' : 'complete'}</div>
+              <div className="absolute inset-0 grid place-items-center text-center">
+                <div>
+                  <div className="dash-display text-[42px] font-extrabold leading-none text-white drop-shadow-[0_4px_16px_rgba(0,0,0,.3)]">{pct}<span className="text-xl text-white/70">%</span></div>
+                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-white/70">{id ? 'selesai' : 'complete'}</div>
+                </div>
+              </div>
             </div>
           </div>
           {/* inline hero stats */}
@@ -192,8 +198,9 @@ export default function PortfolioBento() {
       <div className="pbento-card pbento-tile col-span-12 p-5 lg:col-span-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="dash-eyebrow text-slate-500 dark:text-slate-400">{id ? 'Proyek Anda' : 'Your projects'}</span>
+          <span className="text-[11px] text-slate-400">{active} {id ? 'aktif' : 'active'}</span>
         </div>
-        <div className="space-y-2.5">
+        <div className="max-h-[420px] space-y-2.5 overflow-y-auto pr-1">
           {projects.map((p) => (
             <Link key={p.id} to={`/projects/${p.id}`} className="block rounded-2xl border border-slate-200 bg-white/70 p-3.5 transition hover:border-brand-300 dark:border-white/10 dark:bg-white/[.03] dark:hover:border-white/20">
               <div className="flex items-center justify-between gap-2">
@@ -205,6 +212,47 @@ export default function PortfolioBento() {
           ))}
         </div>
       </div>
+
+      {/* RAID roll-up — fills the bottom band with governance signal (risks/issues/dependencies). */}
+      {raid && (
+        <div className="pbento-card pbento-tile col-span-12 p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="dash-eyebrow text-slate-500 dark:text-slate-400">{id ? 'RAID portfolio' : 'Portfolio RAID'}</span>
+            <span className="text-[11px] text-slate-400">{id ? `${raid.projectCount} proyek` : `${raid.projectCount} projects`}</span>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-12">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-5">
+              {([
+                { label: id ? 'Risiko tinggi' : 'High risks', value: raid.counts.risksHigh, tone: 'text-rose-600 dark:text-rose-300' },
+                { label: id ? 'Isu terbuka' : 'Open issues', value: raid.counts.issues, tone: 'text-amber-600 dark:text-amber-300' },
+                { label: id ? 'Dep. berisiko' : 'Deps at risk', value: raid.counts.dependenciesAtRisk, tone: 'text-amber-600 dark:text-amber-300' },
+                { label: id ? 'Asumsi' : 'Assumptions', value: raid.counts.assumptions, tone: 'text-slate-700 dark:text-slate-200' },
+              ]).map((c) => (
+                <div key={c.label} className="rounded-xl border border-slate-200 bg-white/60 px-3 py-2.5 dark:border-white/10 dark:bg-white/[.03]">
+                  <div className="dash-eyebrow leading-tight text-slate-500 dark:text-slate-400">{c.label}</div>
+                  <div className={`dash-display mt-1 text-[24px] font-extrabold ${c.tone}`}>{c.value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="lg:col-span-7">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{id ? 'Risiko teratas' : 'Top risks'}</div>
+              {raid.risks.length === 0 ? (
+                <p className="text-sm text-slate-400">{id ? 'Tidak ada risiko tinggi terbuka.' : 'No high risks open.'}</p>
+              ) : (
+                <ul className="space-y-2">
+                  {raid.risks.slice(0, 3).map((r, i) => (
+                    <li key={i} className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white/60 px-3 py-2 dark:border-white/10 dark:bg-white/[.03]">
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${r.severity === 'CRITICAL' || r.severity === 'HIGH' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300' : r.severity === 'MEDIUM' ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300' : 'bg-slate-500/15 text-slate-500 dark:text-slate-300'}`}>{r.severity}</span>
+                      <span className="truncate text-[13px] font-medium text-slate-800 dark:text-slate-100">{r.title}</span>
+                      <span className="ml-auto shrink-0 whitespace-nowrap font-mono text-[10px] text-slate-400">{r.code}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
