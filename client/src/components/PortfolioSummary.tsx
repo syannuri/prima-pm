@@ -163,7 +163,7 @@ export default function PortfolioSummary() {
       {/* Command bar — the gauge (health), the money/scope KPIs (filling what used to be
           empty space) and the status date, consolidated into one tight hero. SPI/CPI/%
           complete/projects live in the gauge + header, so they're not repeated here. */}
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-800 shadow-sm dark:border-transparent dark:bg-gradient-to-br dark:from-slate-900 dark:to-slate-950 dark:text-white dark:shadow-lg">
+      <div className="dash-hero-mesh relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3.5 text-slate-800 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_18px_40px_-24px_rgba(30,41,59,0.3)] ring-1 ring-black/[0.02] dark:border-white/10 dark:bg-gradient-to-br dark:from-slate-900 dark:to-slate-950 dark:text-white dark:shadow-[0_1px_0_rgba(255,255,255,0.06)_inset,0_24px_60px_-28px_rgba(0,0,0,0.75)] dark:ring-white/5">
         <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ backgroundColor: HEALTH_META[gaugeStatus].dot, opacity: 0.12 }} />
         <div className="relative mb-2.5 flex items-start justify-between gap-3">
           {/* Titled band with a left accent bar tinted by the live RAG health — same colour
@@ -254,9 +254,9 @@ export default function PortfolioSummary() {
           { label: 'Changes', value: String(totalChanges) },
           { label: 'Contingency', value: formatIdrShort(t.contingencyReserve), title: formatIdr(t.contingencyReserve) },
         ] as Array<{ label: string; value: string; title?: string; warn?: boolean }>).map((s) => (
-          <div key={s.label} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
-            <div className="truncate text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{s.label}</div>
-            <div title={s.title} className={`mt-0.5 truncate text-base font-bold leading-tight tabular-nums ${s.warn ? 'text-red-500 dark:text-red-300' : 'text-slate-800 dark:text-white'}`}>{s.value}</div>
+          <div key={s.label} className="dash-tile rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+            <div className="dash-eyebrow truncate text-slate-500 dark:text-slate-400">{s.label}</div>
+            <div title={s.title} className={`dash-display mt-1 truncate text-lg font-bold leading-tight ${s.warn ? 'text-red-500 dark:text-red-300' : 'text-slate-800 dark:text-white'}`}>{s.value}</div>
           </div>
         ))}
       </div>

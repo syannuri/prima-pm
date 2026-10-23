@@ -496,3 +496,58 @@ button, a, [role="button"], [role="switch"], label, select, summary {
   .lg-chrome, .lg-hero, .lg-card { -webkit-backdrop-filter: none; backdrop-filter: none; background: #ffffff; }
   .dark .lg-chrome, .dark .lg-hero, .dark .lg-card { background: #0b1020; }
 }
+
+/* ===== Dashboard "Elevated" — DESKTOP-scoped visual language (Phase 1, 2026-10-23). Every rule
+   is namespaced under `.dash-elevated` so nothing leaks to the other 60+ pages that share <Card>.
+   Lifts the portfolio dashboard with: an ambient aurora field, a glass/mesh hero surface, elevated
+   KPI tiles, RAG-spined attention rows, and a display-number treatment (no new webfont — we lean on
+   size/weight/tabular-nums over the app's existing sans so there's no extra font to load). ===== */
+.dash-elevated { position: relative; isolation: isolate; }
+/* Ambient aurora behind the whole dashboard column — a soft blue→indigo→violet wash, stronger in
+   dark. Confined to the top band so lower widgets sit on the plain app background. */
+.dash-elevated::before {
+  content: ""; position: absolute; inset: -32px -20px auto -20px; height: 440px; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(42rem 26rem at 2% -12%, rgba(37, 99, 235, 0.10), transparent 60%),
+    radial-gradient(40rem 28rem at 100% -8%, rgba(99, 102, 241, 0.09), transparent 58%),
+    radial-gradient(32rem 24rem at 60% 0%, rgba(139, 92, 246, 0.06), transparent 60%);
+}
+html.dark .dash-elevated::before {
+  background:
+    radial-gradient(44rem 28rem at 2% -12%, rgba(37, 99, 235, 0.20), transparent 60%),
+    radial-gradient(42rem 30rem at 100% -8%, rgba(99, 102, 241, 0.16), transparent 58%),
+    radial-gradient(34rem 26rem at 60% 0%, rgba(139, 92, 246, 0.13), transparent 60%);
+}
+@media (prefers-reduced-transparency: reduce) { .dash-elevated::before { display: none; } }
+
+/* Small-caps section/kicker label + big tabular display number. These two are pure typographic
+   helpers (no colour/surface), used both inside .dash-elevated and in the shared dashboard header,
+   so they stay un-namespaced. */
+.dash-eyebrow { letter-spacing: 0.14em; text-transform: uppercase; font-size: 10.5px; font-weight: 700; }
+.dash-display { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: -0.012em; }
+
+/* Hero mesh overlay — a vivid corner gradient laid over the existing hero card (the "bold" accent,
+   toned for production). Uses ::before so it paints behind the card's real children (no z-index war);
+   parent already has overflow-hidden + rounded-2xl. */
+.dash-elevated .dash-hero-mesh::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background:
+    radial-gradient(120% 130% at 0% 0%, rgba(99, 102, 241, 0.10), transparent 55%),
+    radial-gradient(120% 130% at 100% 100%, rgba(37, 99, 235, 0.10), transparent 55%);
+}
+html.dark .dash-elevated .dash-hero-mesh::before {
+  background:
+    radial-gradient(120% 130% at 0% 0%, rgba(124, 58, 237, 0.30), transparent 55%),
+    radial-gradient(120% 130% at 100% 100%, rgba(37, 99, 235, 0.28), transparent 55%);
+}
+
+/* Elevated KPI tile — hairline ring + lift on hover (desktop pointer only). */
+.dash-elevated .dash-tile { transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s, box-shadow 0.2s; }
+@media (hover: hover) {
+  .dash-elevated .dash-tile:hover { transform: translateY(-2px); border-color: rgba(96, 165, 250, 0.5); box-shadow: 0 16px 32px -20px rgba(15, 23, 42, 0.35); }
+  html.dark .dash-elevated .dash-tile:hover { box-shadow: 0 20px 44px -22px rgba(0, 0, 0, 0.8), 0 0 28px -16px rgba(99, 102, 241, 0.5); }
+}
+
+/* RAG accent spine on the left edge of a list row. */
+.dash-elevated .dash-spine { position: relative; }
+.dash-elevated .dash-spine::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 9999px; background: var(--spine, #94a3b8); }

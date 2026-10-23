@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
@@ -31,6 +32,9 @@ function reasonLabel(r: Reason, id: boolean): string {
 }
 
 const healthDot = (h: string) => (h === 'RED' ? 'bg-red-500' : h === 'AMBER' ? 'bg-amber-400' : 'bg-slate-300 dark:bg-slate-600');
+// Hex for the elevated-dashboard RAG spine (CSS var on .dash-spine). Outside .dash-elevated the
+// spine rule doesn't apply, so this var is simply ignored — the plain row look is preserved.
+const spineHex = (h: string) => (h === 'RED' ? '#f43f5e' : h === 'AMBER' ? '#f59e0b' : '#94a3b8');
 
 export default function AttentionWidget() {
   const { lang } = useLang();
@@ -97,7 +101,7 @@ export default function AttentionWidget() {
       <ul className="mt-3 space-y-2">
         {data.items.map((it) => (
           <li key={it.projectId}>
-            <Link to={`/projects/${it.projectId}`} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
+            <Link to={`/projects/${it.projectId}`} style={{ '--spine': spineHex(it.health) } as CSSProperties} className="dash-spine flex items-start gap-2 rounded-lg border border-slate-200 p-2 pl-3.5 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${healthDot(it.health)}`} aria-hidden />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">

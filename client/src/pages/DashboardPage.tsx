@@ -173,8 +173,11 @@ export default function DashboardPage() {
           mobile dashboard hero + quick actions + bottom tab bar handle greeting and navigation. */}
       <div className="hidden flex-wrap items-center justify-between gap-3 sm:flex">
         <div className="hidden sm:block">
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{greeting}, {firstName}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
+          <p className="dash-eyebrow bg-gradient-to-r from-brand-500 to-indigo-500 bg-clip-text text-transparent dark:from-brand-300 dark:to-indigo-300">
+            {isPmo ? t('Pusat kendali portfolio', 'Portfolio command center') : t('Ruang kerja proyek', 'Project workspace')}
+          </p>
+          <h1 className="dash-display text-[26px] font-bold leading-tight text-slate-900 dark:text-white">{greeting}, {firstName}</h1>
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{today} · {pulse}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div data-tour="portfolio-views" className="flex max-w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5 text-sm">
@@ -217,7 +220,10 @@ export default function DashboardPage() {
           <MobileDashboard />
         </PullToRefresh>
       ) : (
-        <>
+        /* `dash-elevated` scopes the Phase-1 visual lift (ambient aurora + glass/mesh hero + elevated
+           tiles) to the desktop portfolio only — nothing here leaks to other views or pages. The
+           widget stack + Customize ordering is untouched; widgets just render inside the aurora. */
+        <div className="dash-elevated space-y-5">
           {/* Desktop portfolio widgets, in the user's saved order (hidden ones omitted). Each widget
               self-hides when it has nothing to show, so the layout stays tidy regardless. */}
           {resolveEnabledWidgets(user?.dashboardLayout).map((key) => {
@@ -225,7 +231,7 @@ export default function DashboardPage() {
             return W ? <W key={key} /> : null;
           })}
           <ProgramsPanel />
-        </>
+        </div>
       ))}
       {view === 'forecast' && <PortfolioForecast />}
       {view === 'resources' && <ResourceCapacity />}
