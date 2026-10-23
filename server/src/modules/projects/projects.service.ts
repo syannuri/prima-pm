@@ -476,6 +476,14 @@ export async function softDeleteProject(id: string, actorId: string) {
     where: { id },
     data: { deletedAt: new Date() },
   });
+  // Clear this project's inbox/history notifications: they deep-link to a project that no longer
+  // loads (every project route 404s on deletedAt), so leaving them stranded as dead links is just
+  // confusing. Best-effort — must never break the deletion itself.
+  try {
+    await prisma.notification.deleteMany({ where: { projectId: id } });
+  } catch (err) {
+    console.error('[project] failed to clear notifications on delete', err);
+  }
   await writeAudit({ projectId: id, userId: actorId, entity: 'Project', entityId: id, action: 'DELETE' });
   return project;
 }
