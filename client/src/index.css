@@ -563,6 +563,18 @@ html.dark .pbento-hero::after { background: radial-gradient(60% 50% at 82% 8%, r
 .pmx-float { animation: pmx-float 9s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .pmx-float { animation: none; } }
 
+/* ===== S-curve elevation — draw-on lines, fade-in fills, soft endpoint pulse. =====
+   Lines carry pathLength=1 + stroke-dasharray=1 so one keyframe draws any path length. Applied via
+   className on persistent SVG nodes, so React re-renders (hover/zoom) don't restart them. Reduced
+   motion → final (drawn / visible) state. */
+@keyframes evm-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.evm-draw { animation: evm-draw 1.15s cubic-bezier(.4, 0, .2, 1) .12s both; }
+@keyframes evm-fade { from { opacity: 0; } to { opacity: 1; } }
+.evm-fade { animation: evm-fade .85s ease-out both; }
+@keyframes evm-pulse { 0% { transform: scale(.5); opacity: .75; } 70% { transform: scale(1.65); opacity: 0; } 100% { opacity: 0; } }
+.evm-pulse { transform-box: fill-box; transform-origin: center; animation: evm-pulse 2.4s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .evm-draw, .evm-fade { animation: none; } .evm-pulse { animation: none; opacity: 0; } }
+
 /* Glass bento tile. */
 .pbento-card {
   position: relative; border-radius: 1.5rem;

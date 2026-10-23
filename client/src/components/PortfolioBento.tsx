@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import type { PortfolioSummary, PortfolioHealth, PortfolioEvmTrend, PortfolioRaid } from '../api/types';
 import { formatIdrShort, formatDate } from '../lib/format';
 import { useLang } from '../context/LanguageContext';
+import { smoothPath, areaPath } from './chart/smoothPath';
 
 // Portfolio "Command Center" — the bold bento landing for the desktop portfolio view. One big
 // gradient health hero, a tall Needs-attention panel, money tiles, the portfolio S-curve, and a
@@ -69,13 +70,15 @@ export default function PortfolioBento() {
   const CIRC = 427.3;
   const ringOffset = CIRC * (1 - Math.min(100, Math.max(0, pct)) / 100);
 
-  // S-curve from the rolled-up EVM trend (planned=pv, earned=ev, actual=ac).
+  // S-curve from the rolled-up EVM trend (planned=pv, earned=ev, actual=ac). Smoothed + luminous,
+  // matching the elevated per-project S-curve (shared smoothPath/areaPath).
   const series = trend?.series ?? [];
   const W = 640, H = 180, PAD = 8;
-  const maxV = Math.max(trend?.bac ?? 0, ...series.flatMap((s) => [s.pv, s.ev, s.ac]), 1);
+  const bacV = trend?.bac ?? 0;
+  const maxV = Math.max(bacV, ...series.flatMap((s) => [s.pv, s.ev, s.ac]), 1);
   const xi = (i: number) => (series.length > 1 ? (i / (series.length - 1)) * W : 0);
   const yv = (v: number) => H - (v / maxV) * (H - PAD);
-  const path = (key: 'pv' | 'ev' | 'ac') => series.map((s, i) => `${i ? 'L' : 'M'}${xi(i).toFixed(1)},${yv(s[key]).toFixed(1)}`).join(' ');
+  const pts = (key: 'pv' | 'ev' | 'ac') => series.map((s, i) => ({ x: xi(i), y: yv(s[key]) }));
 
   const items = (attn?.items ?? []).slice(0, 4);
   const projects = [...summary.projects]
@@ -186,10 +189,27 @@ export default function PortfolioBento() {
           <div className="grid h-[200px] place-items-center text-sm text-slate-400">{id ? 'Belum cukup snapshot EVM untuk kurva.' : 'Not enough EVM snapshots for a curve yet.'}</div>
         ) : (
           <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 h-[200px] w-full" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="pb-ev-st" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#22d3ee" /><stop offset="100%" stopColor="#818cf8" /></linearGradient>
+              <linearGradient id="pb-ev-ar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22d3ee" stopOpacity="0.28" /><stop offset="60%" stopColor="#818cf8" stopOpacity="0.08" /><stop offset="100%" stopColor="#818cf8" stopOpacity="0" /></linearGradient>
+            </defs>
             <g stroke="currentColor" className="text-slate-900/[.06] dark:text-white/[.06]"><line x1="0" y1="45" x2={W} y2="45" /><line x1="0" y1="90" x2={W} y2="90" /><line x1="0" y1="135" x2={W} y2="135" /></g>
-            <path d={path('pv')} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 6" />
-            <path d={path('ev')} fill="none" className="text-cyan-600 dark:text-cyan-400" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-            <path d={path('ac')} fill="none" className="text-violet-600 dark:text-violet-400" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+            {/* BAC / target line */}
+            {bacV > 0 && <line x1="0" x2={W} y1={yv(bacV)} y2={yv(bacV)} className="text-slate-300 dark:text-slate-600" stroke="currentColor" strokeWidth="1" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />}
+            {/* Earned — luminous area + gradient draw-on line, like the per-project chart. */}
+            <path d={areaPath(pts('ev'), H)} fill="url(#pb-ev-ar)" className="evm-fade" />
+            <path d={smoothPath(pts('pv'))} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 6" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(pts('ac'))} fill="none" className="text-violet-600 dark:text-violet-400" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(pts('ev'))} fill="none" stroke="url(#pb-ev-st)" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.16" vectorEffect="non-scaling-stroke" />
+            <path d={smoothPath(pts('ev'))} fill="none" stroke="url(#pb-ev-st)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} className="evm-draw" vectorEffect="non-scaling-stroke" />
+            {/* "You are here" — latest rolled-up earned point. */}
+            {(() => { const e = pts('ev')[series.length - 1]; if (!e) return null; return (
+              <g>
+                <circle cx={e.x} cy={e.y} r="7" fill="#06b6d4" opacity="0.18" />
+                <circle cx={e.x} cy={e.y} r="5" fill="none" stroke="#67e8f9" strokeWidth="1.3" className="evm-pulse" />
+                <circle cx={e.x} cy={e.y} r="3.4" fill="#06b6d4" stroke="#fff" strokeWidth="1.5" />
+              </g>
+            ); })()}
           </svg>
         )}
       </div>
