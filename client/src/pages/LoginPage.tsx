@@ -391,7 +391,10 @@ export default function LoginPage() {
                 </Field>
                 <Field label={tx.password}>
                   <div className="relative">
-                    <Input type={showPw ? 'text' : 'password'} autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? (isSignup && password.length < 10 ? 'invalid' : 'valid') : undefined} className="pr-10" />
+                    {/* Explicit aria-label: this Field's <label> also wraps the show/hide toggle + hint +
+                        forgot-link, which otherwise pollute the input's accessible name (it stops being
+                        exactly "Password"). aria-label wins, giving screen readers a clean name. */}
+                    <Input aria-label={tx.password} type={showPw ? 'text' : 'password'} autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required state={password ? (isSignup && password.length < 10 ? 'invalid' : 'valid') : undefined} className="pr-10" />
                     <button type="button" onClick={() => setShowPw((s) => !s)} aria-label={showPw ? tx.hide : tx.show} className="absolute inset-y-0 right-0 grid w-10 place-items-center text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200">
                       {showPw ? <EyeOff /> : <Eye />}
                     </button>
