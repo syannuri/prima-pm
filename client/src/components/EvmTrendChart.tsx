@@ -251,9 +251,11 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
               if (!ep || ep.x < padL || ep.x > W - padR) return null;
               const val = latest ? latest.ev : (lastAct && lastAct.actualPct != null ? (lastAct.actualPct as number) * bac : null);
               const label = val == null ? null : (progress ? `${formatNum(V(val), 0)}%` : formatIdrShort(val));
-              const bw = progress ? 56 : 84;
-              const bx = Math.max(padL + 1, ep.x - bw - 10);
-              const by = Math.max(padT + 1, ep.y - 34);
+              const bw = progress ? 56 : 84, bh = 26;
+              // Keep the callout inside the plot and off the endpoint; flip it BELOW the point when
+              // there isn't room above without colliding with the top marker-pill row.
+              const bx = Math.min(W - padR - bw - 1, Math.max(padL + 1, ep.x - bw - 10));
+              const by = ep.y - (bh + 8) >= padT + 16 ? ep.y - (bh + 8) : Math.min(H - padB - bh - 2, ep.y + 12);
               return (
                 <g>
                   <circle cx={ep.x} cy={ep.y} r="9" fill={EV} opacity="0.16" />
