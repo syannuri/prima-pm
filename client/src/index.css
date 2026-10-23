@@ -497,57 +497,73 @@ button, a, [role="button"], [role="switch"], label, select, summary {
   .dark .lg-chrome, .dark .lg-hero, .dark .lg-card { background: #0b1020; }
 }
 
-/* ===== Dashboard "Elevated" — DESKTOP-scoped visual language (Phase 1, 2026-10-23). Every rule
-   is namespaced under `.dash-elevated` so nothing leaks to the other 60+ pages that share <Card>.
-   Lifts the portfolio dashboard with: an ambient aurora field, a glass/mesh hero surface, elevated
-   KPI tiles, RAG-spined attention rows, and a display-number treatment (no new webfont — we lean on
-   size/weight/tabular-nums over the app's existing sans so there's no extra font to load). ===== */
-.dash-elevated { position: relative; isolation: isolate; }
-/* Ambient aurora behind the whole dashboard column — a soft blue→indigo→violet wash, stronger in
-   dark. Confined to the top band so lower widgets sit on the plain app background. */
-.dash-elevated::before {
-  content: ""; position: absolute; inset: -32px -20px auto -20px; height: 440px; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(42rem 26rem at 2% -12%, rgba(37, 99, 235, 0.10), transparent 60%),
-    radial-gradient(40rem 28rem at 100% -8%, rgba(99, 102, 241, 0.09), transparent 58%),
-    radial-gradient(32rem 24rem at 60% 0%, rgba(139, 92, 246, 0.06), transparent 60%);
-}
-html.dark .dash-elevated::before {
-  background:
-    radial-gradient(44rem 28rem at 2% -12%, rgba(37, 99, 235, 0.20), transparent 60%),
-    radial-gradient(42rem 30rem at 100% -8%, rgba(99, 102, 241, 0.16), transparent 58%),
-    radial-gradient(34rem 26rem at 60% 0%, rgba(139, 92, 246, 0.13), transparent 60%);
-}
-@media (prefers-reduced-transparency: reduce) { .dash-elevated::before { display: none; } }
-
-/* Small-caps section/kicker label + big tabular display number. These two are pure typographic
-   helpers (no colour/surface), used both inside .dash-elevated and in the shared dashboard header,
-   so they stay un-namespaced. */
+/* Small-caps section/kicker label + big tabular display number. Pure typographic helpers (no
+   colour/surface), used by the dashboard header and the portfolio bento. */
 .dash-eyebrow { letter-spacing: 0.14em; text-transform: uppercase; font-size: 10.5px; font-weight: 700; }
 .dash-display { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: -0.012em; }
 
-/* Hero mesh overlay — a vivid corner gradient laid over the existing hero card (the "bold" accent,
-   toned for production). Uses ::before so it paints behind the card's real children (no z-index war);
-   parent already has overflow-hidden + rounded-2xl. */
-.dash-elevated .dash-hero-mesh::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+/* ===== Portfolio "Command Center" BENTO — the desktop portfolio landing (bold re-imagine).
+   Dark-first; light gets a lighter frosted treatment. All scoped under .pbento. ===== */
+.pbento { position: relative; isolation: isolate; }
+/* Vivid mesh field + faint grid behind the whole bento. Soft in light, saturated in dark. */
+.pbento::before {
+  content: ""; position: absolute; inset: -40px -24px auto -24px; height: 620px; z-index: -2; pointer-events: none;
   background:
-    radial-gradient(120% 130% at 0% 0%, rgba(99, 102, 241, 0.10), transparent 55%),
-    radial-gradient(120% 130% at 100% 100%, rgba(37, 99, 235, 0.10), transparent 55%);
+    radial-gradient(44rem 30rem at 0% -6%, rgba(124, 58, 237, 0.14), transparent 56%),
+    radial-gradient(46rem 32rem at 100% -2%, rgba(37, 99, 235, 0.12), transparent 55%),
+    radial-gradient(40rem 36rem at 55% 10%, rgba(6, 182, 212, 0.08), transparent 60%);
 }
-html.dark .dash-elevated .dash-hero-mesh::before {
+html.dark .pbento::before {
   background:
-    radial-gradient(120% 130% at 0% 0%, rgba(124, 58, 237, 0.30), transparent 55%),
-    radial-gradient(120% 130% at 100% 100%, rgba(37, 99, 235, 0.28), transparent 55%);
+    radial-gradient(44rem 30rem at 0% -6%, rgba(124, 58, 237, 0.34), transparent 56%),
+    radial-gradient(46rem 32rem at 100% -2%, rgba(37, 99, 235, 0.30), transparent 55%),
+    radial-gradient(40rem 36rem at 55% 10%, rgba(6, 182, 212, 0.18), transparent 60%);
 }
+.pbento::after {
+  content: ""; position: absolute; inset: -40px -24px auto -24px; height: 620px; z-index: -1; pointer-events: none; opacity: .5;
+  background-image: linear-gradient(rgba(79, 70, 229, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(79, 70, 229, .05) 1px, transparent 1px);
+  background-size: 44px 44px; -webkit-mask-image: radial-gradient(70% 70% at 50% 24%, #000, transparent); mask-image: radial-gradient(70% 70% at 50% 24%, #000, transparent);
+}
+html.dark .pbento::after { background-image: linear-gradient(rgba(255, 255, 255, .03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .03) 1px, transparent 1px); }
+@media (prefers-reduced-transparency: reduce) { .pbento::before, .pbento::after { display: none; } }
 
-/* Elevated KPI tile — hairline ring + lift on hover (desktop pointer only). */
-.dash-elevated .dash-tile { transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s, box-shadow 0.2s; }
+/* The signature gradient hero tile — a saturated violet→blue block in both themes. */
+.pbento-hero { position: relative; overflow: hidden; border-radius: 1.6rem; }
+.pbento-hero {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(167, 139, 250, .7), transparent 55%),
+    radial-gradient(120% 140% at 100% 100%, rgba(59, 130, 246, .85), transparent 58%),
+    linear-gradient(135deg, #6d28d9, #4f46e5 55%, #2563eb);
+  border: 1px solid rgba(255, 255, 255, .3);
+  box-shadow: 0 30px 70px -28px rgba(79, 70, 229, .6), 0 0 0 1px rgba(124, 58, 237, .2);
+}
+html.dark .pbento-hero {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(124, 58, 237, .55), transparent 55%),
+    radial-gradient(120% 140% at 100% 100%, rgba(37, 99, 235, .55), transparent 55%),
+    linear-gradient(135deg, #1b1250, #0b1030 60%, #061024);
+  border: 1px solid rgba(148, 163, 255, .22);
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, .1), 0 40px 110px -40px rgba(76, 29, 149, .8);
+}
+.pbento-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 50% at 82% 8%, rgba(255, 255, 255, .22), transparent 60%); }
+
+/* Glass bento tile. */
+.pbento-card {
+  position: relative; border-radius: 1.5rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .94), rgba(255, 255, 255, .82));
+  border: 1px solid rgba(203, 213, 225, .85);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 22px 50px -26px rgba(30, 41, 59, .3), 0 2px 8px -4px rgba(30, 41, 59, .1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1); backdrop-filter: blur(14px) saturate(1.1);
+}
+html.dark .pbento-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
+  border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .07) inset, 0 30px 80px -34px rgba(0, 0, 0, .85);
+}
+.pbento-tile { transition: transform .25s cubic-bezier(.22, 1, .36, 1), border-color .25s, box-shadow .25s; }
 @media (hover: hover) {
-  .dash-elevated .dash-tile:hover { transform: translateY(-2px); border-color: rgba(96, 165, 250, 0.5); box-shadow: 0 16px 32px -20px rgba(15, 23, 42, 0.35); }
-  html.dark .dash-elevated .dash-tile:hover { box-shadow: 0 20px 44px -22px rgba(0, 0, 0, 0.8), 0 0 28px -16px rgba(99, 102, 241, 0.5); }
+  .pbento-tile:hover { transform: translateY(-4px); border-color: rgba(124, 58, 237, .5); box-shadow: 0 30px 55px -26px rgba(30, 41, 59, .38); }
+  html.dark .pbento-tile:hover { border-color: rgba(167, 139, 250, .5); box-shadow: 0 40px 90px -36px rgba(0, 0, 0, .9), 0 0 40px -16px rgba(124, 58, 237, .5); }
 }
-
-/* RAG accent spine on the left edge of a list row. */
-.dash-elevated .dash-spine { position: relative; }
-.dash-elevated .dash-spine::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 9999px; background: var(--spine, #94a3b8); }
+.pbento-spine { position: relative; }
+.pbento-spine::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 9999px; background: var(--spine, #94a3b8); }

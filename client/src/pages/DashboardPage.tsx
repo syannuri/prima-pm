@@ -32,9 +32,7 @@ import PortfolioForecast from '../components/PortfolioForecast';
 import AssignmentBanner from '../components/AssignmentBanner';
 import ResourceCapacity from '../components/ResourceCapacity';
 // Customizable desktop portfolio widgets (show/hide + reorder) — rendered from the user's saved layout.
-import CustomizeDashboardModal from '../components/CustomizeDashboardModal';
-import { WIDGET_BY_KEY, resolveEnabledWidgets } from '../components/dashboardWidgets';
-import ProgramsPanel from '../components/ProgramsPanel';
+import PortfolioBento from '../components/PortfolioBento';
 
 const STATUS_COLOR = PROJECT_STATUS_BADGE;
 
@@ -44,7 +42,6 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { lang } = useLang();
   const [showForm, setShowForm] = useState(false);
-  const [showCustomize, setShowCustomize] = useState(false);
   // Seed from the user's saved default landing view; an explicit ?view param always wins.
   const [view, setView] = useState<'portfolio' | 'forecast' | 'resources' | 'cards'>(user?.dashboardDefaultView ?? 'portfolio');
   // The mobile "Projects" tab deep-links to ?view=cards; keep the view in sync with the URL.
@@ -206,9 +203,6 @@ export default function DashboardPage() {
               Project Cards
             </button>
           </div>
-          {view === 'portfolio' && (
-            <Button variant="secondary" onClick={() => setShowCustomize(true)}>{lang === 'id' ? 'Sesuaikan' : 'Customize'}</Button>
-          )}
           {canCreate && <Button data-tour="new-project" onClick={() => setShowForm((s) => !s)}>+ New Project</Button>}
         </div>
       </div>
@@ -220,18 +214,10 @@ export default function DashboardPage() {
           <MobileDashboard />
         </PullToRefresh>
       ) : (
-        /* `dash-elevated` scopes the Phase-1 visual lift (ambient aurora + glass/mesh hero + elevated
-           tiles) to the desktop portfolio only — nothing here leaks to other views or pages. The
-           widget stack + Customize ordering is untouched; widgets just render inside the aurora. */
-        <div className="dash-elevated space-y-5">
-          {/* Desktop portfolio widgets, in the user's saved order (hidden ones omitted). Each widget
-              self-hides when it has nothing to show, so the layout stays tidy regardless. */}
-          {resolveEnabledWidgets(user?.dashboardLayout).map((key) => {
-            const W = WIDGET_BY_KEY[key]?.Component;
-            return W ? <W key={key} /> : null;
-          })}
-          <ProgramsPanel />
-        </div>
+        /* Desktop portfolio landing = the bold "command center" bento (replaces the old widget
+           stack). It reads the same live endpoints; the detailed donuts + EVM table still live in
+           Reports and the Project Cards view. */
+        <PortfolioBento />
       ))}
       {view === 'forecast' && <PortfolioForecast />}
       {view === 'resources' && <ResourceCapacity />}
@@ -241,7 +227,6 @@ export default function DashboardPage() {
         <Fab label={lang === 'id' ? 'Proyek baru' : 'New Project'} onClick={() => setShowForm(true)} />
       )}
 
-      {showCustomize && <CustomizeDashboardModal onClose={() => setShowCustomize(false)} />}
 
       {showForm && (
         <Modal onClose={() => setShowForm(false)} title="New Project" size="lg">
