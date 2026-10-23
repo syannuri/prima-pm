@@ -8,7 +8,7 @@ import { formatNum } from '../lib/format';
 import { computeMargin } from '../lib/margin';
 import HealthBulletGauge from './HealthBulletGauge';
 import EvmTrendChart from './EvmTrendChart';
-import ExtractFromNotes from './ExtractFromNotes';
+import AiToolsMenu from './AiToolsMenu';
 import PredictiveCard from './PredictiveCard';
 import AnettNudge from './AnettNudge';
 import InfoTip from './InfoTip';
@@ -577,8 +577,9 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
         </div>
       </div>
 
-      {/* Stage A — extract task-progress + issues from pasted notes (renders nothing when AI is off). */}
-      <div className="lg:col-span-12 lg:order-first"><ExtractFromNotes projectId={projectId} /></div>
+      {/* AI tools — a collapsed "✨ AI tools" toggle gathering the project's AI actions (currently
+          Extract-from-notes). Renders nothing when AI is off (guests get a nudge). */}
+      <div className="lg:col-span-12 lg:order-first"><AiToolsMenu projectId={projectId} /></div>
 
       {/* Performance — Schedule (SPI) & Cost (CPI) bullet gauges vs the 1.0 target, then progress. */}
       <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="hidden sm:block lg:col-span-4 lg:order-1" spine={healthHex(health)} delay={60}>
