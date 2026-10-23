@@ -80,6 +80,10 @@ jobs:
   e2e:
     name: E2E (full suite)
     runs-on: ubuntu-latest
+    # Hard cap so a hung run fails fast instead of sitting until GitHub's 6h default. The suite's
+    # dev webServers (npm run dev, with watchers) don't always exit cleanly after the tests finish,
+    # which can leave `playwright test` waiting on child processes and the job hanging indefinitely.
+    timeout-minutes: 20
     needs: [server, client] # only run once build + unit tests are green
     services:
       postgres:
