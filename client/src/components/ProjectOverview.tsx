@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, type CSSProperties, useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, API_BASE, streamHeaders } from '../api/client';
 import type { Evm, EvmTrend, Forecast, GanttNode } from '../api/types';
@@ -26,6 +26,36 @@ type Health = 'GREEN' | 'AMBER' | 'RED' | 'NO_DATA';
 // Health → progress-bar fill (single source of truth for the one progress bar).
 const barColor = (h: Health) =>
   h === 'RED' ? 'bg-red-500' : h === 'AMBER' ? 'bg-amber-500' : h === 'GREEN' ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500';
+
+// Health → a single accent hex. Mirrors the portfolio bento's spineHex so the Overview's hero wash
+// + panel spines speak one colour language with the dashboard.
+const healthHex = (h: Health) =>
+  h === 'RED' ? '#f43f5e' : h === 'AMBER' ? '#f59e0b' : h === 'GREEN' ? '#10b981' : '#7c3aed';
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+// Count a number up from 0 on mount — a small "live" flourish for the hero's focal figure. Honours
+// prefers-reduced-motion (renders the final value immediately). `format` keeps the caller in control
+// of how the running value prints (rounding, suffix, …).
+function CountUp({ to, duration = 900, format = (n: number) => String(Math.round(n)) }: { to: number; duration?: number; format?: (n: number) => string }) {
+  const [v, setV] = useState(() => (prefersReducedMotion() ? to : 0));
+  const target = useRef(to);
+  target.current = to;
+  useEffect(() => {
+    if (prefersReducedMotion()) { setV(to); return; }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / duration);
+      setV(target.current * (1 - Math.pow(1 - p, 3))); // easeOutCubic
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [to, duration]);
+  return <>{format(v)}</>;
+}
 
 // Count leaf work-packages as completed (100%) vs remaining, walking the WBS/Gantt tree.
 function countTasks(nodes: GanttNode[]): { completed: number; remaining: number } {
@@ -111,10 +141,13 @@ function Bar({ label, value, max, color, sub }: { label: string; value: number; 
 // Overview panels now wear the command-center glass surface (.pbento-card) for one language with
 // the portfolio dashboard. `surface` (the old RAG accent tint) is folded into the uniform glass —
 // the coloured KpiIcon + headings already carry the signal. Charts/contents are untouched.
-function Panel({ onClick, className, surface, children }: { onClick?: () => void; className?: string; surface?: string; children: ReactNode }) {
+// `spine` paints a left accent rail (health/category hex, mirrors the dashboard's .pbento-spine) and
+// `delay` staggers the rise-in so the tab assembles with depth (reduced-motion disables it).
+function Panel({ onClick, className, surface, spine, delay, children }: { onClick?: () => void; className?: string; surface?: string; spine?: string; delay?: number; children: ReactNode }) {
   void surface;
-  const base = 'pbento-card pbento-tile p-4 sm:p-5';
-  if (!onClick) return <div className={`${base} ${className ?? ''}`}>{children}</div>;
+  const base = `pbento-card pbento-tile prima-rise p-4 sm:p-5${spine ? ' pbento-spine pl-5' : ''}`;
+  const style: CSSProperties = { ...(spine ? { ['--spine' as string]: spine } : {}), ...(delay ? { animationDelay: `${delay}ms` } : {}) };
+  if (!onClick) return <div className={`${base} ${className ?? ''}`} style={style}>{children}</div>;
   return (
     <div
       role="button"
@@ -123,7 +156,7 @@ function Panel({ onClick, className, surface, children }: { onClick?: () => void
       onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onClick(); } }}
       className={`cursor-pointer ${className ?? ''}`}
     >
-      <div className={`${base} h-full`}>{children}</div>
+      <div className={`${base} h-full`} style={style}>{children}</div>
     </div>
   );
 }
@@ -452,11 +485,19 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
         ? { label: id ? 'Di belakang' : 'Behind', chip: 'bg-rose-400/20 text-rose-100 ring-rose-300/40' }
         : { label: id ? 'Tanpa data' : 'No data', chip: 'bg-white/15 text-white ring-white/30' };
   const HERO_C = 2 * Math.PI * 60; // ring r=60
-  const heroStats: { k: string; v: string }[] = [
-    { k: 'SPI', v: e.pv > 0 ? e.spi.toFixed(2) : '—' },
-    { k: 'CPI', v: e.ac > 0 ? e.cpi.toFixed(2) : '—' },
-    { k: 'EAC', v: formatIdrShort(e.eac) },
-    { k: 'Margin', v: hasMargin && projected.marginPct != null ? `${projected.marginPct.toFixed(0)}%` : '—' },
+  // Headline tiles carry a target/variance sub-signal (▲/▼ + a word) so the figure reads as healthy
+  // or not at a glance — SPI/CPI vs the 1.0 target, EAC vs BAC, Margin by sign.
+  const heroStats: { k: string; v: string; sub?: string; tone?: 'up' | 'down' }[] = [
+    { k: 'SPI', v: e.pv > 0 ? e.spi.toFixed(2) : '—', ...(e.pv > 0 ? { tone: e.spi >= 1 ? 'up' : 'down', sub: e.spi >= 1 ? (id ? 'sesuai' : 'on plan') : (id ? 'lambat' : 'behind') } : {}) },
+    { k: 'CPI', v: e.ac > 0 ? e.cpi.toFixed(2) : '—', ...(e.ac > 0 ? { tone: e.cpi >= 1 ? 'up' : 'down', sub: e.cpi >= 1 ? (id ? 'hemat' : 'under') : (id ? 'boros' : 'over') } : {}) },
+    { k: 'EAC', v: formatIdrShort(e.eac), ...(e.bac > 0 && e.eac > 0
+      ? e.eac > e.bac
+        ? { tone: 'down' as const, sub: `+${formatIdrShort(e.eac - e.bac)}` }
+        : e.eac < e.bac
+          ? { tone: 'up' as const, sub: `−${formatIdrShort(e.bac - e.eac)}` }
+          : { tone: 'up' as const, sub: id ? 'sesuai anggaran' : 'on budget' }
+      : {}) },
+    { k: 'Margin', v: hasMargin && projected.marginPct != null ? `${projected.marginPct.toFixed(0)}%` : '—', ...(hasMargin && projected.profit != null ? { tone: projected.profit >= 0 ? 'up' : 'down', sub: id ? 'proyeksi' : 'projected' } : {}) },
   ];
 
   return (
@@ -469,7 +510,10 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Command-center hero band (desktop/tablet) — a gradient tile leading the Overview with the
           project's progress ring + status + headline stats, matching the portfolio dashboard. Phones
           keep their own ring hero below (hidden sm:block here avoids duplicating it). */}
-      <div className="pbento-hero col-span-12 hidden p-6 sm:block lg:order-first">
+      <div className="pbento-hero prima-rise col-span-12 hidden p-6 sm:block lg:order-first">
+        {/* Health-tinted glow — the hero itself signals RAG (green/amber/red/violet) by washing a
+            drifting coloured blob over the violet base, so status reads before you find the chip. */}
+        <div aria-hidden className="pmx-float pointer-events-none absolute -right-12 -top-20 h-72 w-72 rounded-full blur-3xl" style={{ backgroundColor: healthHex(health), opacity: 0.3 }} />
         <div className="relative z-10 flex flex-wrap items-center gap-6">
           <div className="relative h-[136px] w-[136px] shrink-0">
             <svg viewBox="0 0 160 160" className="h-full w-full -rotate-90">
@@ -479,14 +523,14 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
             </svg>
             <div className="absolute inset-0 grid place-items-center text-center">
               <div>
-                <div className="dash-display text-[34px] font-extrabold leading-none text-white">{pct}<span className="text-lg text-white/70">%</span></div>
+                <div className="dash-display text-[34px] font-extrabold leading-none text-white"><CountUp to={pct} /><span className="text-lg text-white/70">%</span></div>
                 <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/70">{id ? 'selesai' : 'complete'}</div>
               </div>
             </div>
           </div>
           <div className="min-w-0 flex-1">
             <span className="dash-eyebrow text-violet-100/90">{id ? 'Kesehatan proyek' : 'Project health'}</span>
-            <div className="mt-2"><span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${heroStatus.chip}`}>● {heroStatus.label}</span></div>
+            <div className="mt-2"><span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${heroStatus.chip}`}><span className="mr-1 inline-block h-2 w-2 animate-pulse rounded-full bg-current align-middle" />{heroStatus.label}</span></div>
             <p className="mt-2 text-[13px] text-white/80">
               {id ? 'Jadwal' : 'Schedule'} SPI {e.pv > 0 ? e.spi.toFixed(2) : '—'} · {id ? 'Biaya' : 'Cost'} CPI {e.ac > 0 ? e.cpi.toFixed(2) : '—'}
               {e.finishVarianceDays != null ? ` · ${id ? 'selisih selesai' : 'finish'} ${e.finishVarianceDays > 0 ? '+' : ''}${e.finishVarianceDays}${id ? 'h' : 'd'}` : ''}
@@ -494,9 +538,14 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           </div>
           <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:grid-cols-4">
             {heroStats.map((s) => (
-              <div key={s.k} className="rounded-2xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur">
+              <div key={s.k} className="rounded-2xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur transition hover:bg-white/15">
                 <div className="text-[11px] text-white/70">{s.k}</div>
-                <div className="dash-display text-[20px] font-extrabold text-white">{s.v}</div>
+                <div className="dash-display text-[20px] font-extrabold leading-tight text-white">{s.v}</div>
+                {s.sub && (
+                  <div className={`mt-0.5 flex items-center gap-1 text-[10px] font-semibold ${s.tone === 'down' ? 'text-rose-200' : 'text-emerald-200'}`}>
+                    <span aria-hidden>{s.tone === 'down' ? '▼' : '▲'}</span><span className="truncate">{s.sub}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -534,7 +583,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       <div className="lg:col-span-12 lg:order-none"><PredictiveCard projectId={projectId} /></div>
 
       {/* Performance — Schedule (SPI) & Cost (CPI) bullet gauges vs the 1.0 target, then progress. */}
-      <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="hidden sm:block lg:col-span-4 lg:order-1">
+      <Panel onClick={onJump ? () => onJump('Cost') : undefined} className="hidden sm:block lg:col-span-4 lg:order-1" spine={healthHex(health)} delay={60}>
         <HealthBulletGauge spi={e.spi} cpi={e.cpi} hasSchedule={e.pv > 0} hasCost={e.ac > 0} id={id} />
 
         {/* In-context nudge (#B): when the project is off-track, offer to ask Anett why (opens the
@@ -589,7 +638,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       <div className="space-y-3 lg:col-span-12 lg:order-3 lg:flex lg:items-stretch lg:gap-3 lg:space-y-0">
       {/* Margin & profit — plan vs actual */}
       {hasMargin && (
-        <Panel onClick={onJump ? () => onJump('Forecast') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('emerald')}>
+        <Panel onClick={onJump ? () => onJump('Forecast') : undefined} className="lg:min-w-0 lg:flex-1" spine="#10b981" delay={140}>
           <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><KpiIcon name="trendingUp" accent="emerald" className="h-6 w-6" />{id ? 'Margin & Laba — Rencana vs Proyeksi' : 'Margin & profit — plan vs projected'}</h3>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
@@ -609,7 +658,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
 
       {/* Completed vs remaining tasks */}
       {hasTasks && (
-        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('blue')}>
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1" spine="#3b82f6" delay={180}>
           <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><KpiIcon name="listChecks" accent="blue" className="h-6 w-6" />{id ? 'Tugas (WBS)' : 'Tasks (WBS)'}<InfoTip text={taskTip} /></h3>
           <div className="flex items-center gap-4">
             <TaskDonut completed={tasks.completed} remaining={tasks.remaining} label={id ? 'tugas' : 'tasks'} />
@@ -632,7 +681,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
       {/* Upcoming deadlines — leaf tasks/milestones due within 7 days or overdue, so a PM catches
           them before they slip. Derived from the already-loaded WBS tree (no extra request). */}
       {hasUpcoming && (
-        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1" surface={accentSurface('amber')}>
+        <Panel onClick={onJump ? () => onJump('Schedule') : undefined} className="lg:min-w-0 lg:flex-1" spine="#f59e0b" delay={220}>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><KpiIcon name="clock" accent="amber" className="h-6 w-6" />{id ? 'Tenggat terdekat' : 'Upcoming deadlines'}</h3>
             <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{id ? '7 hari' : 'next 7 days'}</span>
@@ -666,7 +715,7 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
           value unit (physical % vs money). Not a click-to-navigate Panel (that would fight the
           chart's drag-to-zoom) — an explicit "EVM Trend →" link handles the jump. */}
       {(hasTrend || trendQ.isLoading) && (
-        <Panel className="lg:col-span-8 lg:order-2">
+        <Panel className="lg:col-span-8 lg:order-2" spine="#14b8a6" delay={100}>
           {/* flex-wrap so the control cluster drops to its own line on narrow phones instead of the
               rightmost control (EVM Trend →) clipping past the card edge. */}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2 gap-y-2">
