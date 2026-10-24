@@ -2613,7 +2613,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                     } : undefined}
                     className={`group ${compact ? 'cursor-pointer' : ''} [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:px-2 [&>td]:text-center [&>td]:transition-colors ${depth === 0 && rowIdx > 0 ? '[&>td]:!border-t-2 [&>td]:!border-t-slate-300 dark:[&>td]:!border-t-slate-700' : ''} ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
                     {!compact && (
-                    <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover}`}>
+                    <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`} title={`Schedule health: ${overdue ? 'behind / late' : st.label}`}>
                       <div className="flex justify-center">
                         {selectMode ? (
                           <input type="checkbox" aria-label={`Select ${node.name}`} checked={selectedIds.has(node.id)} onChange={() => toggleSel(node.id)} className="h-4 w-4 accent-brand-600" />
@@ -2624,7 +2624,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                     </td>
                     )}
                     {!compact && <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-600 dark:text-slate-300 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>}
-                    <td style={frozenLeft(taskLeft)} className={`!text-left ${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`}>
+                    <td style={frozenLeft(taskLeft)} className={`!text-left ${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${compact ? (NAME_ACCENT[overdue ? 'red' : st.color] ?? '') : ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
                         {hasKids && (
                           <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
