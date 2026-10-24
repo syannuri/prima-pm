@@ -78,6 +78,6 @@ test.describe('Project workspace', () => {
 
   test('back link returns to the dashboard', async ({ page }) => {
     await page.getByRole('link', { name: /All projects/ }).click();
-    await expect(page.getByRole('heading', { name: /👋/ })).toBeVisible(); // dashboard greeting "…, <name> 👋"
+    await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible(); // dashboard greeting
   });
 });

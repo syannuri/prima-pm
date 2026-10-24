@@ -35,8 +35,24 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   await expect(signIn).toBeEnabled();
   await signIn.click();
 
-  // Header logout button only renders once authenticated.
-  await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible();
+  // Logout no longer sits in the header — it moved inside the account (avatar) menu. The menu
+  // TRIGGER ("Account & settings") only renders once authenticated, so it's the auth signal.
+  await expect(accountMenuTrigger(page)).toBeVisible();
+}
+
+/**
+ * The account/avatar menu trigger — the home of Settings, theme, and Logout. Desktop renders
+ * one in the top bar AND one in the sidebar footer (both labelled "Account & settings"), so
+ * scope to the first match to avoid a strict-mode violation.
+ */
+export function accountMenuTrigger(page: Page) {
+  return page.getByRole('button', { name: 'Account & settings' }).first();
+}
+
+/** Log out via the account menu: open it, then click Logout (English label in CI). */
+export async function logout(page: Page) {
+  await accountMenuTrigger(page).click();
+  await page.getByRole('button', { name: 'Logout' }).click();
 }
 
 /**
