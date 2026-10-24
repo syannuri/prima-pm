@@ -159,9 +159,31 @@ const ZOOM_MIN = 0.3, ZOOM_MAX = 6;
 // Header band: a solid dark-slate tint across the whole header (frozen pane + scrolling
 // timeline share the SAME bg so there's no seam at the frozen edge) so the column titles read
 // firmly against the data rows. Opaque so scrolled bars never bleed through the sticky header.
-const FROZEN_TH = 'sticky !z-30 bg-slate-200 dark:bg-slate-800';
+const FROZEN_TH = 'sticky !z-30 bg-slate-50 dark:bg-slate-900';
 const FROZEN_TD = 'sticky z-10'; // opaque zebra bg + group-hover are applied per-row (see rowBg)
 const FROZEN_EDGE = 'border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_-3px_rgba(15,23,42,0.25)]';
+
+// ── Elevated, calm column-group header ───────────────────────────────────────
+// The old header stacked loud saturated fills (navy Plan / teal Actual / amber cost / blue
+// progress) that fought each other. Replace them with ONE quiet surface + a thin semantic accent
+// UNDERLINE per group — the group's colour now lives in a hairline, not a block, so the data leads
+// and the header recedes. Opaque surface so scrolled bars never bleed through the sticky header.
+const TH_SURFACE = 'bg-slate-50 text-slate-500 dark:bg-slate-900 dark:text-slate-400';
+const TH_DRAG = 'cursor-grab touch-none select-none active:cursor-grabbing';
+// Group header (spans Start/Finish): small centred overline on the calm surface.
+const thGroup = (accent: string) =>
+  `${TH_DRAG} ${TH_SURFACE} !py-1 text-center text-[10px] font-bold uppercase tracking-[0.1em] border-b-2 ${accent}`;
+// Single column header: calm surface + accent underline, bottom-aligned.
+const thCol = (accent: string) =>
+  `relative ${TH_DRAG} ${TH_SURFACE} align-bottom text-[10px] font-bold uppercase tracking-[0.07em] border-b-2 ${accent}`;
+// Start/Finish sub-header under a group: faint, same surface, matching accent underline.
+const thSub = (accent: string) =>
+  `${TH_SURFACE} !text-[10px] !font-semibold !uppercase !tracking-wide border-b-2 ${accent}`;
+const ACC_PLAN = 'border-b-sky-400 dark:border-b-sky-500/70';
+const ACC_ACTUAL = 'border-b-emerald-400 dark:border-b-emerald-500/70';
+const ACC_COST = 'border-b-amber-400 dark:border-b-amber-500/70';
+const ACC_PROG = 'border-b-violet-400 dark:border-b-violet-500/70';
+const ACC_ID = 'border-b-brand-400 dark:border-b-brand-500/70';
 
 // WBS dictionary (per-row ⓘ detail: description / deliverable / acceptance criteria / owner) is
 // hidden for now — flip to true to bring back the row toggle, expandable detail and menu entry.
@@ -1259,22 +1281,22 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   // row, and every body cell. Identity (✓/WBS/Task) and the timeline render outside this list.
   const headTop = (k: ColKey): ReactNode => {
     switch (k) {
-      case 'owner': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('owner')} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className={`relative cursor-grab touch-none select-none active:cursor-grabbing border-b-4 border-b-rose-400 align-bottom ${dragCls(k)}`} title="Owner (PIC) — drag to reorder · right-click to hide">Owner<ColGrip col="owner" /></th>;
-      case 'planDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className={`cursor-grab touch-none select-none active:cursor-grabbing border-b-2 border-slate-800 !bg-slate-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-slate-900 dark:!bg-slate-700 ${dragCls(k)}`} title="Planned (baseline plan) dates — drag to reorder · right-click to hide">Plan</th>;
-      case 'actualDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className={`cursor-grab touch-none select-none active:cursor-grabbing border-b-2 border-teal-800 !bg-teal-700 !py-1 text-center text-[11px] font-bold uppercase tracking-wide !text-white dark:border-teal-900 dark:!bg-teal-700 ${dragCls(k)}`} title="Actual start & finish (tracking) — drag to reorder · right-click to hide">Actual</th>;
-      case 'dur': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('dur')} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className={`relative cursor-grab touch-none select-none active:cursor-grabbing border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Duration — drag to reorder · right-click to hide">Dur<ColGrip col="dur" /></th>;
-      case 'budget': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('budget')} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className={`relative cursor-grab touch-none select-none active:cursor-grabbing border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Linked Direct Cost (the EVM budget weight) — drag to reorder · right-click to hide">Budget<ColGrip col="budget" /></th>;
-      case 'weight': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('weight')} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className={`relative cursor-grab touch-none select-none active:cursor-grabbing border-b-4 border-b-amber-400 align-bottom !bg-amber-800 !text-white ${dragCls(k)}`} title="Manual work-package weight steers the % roll-up — drag to reorder · right-click to hide">Weight<ColGrip col="weight" /></th>;
-      case 'pct': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('pct')} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className={`relative cursor-grab touch-none select-none active:cursor-grabbing border-b-4 border-b-violet-400 text-center align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="% complete — drag to reorder · right-click to hide"><span className="inline-flex flex-col items-center leading-tight"><span className="text-[9px] font-semibold uppercase tracking-wide text-blue-200">Progress</span><span>%</span></span><ColGrip col="pct" /></th>;
-      case 'status': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('status')} onContextMenu={(e) => openColMenu('status', 'Status', e)} className={`relative cursor-grab touch-none select-none active:cursor-grabbing border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="Status — drag to reorder · right-click to hide">Status<ColGrip col="status" /></th>;
-      case 'var': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('var')} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className={`relative cursor-grab touch-none select-none active:cursor-grabbing border-b-4 border-b-violet-400 align-bottom !bg-blue-800 !text-white ${dragCls(k)}`} title="Finish variance vs baseline (days) — drag to reorder · right-click to hide">Var<ColGrip col="var" /></th>;
+      case 'owner': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('owner')} onContextMenu={(e) => openColMenu('owner', 'Owner', e)} className={`${thCol(ACC_ID)} ${dragCls(k)}`} title="Owner (PIC) — drag to reorder · right-click to hide">Owner<ColGrip col="owner" /></th>;
+      case 'planDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('planDates', 'Plan dates', e)} className={`${thGroup(ACC_PLAN)} ${dragCls(k)}`} title="Planned (baseline plan) dates — drag to reorder · right-click to hide">Plan</th>;
+      case 'actualDates': return <th key={k} {...headDrag(k)} colSpan={2} onContextMenu={(e) => openColMenu('actualDates', 'Actual dates', e)} className={`${thGroup(ACC_ACTUAL)} ${dragCls(k)}`} title="Actual start & finish (tracking) — drag to reorder · right-click to hide">Actual</th>;
+      case 'dur': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('dur')} onContextMenu={(e) => openColMenu('dur', 'Duration', e)} className={`${thCol(ACC_COST)} ${dragCls(k)}`} title="Duration — drag to reorder · right-click to hide">Dur<ColGrip col="dur" /></th>;
+      case 'budget': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('budget')} onContextMenu={(e) => openColMenu('budget', 'Budget', e)} className={`${thCol(ACC_COST)} ${dragCls(k)}`} title="Linked Direct Cost (the EVM budget weight) — drag to reorder · right-click to hide">Budget<ColGrip col="budget" /></th>;
+      case 'weight': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('weight')} onContextMenu={(e) => openColMenu('weight', 'Weight', e)} className={`${thCol(ACC_COST)} ${dragCls(k)}`} title="Manual work-package weight steers the % roll-up — drag to reorder · right-click to hide">Weight<ColGrip col="weight" /></th>;
+      case 'pct': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('pct')} onContextMenu={(e) => openColMenu('pct', '% complete', e)} className={`${thCol(ACC_PROG)} text-center ${dragCls(k)}`} title="% complete — drag to reorder · right-click to hide"><span className="inline-flex flex-col items-center leading-tight"><span className="text-[9px] font-semibold uppercase tracking-wide text-violet-500 dark:text-violet-400">Progress</span><span>%</span></span><ColGrip col="pct" /></th>;
+      case 'status': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('status')} onContextMenu={(e) => openColMenu('status', 'Status', e)} className={`${thCol(ACC_PROG)} ${dragCls(k)}`} title="Status — drag to reorder · right-click to hide">Status<ColGrip col="status" /></th>;
+      case 'var': return <th key={k} {...headDrag(k)} rowSpan={showDates ? 2 : 1} style={colStyle('var')} onContextMenu={(e) => openColMenu('var', 'Variance', e)} className={`${thCol(ACC_PROG)} ${dragCls(k)}`} title="Finish variance vs baseline (days) — drag to reorder · right-click to hide">Var<ColGrip col="var" /></th>;
       default: return null;
     }
   };
   const headSub = (k: ColKey): ReactNode => {
     switch (k) {
-      case 'planDates': return <Fragment key={k}><th className="!bg-slate-600 !text-slate-100 !border-b-4 !border-b-sky-400 dark:!bg-slate-600 dark:!text-slate-100">Start</th><th className="!bg-slate-600 !text-slate-100 !border-b-4 !border-b-sky-400 dark:!bg-slate-600 dark:!text-slate-100">Finish</th></Fragment>;
-      case 'actualDates': return <Fragment key={k}><th className="!bg-emerald-600 !text-emerald-50 !border-b-4 !border-b-emerald-400 dark:!bg-emerald-600 dark:!text-emerald-50">Start</th><th className="!bg-emerald-600 !text-emerald-50 !border-b-4 !border-b-emerald-400 dark:!bg-emerald-600 dark:!text-emerald-50">Finish</th></Fragment>;
+      case 'planDates': return <Fragment key={k}><th className={thSub(ACC_PLAN)}>Start</th><th className={thSub(ACC_PLAN)}>Finish</th></Fragment>;
+      case 'actualDates': return <Fragment key={k}><th className={thSub(ACC_ACTUAL)}>Start</th><th className={thSub(ACC_ACTUAL)}>Finish</th></Fragment>;
       default: return null;
     }
   };
@@ -1772,7 +1794,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                 </div>
               );
             })}
-            <div aria-hidden className="pointer-events-none absolute -top-1 bottom-0 w-px bg-brand-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]" style={{ left: `${todayPct}%` }} />
+            <div aria-hidden className="pointer-events-none absolute -top-1 bottom-0 w-px bg-gradient-to-b from-amber-500 to-orange-500 shadow-[0_0_6px_1px_rgba(245,158,11,0.5)]" style={{ left: `${todayPct}%` }} />
           </div>
         </div>
         {/* Main-task list — progress first; tap a row for the full detail sheet */}
@@ -2227,11 +2249,11 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-1.5 w-5 rounded-full bg-slate-300/80 dark:bg-slate-600/70" />Baseline</span>
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-4 rounded-sm bg-slate-700 dark:bg-slate-200" />Summary</span>
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[2px] bg-gradient-to-br from-brand-400 to-brand-600" />Milestone</span>
-            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full ring-2 ring-inset ring-red-500/70" />Critical&nbsp;path</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full ring-2 ring-inset ring-rose-500/80 shadow-[0_0_6px_-1px_rgba(244,63,94,0.6)]" />Critical&nbsp;path</span>
             {showFloat && hasFloat && (
               <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-5 rounded-full bg-[repeating-linear-gradient(45deg,rgba(16,185,129,0.5)_0,rgba(16,185,129,0.5)_2px,transparent_2px,transparent_5px)] ring-1 ring-inset ring-emerald-500/40" />Slack&nbsp;(float)</span>
             )}
-            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-brand-500 shadow-[0_0_6px_rgba(59,130,246,0.55)]" />Today</span>
+            <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-gradient-to-b from-amber-500 to-orange-500 shadow-[0_0_6px_1px_rgba(245,158,11,0.5)]" />Today</span>
           </div>
         )}
         {/* Row filter — quick name search + status chips. Narrows long WBS lists; keeps ancestors
@@ -2355,7 +2377,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                   then (rowSpan=hrs), 1 otherwise. */}
               <tr className="text-center text-xs font-bold uppercase tracking-wide text-slate-800 dark:text-slate-100 [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:py-2 [&>th]:px-2 [&>th]:border-slate-300 [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700 [&>th:last-child]:border-r-0">
                 {!compact && (
-                <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b-4 border-b-rose-400 text-center align-bottom ${frozenTh}`} title={selectMode ? 'Select all' : 'Mark task / subtask complete'}>
+                <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`border-b-2 border-b-brand-400 dark:border-b-brand-500/70 text-center align-bottom ${frozenTh}`} title={selectMode ? 'Select all' : 'Mark task / subtask complete'}>
                   {selectMode ? (
                     <input
                       type="checkbox" aria-label="Select all tasks"
@@ -2366,8 +2388,8 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                   ) : <span className="text-slate-300 dark:text-slate-600">✓</span>}
                 </th>
                 )}
-                {!compact && <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b-4 border-b-rose-400 align-bottom ${frozenTh}`}>WBS</th>}
-                <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(taskLeft, compact ? {} : colStyle('task'))} className={`relative ${compact ? 'min-w-[7.5rem] max-w-[45vw]' : colWidths.task ? '' : 'min-w-[14rem]'} border-b-4 border-b-rose-400 text-center align-bottom ${frozenTh} ${frozenEdge}`}>Task<ColGrip col="task" /></th>
+                {!compact && <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`border-b-2 border-b-brand-400 dark:border-b-brand-500/70 align-bottom ${frozenTh}`}>WBS</th>}
+                <th rowSpan={effShowDates ? 2 : 1} style={frozenLeft(taskLeft, compact ? {} : colStyle('task'))} className={`relative ${compact ? 'min-w-[7.5rem] max-w-[45vw]' : colWidths.task ? '' : 'min-w-[14rem]'} border-b-2 border-b-brand-400 dark:border-b-brand-500/70 text-center align-bottom ${frozenTh} ${frozenEdge}`}>Task<ColGrip col="task" /></th>
                 {/* Data columns — reorderable (drag a header, or ⚙ Options → Columns); each hideable via right-click. Hidden entirely on compact (phone). */}
                 {effOrderedCols.map(headTop)}
                 {/* Timeline header — dynamic ticks for the chosen scale + a Today marker */}
@@ -2378,7 +2400,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                         <span key={t.key} className={`absolute -top-1 whitespace-nowrap normal-case ${t.major ? 'rounded bg-slate-300 px-1 py-px text-[10px] font-bold text-slate-800 dark:bg-slate-700 dark:text-slate-100' : 'top-0 text-[9px] font-medium text-slate-400 dark:text-slate-500'}`} style={{ left: `${t.leftPct}%` }}>{t.label}</span>
                       ))}
                       {axis?.todayPct != null && (
-                        <span className="absolute -top-0.5 z-10 -translate-x-1/2 rounded bg-brand-600 px-1 text-[9px] font-semibold normal-case text-white" style={{ left: `${axis.todayPct}%` }}>Today</span>
+                        <span className="absolute -top-0.5 z-20 -translate-x-1/2 rounded-full bg-gradient-to-b from-amber-500 to-orange-500 px-1.5 text-[9px] font-bold normal-case text-white shadow-[0_2px_6px_-1px_rgba(245,158,11,0.6)] ring-1 ring-white/50 dark:ring-black/20" style={{ left: `${axis.todayPct}%` }}>Today</span>
                       )}
                     </div>
                   </th>
@@ -2386,7 +2408,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
               </tr>
               {/* Row 2 — the Start/Finish sub-labels under each VISIBLE date group. */}
               {effShowDates && (
-                <tr className="text-center text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-200 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-200 [&>th]:dark:bg-slate-800 [&>th]:border-b [&>th]:border-slate-300 [&>th]:dark:border-slate-800 [&>th]:py-1 [&>th]:px-2 [&>th]:text-center [&>th]:font-bold [&>th]:border-r [&>th]:border-r-slate-300/80 dark:[&>th]:border-r-slate-700">
+                <tr className="text-center text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 [&>th]:sticky [&>th]:top-[25px] [&>th]:z-20 [&>th]:bg-slate-50 [&>th]:dark:bg-slate-900 [&>th]:py-1 [&>th]:px-2 [&>th]:text-center [&>th]:font-bold [&>th]:border-r [&>th]:border-r-slate-200/70 dark:[&>th]:border-r-slate-800/70">
                   {orderedDateGroups.map(headSub)}
                 </tr>
               )}
@@ -2669,7 +2691,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                           <div key={t.key} className="absolute inset-y-0 w-px bg-slate-200/70 dark:bg-slate-700/50" style={{ left: `${t.leftPct}%` }} />
                         ))}
                         {axis?.todayPct != null && (
-                          <div className="absolute inset-y-0 z-10 w-px bg-brand-500/80 shadow-[0_0_6px_rgba(59,130,246,0.55)]" style={{ left: `${axis.todayPct}%` }} />
+                          <div aria-hidden className="pointer-events-none absolute inset-y-0 z-10 w-px bg-gradient-to-b from-amber-500 to-orange-500 shadow-[0_0_8px_1px_rgba(245,158,11,0.5)]" style={{ left: `${axis.todayPct}%` }} />
                         )}
                         {/* Variance connector — baseline finish → current/actual finish (red late, green early). */}
                         {showVarConnector && (
@@ -2741,7 +2763,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                             {/* plan track — light status-tinted reference; drag to move, edge handles to resize */}
                             <div
                               onPointerDown={(e) => draggable && startDrag(e, node, 'move')}
-                              className={`group/track absolute top-3 h-[15px] overflow-hidden rounded-full ${isCritical ? 'ring-2 ring-red-500/70' : 'ring-1 ring-inset ring-black/5 dark:ring-white/10'} ${bar.track} ${draggable ? 'cursor-grab touch-none active:cursor-grabbing' : ''} ${dragging ? 'ring-2 ring-brand-400' : ''}`}
+                              className={`group/track absolute top-3 h-[15px] overflow-hidden rounded-full ${isCritical ? 'ring-2 ring-rose-500/80 shadow-[0_0_10px_-1px_rgba(244,63,94,0.6)]' : 'ring-1 ring-inset ring-black/5 dark:ring-white/10'} ${bar.track} ${draggable ? 'cursor-grab touch-none active:cursor-grabbing' : ''} ${dragging ? 'ring-2 ring-brand-400' : ''}`}
                               style={{ left: `${pLeft}%`, width: `${pWidth}%` }}
                               title={dragging ? 'Release to reschedule' : `Plan: ${formatDate(new Date(r.start))} → ${formatDate(new Date(r.end))}`}
                             >
