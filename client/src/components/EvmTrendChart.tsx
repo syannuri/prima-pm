@@ -156,22 +156,36 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
         const ribbon = evPts.length > 1 ? ribbonPath(evPts, other) : '';
         const hi = vp.hoverTime != null && snaps.length ? nearestIndex(snapTimes, vp.hoverTime) : -1;
         const ticks = visibleTicks(d0, d1, 9, vp.granularity);
-        const marker = (t: number | null, cls: string, label: string, dash = true) => {
+        // Vertical markers as legible pill labels. `hot` (Today) gets a solid accent line + filled
+        // pill; the finish markers are dashed with a tinted pill. `row` stacks them so two labels
+        // near the right edge don't collide.
+        const pill = (t: number | null, accent: string, label: string, hot = false, row = 0) => {
           if (t == null || t < d0 || t > d1) return null;
           const mx = x(t);
+          const topY = padT - 3 + row * 15;
+          const w = label.length * 5.1 + 12;
+          const rx = Math.max(padL, Math.min(mx - w / 2, W - padR - w));
           return (
             <g key={label}>
-              <line x1={mx} x2={mx} y1={padT} y2={H - padB} stroke="currentColor" className={cls} strokeWidth="1.25" strokeDasharray={dash ? '3 3' : undefined} vectorEffect="non-scaling-stroke" />
-              <text x={mx} y={padT + 8} textAnchor={mx > W - 60 ? 'end' : 'middle'} className={`${cls} text-[9px] font-medium`} style={{ fill: 'currentColor' }}>{label}</text>
+              <line x1={mx} x2={mx} y1={topY + 15} y2={H - padB} stroke={accent} strokeWidth={hot ? 1.75 : 1.1} strokeDasharray={hot ? undefined : '3 3'} strokeOpacity={hot ? 0.85 : 0.5} vectorEffect="non-scaling-stroke" />
+              <rect x={rx} y={topY} width={w} height={13} rx={6.5} fill={accent} fillOpacity={hot ? 1 : 0.15} stroke={accent} strokeOpacity={0.5} />
+              <text x={rx + w / 2} y={topY + 9.3} textAnchor="middle" className="text-[8px] font-bold" style={{ fill: hot ? '#fff' : accent }}>{label}</text>
             </g>
           );
         };
         return (
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
             <defs>
+              {/* Earned value wears a left→right emerald→cyan gradient stroke — the luminous hero line. */}
+              <linearGradient id={`evStroke-${uid}`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#10b981" />
+                <stop offset="100%" stopColor="#22d3ee" />
+              </linearGradient>
+              {/* Layered area fill under EV (emerald → cyan → transparent) for depth, not a flat tint. */}
               <linearGradient id={`evTrendGrad-${uid}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={EV} stopOpacity="0.22" />
-                <stop offset="100%" stopColor={EV} stopOpacity="0" />
+                <stop offset="0%" stopColor="#34d399" stopOpacity="0.30" />
+                <stop offset="55%" stopColor="#22d3ee" stopOpacity="0.10" />
+                <stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
               </linearGradient>
               <linearGradient id={`evPlotBg-${uid}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#108AB1" stopOpacity="0.07" />
@@ -179,6 +193,11 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
               </linearGradient>
             </defs>
             <rect x={padL} y={padT} width={W - padL - padR} height={H - padT - padB} fill={`url(#evPlotBg-${uid})`} />
+            {/* Past ▸ future split — a faint warm tint over the region right of the status date, so
+                captured actuals read apart from the forecast projection at a glance. */}
+            {statusMs > d0 && statusMs < d1 && (
+              <rect x={x(statusMs)} y={padT} width={(W - padR) - x(statusMs)} height={H - padT - padB} className="fill-amber-400/[0.04] dark:fill-amber-400/[0.06]" />
+            )}
             {ticks.map((tk) => {
               const gx = tickX(tk.ms, d0, d1);
               return <line key={tk.ms} x1={gx} x2={gx} y1={padT} y2={H - padB} stroke="currentColor" className={tk.major ? 'text-slate-200 dark:text-slate-700/70' : 'text-slate-100 dark:text-slate-800'} strokeWidth="1" vectorEffect="non-scaling-stroke" />;
@@ -196,8 +215,8 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
             {/* Variance shading — favourable (green) / unfavourable (red), very subtle. */}
             {ribbon && <path d={ribbon} className={favourable ? 'fill-emerald-400/10' : 'fill-red-400/10'} stroke="none" />}
             {progRibbon && <path d={progRibbon} className={progFav ? 'fill-emerald-400/10' : 'fill-red-400/10'} stroke="none" />}
-            {evPts.length > 1 && <path d={areaPath(evPts, H - padB)} fill={`url(#evTrendGrad-${uid})`} stroke="none" />}
-            {progActPts.length > 1 && <path d={areaPath(progActPts, H - padB)} fill={`url(#evTrendGrad-${uid})`} stroke="none" />}
+            {evPts.length > 1 && <path d={areaPath(evPts, H - padB)} fill={`url(#evTrendGrad-${uid})`} stroke="none" className="evm-fade" />}
+            {progActPts.length > 1 && <path d={areaPath(progActPts, H - padB)} fill={`url(#evTrendGrad-${uid})`} stroke="none" className="evm-fade" />}
             {/* EAC cone (optimistic..pessimistic). */}
             {cone.length > 1 && <path d={ribbonPath(toPts(cone.map((c) => ({ t: c.t, v: c.hi }))), toPts(cone.map((c) => ({ t: c.t, v: c.lo }))))} className="fill-amber-400/10" stroke="none" />}
             {/* Target reference line: BAC (money) or 100% (progress). */}
@@ -207,10 +226,12 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
             {acPts.length > 1 && <path d={smoothPath(acPts)} fill="none" stroke={AC} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
             {/* Forecast projection — dashed amber from today to the forecast finish. */}
             {fcPts.length > 1 && <path d={smoothPath(fcPts)} fill="none" stroke={FC} strokeWidth="2.25" strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-            {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={EV} strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.14" vectorEffect="non-scaling-stroke" />}
-            {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={EV} strokeWidth="3.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-            {progActPts.length > 1 && <path d={smoothPath(progActPts)} fill="none" stroke={EV} strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.14" vectorEffect="non-scaling-stroke" />}
-            {progActPts.length > 1 && <path d={smoothPath(progActPts)} fill="none" stroke={EV} strokeWidth="3.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {/* Earned value — a soft gradient underglow + the luminous gradient hero line that draws
+                on once (pathLength=1 + stroke-dasharray trick; reduced-motion → instant). */}
+            {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={`url(#evStroke-${uid})`} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" opacity="0.16" vectorEffect="non-scaling-stroke" />}
+            {evPts.length > 1 && <path d={smoothPath(evPts)} fill="none" stroke={`url(#evStroke-${uid})`} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} className="evm-draw" vectorEffect="non-scaling-stroke" />}
+            {progActPts.length > 1 && <path d={smoothPath(progActPts)} fill="none" stroke={`url(#evStroke-${uid})`} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" opacity="0.16" vectorEffect="non-scaling-stroke" />}
+            {progActPts.length > 1 && <path d={smoothPath(progActPts)} fill="none" stroke={`url(#evStroke-${uid})`} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} className="evm-draw" vectorEffect="non-scaling-stroke" />}
             {snaps.map((s, i) => (
               <g key={s.id}>
                 {i === hi && <circle cx={acPts[i].x} cy={acPts[i].y} r="6" fill={AC} opacity="0.18" />}
@@ -219,10 +240,37 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
                 <circle cx={evPts[i].x} cy={evPts[i].y} r={i === hi ? 3.6 : 2.8} fill={EV} stroke="#fff" strokeWidth="1.1" />
               </g>
             ))}
-            {/* Vertical markers: today (status date) + baseline & forecast finish. */}
-            {marker(statusMs, 'text-slate-400 dark:text-slate-500', 'today')}
-            {marker(plannedFinishMs, 'text-slate-400 dark:text-slate-500', 'plan finish')}
-            {forecastFinishMs && forecastFinishMs !== plannedFinishMs ? marker(forecastFinishMs, 'text-amber-500 dark:text-amber-400', 'forecast') : null}
+            {/* Vertical markers: baseline & forecast finish (stacked), then today on top. */}
+            {pill(plannedFinishMs, '#94a3b8', 'Plan finish', false, 0)}
+            {forecastFinishMs && forecastFinishMs !== plannedFinishMs ? pill(forecastFinishMs, '#f59e0b', 'Forecast', false, 1) : null}
+            {pill(statusMs, '#8b5cf6', 'Today', true, 0)}
+            {/* "You are here" — the latest earned point gets a soft glow + CSS pulse ring + a value
+                callout. The callout hides while hovering so it never fights the tooltip. */}
+            {(() => {
+              const ep = evPts.length > 1 ? evPts[evPts.length - 1] : (progActPts.length > 1 ? progActPts[progActPts.length - 1] : null);
+              if (!ep || ep.x < padL || ep.x > W - padR) return null;
+              const val = latest ? latest.ev : (lastAct && lastAct.actualPct != null ? (lastAct.actualPct as number) * bac : null);
+              const label = val == null ? null : (progress ? `${formatNum(V(val), 0)}%` : formatIdrShort(val));
+              const bw = progress ? 56 : 84, bh = 26;
+              // Keep the callout inside the plot and off the endpoint; flip it BELOW the point when
+              // there isn't room above without colliding with the top marker-pill row.
+              const bx = Math.min(W - padR - bw - 1, Math.max(padL + 1, ep.x - bw - 10));
+              const by = ep.y - (bh + 8) >= padT + 16 ? ep.y - (bh + 8) : Math.min(H - padB - bh - 2, ep.y + 12);
+              return (
+                <g>
+                  <circle cx={ep.x} cy={ep.y} r="9" fill={EV} opacity="0.16" />
+                  <circle cx={ep.x} cy={ep.y} r="6" fill="none" stroke="#34d399" strokeWidth="1.3" className="evm-pulse" />
+                  <circle cx={ep.x} cy={ep.y} r="4" fill={EV} stroke="#fff" strokeWidth="1.6" />
+                  {vp.hoverTime == null && label && (
+                    <g className="evm-fade">
+                      <rect x={bx} y={by} width={bw} height={26} rx={8} className="fill-emerald-50 stroke-emerald-200 dark:fill-emerald-500/15 dark:stroke-emerald-400/40" strokeWidth="1" />
+                      <text x={bx + 8} y={by + 10.5} className="fill-emerald-700 text-[7px] font-bold dark:fill-emerald-200">{progress && progSeries ? 'ACTUAL' : 'EARNED'}</text>
+                      <text x={bx + 8} y={by + 21} className="fill-emerald-800 text-[10px] font-extrabold dark:fill-white">{label}</text>
+                    </g>
+                  )}
+                </g>
+              );
+            })()}
             <line x1={padL} x2={W - padR} y1={H - padB} y2={H - padB} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1.25" vectorEffect="non-scaling-stroke" />
             {ticks.map((tk) => {
               const gx = tickX(tk.ms, d0, d1);

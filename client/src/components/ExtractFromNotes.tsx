@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import { Badge, Button, Modal } from './ui';
 import { useToast } from './Toast';
-import GuestAiNote, { useIsGuest } from './GuestAiNote';
+import { useLang } from '../context/LanguageContext';
 
 // Stage A — extract structured updates from free-text notes, then apply the ones the PM keeps via
 // the existing write endpoints (audited, permission-checked). The AI only drafts; nothing is
@@ -14,22 +14,19 @@ interface Draft { progressUpdates: ProgressUpdate[]; issues: IssueDraft[] }
 
 const IMPACT_COLOR: Record<IssueDraft['impact'], string> = { LOW: 'slate', MEDIUM: 'amber', HIGH: 'red', CRITICAL: 'red' };
 
-export default function ExtractFromNotes({ projectId }: { projectId: string }) {
+// Controlled modal: the trigger + AI-availability gate live in the parent ([[AiToolsMenu]]); this
+// component owns only the extract/apply workflow. Rendering the modal outside the parent's dropdown
+// (so it survives the dropdown closing) is the parent's job.
+export default function ExtractFromNotes({ projectId, open, onClose }: { projectId: string; open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
+  const { lang } = useLang();
+  const id = lang === 'id';
   const [text, setText] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pctById, setPctById] = useState<Record<string, number>>({}); // editable target %
   const [pickTasks, setPickTasks] = useState<Set<string>>(new Set());
   const [pickIssues, setPickIssues] = useState<Set<number>>(new Set());
-
-  const isGuest = useIsGuest();
-  const aiQ = useQuery({
-    queryKey: ['ai-available', projectId],
-    queryFn: () => api.get<{ aiAvailable: boolean }>(`/projects/${projectId}/ai-available`),
-    staleTime: 5 * 60_000,
-  });
 
   const extract = useMutation({
     mutationFn: () => api.post<Draft>(`/projects/${projectId}/data-extract/ai-draft`, { text }),
@@ -68,22 +65,16 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to apply some items'),
   });
 
-  const close = () => { setOpen(false); setText(''); setDraft(null); };
+  const close = () => { setText(''); setDraft(null); onClose(); };
 
-  if (!aiQ.data?.aiAvailable) return isGuest ? <GuestAiNote /> : null;
+  if (!open) return null;
 
   const toggleTask = (id: string) => setPickTasks((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleIssue = (i: number) => setPickIssues((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; });
   const chosenCount = pickTasks.size + pickIssues.size;
 
   return (
-    <>
-      <div className="flex justify-end">
-        <Button variant="secondary" className="!py-1 text-xs" onClick={() => setOpen(true)}>✨ Extract from notes</Button>
-      </div>
-
-      {open && (
-        <Modal onClose={close} title="Extract from notes (AI)" size="lg">
+    <Modal onClose={close} title={id ? 'Ekstrak dari catatan (AI)' : 'Extract from notes (AI)'} size="lg">
           <div className="space-y-3">
             {!draft ? (
               <>
@@ -164,8 +155,6 @@ export default function ExtractFromNotes({ projectId }: { projectId: string }) {
               </>
             )}
           </div>
-        </Modal>
-      )}
-    </>
+    </Modal>
   );
 }
