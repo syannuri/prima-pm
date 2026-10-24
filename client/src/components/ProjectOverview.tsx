@@ -108,8 +108,13 @@ function Bar({ label, value, max, color, sub }: { label: string; value: number; 
 // with onClick the inner Card gets `h-full` so it fills a stretched grid cell (no click dead-zone).
 // `surface` (themed tint classes) always lands on the inner Card so the visible tile is tinted,
 // not the invisible grid wrapper.
+// Overview panels now wear the command-center glass surface (.pbento-card) for one language with
+// the portfolio dashboard. `surface` (the old RAG accent tint) is folded into the uniform glass —
+// the coloured KpiIcon + headings already carry the signal. Charts/contents are untouched.
 function Panel({ onClick, className, surface, children }: { onClick?: () => void; className?: string; surface?: string; children: ReactNode }) {
-  if (!onClick) return <Card className={`${surface ?? ''} ${className ?? ''}`}>{children}</Card>;
+  void surface;
+  const base = 'pbento-card pbento-tile p-4 sm:p-5';
+  if (!onClick) return <div className={`${base} ${className ?? ''}`}>{children}</div>;
   return (
     <div
       role="button"
@@ -118,17 +123,17 @@ function Panel({ onClick, className, surface, children }: { onClick?: () => void
       onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onClick(); } }}
       className={`cursor-pointer ${className ?? ''}`}
     >
-      <Card className={`h-full transition hover:border-brand-300 dark:hover:border-brand-700 ${surface ?? ''}`}>{children}</Card>
+      <div className={`${base} h-full`}>{children}</div>
     </div>
   );
 }
 
 function Tile({ label, value, tone, hint }: { label: string; value: string; tone?: 'good' | 'warn'; hint?: string }) {
-  const c = tone === 'warn' ? 'text-red-600 dark:text-red-400' : tone === 'good' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100';
+  const c = tone === 'warn' ? 'text-red-600 dark:text-red-400' : tone === 'good' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-white';
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 dark:border-slate-800 dark:bg-slate-800/40" title={hint}>
-      <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`text-sm font-semibold tabular-nums ${c}`}>{value}</div>
+    <div className="pbento-card pbento-tile px-3 py-2.5" title={hint}>
+      <div className="dash-eyebrow text-slate-500 dark:text-slate-400">{label}</div>
+      <div className={`dash-display mt-1 text-lg font-bold ${c}`}>{value}</div>
     </div>
   );
 }
@@ -438,13 +443,66 @@ export default function ProjectOverview({ projectId, onJump }: { projectId: stri
   const hasUpcoming = upcoming.length > 0;
   const hasSecondary = hasMargin || hasTasks || hasUpcoming;
 
+  // Command-center hero band (desktop) — status chip + the progress ring + headline stats.
+  const heroStatus = health === 'GREEN'
+    ? { label: id ? 'Sehat' : 'On track', chip: 'bg-emerald-400/20 text-emerald-100 ring-emerald-300/40' }
+    : health === 'AMBER'
+      ? { label: id ? 'Perlu dipantau' : 'At risk', chip: 'bg-amber-400/20 text-amber-100 ring-amber-300/40' }
+      : health === 'RED'
+        ? { label: id ? 'Di belakang' : 'Behind', chip: 'bg-rose-400/20 text-rose-100 ring-rose-300/40' }
+        : { label: id ? 'Tanpa data' : 'No data', chip: 'bg-white/15 text-white ring-white/30' };
+  const HERO_C = 2 * Math.PI * 60; // ring r=60
+  const heroStats: { k: string; v: string }[] = [
+    { k: 'SPI', v: e.pv > 0 ? e.spi.toFixed(2) : '—' },
+    { k: 'CPI', v: e.ac > 0 ? e.cpi.toFixed(2) : '—' },
+    { k: 'EAC', v: formatIdrShort(e.eac) },
+    { k: 'Margin', v: hasMargin && projected.marginPct != null ? `${projected.marginPct.toFixed(0)}%` : '—' },
+  ];
+
   return (
     // Mobile/tablet: a single stacked column (unchanged). Desktop (lg+): a 12-col bento so the
     // charts sit tight side-by-side instead of a narrow centred column with big vertical gaps —
     // gauge is the hero (left, 2 rows tall), S-curve leads the right, Margin + Tasks pair below it,
     // key figures run full-width along the bottom. `lg:order-*` sets the desktop visual order while
     // the DOM order stays mobile-friendly (order is ignored in the mobile block-flow layout).
-    <div className="space-y-3 lg:grid lg:grid-cols-12 lg:gap-3 lg:space-y-0">
+    <div className="pbento space-y-3 lg:grid lg:grid-cols-12 lg:gap-3 lg:space-y-0">
+      {/* Command-center hero band (desktop/tablet) — a gradient tile leading the Overview with the
+          project's progress ring + status + headline stats, matching the portfolio dashboard. Phones
+          keep their own ring hero below (hidden sm:block here avoids duplicating it). */}
+      <div className="pbento-hero col-span-12 hidden p-6 sm:block lg:order-first">
+        <div className="relative z-10 flex flex-wrap items-center gap-6">
+          <div className="relative h-[136px] w-[136px] shrink-0">
+            <svg viewBox="0 0 160 160" className="h-full w-full -rotate-90">
+              <defs><linearGradient id="ov-hero-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffffff" /><stop offset=".5" stopColor="#c4b5fd" /><stop offset="1" stopColor="#67e8f9" /></linearGradient></defs>
+              <circle cx="80" cy="80" r="60" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="13" />
+              <circle cx="80" cy="80" r="60" fill="none" stroke="url(#ov-hero-ring)" strokeWidth="13" strokeLinecap="round" strokeDasharray={HERO_C} style={{ strokeDashoffset: HERO_C - (Math.min(100, Math.max(0, pct)) / 100) * HERO_C, ['--pmx-len' as string]: `${HERO_C}`, animation: 'pmx-sweep 1.2s cubic-bezier(.2,.7,.2,1) both', filter: 'drop-shadow(0 0 10px rgba(167,139,250,.6))' }} />
+            </svg>
+            <div className="absolute inset-0 grid place-items-center text-center">
+              <div>
+                <div className="dash-display text-[34px] font-extrabold leading-none text-white">{pct}<span className="text-lg text-white/70">%</span></div>
+                <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/70">{id ? 'selesai' : 'complete'}</div>
+              </div>
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <span className="dash-eyebrow text-violet-100/90">{id ? 'Kesehatan proyek' : 'Project health'}</span>
+            <div className="mt-2"><span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${heroStatus.chip}`}>● {heroStatus.label}</span></div>
+            <p className="mt-2 text-[13px] text-white/80">
+              {id ? 'Jadwal' : 'Schedule'} SPI {e.pv > 0 ? e.spi.toFixed(2) : '—'} · {id ? 'Biaya' : 'Cost'} CPI {e.ac > 0 ? e.cpi.toFixed(2) : '—'}
+              {e.finishVarianceDays != null ? ` · ${id ? 'selisih selesai' : 'finish'} ${e.finishVarianceDays > 0 ? '+' : ''}${e.finishVarianceDays}${id ? 'h' : 'd'}` : ''}
+            </p>
+          </div>
+          <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:grid-cols-4">
+            {heroStats.map((s) => (
+              <div key={s.k} className="rounded-2xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur">
+                <div className="text-[11px] text-white/70">{s.k}</div>
+                <div className="dash-display text-[20px] font-extrabold text-white">{s.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Phones (Mobile v2 prototype): a progress-ring hero with At risk/Baselined chips + EVM tiles,
           leading the page. The desktop gauge/progress panel below is hidden on phones (no dup). */}
       <div className="space-y-4 sm:hidden">
