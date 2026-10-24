@@ -716,6 +716,12 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   // Deep-link from an OVERDUE_TASK notification (?focus=<taskId>): once the rows render, scroll
   // that task into view and flash a highlight so the PM lands directly on the culprit.
   const [flashId, setFlashId] = useState<string | null>(null);
+  // After a plan-date edit the rows re-sort chronologically (see flatten) — the task can jump to a
+  // new row AND get a new WBS number. `locate` queues a flash + scroll-into-view (and a toast with
+  // the new WBS) to wherever it lands, so the editor never loses it. Gated on `since` vs the query's
+  // dataUpdatedAt so we flash the POST-edit order, not the stale one.
+  const [locate, setLocate] = useState<{ id: string; k: number; since: number } | null>(null);
+  const locateDone = useRef(0);
   useEffect(() => {
     if (!focusTaskId || !rows.some((r) => r.node.id === focusTaskId)) return;
     setFlashId(focusTaskId);
@@ -726,6 +732,21 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
     const clearT = setTimeout(() => setFlashId(null), 2800);
     return () => { clearTimeout(scrollT); clearTimeout(clearT); };
   }, [focusTaskId, focusKey, rows]);
+  // Flash + scroll to a task the user just rescheduled, once the refetched (re-sorted) rows land.
+  useEffect(() => {
+    if (!locate || locateDone.current === locate.k || ganttQ.dataUpdatedAt <= locate.since) return;
+    const row = rows.find((r) => r.node.id === locate.id);
+    if (!row) return;
+    locateDone.current = locate.k;
+    setFlashId(locate.id);
+    toast.success(`Now at WBS ${row.wbs}`);
+    const scrollT = setTimeout(() => {
+      (scrollRef.current?.querySelector(`[data-task-row="${locate.id}"]`) as HTMLElement | null)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+    const clearT = setTimeout(() => setFlashId((cur) => (cur === locate.id ? null : cur)), 2800);
+    return () => { clearTimeout(scrollT); clearTimeout(clearT); };
+  }, [locate, rows, ganttQ.dataUpdatedAt]);
   // Every parent id (for "collapse all") + whether anything is currently collapsed.
   const allParentIds = useMemo(() => {
     const ids: string[] = [];
@@ -1448,7 +1469,7 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
         actualStart: node.actualStart ?? undefined, actualFinish: node.actualFinish ?? undefined,
         progressPct: node.progressPct, isMilestone: node.isMilestone, weight: node.weight,
       }),
-    onSuccess: (res) => { invalidate(); notifyAutoMoves(res); },
+    onSuccess: (res, vars) => { invalidate(); notifyAutoMoves(res); setLocate({ id: vars.node.id, k: Date.now(), since: ganttQ.dataUpdatedAt }); },
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to reschedule'); },
   });
   // Inline single-field edit (dates / owner): PUT replaces the whole task, so send the full
@@ -1465,7 +1486,12 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
         actualStart: node.actualStart ?? undefined, actualFinish: node.actualFinish ?? undefined,
         ...patch,
       }),
-    onSuccess: (res) => { invalidate(); notifyAutoMoves(res); },
+    onSuccess: (res, vars) => {
+      invalidate(); notifyAutoMoves(res);
+      // Only a plan-date change re-sorts the rows (subtreeStart is planStart) — locate just those,
+      // not owner/name/weight edits which keep the row put.
+      if (vars.patch && ('planStart' in vars.patch || 'planEnd' in vars.patch)) setLocate({ id: vars.node.id, k: Date.now(), since: ganttQ.dataUpdatedAt });
+    },
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to save'); },
   });
 
