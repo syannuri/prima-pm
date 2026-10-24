@@ -96,6 +96,20 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
       })
     : [];
 
+  // Read the forecast EAC line (and its optimistic..pessimistic cone) at an arbitrary time. The
+  // projection is a straight AC→EAC line, so a linear read at the exact cursor time is exact — this
+  // feeds the tooltip in the forecast region (right of today), where there are no snapshots to snap
+  // to and the nearest-snapshot tooltip would otherwise show a stale captured value.
+  const forecastAt = (t: number) => {
+    if (progress || !forecast || !fcFinishMs || fcFinishMs <= statusMs || !fcSeries.length) return null;
+    const frac = Math.min(1, Math.max(0, (t - statusMs) / (fcFinishMs - statusMs)));
+    return {
+      v: forecast.ac + (forecast.eac.likely - forecast.ac) * frac,
+      lo: forecast.ac + (forecast.eac.optimistic - forecast.ac) * frac,
+      hi: forecast.ac + (forecast.eac.pessimistic - forecast.ac) * frac,
+    };
+  };
+
   const uid = progress ? 'prog' : 'money';
   return (
     <ChartZoomFrame
@@ -113,6 +127,15 @@ export default function EvmTrendChart({ data, forecast, mode = 'money', bare, co
       ]} />}
       footer={(vp) => <TimeAxisLabels t0={vp.domain[0]} t1={vp.domain[1]} granularity={vp.granularity} />}
       tooltip={snaps.length ? ({ hoverTime }) => {
+        // Forecast region (right of today): read the EAC projection at the exact cursor time rather
+        // than snapping to the last captured snapshot — see forecastAt.
+        const fc = hoverTime > statusMs ? forecastAt(hoverTime) : null;
+        if (fc) {
+          return <ChartTip heading={formatDate(new Date(hoverTime))} rows={[
+            { label: 'Forecast (EAC)', value: fmtFull(V(fc.v)), color: FC },
+            { label: 'Best / worst', value: `${fmtShort(V(fc.lo))} – ${fmtShort(V(fc.hi))}`, color: '#64748b' },
+          ]} />;
+        }
         const s = snaps[nearestIndex(snapTimes, hoverTime)];
         return <ChartTip heading={formatDate(s.statusDate)} rows={[
           // V() maps to the axis unit: money mode = identity (IDR), progress mode = % of BAC. Must
