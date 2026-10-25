@@ -21,19 +21,13 @@ interface Row {
   wbs: string; // outline number, e.g. 1.2.1
 }
 
-// Earliest planned start anywhere in a node's subtree (a parent sorts by its first task).
-function subtreeStart(node: GanttNode): number {
-  let min = +new Date(node.planStart);
-  (node.children ?? []).forEach((c) => { min = Math.min(min, subtreeStart(c)); });
-  return min;
-}
-
 // Flatten the tree into ordered rows and assign hierarchical WBS outline numbers.
-// Siblings are ordered chronologically (earliest start first, tie-break on end) so the
-// WBS reads top-to-bottom by date — the kick-off / earliest task is #1.
+// Siblings arrive from the server already in MANUAL order (Task.sortOrder — see assembleTree) and we
+// PRESERVE it: a task's row position and WBS number stay put when you edit its dates, and only a
+// deliberate drag-to-reorder moves it. (Previously these were re-sorted by date here, which made a
+// task jump + renumber whenever its date changed.)
 function flatten(nodes: GanttNode[], collapsed?: Set<string>, depth = 0, prefix = '', acc: Row[] = []): Row[] {
-  const ordered = [...nodes].sort((a, b) => subtreeStart(a) - subtreeStart(b) || +new Date(a.planEnd) - +new Date(b.planEnd));
-  ordered.forEach((node, i) => {
+  nodes.forEach((node, i) => {
     const wbs = prefix ? `${prefix}.${i + 1}` : `${i + 1}`;
     acc.push({ node, depth, wbs });
     // Skip descendants of a collapsed parent (its rolled bar still spans the subtree).
@@ -636,6 +630,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   // for variance tracking, and any change must go through a change request (not a casual drag) —
   // and is off on touch devices (see isTouch above) so the timeline scrolls freely.
   const canDrag = canEdit && !baselineLocked && !baselinedAt && !isTouch;
+  // Manual drag-to-REORDER (change sortOrder within a sibling group). Available whenever the plan is
+  // editable; desktop only (HTML5 drag-and-drop doesn't work on touch).
+  const canReorder = canPlan && !isTouch;
 
   // On narrow phones (portrait) the frozen ✓/WBS/Task pane filled the viewport and overlapped the
   // scrolled columns. Un-freeze there: the whole Gantt becomes one wide table you swipe through
@@ -716,6 +713,9 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
   // Deep-link from an OVERDUE_TASK notification (?focus=<taskId>): once the rows render, scroll
   // that task into view and flash a highlight so the PM lands directly on the culprit.
   const [flashId, setFlashId] = useState<string | null>(null);
+  // Drag-to-reorder (manual sortOrder): the row being dragged + the current drop target/side.
+  const [dragRowId, setDragRowId] = useState<string | null>(null);
+  const [overRow, setOverRow] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
   useEffect(() => {
     if (!focusTaskId || !rows.some((r) => r.node.id === focusTaskId)) return;
     setFlashId(focusTaskId);
@@ -1468,6 +1468,38 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
     onSuccess: (res) => { invalidate(); notifyAutoMoves(res); },
     onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to save'); },
   });
+
+  // Manual drag-to-reorder: re-pack one sibling group's sortOrder to the given order.
+  const reorder = useMutation({
+    mutationFn: (body: { parentTaskId: string | null; orderedIds: string[] }) => api.post(`${base}/tasks/reorder`, body),
+    onSuccess: invalidate,
+    onError: (e) => { invalidate(); toast.error(e instanceof ApiError ? e.message : 'Failed to reorder'); },
+  });
+  // The complete, in-order id list of a sibling group — read from the TREE (not the flattened rows)
+  // so it's correct even when a parent is collapsed.
+  const siblingIdsOf = (parentTaskId: string | null): string[] => {
+    const tree = ganttQ.data?.tree ?? [];
+    if (parentTaskId == null) return tree.map((n) => n.id);
+    const find = (nodes: GanttNode[]): GanttNode | null => {
+      for (const n of nodes) { if (n.id === parentTaskId) return n; const f = n.children ? find(n.children) : null; if (f) return f; }
+      return null;
+    };
+    return (find(tree)?.children ?? []).map((n) => n.id);
+  };
+  // Drop `dragId` before/after `targetId`. Same-parent only (re-parenting stays on indent/outdent).
+  const reorderDrop = (dragId: string, targetId: string, pos: 'before' | 'after') => {
+    const drag = rows.find((r) => r.node.id === dragId)?.node;
+    const target = rows.find((r) => r.node.id === targetId)?.node;
+    if (!drag || !target || (drag.parentTaskId ?? null) !== (target.parentTaskId ?? null)) return;
+    const parentTaskId = drag.parentTaskId ?? null;
+    const sibs = siblingIdsOf(parentTaskId);
+    const without = sibs.filter((id) => id !== dragId);
+    const idx = without.indexOf(targetId);
+    if (idx < 0) return;
+    without.splice(pos === 'before' ? idx : idx + 1, 0, dragId);
+    if (without.join('|') === sibs.join('|')) return; // no-op
+    reorder.mutate({ parentTaskId, orderedIds: without });
+  };
 
   // Editing a plan date from the table. Plan Start SHIFTS Plan Finish to keep the duration
   // (MS-Project style) so moving a task earlier/later never produces an invalid start>finish
@@ -2611,7 +2643,21 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                       if ((e.target as HTMLElement).closest('button,input,select,textarea,a')) return;
                       setDetailNode(node);
                     } : undefined}
-                    className={`group ${compact ? 'cursor-pointer' : ''} [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:px-2 [&>td]:text-center [&>td]:transition-colors ${depth === 0 && rowIdx > 0 ? '[&>td]:!border-t-2 [&>td]:!border-t-slate-300 dark:[&>td]:!border-t-slate-700' : ''} ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''}`}>
+                    onDragOver={canReorder && dragRowId ? (e) => {
+                      // Only a same-parent sibling is a valid drop target (reorder within a group).
+                      const drag = rows.find((r) => r.node.id === dragRowId)?.node;
+                      if (!drag || dragRowId === node.id || (drag.parentTaskId ?? null) !== (node.parentTaskId ?? null)) return;
+                      e.preventDefault();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const pos: 'before' | 'after' = (e.clientY - rect.top) < rect.height / 2 ? 'before' : 'after';
+                      setOverRow((o) => (o?.id === node.id && o.pos === pos ? o : { id: node.id, pos }));
+                    } : undefined}
+                    onDrop={canReorder && dragRowId ? (e) => {
+                      e.preventDefault();
+                      if (dragRowId && dragRowId !== node.id) reorderDrop(dragRowId, node.id, overRow?.pos ?? 'before');
+                      setDragRowId(null); setOverRow(null);
+                    } : undefined}
+                    className={`group ${compact ? 'cursor-pointer' : ''} [&>td]:border-b [&>td]:border-slate-200 [&>td]:dark:border-slate-800 ${density === 'compact' ? '[&>td]:py-1.5' : '[&>td]:py-3'} [&>td]:px-2 [&>td]:text-center [&>td]:transition-colors ${depth === 0 && rowIdx > 0 ? '[&>td]:!border-t-2 [&>td]:!border-t-slate-300 dark:[&>td]:!border-t-slate-700' : ''} ${alt ? 'bg-slate-50 dark:bg-slate-800' : ''} hover:bg-slate-100 dark:hover:bg-slate-800 ${node.id === flashId ? '[&>td]:!bg-amber-100 dark:[&>td]:!bg-amber-900/40' : ''} ${dragRowId === node.id ? 'opacity-40' : ''} ${overRow?.id === node.id ? (overRow.pos === 'before' ? '[&>td]:shadow-[inset_0_3px_0_0_#108AB1]' : '[&>td]:shadow-[inset_0_-3px_0_0_#108AB1]') : ''}`}>
                     {!compact && (
                     <td style={frozenLeft(0, { width: 40, minWidth: 40, maxWidth: 40 })} className={`text-center ${frozenTd} ${rowBg} ${rowHover} ${NAME_ACCENT[overdue ? 'red' : st.color] ?? ''}`} title={`Schedule health: ${overdue ? 'behind / late' : st.label}`}>
                       <div className="flex justify-center">
@@ -2626,6 +2672,20 @@ export default function WbsPanel({ projectId, focusTaskId, focusKey, toolbarLead
                     {!compact && <td style={frozenLeft(40, { width: 48, minWidth: 48, maxWidth: 48 })} className={`font-mono text-xs text-slate-600 dark:text-slate-300 ${frozenTd} ${rowBg} ${rowHover}`}>{wbs}</td>}
                     <td style={frozenLeft(taskLeft)} className={`!text-left ${frozenTd} ${stickyCol ? '' : 'relative'} group-hover:z-[25] ${rowBg} ${rowHover} ${frozenEdge} ${compact ? (NAME_ACCENT[overdue ? 'red' : st.color] ?? '') : ''}`}>
                       <span style={{ paddingLeft: `${depth * 18}px` }} className="flex items-center gap-1">
+                        {canReorder && (
+                          <button
+                            type="button"
+                            draggable
+                            onDragStart={(e) => { setDragRowId(node.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', node.id); }}
+                            onDragEnd={() => { setDragRowId(null); setOverRow(null); }}
+                            onClick={(e) => e.stopPropagation()}
+                            title="Drag to reorder (within the same parent)"
+                            aria-label={`Reorder ${node.name}`}
+                            className="grid h-5 w-3.5 shrink-0 cursor-grab touch-none place-items-center rounded text-slate-300 opacity-0 transition hover:text-slate-500 active:cursor-grabbing group-hover:opacity-100 dark:text-slate-600 dark:hover:text-slate-400"
+                          >
+                            <svg viewBox="0 0 10 16" className="h-3.5 w-2" fill="currentColor" aria-hidden><circle cx="2.5" cy="3" r="1.3" /><circle cx="7.5" cy="3" r="1.3" /><circle cx="2.5" cy="8" r="1.3" /><circle cx="7.5" cy="8" r="1.3" /><circle cx="2.5" cy="13" r="1.3" /><circle cx="7.5" cy="13" r="1.3" /></svg>
+                          </button>
+                        )}
                         {hasKids && (
                           <button onClick={() => toggleCollapse(node.id)} aria-label={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'} className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100">
                             <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} fill="currentColor" aria-hidden><path d="M7 5l6 5-6 5V5z" /></svg>

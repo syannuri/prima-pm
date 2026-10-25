@@ -129,7 +129,16 @@ export const bulkShiftSchema = z.object({
   days: z.coerce.number().int().min(-3650).max(3650).refine((n) => n !== 0, { message: 'days must be non-zero' }),
 });
 
+// Manual drag-to-reorder within one sibling group. `orderedIds` must be EXACTLY the set of tasks
+// sharing `parentTaskId` (null = top level) — the service re-packs their sortOrder to the given order.
+// Display-only (doesn't touch dates/cost/PMB), so it isn't baseline-gated.
+export const reorderSchema = z.object({
+  parentTaskId: z.string().uuid().nullable(),
+  orderedIds: z.array(z.string().uuid()).min(1).max(2000),
+});
+
 export type TaskStepsInput = z.infer<typeof taskStepsSchema>;
+export type ReorderInput = z.infer<typeof reorderSchema>;
 export type UpsertTaskInput = z.infer<typeof upsertTaskSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
 export type DependencyEditInput = z.infer<typeof dependencyEditSchema>;

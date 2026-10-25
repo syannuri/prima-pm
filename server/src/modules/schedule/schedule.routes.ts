@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateBody } from '../../middleware/validate.js';
 import { requireProjectGovernance, requireProjectAccess } from '../../middleware/rbac.js';
-import { upsertTaskSchema, dependencySchema, dependencyEditSchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema, bulkDeleteSchema, bulkUpdateSchema, bulkShiftSchema } from './schedule.schemas.js';
+import { upsertTaskSchema, dependencySchema, dependencyEditSchema, evmQuerySchema, progressSchema, taskActualsSchema, taskStepsSchema, applyTemplateSchema, bulkDeleteSchema, bulkUpdateSchema, bulkShiftSchema, reorderSchema } from './schedule.schemas.js';
 import * as svc from './schedule.service.js';
 import { notifyActivationReady } from '../projects/activation.js';
 import { aiEnabled } from '../../lib/ai.js';
@@ -173,6 +173,12 @@ router.post('/tasks/bulk-update', ...canWrite, validateBody(bulkUpdateSchema), a
 // Bulk date-shift selected tasks (each expanded to its subtree) by ±N days, then push-only reschedule.
 router.post('/tasks/bulk-shift', ...canWrite, validateBody(bulkShiftSchema), asyncHandler(async (req, res) => {
   const result = await svc.bulkShiftTasks(req.params.projectId, req.body.ids, req.body.days, req.user!.id);
+  res.json(result);
+}));
+
+// Manual drag-to-reorder within one sibling group (re-pack sortOrder). Display-only, not baseline-gated.
+router.post('/tasks/reorder', ...canWrite, validateBody(reorderSchema), asyncHandler(async (req, res) => {
+  const result = await svc.reorderTasks(req.params.projectId, req.body, req.user!.id);
   res.json(result);
 }));
 

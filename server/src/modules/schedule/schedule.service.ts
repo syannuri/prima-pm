@@ -24,7 +24,7 @@ import {
   type AutoTaskInput,
   type AutoScheduleMode,
 } from './schedule.helpers.js';
-import type { BulkUpdateInput, DependencyInput, DependencyEditInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
+import type { BulkUpdateInput, DependencyInput, DependencyEditInput, ReorderInput, TaskActualsInput, TaskStepsInput, UpsertTaskInput } from './schedule.schemas.js';
 import { simulateSchedule, seedFromString, type SchedDistribution } from './scheduleSimulation.js';
 
 const dec = (v: Prisma.Decimal | number | null | undefined): number =>
@@ -326,6 +326,10 @@ export async function createTask(projectId: string, input: UpsertTaskInput, acto
   const task = await prisma.$transaction(async (tx) => {
     const count = await tx.task.count({ where: { projectId } });
     const wbsCode = input.wbsCode ?? generateTaskCode(count + 1);
+    // Manual ordering: a new task APPENDS to the end of its sibling group (max sortOrder + 1) so it
+    // never jumps into the middle. An explicit non-zero sortOrder (seed/import paths) is honoured.
+    const maxOrder = await tx.task.aggregate({ where: { projectId, parentTaskId: input.parentTaskId ?? null }, _max: { sortOrder: true } });
+    const sortOrder = input.sortOrder && input.sortOrder > 0 ? input.sortOrder : (maxOrder._max.sortOrder ?? -1) + 1;
     return tx.task.create({
       data: {
         projectId,
@@ -345,7 +349,7 @@ export async function createTask(projectId: string, input: UpsertTaskInput, acto
         progressPct: input.progressPct,
         weight: input.weight ?? null,
         isMilestone: input.isMilestone,
-        sortOrder: input.sortOrder,
+        sortOrder,
       },
     });
   });
@@ -653,6 +657,26 @@ export async function bulkShiftTasks(projectId: string, ids: string[], days: num
   const auto = await applyAutoSchedule(projectId, { actorId });
   await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: roots[0], action: 'UPDATE', before: null, after: { bulkShiftDays: days, tasks: leaves.length } });
   return { updated: leaves.length, moved: auto.moved.length };
+}
+
+// Manual drag-to-reorder within one sibling group: re-pack sortOrder to the given order. Display-only
+// (doesn't touch dates/cost/PMB/weights), so it's NOT baseline-gated — reordering a frozen plan is safe.
+export async function reorderTasks(projectId: string, input: ReorderInput, actorId: string) {
+  const siblings = await prisma.task.findMany({
+    where: { projectId, parentTaskId: input.parentTaskId ?? null },
+    select: { id: true },
+  });
+  const sibIds = new Set(siblings.map((s) => s.id));
+  // The payload must be EXACTLY this sibling group — guards against a stale client view reordering a
+  // partial/cross-parent set (which would leave gaps or silently drop tasks).
+  if (input.orderedIds.length !== siblings.length || input.orderedIds.some((id) => !sibIds.has(id))) {
+    throw BadRequest('orderedIds must be exactly the set of tasks under this parent');
+  }
+  await prisma.$transaction(
+    input.orderedIds.map((id, i) => prisma.task.update({ where: { id }, data: { sortOrder: i } })),
+  );
+  await writeAudit({ projectId, userId: actorId, entity: 'Task', entityId: input.parentTaskId ?? projectId, action: 'UPDATE', after: { reorder: input.orderedIds } });
+  return { reordered: input.orderedIds.length };
 }
 
 // Clear the whole schedule (delete every task in the project). Strong-confirmed on the client.
