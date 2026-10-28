@@ -20,7 +20,13 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   await page.goto('/login');
   // If a stale token persists, the app skips the login screen — clear first.
   // Tokens live in sessionStorage now; clear localStorage too for the migration path.
-  await page.evaluate(() => { sessionStorage.removeItem('prima_token'); localStorage.removeItem('prima_token'); });
+  // Also pre-dismiss the cookie notice: it's a fixed bottom-right banner (z-60) that otherwise
+  // intercepts clicks on elements near the viewport bottom (e.g. a modal's footer actions).
+  await page.evaluate(() => {
+    sessionStorage.removeItem('prima_token');
+    localStorage.removeItem('prima_token');
+    localStorage.setItem('prismatix.cookieNotice.v1', '1');
+  });
   await page.reload();
 
   // Login form is ready (the brand wordmark is no longer a heading, so wait on the field).

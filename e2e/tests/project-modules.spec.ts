@@ -5,7 +5,7 @@ import { login, openFirstProject } from './helpers';
 // guards against the group label also existing as a sub-tab pill (e.g. "Cost" group + "Cost" tab).
 async function openTab(page: Page, group: string, tab: string) {
   await page.getByRole('tab', { name: group, exact: true }).first().click();
-  // A group with a single visible tab (e.g. "Schedule & WBS" on a predictive project, where
+  // A group with a single visible tab (e.g. "Schedule" on a predictive project, where
   // the Agile tab is hidden) renders no sub-tab pills — the group click already opens the tab.
   // Only click the sub-pill when it exists.
   const sub = page.getByRole('tab', { name: tab, exact: true });
@@ -40,7 +40,10 @@ test.describe('Project modules render', () => {
   });
 
   test('Schedule tab surfaces the Critical Path (CPM)', async ({ page }) => {
-    await openTab(page, 'Schedule & WBS', 'Schedule');
+    await openTab(page, 'Schedule', 'Schedule');
+    // The Schedule tab is now a single-view workspace with a segmented switcher (Gantt is the
+    // default canvas); the CPM read-out is a sibling view, so switch to it first.
+    await page.getByRole('tab', { name: 'Critical Path' }).click();
     await expect(page.getByText(/Critical Path \(CPM\)/)).toBeVisible();
   });
 

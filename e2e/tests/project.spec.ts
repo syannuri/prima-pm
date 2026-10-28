@@ -1,13 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { login, openFirstProject } from './helpers';
 
-// The tab bar groups tabs by management domain (Initiating/Schedule & WBS/Cost/Risk/Quality/
+// The tab bar groups tabs by management domain (Initiating/Schedule/Cost/Risk/Quality/
 // Monitoring/Closing/Governance & Audit); open the group (its stable aria-label) then click the tab.
 // `.first()` guards the case where a group label also exists as a sub-tab pill (e.g. the
 // "Cost" group contains a "Cost" tab). Single-tab groups (Closing/Governance & Audit) are plain buttons.
 async function openTab(page: Page, group: string, tab: string) {
   await page.getByRole('tab', { name: group, exact: true }).first().click();
-  // A group with a single visible tab (e.g. "Schedule & WBS" on a predictive project, where
+  // A group with a single visible tab (e.g. "Schedule" on a predictive project, where
   // the Agile tab is hidden) renders no sub-tab pills — the group click already opens the tab.
   // Only click the sub-pill when it exists.
   const sub = page.getByRole('tab', { name: tab, exact: true });
@@ -28,17 +28,17 @@ test.describe('Project workspace', () => {
     await openTab(page, 'Risk', 'Risk');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
 
-    await openTab(page, 'Schedule & WBS', 'Schedule');
+    await openTab(page, 'Schedule', 'Schedule');
     await expect(page.getByText(/Commit the Project Charter first/i)).toHaveCount(0);
   });
 
   test('manpower cost line offers a named-resource picker', async ({ page }) => {
     await openTab(page, 'Cost', 'Cost');
-    // The Direct Cost form's type selector switches the row to manpower fields.
-    const typeSelect = page.locator('select').filter({ hasText: 'Manpower' }).first();
-    await typeSelect.selectOption('MANPOWER');
-    // The add-form resource picker (scoped by its placeholder, to avoid the inline
-    // per-row selects) appears with the seeded users.
+    // The Direct Cost section now opens the add-form per family via an "Add line" chip row;
+    // the Manpower chip opens the form already in manpower mode (resource picker + mandays).
+    await page.getByRole('button', { name: 'Manpower', exact: true }).first().click();
+    // The add-form resource picker (scoped by its "Resource…" placeholder option, to avoid the
+    // inline per-row selects) appears with the seeded users.
     const addResourceSelect = page.locator('select').filter({ hasText: 'Resource…' });
     await expect(addResourceSelect).toBeVisible();
     await expect(addResourceSelect.getByRole('option', { name: 'Budi Santoso' })).toBeAttached();
@@ -77,7 +77,9 @@ test.describe('Project workspace', () => {
   });
 
   test('back link returns to the dashboard', async ({ page }) => {
-    await page.getByRole('link', { name: /All projects/ }).click();
+    // The in-page "All projects" breadcrumb was dropped from the project header; the sidebar
+    // "Dashboard" nav link (and the top-bar back arrow) carry the back-to-portfolio affordance.
+    await page.getByRole('link', { name: /^Dashboard/ }).first().click();
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible(); // dashboard greeting
   });
 });

@@ -46,8 +46,10 @@ test.describe('Authentication & RBAC', () => {
 
   test('change-password form validates without mutating the account', async ({ page }) => {
     await login(page, 'Project Manager');
-    // Change-password now lives on the Settings page (moved out of the header).
-    await page.goto('/settings');
+    // Change-password now lives on the Settings page (moved out of the header), under the
+    // "Account" category of the category-rail layout — deep-link straight to it so the
+    // SecurityCard renders (the default landing category is "General" / appearance).
+    await page.goto('/settings?section=account');
     // Target the three fields by their autocomplete tokens: the live password checklist
     // renders inside the <label>, so getByLabel('New password') is no longer an exact
     // accessible-name match once a value is typed.
@@ -70,7 +72,10 @@ test.describe('Authentication & RBAC', () => {
     await confirmPw.fill('Some-Strong-Pass-9');
     await newPw.fill('Some-Strong-Pass-9');
     await page.getByRole('button', { name: 'Update password' }).click();
-    await expect(page.getByText(/incorrect|invalid|differ|common|breach/i)).toBeVisible();
+    // Generous timeout: a wrong current password still runs a full password-hash verify server-side,
+    // and the client replays the request once after a refresh attempt (2× verify) — slow on a loaded
+    // box. The inline error ("Current password is incorrect") then renders.
+    await expect(page.getByText(/incorrect|invalid|differ|common|breach/i)).toBeVisible({ timeout: 30_000 });
   });
 
   test('admin sees the Users management page; non-admins do not', async ({ page }) => {
@@ -97,9 +102,11 @@ test.describe('Authentication & RBAC', () => {
   test('logout returns to the public landing (with a Sign in link)', async ({ page }) => {
     await login(page, 'Admin');
     await logout(page);
-    // After logout the guest lands on the public homepage at "/".
-    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
-    // "Enter Prismatix" appears twice (hero + closing CTA) — scope to the first.
-    await expect(page.getByRole('link', { name: 'Enter Prismatix' }).first()).toBeVisible();
+    // After logout the guest lands on the public homepage at "/". "Sign in" renders twice
+    // (sticky header + footer links) — scope to the first.
+    await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
+    // The public hero's primary CTA is now "Try for free" (it renders more than once — hero +
+    // closing CTA) — scope to the first.
+    await expect(page.getByRole('link', { name: 'Try for free' }).first()).toBeVisible();
   });
 });

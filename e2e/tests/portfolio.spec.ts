@@ -7,20 +7,23 @@ test.describe('Portfolio dashboard', () => {
   });
 
   test('shows the portfolio health command bar (gauge + KPIs)', async ({ page }) => {
-    // Consolidated hero: the gauge readout carries SPI/CPI/% complete; the KPI grid the money.
-    // exact match — other panels carry lowercase "Earned value"/"Actual cost" labels too.
-    await expect(page.getByText('Total BAC', { exact: true })).toBeVisible();
-    await expect(page.getByText('Earned Value', { exact: true })).toBeVisible();
-    await expect(page.getByText('Actual Cost', { exact: true })).toBeVisible();
-    await expect(page.getByText(/SPI \d/).first()).toBeVisible(); // gauge readout "SPI 1.10"
+    // The desktop portfolio is now the command-center bento: a hero gauge (% complete + SPI/CPI
+    // readout) over three money tiles. The tiles read "Budget · BAC / Earned · EV / Actual · AC".
+    await expect(page.getByText(/Budget.*BAC/).first()).toBeVisible();
+    await expect(page.getByText(/Earned.*EV/).first()).toBeVisible();
+    await expect(page.getByText(/Actual.*AC/).first()).toBeVisible();
+    await expect(page.getByText(/SPI \d/).first()).toBeVisible(); // gauge subtitle "… SPI 1.10, CPI 0.99"
   });
 
-  test('status date drives EVM (future date yields SPI)', async ({ page }) => {
-    const dateInput = page.getByLabel('Status date (EVM)');
-    await dateInput.fill('2026-10-01');
-    // After a future status date some schedule progress should exist → a real SPI table.
-    // The per-project EVM table's SPI column is a <th> (role columnheader, not cell).
-    await expect(page.getByRole('columnheader', { name: 'SPI' })).toBeVisible();
+  test('portfolio hero rolls up a computed SPI and CPI', async ({ page }) => {
+    // The old editable "Status date (EVM)" control + per-project SPI table were a widget-stack
+    // feature; the desktop dashboard is now the bento, which surfaces the portfolio-wide EVM
+    // roll-up as the hero gauge subtitle + KPI tiles. Assert the roll-up actually computed real
+    // SPI/CPI numbers (the seed has EVM data) rather than falling back to "no data".
+    // Wait for the bento to finish loading its summary (money tile) before reading the subtitle.
+    await expect(page.getByText(/Budget.*BAC/).first()).toBeVisible();
+    await expect(page.getByText(/SPI \d/).first()).toBeVisible();
+    await expect(page.getByText(/CPI \d/).first()).toBeVisible();
   });
 
   test('resources view shows capacity heatmap and over-allocation', async ({ page }) => {
@@ -41,6 +44,6 @@ test.describe('Portfolio dashboard', () => {
     await expect(page.locator('a[href^="/projects/"]').first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Portfolio EVM' }).click();
-    await expect(page.getByText('Total BAC')).toBeVisible();
+    await expect(page.getByText(/Budget.*BAC/).first()).toBeVisible();
   });
 });
