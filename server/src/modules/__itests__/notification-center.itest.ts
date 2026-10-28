@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../lib/password.js';
-import { createNotification, getInbox, getNotificationHistory, markInboxSeen, notifCategory } from '../notification/notification.service.js';
+import { createNotification, dismissAttention, getAttentionItems, getInbox, getNotificationHistory, markInboxSeen, notifCategory } from '../notification/notification.service.js';
 import { softDeleteProject } from '../projects/projects.service.js';
 
 // Notification Center backend: full history (read + unread), category derivation + filtering, and
@@ -93,5 +93,34 @@ describe('notification center', () => {
     await createNotification({ userId, type: 'PROJECT_ASSIGNED', title: 'stale', projectId: orphan.id });
     expect((await getNotificationHistory(userId, {})).items.map((i) => i.title)).toEqual(['account notice']);
     expect((await getInbox(userId)).items.map((i) => i.title)).toEqual(['account notice']);
+  });
+
+  // Regression: a ✓-dismissed "Needs attention" alert must STAY dismissed as its day-count /
+  // %-done tick (the signature used to hash the human message, so it drifted daily and the alert
+  // re-appeared on the next refresh — "always shows even though I cleared it"). It should only
+  // re-surface on a genuine escalation (severity change).
+  it('a dismissed overdue-task alert stays dismissed as days climb, but resurfaces on escalation', async () => {
+    const p = await prisma.project.create({
+      data: { code: 'PRJ-ATT-0001', name: 'Attention', status: 'IN_PROGRESS', deliveryApproach: 'PREDICTIVE', pmUserId: userId },
+    });
+    // Leaf task, planned finish 2026-06-10, not complete (40%).
+    await prisma.task.create({
+      data: { projectId: p.id, wbsCode: '1', name: 'Overdue work', planStart: new Date('2026-06-01'), planEnd: new Date('2026-06-10'), progressPct: 40 },
+    });
+    const at = (iso: string) => getAttentionItems(userId, 'PROJECT_MANAGER', new Date(iso));
+
+    // 5 days overdue → a MEDIUM alert shows; follow it up.
+    const a1 = await at('2026-06-15T00:00:00Z');
+    const o1 = a1.items.find((i) => i.type === 'OVERDUE_TASK');
+    expect(o1).toBeDefined();
+    await dismissAttention(userId, o1!.key);
+
+    // 3 days on, the message now says "8d overdue" — it must NOT re-appear (same severity = same key).
+    const a2 = await at('2026-06-18T00:00:00Z');
+    expect(a2.items.find((i) => i.type === 'OVERDUE_TASK')).toBeUndefined();
+
+    // Crossing 14 days overdue escalates MEDIUM→HIGH — a real change, so it SHOULD re-surface.
+    const a3 = await at('2026-06-26T00:00:00Z'); // 16 days overdue
+    expect(a3.items.find((i) => i.type === 'OVERDUE_TASK')).toBeDefined();
   });
 });
