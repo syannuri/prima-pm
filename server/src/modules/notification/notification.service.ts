@@ -3,11 +3,15 @@ import { createHash } from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 
 const GLOBAL_ROLES: Role[] = ['ADMIN', 'PMO'];
-// Stable identity of a live "Needs attention" alert for the per-user dismissal store. The message
-// encodes the alert's magnitude (days overdue, Rp overrun, severity), so a worsening alert yields a
-// DIFFERENT signature → a followed-up alert re-appears when it changes.
-const alertSignature = (projectId: string, type: string, message: string) =>
-  createHash('sha256').update(`${projectId}|${type}|${message}`).digest('hex');
+// Stable identity of a live "Needs attention" alert for the per-user dismissal store. Keyed on the
+// alert's STABLE identity — project + type + the specific entity (task/risk/CR id, or a fixed token
+// for project-level budget signals) + severity. Deliberately NOT the human-readable message: that
+// embeds volatile values (days-overdue counter, % done, Rp amount) that tick every day, which made a
+// dismissed alert re-appear on the very next refresh. Severity IS in the key so a genuine escalation
+// (a task crossing 14d overdue → MEDIUM→HIGH, or due-soon → overdue) re-surfaces a ✓'d alert, while
+// day-to-day drift does not.
+const alertSignature = (projectId: string, type: string, entityId: string | undefined, severity: string) =>
+  createHash('sha256').update(`${projectId}|${type}|${entityId ?? ''}|${severity}`).digest('hex');
 const dec = (v: Prisma.Decimal | number | null | undefined): number => (v == null ? 0 : Number(v));
 const DAY = 86_400_000;
 // Prune dismissals this old so the table can't grow unbounded (old signatures never match again).
@@ -446,7 +450,7 @@ export async function getAttentionItems(userId: string, role: string, now: Date)
   const inputs = await loadAlertInputs(projects.map((p) => p.id));
 
   const items: AttentionItem[] = [];
-  const push = (i: Omit<AttentionItem, 'key'>) => items.push({ ...i, key: alertSignature(i.projectId, i.type, i.message) });
+  const push = (i: Omit<AttentionItem, 'key'>) => items.push({ ...i, key: alertSignature(i.projectId, i.type, i.entityId, i.severity) });
   projects.forEach((p) => {
     for (const a of computeAlerts(inputs.get(p.id)!, now).alerts) {
       push({ projectId: p.id, projectCode: p.code, projectName: p.name, type: a.type, severity: a.severity, tab: a.tab, message: a.message, entityId: a.entityId });
@@ -456,10 +460,12 @@ export async function getAttentionItems(userId: string, role: string, now: Date)
   // Change requests still awaiting a decision.
   const crs = await prisma.changeRequest.findMany({
     where: { projectId: { in: projects.map((p) => p.id) }, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } },
-    select: { title: true, projectId: true, project: { select: { code: true, name: true } } },
+    select: { id: true, title: true, projectId: true, project: { select: { code: true, name: true } } },
   });
   for (const cr of crs) {
-    push({ projectId: cr.projectId, projectCode: cr.project.code, projectName: cr.project.name, type: 'CHANGE_REQUEST', severity: 'MEDIUM', tab: 'Change Req', message: `Change request “${cr.title}” awaiting a decision` });
+    // entityId = the CR id so (a) two CRs on one project get distinct dismissal signatures and
+    // (b) a ✓'d CR stays dismissed while awaiting the decision (title/severity don't drift).
+    push({ projectId: cr.projectId, projectCode: cr.project.code, projectName: cr.project.name, type: 'CHANGE_REQUEST', severity: 'MEDIUM', tab: 'Change Req', message: `Change request “${cr.title}” awaiting a decision`, entityId: cr.id });
   }
 
   // Drop items the caller has already followed up (✓) — unless the alert changed (→ new signature).
