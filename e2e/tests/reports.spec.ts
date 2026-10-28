@@ -18,8 +18,10 @@ test.describe('Reporting Hub', () => {
 
   test('Portfolio view shows budget vs actual', async ({ page }) => {
     await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
+    // Both phrases also appear in the view's description blurb, so scope to the first match
+    // (the report's own heading / KPI).
     await expect(page.getByText(/Budget vs actual/i).first()).toBeVisible();
-    await expect(page.getByText(/Cost variance/i)).toBeVisible();
+    await expect(page.getByText(/Cost variance/i).first()).toBeVisible();
   });
 
   test('Analytics view offers the velocity & burndown lens', async ({ page }) => {

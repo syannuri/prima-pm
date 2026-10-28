@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, ACCOUNTS } from './helpers';
+import { login, logout, accountMenuTrigger, ACCOUNTS } from './helpers';
 
 test.describe('Authentication & RBAC', () => {
   test('rejects invalid credentials', async ({ page }) => {
@@ -14,13 +14,14 @@ test.describe('Authentication & RBAC', () => {
 
     // Generous timeout: the login round-trip can be slow on a cold dev server.
     await expect(page.getByText(/invalid|incorrect|credential/i)).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('button', { name: 'Logout' })).toHaveCount(0);
+    // Not authenticated → the account menu (home of Logout) never renders.
+    await expect(accountMenuTrigger(page)).toHaveCount(0);
   });
 
   test('PM can log in and reaches the dashboard', async ({ page }) => {
     await login(page, 'Project Manager');
-    // Dashboard greeting heading ("Good <time>, <name> 👋") — matched via the wave emoji.
-    await expect(page.getByRole('heading', { name: /👋/ })).toBeVisible();
+    // Dashboard greeting heading — time-based "Good <morning|afternoon|evening>, <name>".
+    await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
     await expect(page.getByText('PROJECT_MANAGER', { exact: true })).toBeVisible();
   });
 
@@ -31,13 +32,13 @@ test.describe('Authentication & RBAC', () => {
     await expect(page.getByRole('button', { name: '+ New Project' })).toBeVisible();
 
     // Project Manager cannot create (PMO assigns projects to PMs, not the reverse).
-    await page.getByRole('button', { name: 'Logout' }).click();
+    await logout(page);
     await login(page, 'Project Manager');
     await expect(page.getByText('PROJECT_MANAGER', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '+ New Project' })).toHaveCount(0);
 
     // Finance cannot either.
-    await page.getByRole('button', { name: 'Logout' }).click();
+    await logout(page);
     await login(page, 'Finance');
     await expect(page.getByText('FINANCE', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '+ New Project' })).toHaveCount(0);
@@ -45,8 +46,10 @@ test.describe('Authentication & RBAC', () => {
 
   test('change-password form validates without mutating the account', async ({ page }) => {
     await login(page, 'Project Manager');
-    // Change-password now lives on the Settings page (moved out of the header).
-    await page.goto('/settings');
+    // Change-password now lives on the Settings page (moved out of the header), under the
+    // "Account" category of the category-rail layout — deep-link straight to it so the
+    // SecurityCard renders (the default landing category is "General" / appearance).
+    await page.goto('/settings?section=account');
     // Target the three fields by their autocomplete tokens: the live password checklist
     // renders inside the <label>, so getByLabel('New password') is no longer an exact
     // accessible-name match once a value is typed.
@@ -69,7 +72,10 @@ test.describe('Authentication & RBAC', () => {
     await confirmPw.fill('Some-Strong-Pass-9');
     await newPw.fill('Some-Strong-Pass-9');
     await page.getByRole('button', { name: 'Update password' }).click();
-    await expect(page.getByText(/incorrect|invalid|differ|common|breach/i)).toBeVisible();
+    // Generous timeout: a wrong current password still runs a full password-hash verify server-side,
+    // and the client replays the request once after a refresh attempt (2× verify) — slow on a loaded
+    // box. The inline error ("Current password is incorrect") then renders.
+    await expect(page.getByText(/incorrect|invalid|differ|common|breach/i)).toBeVisible({ timeout: 30_000 });
   });
 
   test('admin sees the Users management page; non-admins do not', async ({ page }) => {
@@ -86,7 +92,7 @@ test.describe('Authentication & RBAC', () => {
     await page.screenshot({ path: 'test-results/admin-users.png', fullPage: true });
 
     // Non-admin (a Project Manager): no link, and direct navigation is blocked by a notice.
-    await page.getByRole('button', { name: 'Logout' }).click();
+    await logout(page);
     await login(page, 'Project Manager');
     await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0);
     await page.goto('/admin/users');
@@ -95,10 +101,12 @@ test.describe('Authentication & RBAC', () => {
 
   test('logout returns to the public landing (with a Sign in link)', async ({ page }) => {
     await login(page, 'Admin');
-    await page.getByRole('button', { name: 'Logout' }).click();
-    // After logout the guest lands on the public homepage at "/".
-    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
-    // "Enter Prismatix" appears twice (hero + closing CTA) — scope to the first.
-    await expect(page.getByRole('link', { name: 'Enter Prismatix' }).first()).toBeVisible();
+    await logout(page);
+    // After logout the guest lands on the public homepage at "/". "Sign in" renders twice
+    // (sticky header + footer links) — scope to the first.
+    await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
+    // The public hero's primary CTA is now "Try for free" (it renders more than once — hero +
+    // closing CTA) — scope to the first.
+    await expect(page.getByRole('link', { name: 'Try for free' }).first()).toBeVisible();
   });
 });

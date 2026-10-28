@@ -15,7 +15,7 @@ import { SUPPORTED_BUNDLE_VERSIONS } from '../export/export.bundle.data.js';
 // Lenient shape check: we validate the envelope + that a project name exists, and default every
 // component array to []. Field-level typos surface as a transaction error (→ 400) at commit.
 const arr = <T>(s: z.ZodType<T>) => z.array(s).default([]);
-const obj = z.record(z.any());
+const obj = z.record(z.string(), z.any());
 const bundleSchema = z.object({
   formatVersion: z.number(),
   exportedFrom: z.object({ code: z.string().optional(), name: z.string().optional() }).partial().optional(),

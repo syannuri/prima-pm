@@ -20,7 +20,13 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   await page.goto('/login');
   // If a stale token persists, the app skips the login screen — clear first.
   // Tokens live in sessionStorage now; clear localStorage too for the migration path.
-  await page.evaluate(() => { sessionStorage.removeItem('prima_token'); localStorage.removeItem('prima_token'); });
+  // Also pre-dismiss the cookie notice: it's a fixed bottom-right banner (z-60) that otherwise
+  // intercepts clicks on elements near the viewport bottom (e.g. a modal's footer actions).
+  await page.evaluate(() => {
+    sessionStorage.removeItem('prima_token');
+    localStorage.removeItem('prima_token');
+    localStorage.setItem('prismatix.cookieNotice.v1', '1');
+  });
   await page.reload();
 
   // Login form is ready (the brand wordmark is no longer a heading, so wait on the field).
@@ -35,8 +41,24 @@ export async function login(page: Page, role: Role = 'Project Manager') {
   await expect(signIn).toBeEnabled();
   await signIn.click();
 
-  // Header logout button only renders once authenticated.
-  await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible();
+  // Logout no longer sits in the header — it moved inside the account (avatar) menu. The menu
+  // TRIGGER ("Account & settings") only renders once authenticated, so it's the auth signal.
+  await expect(accountMenuTrigger(page)).toBeVisible();
+}
+
+/**
+ * The account/avatar menu trigger — the home of Settings, theme, and Logout. Desktop renders
+ * one in the top bar AND one in the sidebar footer (both labelled "Account & settings"), so
+ * scope to the first match to avoid a strict-mode violation.
+ */
+export function accountMenuTrigger(page: Page) {
+  return page.getByRole('button', { name: 'Account & settings' }).first();
+}
+
+/** Log out via the account menu: open it, then click Logout (English label in CI). */
+export async function logout(page: Page) {
+  await accountMenuTrigger(page).click();
+  await page.getByRole('button', { name: 'Logout' }).click();
 }
 
 /**
