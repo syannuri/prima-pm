@@ -1,5 +1,6 @@
-import { type ReactNode, type CSSProperties, useState, useEffect, useRef } from 'react';
+import { type ReactNode, type CSSProperties, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { CountUp } from './CountUp';
 import { api, API_BASE, streamHeaders } from '../api/client';
 import type { Evm, EvmTrend, Forecast, GanttNode } from '../api/types';
 import { Card, Spinner } from './ui';
@@ -30,31 +31,6 @@ const barColor = (h: Health) =>
 // + panel spines speak one colour language with the dashboard.
 const healthHex = (h: Health) =>
   h === 'RED' ? '#f43f5e' : h === 'AMBER' ? '#f59e0b' : h === 'GREEN' ? '#10b981' : '#7c3aed';
-
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
-// Count a number up from 0 on mount — a small "live" flourish for the hero's focal figure. Honours
-// prefers-reduced-motion (renders the final value immediately). `format` keeps the caller in control
-// of how the running value prints (rounding, suffix, …).
-function CountUp({ to, duration = 900, format = (n: number) => String(Math.round(n)) }: { to: number; duration?: number; format?: (n: number) => string }) {
-  const [v, setV] = useState(() => (prefersReducedMotion() ? to : 0));
-  const target = useRef(to);
-  target.current = to;
-  useEffect(() => {
-    if (prefersReducedMotion()) { setV(to); return; }
-    let raf = 0;
-    const t0 = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - t0) / duration);
-      setV(target.current * (1 - Math.pow(1 - p, 3))); // easeOutCubic
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [to, duration]);
-  return <>{format(v)}</>;
-}
 
 // Count leaf work-packages as completed (100%) vs remaining, walking the WBS/Gantt tree.
 function countTasks(nodes: GanttNode[]): { completed: number; remaining: number } {
