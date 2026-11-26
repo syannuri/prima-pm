@@ -6,6 +6,7 @@ import type { PortfolioSummary, PortfolioHealth, PortfolioEvmTrend, PortfolioRai
 import { formatIdrShort, formatDate } from '../lib/format';
 import { useLang } from '../context/LanguageContext';
 import { smoothPath, areaPath } from './chart/smoothPath';
+import { CountUp } from './CountUp';
 
 // Portfolio "Command Center" — the bold bento landing for the desktop portfolio view. One big
 // gradient health hero, a tall Needs-attention panel, money tiles, the portfolio S-curve, and a
@@ -94,6 +95,8 @@ export default function PortfolioBento() {
       {/* HERO — gradient command tile. The ring is the live focal gauge (big % centred, animated
           glowing arc); the left column carries context + the inline KPI stats. */}
       <div className="pbento-hero col-span-12 p-7 lg:col-span-8 lg:row-span-2">
+        {/* living health-tinted glow — drifts behind the ring, mirroring the per-project hero */}
+        <div aria-hidden className="pmx-float pointer-events-none absolute -right-16 -top-20 h-80 w-80 rounded-full blur-3xl" style={{ backgroundColor: spineHex(status), opacity: 0.28 }} />
         <div className="relative z-10 flex h-full flex-col">
           <div className="flex items-start justify-between gap-6">
             <div className="max-w-md">
@@ -116,7 +119,7 @@ export default function PortfolioBento() {
               </svg>
               <div className="absolute inset-0 grid place-items-center text-center">
                 <div>
-                  <div className="dash-display text-[42px] font-extrabold leading-none text-white drop-shadow-[0_4px_16px_rgba(0,0,0,.3)]">{pct}<span className="text-xl text-white/70">%</span></div>
+                  <div className="dash-display text-[42px] font-extrabold leading-none text-white drop-shadow-[0_4px_16px_rgba(0,0,0,.3)]"><CountUp to={pct} /><span className="text-xl text-white/70">%</span></div>
                   <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-white/70">{id ? 'selesai' : 'complete'}</div>
                 </div>
               </div>
@@ -125,10 +128,10 @@ export default function PortfolioBento() {
           {/* inline hero stats */}
           <div className="mt-auto grid grid-cols-2 gap-3 pt-6 sm:grid-cols-4">
             {[
-              { k: 'SPI', v: t.spi.toFixed(2), tone: t.spi >= 1 ? 'text-emerald-200' : 'text-amber-200' },
-              { k: 'CPI', v: t.cpi.toFixed(2), tone: t.cpi >= 1 ? 'text-emerald-200' : 'text-amber-200' },
-              { k: id ? 'On track' : 'On track', v: `${onTrackPct}%`, tone: 'text-white' },
-              { k: id ? 'Aktif' : 'Active', v: String(active), tone: 'text-white' },
+              { k: 'SPI', v: <CountUp to={t.spi} format={(n) => n.toFixed(2)} />, tone: t.spi >= 1 ? 'text-emerald-200' : 'text-amber-200' },
+              { k: 'CPI', v: <CountUp to={t.cpi} format={(n) => n.toFixed(2)} />, tone: t.cpi >= 1 ? 'text-emerald-200' : 'text-amber-200' },
+              { k: id ? 'Sesuai' : 'On-track', v: <CountUp to={onTrackPct} format={(n) => `${Math.round(n)}%`} />, tone: 'text-white' },
+              { k: id ? 'Aktif' : 'Active', v: <CountUp to={active} />, tone: 'text-white' },
             ].map((s) => (
               <div key={s.k} className="rounded-2xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur">
                 <div className="text-[11px] text-white/70">{s.k}</div>
@@ -164,13 +167,13 @@ export default function PortfolioBento() {
 
       {/* MONEY TILES */}
       {([
-        { label: id ? 'Anggaran · BAC' : 'Budget · BAC', value: formatIdrShort(t.bac), bar: 'from-violet-500 to-blue-500', pct: 100 },
-        { label: id ? 'Earned · EV' : 'Earned · EV', value: formatIdrShort(t.ev), bar: 'from-emerald-500 to-teal-500', pct: t.bac > 0 ? (t.ev / t.bac) * 100 : 0 },
-        { label: id ? 'Aktual · AC' : 'Actual · AC', value: formatIdrShort(t.ac), bar: 'from-cyan-500 to-sky-500', pct: t.bac > 0 ? (t.ac / t.bac) * 100 : 0 },
+        { label: id ? 'Anggaran · BAC' : 'Budget · BAC', value: t.bac, bar: 'from-violet-500 to-blue-500', pct: 100 },
+        { label: id ? 'Earned · EV' : 'Earned · EV', value: t.ev, bar: 'from-emerald-500 to-teal-500', pct: t.bac > 0 ? (t.ev / t.bac) * 100 : 0 },
+        { label: id ? 'Aktual · AC' : 'Actual · AC', value: t.ac, bar: 'from-cyan-500 to-sky-500', pct: t.bac > 0 ? (t.ac / t.bac) * 100 : 0 },
       ]).map((m) => (
         <div key={m.label} className="pbento-card pbento-tile col-span-12 p-5 sm:col-span-6 lg:col-span-4">
           <div className="dash-eyebrow text-slate-500 dark:text-slate-400">{m.label}</div>
-          <div className="dash-display mt-1 text-[32px] font-extrabold text-slate-900 dark:text-white">{m.value}</div>
+          <div className="dash-display mt-1 text-[32px] font-extrabold text-slate-900 dark:text-white"><CountUp to={m.value} format={formatIdrShort} /></div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><div className={`h-full rounded-full bg-gradient-to-r ${m.bar}`} style={{ width: `${Math.min(100, m.pct)}%` }} /></div>
         </div>
       ))}
@@ -250,7 +253,7 @@ export default function PortfolioBento() {
               ]).map((c) => (
                 <div key={c.label} className="rounded-xl border border-slate-200 bg-white/60 px-3 py-2.5 dark:border-white/10 dark:bg-white/[.03]">
                   <div className="dash-eyebrow leading-tight text-slate-500 dark:text-slate-400">{c.label}</div>
-                  <div className={`dash-display mt-1 text-[24px] font-extrabold ${c.tone}`}>{c.value}</div>
+                  <div className={`dash-display mt-1 text-[24px] font-extrabold ${c.tone}`}><CountUp to={c.value} /></div>
                 </div>
               ))}
             </div>

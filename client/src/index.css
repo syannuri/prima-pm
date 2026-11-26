@@ -595,3 +595,20 @@ html.dark .pbento-card {
 }
 .pbento-spine { position: relative; }
 .pbento-spine::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 9999px; background: var(--spine, #94a3b8); }
+
+/* Staggered "builds-in" entrance — each top-level bento tile fades + rises in DOM order so the
+   board assembles itself on load instead of popping in at once. CSS-only (keyed off :nth-child),
+   so no JSX churn; pseudo-element glows (::before/::after) aren't children and are untouched.
+   Fill-mode `both` holds the resting (to) state, so tile hover-lift still works afterwards. */
+@keyframes pbento-rise { from { opacity: 0; transform: translateY(16px); } }
+@media (prefers-reduced-motion: no-preference) {
+  .pbento > * { animation: pbento-rise .5s cubic-bezier(.22, 1, .36, 1) both; }
+  .pbento > *:nth-child(1) { animation-delay: .02s; }
+  .pbento > *:nth-child(2) { animation-delay: .07s; }
+  .pbento > *:nth-child(3) { animation-delay: .12s; }
+  .pbento > *:nth-child(4) { animation-delay: .17s; }
+  .pbento > *:nth-child(5) { animation-delay: .22s; }
+  .pbento > *:nth-child(6) { animation-delay: .27s; }
+  .pbento > *:nth-child(7) { animation-delay: .32s; }
+  .pbento > *:nth-child(n+8) { animation-delay: .37s; }
+}
