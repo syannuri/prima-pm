@@ -9,9 +9,9 @@
 Prismatix gives PMs, PMO and finance one clear, role-aware view of project **health, cost, schedule and risk** —
 turning scattered updates into Earned Value insight (CPI/SPI), resource utilization and an auditable trail.
 
-![Prismatix — portfolio dashboard (light theme)](docs/screenshots/dashboard.png)
+![Prismatix — portfolio command-center bento (dark theme)](docs/screenshots/bento-portfolio.png)
 
-<p align="center"><em>Portfolio dashboard — aggregated portfolio health, EVM (CPI/SPI), needs-attention and project roll-ups at a glance.</em></p>
+<p align="center"><em>Portfolio command center — a bento of aggregated health (gauge ring + SPI/CPI), a needs-attention panel, money tiles (BAC · EV · AC) and the portfolio S-curve.</em></p>
 
 > **Naming:** "Prismatix" is the user-facing brand (formerly PRIMA → Precise). Internal identifiers
 > stay `prima*` on purpose (repo dir, DB `prima_pm`, systemd unit, `prima_*` localStorage keys) — do not rename them.
@@ -56,6 +56,18 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 **Public landing page** — the bilingual, aurora-dark front door shown to guests before sign-in.
 
 ![Prismatix public landing page — aurora-dark hero introducing the app](docs/screenshots/homepage.png)
+
+**Command-center Bento** — the desktop portfolio landing and each project's **Overview** tab share one "command center" bento design: a health-ring hero with EVM headline metrics (SPI/CPI/EAC/margin), a luminous S-curve, needs-attention and predictive panels — figures count up on load and tiles stagger in.
+
+| Project Overview — health-ring hero (SPI/CPI/EAC/margin) & S-curve | Anett — the in-app AI assistant that reads project data & proposes actions |
+|:---:|:---:|
+| ![Project Overview command-center bento — a 54% health ring, SPI/CPI/EAC/margin tiles and a progress S-curve](docs/screenshots/bento-overview.png) | ![Anett AI assistant side panel offering needs-attention items and suggested questions](docs/screenshots/anett-assistant.png) |
+| **Schedule — baseline-vs-actual tracking Gantt** | **Cost — manpower lines with spent / remaining & EVM** |
+| ![Schedule tracking Gantt with critical-path, baseline variance and per-task progress](docs/screenshots/schedule-gantt.png) | ![Cost manpower table showing amount, spent, remaining and available per line](docs/screenshots/cost-manpower.png) |
+
+![Project Overview lower band — EAC/VAC/CV/SV metric tiles, WBS completion ring and a predictive schedule-slip / cost-overrun panel](docs/screenshots/overview-metrics.png)
+
+<p align="center"><em>Project Overview — EAC/VAC/CV/SV tiles, WBS completion and a predictive schedule-slip / cost-overrun read.</em></p>
 
 | Project Manager dashboard — health gauge, SPI trend & KPIs | Agile board — drag & drop Kanban |
 |:---:|:---:|
