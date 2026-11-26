@@ -11,7 +11,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 
 ![Prismatix — portfolio dashboard (light theme)](docs/screenshots/dashboard.png)
 
-<p align="center"><em>Portfolio dashboard — a compact KPI stat strip, EVM health & status distribution, activity and resource load.</em></p>
+<p align="center"><em>Portfolio dashboard — aggregated portfolio health, EVM (CPI/SPI), needs-attention and project roll-ups at a glance.</em></p>
 
 > **Naming:** "Prismatix" is the user-facing brand (formerly PRIMA → Precise). Internal identifiers
 > stay `prima*` on purpose (repo dir, DB `prima_pm`, systemd unit, `prima_*` localStorage keys) — do not rename them.
@@ -21,7 +21,8 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 ## ✨ Features
 
 - **PMBOK process-group workspace** — inside a project, modules are grouped under five phase tabs: **Initiating** (Charter · Kick-Off · Stakeholders), **Planning** (Schedule · Agile · Cost · Procurement · Risk), **Executing** (Timesheet · RAID · Issues · UAT · Change Request), **Monitoring & Controlling** (Forecast · EVM Trend) and **Closing** (Closeout), with a cross-cutting **Audit** tab.
-- **Role-aware dashboard** — Admin/PMO get **Portfolio EVM** (a compact KPI **stat strip**, CPI/SPI, status & health charts, activity-by-project, resource load); **Project Managers** get a *"My Projects"* view with a **portfolio-health gauge**, an **SPI trend** sparkline and CPI/SPI/BAC KPI tiles — plus a Resource **Utilization** heatmap and project cards. Personalised, time-based greeting (auto **ID/EN**).
+- **Command-center dashboard (Bento)** — the desktop portfolio landing is a bold, role-aware **"command center" bento**. Admin/PMO get a gradient **portfolio-health hero** (a focal animated **gauge ring** with aggregate completion + SPI/CPI/on-track/active stats), a **Needs-attention** panel, **money tiles** (BAC · EV · AC), a luminous **portfolio S-curve** (planned / earned / actual) and a project shortlist, plus a cross-project **RAID roll-up** — figures **count up** on load and tiles **stagger in** (all motion honours *reduced-motion*). Alternate views (**Forecast**, a resource **Utilization** heatmap, **Project Cards**) are one click away. Each project's **Overview** tab speaks the same language — a health-ring hero with SPI/CPI/EAC/margin and matching bento panels. **Light & dark**, with a personalised, time-based greeting (auto **ID/EN**).
+- **Mobile app experience** — a purpose-built **phone UI**, not a shrunk desktop: an **Aurora glass** shell with one dominant **health ring** per screen, a graphic-first project **Overview** (progress ring · health gauge · EVM bars · S-curve), and small-screen-tuned **Schedule** (progress hero + mini-Gantt thumbnail + main-task list) and **Cost** (summary + forecast + budget-by-category) views. **Dark-premium by default** with an optional light-glass theme; register tables reflow into cards.
 - **⌘K Command Palette** — jump to any project, page or quick action from anywhere (**Ctrl/⌘ K**), keyboard-first.
 - **Project Charter** — goals, scope, sponsor, high-level cost, and the **delivery approach** (Predictive / Agile / Hybrid) chosen at initiation; committing locks a baseline and unlocks the other modules.
 - **Agile & Hybrid delivery** — product **backlog**, **sprints**, and a **Kanban board with smooth drag-and-drop**; **velocity** & **burndown** reports; **Agile-EVM** (story-point based) and **Hybrid-EVM** blended into the same portfolio.
@@ -48,7 +49,7 @@ turning scattered updates into Earned Value insight (CPI/SPI), resource utilizat
 - **Subscription billing** — self-serve plan management (Free / Pro / Enterprise) with a signed billing webhook that keeps each workspace's plan in sync.
 - **Observability** — structured request logging with request IDs and a readiness/health check, plus optional error tracking — all dormant until configured.
 - **Public landing page** — a bilingual (EN/ID), **aurora-dark** homepage greets guests at `/` and introduces Prismatix before sign-in — offered as a contribution to the global project-management community. Every call-to-action leads to the login.
-- **UX** — **light theme by default** (dark optional), **IDR thousand-separator inputs**, **live inline form validation** (green/red field state with strong-password checklists on auth/admin forms), native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, responsive & mobile-friendly.
+- **UX** — a modern **"bento" command-center design language** (glass tiles, health-tinted RAG accents, subtle count-up & entrance motion, all reduced-motion-aware) shared across desktop, with a dedicated **Aurora glass** treatment on phones. **Light theme by default** (dark optional), **IDR thousand-separator inputs**, **live inline form validation** (green/red field state with strong-password checklists on auth/admin forms), native spellcheck, WCAG-minded contrast, accessible modals/toasts/confirm dialogs, skeleton loaders, fully responsive & mobile-friendly.
 
 ## 📸 Screenshots
 
